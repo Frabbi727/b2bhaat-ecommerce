@@ -60,4 +60,9 @@ class Order extends Model
     {
         return $this->hasManyThrough(OrderItem::class, SubOrder::class, 'parent_order_id', 'sub_order_id');
     }
+
+    public function getGrandTotalAttribute(): float
+    {
+        return (float) ($this->total_amount + ($this->shipping_amount ?? 0) + ($this->tax_amount ?? 0));
+    }
 }

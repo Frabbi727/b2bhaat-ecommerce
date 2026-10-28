@@ -8,6 +8,7 @@ use App\Models\SellerProfile;
 use App\Models\SellerWallet;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
+use Illuminate\Support\Facades\DB;
 
 class AdminStatsOverview extends StatsOverviewWidget
 {
@@ -15,10 +16,10 @@ class AdminStatsOverview extends StatsOverviewWidget
 
     protected function getStats(): array
     {
-        $totalGmv = Order::whereHas('paymentStatus', fn ($q) => $q->where('slug', 'paid'))
-            ->sum('grand_total');
+        $totalGmv = (float) Order::whereHas('paymentStatus', fn ($q) => $q->where('slug', 'paid'))
+            ->sum(DB::raw('total_amount + COALESCE(shipping_amount, 0) + COALESCE(tax_amount, 0)'));
 
-        $totalEscrow = SellerWallet::sum('pending_balance');
+        $totalEscrow = SellerWallet::sum('escrow_held_balance');
 
         $approvedMerchants = SellerProfile::where('is_approved', true)->count();
 
