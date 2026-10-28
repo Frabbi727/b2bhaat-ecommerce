@@ -28,21 +28,40 @@ class StoreSettings extends Page
 
     public string $store_name = '';
 
+    public string $store_slug = '';
+
     public ?string $trade_license_number = null;
 
     public ?string $tax_id_number = null;
 
+    public string $commission_rate = '0';
+
+    public bool $is_approved = false;
+
+    public string $seller_email = '';
+
+    public string $seller_phone = '';
+
     public function mount(): void
     {
-        $profile = auth()->user()?->sellerProfile;
+        $user = auth()->user();
+        $profile = $user?->sellerProfile;
+
+        if ($user) {
+            $this->seller_email = (string) $user->email;
+            $this->seller_phone = (string) ($user->phone ?? 'N/A');
+        }
 
         if ($profile) {
             $this->is_on_vacation = (bool) $profile->is_on_vacation;
             $this->vacation_message = (string) ($profile->vacation_message ?? '');
             $this->vacation_ends_at = $profile->vacation_ends_at ? $profile->vacation_ends_at->format('Y-m-d') : null;
             $this->store_name = (string) $profile->store_name;
+            $this->store_slug = (string) $profile->store_slug;
             $this->trade_license_number = $profile->trade_license_number;
             $this->tax_id_number = $profile->tax_id_number;
+            $this->commission_rate = (string) ($profile->commission_rate_percentage ?? '10');
+            $this->is_approved = (bool) $profile->is_approved;
         }
     }
 
