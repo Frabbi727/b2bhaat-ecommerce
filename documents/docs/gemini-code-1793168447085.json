@@ -1,0 +1,32 @@
+{
+  "data": {
+    "order_number": "ORD-2026-9912",
+    "status": "Processing",
+    "placed_at": "2026-10-26T10:15:00Z",
+    "packages": [
+      {
+        "sub_order_number": "ORD-2026-9912-A",
+        "seller_store": "NailsFactory Ltd.",
+        "fulfillment_status": "In Transit",
+        "courier_name": "Steadfast Courier",
+        "tracking_number": "ST-992381",
+        "timeline": [
+          {
+            "status": "Order Paid",
+            "title": "Order Confirmed",
+            "description": "Payment confirmed via Gateway.",
+            "location": "System",
+            "timestamp": "2026-10-26T10:15:00Z"
+          },
+          {
+            "status": "Shipped",
+            "title": "Handed Over to Courier",
+            "description": "Parcel received at Tongi Hub.",
+            "location": "Gazipur Hub",
+            "timestamp": "2026-10-27T11:00:00Z"
+          }
+        ]
+      }
+    ]
+  }
+}

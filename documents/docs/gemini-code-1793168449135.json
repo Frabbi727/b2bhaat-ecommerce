@@ -1,0 +1,20 @@
+{
+  "data": {
+    "id": 108,
+    "title": "Luxury Press-on Fake Nails Set",
+    "slug": "luxury-press-on-fake-nails-set",
+    "channel": "both",
+    "pricing": {
+      "wholesale_price": 110.00,
+      "min_order_quantity": 50
+    },
+    "wholesale_teaser": null,
+    "variations": [
+      {
+        "sku": "NAIL-PNK-MED",
+        "attributes": { "Color": "Pink", "Length": "Medium" },
+        "stock_available": 500
+      }
+    ]
+  }
+}

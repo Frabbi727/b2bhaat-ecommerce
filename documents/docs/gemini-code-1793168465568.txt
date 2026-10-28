@@ -1,0 +1,20 @@
+[ Incoming Checkout Request ]
+             │
+             ▼
+[ DB::transaction() Initiated ]
+             │
+             ▼
+[ SELECT * FROM product_variations WHERE id = :id FOR UPDATE ]
+             │
+             ├──> Has Sufficient Stock? ───[ No ]───> Abort (Throw InsufficientStockException)
+             │
+            [ Yes ]
+             │
+             ▼
+[ Deduct stock_quantity, Record in reservations table ]
+             │
+             ▼
+[ Redirect to Payment Gateway / Await Confirmation ]
+             │
+             ├──> Payment Confirmed ───> Commit & Finalize Sub-Orders
+             └──> Payment Timed Out  ───> Rollback & Release Reserved Quantity

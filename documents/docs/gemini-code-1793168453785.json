@@ -1,0 +1,40 @@
+{
+  "category_id": 14,
+  "brand_id": 2,
+  "sales_channel_slug": "both",
+  "unit_id": 1,
+  "title": "Luxury Press-on Fake Nails Set",
+  "slug": "luxury-press-on-fake-nails-set",
+  "short_description": "Salon quality reusable artificial nails.",
+  "full_description": "Detailed description and application guide...",
+  "buy_price": 45.00,
+  "has_variations": true,
+  "prices": [
+    {
+      "sales_channel_slug": "retail",
+      "min_quantity": 1,
+      "max_quantity": null,
+      "unit_price": 250.00
+    },
+    {
+      "sales_channel_slug": "wholesale",
+      "min_quantity": 50,
+      "max_quantity": null,
+      "unit_price": 110.00
+    }
+  ],
+  "variations": [
+    {
+      "sku": "NAIL-PNK-MED",
+      "buy_price": 45.00,
+      "stock_quantity": 500,
+      "attribute_value_ids": [12, 45]
+    },
+    {
+      "sku": "NAIL-BLK-LNG",
+      "buy_price": 50.00,
+      "stock_quantity": 300,
+      "attribute_value_ids": [14, 46]
+    }
+  ]
+}
