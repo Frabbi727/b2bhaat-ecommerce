@@ -3,7 +3,6 @@
 namespace App\Livewire\Storefront;
 
 use App\Models\CustomerAddress;
-use App\Models\Order;
 use App\Models\OrderStatus;
 use App\Models\PaymentMethod;
 use App\Models\PaymentStatus;
@@ -11,6 +10,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\Cart\CartSessionService;
 use App\Services\Escrow\EscrowLedgerService;
+use App\Services\Logistics\ShippingCalculatorService;
 use App\Services\Orders\OrderSplitterService;
 use Exception;
 use Illuminate\Support\Facades\Auth;
@@ -89,14 +89,19 @@ class CheckoutComponent extends Component
     public function getShippingFee(): float
     {
         $cart = app(CartSessionService::class);
-        $subtotal = $cart->getSubtotal();
+        $items = $cart->getItems();
 
-        // Wholesale bulk order free delivery incentive
-        if ($subtotal >= 10000.0) {
-            return 0.0;
-        }
+        $calc = app(ShippingCalculatorService::class)->calculateShipping($items, $this->deliveryZone);
 
-        return $this->deliveryZone === 'outside_dhaka' ? 130.0 : 70.0;
+        return (float) $calc['total_shipping'];
+    }
+
+    public function getShippingBreakdown(): array
+    {
+        $cart = app(CartSessionService::class);
+        $items = $cart->getItems();
+
+        return app(ShippingCalculatorService::class)->calculateShipping($items, $this->deliveryZone);
     }
 
     public function updatedDeliveryZone(): void
@@ -224,7 +229,8 @@ class CheckoutComponent extends Component
         $cart = app(CartSessionService::class);
         $items = $cart->getItems();
         $subtotal = $cart->getSubtotal();
-        $shippingFee = $this->getShippingFee();
+        $shippingBreakdown = $this->getShippingBreakdown();
+        $shippingFee = (float) $shippingBreakdown['total_shipping'];
         $grandTotal = $subtotal + $shippingFee;
         $paymentMethods = PaymentMethod::where('is_active', true)->get();
         $savedAddresses = Auth::check() ? Auth::user()->addresses()->latest()->get() : collect();
@@ -233,6 +239,7 @@ class CheckoutComponent extends Component
             'items' => $items,
             'subtotal' => $subtotal,
             'shippingFee' => $shippingFee,
+            'shippingBreakdown' => $shippingBreakdown,
             'grandTotal' => $grandTotal,
             'paymentMethods' => $paymentMethods,
             'savedAddresses' => $savedAddresses,

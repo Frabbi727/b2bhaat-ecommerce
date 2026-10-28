@@ -17,6 +17,7 @@ class SubOrder extends Model
         'tracking_number',
         'subtotal',
         'commission_amount',
+        'shipping_amount',
         'is_self_delivered',
         'handover_code',
         'handover_confirmed_at',
@@ -27,6 +28,7 @@ class SubOrder extends Model
         return [
             'subtotal' => 'decimal:2',
             'commission_amount' => 'decimal:2',
+            'shipping_amount' => 'decimal:2',
             'is_self_delivered' => 'boolean',
             'handover_confirmed_at' => 'datetime',
         ];

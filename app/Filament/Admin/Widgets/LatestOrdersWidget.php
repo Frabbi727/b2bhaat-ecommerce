@@ -68,7 +68,7 @@ class LatestOrdersWidget extends TableWidget
 
                 TextColumn::make('total_amount')
                     ->label('Grand Total')
-                    ->state(fn (Order $record): float => (float) ($record->total_amount + ($record->shipping_amount ?? 0) + ($record->tax_amount ?? 0)))
+                    ->state(fn (Order $record): float => (float) $record->total_amount)
                     ->formatStateUsing(fn ($state) => '৳'.number_format((float) $state, 2))
                     ->weight('bold')
                     ->alignment('right'),

@@ -15,6 +15,9 @@ class SellerProfile extends Model
         'trade_license_number',
         'tax_id_number',
         'commission_rate_percentage',
+        'inside_dhaka_rate',
+        'outside_dhaka_rate',
+        'free_shipping_threshold',
         'is_approved',
         'is_on_vacation',
         'vacation_message',
@@ -25,6 +28,9 @@ class SellerProfile extends Model
     {
         return [
             'commission_rate_percentage' => 'decimal:2',
+            'inside_dhaka_rate' => 'decimal:2',
+            'outside_dhaka_rate' => 'decimal:2',
+            'free_shipping_threshold' => 'decimal:2',
             'is_approved' => 'boolean',
             'is_on_vacation' => 'boolean',
             'vacation_ends_at' => 'date',

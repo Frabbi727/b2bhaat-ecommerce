@@ -229,12 +229,26 @@
                         <span>Items Subtotal:</span>
                         <span class="font-bold text-slate-900">৳{{ number_format($subtotal, 2) }}</span>
                     </div>
-                    <div class="flex justify-between text-slate-600">
-                        <span>Courier / Shipping:</span>
-                        @if ($shippingFee == 0)
-                            <span class="text-emerald-600 font-bold">Free Bulk Delivery</span>
-                        @else
-                            <span class="font-bold text-slate-800 font-mono">৳{{ number_format($shippingFee, 2) }}</span>
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-slate-600">
+                            <span>Courier & Delivery Freight:</span>
+                            @if ($shippingFee == 0)
+                                <span class="text-emerald-600 font-bold">Free Delivery</span>
+                            @else
+                                <span class="font-bold text-slate-800 font-mono">৳{{ number_format($shippingFee, 2) }}</span>
+                            @endif
+                        </div>
+                        @if (count($shippingBreakdown['vendors'] ?? []) > 0)
+                            <div class="bg-slate-50 rounded-xl p-2.5 space-y-1 text-[11px] border border-slate-100">
+                                @foreach ($shippingBreakdown['vendors'] as $v)
+                                    <div class="flex justify-between text-slate-500">
+                                        <span class="truncate max-w-[180px] font-medium">• {{ $v['store_name'] }}:</span>
+                                        <span class="font-semibold {{ $v['is_free'] ? 'text-emerald-600 font-bold' : 'text-slate-700' }}">
+                                            {{ $v['is_free'] ? 'Free (over ৳' . number_format($v['threshold']) . ')' : '৳' . number_format($v['shipping_fee'], 2) }}
+                                        </span>
+                                    </div>
+                                @endforeach
+                            </div>
                         @endif
                     </div>
                     <div class="flex justify-between text-slate-600">

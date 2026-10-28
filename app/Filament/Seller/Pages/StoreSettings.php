@@ -42,6 +42,12 @@ class StoreSettings extends Page
 
     public string $seller_phone = '';
 
+    public ?float $inside_dhaka_rate = null;
+
+    public ?float $outside_dhaka_rate = null;
+
+    public ?float $free_shipping_threshold = null;
+
     public function mount(): void
     {
         $user = auth()->user();
@@ -62,6 +68,9 @@ class StoreSettings extends Page
             $this->tax_id_number = $profile->tax_id_number;
             $this->commission_rate = (string) ($profile->commission_rate_percentage ?? '10');
             $this->is_approved = (bool) $profile->is_approved;
+            $this->inside_dhaka_rate = $profile->inside_dhaka_rate !== null ? (float) $profile->inside_dhaka_rate : null;
+            $this->outside_dhaka_rate = $profile->outside_dhaka_rate !== null ? (float) $profile->outside_dhaka_rate : null;
+            $this->free_shipping_threshold = $profile->free_shipping_threshold !== null ? (float) $profile->free_shipping_threshold : null;
         }
     }
 
@@ -71,6 +80,9 @@ class StoreSettings extends Page
             'is_on_vacation' => 'boolean',
             'vacation_message' => 'nullable|string|max:1000',
             'vacation_ends_at' => 'nullable|date',
+            'inside_dhaka_rate' => 'nullable|numeric|min:0|max:10000',
+            'outside_dhaka_rate' => 'nullable|numeric|min:0|max:10000',
+            'free_shipping_threshold' => 'nullable|numeric|min:0|max:1000000',
         ]);
 
         $profile = auth()->user()?->sellerProfile;
@@ -88,6 +100,9 @@ class StoreSettings extends Page
             'is_on_vacation' => $this->is_on_vacation,
             'vacation_message' => $this->vacation_message ?: null,
             'vacation_ends_at' => $this->vacation_ends_at ?: null,
+            'inside_dhaka_rate' => $this->inside_dhaka_rate,
+            'outside_dhaka_rate' => $this->outside_dhaka_rate,
+            'free_shipping_threshold' => $this->free_shipping_threshold,
         ]);
 
         Notification::make()

@@ -63,6 +63,6 @@ class Order extends Model
 
     public function getGrandTotalAttribute(): float
     {
-        return (float) ($this->total_amount + ($this->shipping_amount ?? 0) + ($this->tax_amount ?? 0));
+        return (float) $this->total_amount;
     }
 }

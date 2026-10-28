@@ -77,6 +77,69 @@
                                     Buyers will see this estimated date on your store banner.
                                 </p>
                             </div>
+
+                            <!-- Regional Shipping & Free Delivery Rules (Decision D6) -->
+                            <div class="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-4">
+                                <div>
+                                    <h4 class="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1.5">
+                                        <span>🚚</span>
+                                        <span>Store Regional Delivery Rates & Free Shipping (Decision D6)</span>
+                                    </h4>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                        Customize courier/freight delivery charges for your store products. Leave blank to inherit platform defaults.
+                                    </p>
+                                </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div class="space-y-1.5">
+                                        <label for="inside_dhaka_rate" class="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                                            Inside Dhaka (৳)
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            step="0.01"
+                                            min="0"
+                                            id="inside_dhaka_rate"
+                                            wire:model="inside_dhaka_rate" 
+                                            placeholder="Default: ৳70"
+                                            class="w-full text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-950 dark:text-white p-2.5 shadow-xs focus:ring-2 focus:ring-primary-500"
+                                        />
+                                        <span class="text-[10px] text-gray-400">Platform base: ৳70.00</span>
+                                    </div>
+
+                                    <div class="space-y-1.5">
+                                        <label for="outside_dhaka_rate" class="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                                            Outside Dhaka (৳)
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            step="0.01"
+                                            min="0"
+                                            id="outside_dhaka_rate"
+                                            wire:model="outside_dhaka_rate" 
+                                            placeholder="Default: ৳130"
+                                            class="w-full text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-950 dark:text-white p-2.5 shadow-xs focus:ring-2 focus:ring-primary-500"
+                                        />
+                                        <span class="text-[10px] text-gray-400">Platform base: ৳130.00</span>
+                                    </div>
+
+                                    <div class="space-y-1.5">
+                                        <label for="free_shipping_threshold" class="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                                            Free Delivery Over (৳)
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            step="1"
+                                            min="0"
+                                            id="free_shipping_threshold"
+                                            wire:model="free_shipping_threshold" 
+                                            placeholder="Default: ৳10,000"
+                                            class="w-full text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-950 dark:text-white p-2.5 shadow-xs focus:ring-2 focus:ring-primary-500"
+                                        />
+                                        <span class="text-[10px] text-gray-400">Cart subtotal threshold</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <x-slot name="footer">

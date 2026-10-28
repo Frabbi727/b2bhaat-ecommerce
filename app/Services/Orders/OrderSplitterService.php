@@ -12,13 +12,15 @@ use App\Models\SalesChannel;
 use App\Models\SubOrder;
 use App\Models\User;
 use App\Services\Inventory\StockReservationService;
+use App\Services\Logistics\ShippingCalculatorService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class OrderSplitterService
 {
     public function __construct(
-        protected StockReservationService $stockReservationService
+        protected StockReservationService $stockReservationService,
+        protected ShippingCalculatorService $shippingCalculatorService
     ) {}
 
     /**
@@ -70,12 +72,26 @@ class OrderSplitterService
             $unpaidStatus = PaymentStatus::where('slug', 'unpaid')->firstOrFail();
             $unfulfilledStatus = FulfillmentStatus::where('slug', 'unfulfilled')->firstOrFail();
 
-            // Calculate total amount
+            // Calculate total amount & shipping fee breakdown (Decision D6)
             $itemsTotal = 0.0;
             foreach ($data['items'] as $item) {
                 $itemsTotal += ($item['unit_price'] * $item['quantity']);
             }
-            $shippingAmount = isset($data['shipping_amount']) ? (float) $data['shipping_amount'] : 0.0;
+
+            $hasExplicitZone = isset($data['shipping_address']['delivery_zone']);
+            $hasExplicitShipping = isset($data['shipping_amount']);
+
+            $zone = $data['shipping_address']['delivery_zone'] ?? 'inside_dhaka';
+            $shippingResult = ($hasExplicitZone || $hasExplicitShipping)
+                ? $this->shippingCalculatorService->calculateShipping($data['items'], $zone)
+                : ['total_shipping' => 0.0, 'vendors' => []];
+
+            $calculatedShippingAmount = $shippingResult['total_shipping'];
+
+            $shippingAmount = isset($data['shipping_amount'])
+                ? (float) $data['shipping_amount']
+                : $calculatedShippingAmount;
+
             $grandTotal = $itemsTotal + $shippingAmount;
 
             $orderNumber = 'ORD-'.date('Ymd').'-'.strtoupper(Str::random(6));
@@ -137,6 +153,8 @@ class OrderSplitterService
                     $commissionAmount += ($lineTotal * ($rate / 100.0));
                 }
 
+                $vendorShipping = $shippingResult['vendors'][$sellerId]['shipping_fee'] ?? 0.00;
+
                 $subOrder = SubOrder::create([
                     'parent_order_id' => $order->id,
                     'seller_id' => $sellerId,
@@ -144,6 +162,7 @@ class OrderSplitterService
                     'fulfillment_status_id' => $unfulfilledStatus->id,
                     'subtotal' => $subtotal,
                     'commission_amount' => round($commissionAmount, 2),
+                    'shipping_amount' => round($vendorShipping, 2),
                 ]);
 
                 foreach ($sellerItemList as $entry) {
