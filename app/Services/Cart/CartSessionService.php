@@ -20,35 +20,48 @@ class CartSessionService
     }
 
     /**
-     * Add item with role and MOQ validation.
+     * Add item with role, MOQ, and progressive volume discount tier validation.
      *
      * @throws Exception
      */
-    public function addItem(int $productId, ?int $variationId, string $channelSlug, int $quantity): void
+    public function addItem(int $productId, ?int $variationId, string $channelSlug, int $quantity, ?float $overrideUnitPrice = null): void
     {
         $product = Product::with(['prices.salesChannel', 'variations.attributeValues.attribute', 'seller.sellerProfile'])
             ->findOrFail($productId);
 
+        if ($product->seller?->sellerProfile?->is_on_vacation) {
+            $storeName = $product->seller->sellerProfile->store_name ?? 'This merchant';
+            $vacationNotice = $product->seller->sellerProfile->vacation_message ?: 'The store is temporarily taking a break and cannot accept new orders.';
+            throw new Exception("{$storeName} is currently on vacation mode. {$vacationNotice}");
+        }
+
         $variation = $variationId ? $product->variations->firstWhere('id', $variationId) : null;
 
-        // Fetch channel-specific price
-        $priceRecord = $product->prices
-            ->where('salesChannel.slug', $channelSlug)
-            ->where('variation_id', $variationId)
-            ->first()
-            ?? $product->prices
-                ->where('salesChannel.slug', $channelSlug)
-                ->whereNull('variation_id')
-                ->first();
+        // Fetch channel-specific price tiers
+        $channelPrices = $product->prices
+            ->filter(fn ($p) => $p->salesChannel?->slug === $channelSlug && ($p->variation_id === $variationId || is_null($p->variation_id)))
+            ->sortBy('min_quantity');
 
-        if (! $priceRecord) {
+        if ($channelPrices->isEmpty()) {
             throw new Exception("Pricing for {$channelSlug} channel is unavailable for this item.");
         }
 
-        $minQty = $priceRecord->min_quantity ?? 1;
+        // Base MOQ is the lowest tier threshold
+        $minQty = (int) $channelPrices->first()->min_quantity;
 
-        if ($channelSlug === SalesChannel::WHOLESALE && $quantity < $minQty) {
+        if ($channelSlug === SalesChannel::WHOLESALE && $quantity < $minQty && is_null($overrideUnitPrice)) {
             throw new Exception("Wholesale minimum order quantity is {$minQty}. You requested {$quantity}.");
+        }
+
+        // Match progressive volume tier or apply passed override rate
+        $effectivePrice = $overrideUnitPrice;
+        $matchedRecord = null;
+        if (! $effectivePrice) {
+            $matchedRecord = $channelPrices->filter(fn ($p) => $quantity >= $p->min_quantity)->last()
+                ?? $channelPrices->first();
+            $effectivePrice = (float) $matchedRecord->unit_price;
+        } else {
+            $matchedRecord = $channelPrices->first();
         }
 
         $items = $this->getItems();
@@ -64,6 +77,7 @@ class CartSessionService
 
         if (isset($items[$key])) {
             $items[$key]['quantity'] += $quantity;
+            $items[$key]['unit_price'] = $effectivePrice;
         } else {
             $items[$key] = [
                 'key' => $key,
@@ -73,9 +87,9 @@ class CartSessionService
                 'variation_id' => $variationId,
                 'variation_sku' => $sku,
                 'attributes_summary' => $attrs,
-                'sales_channel_id' => $priceRecord->sales_channel_id,
+                'sales_channel_id' => $matchedRecord->sales_channel_id,
                 'sales_channel_slug' => $channelSlug,
-                'unit_price' => (float) $priceRecord->unit_price,
+                'unit_price' => $effectivePrice,
                 'min_quantity' => $minQty,
                 'quantity' => $quantity,
                 'seller_id' => $product->seller_id,

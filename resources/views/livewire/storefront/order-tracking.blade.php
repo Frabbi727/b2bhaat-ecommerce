@@ -49,6 +49,20 @@
     <!-- Order & Sub-Orders Display -->
     @if ($order)
         <div class="space-y-6">
+            @if ($actionFeedback)
+                <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+                    <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    <span>{{ $actionFeedback }}</span>
+                </div>
+            @endif
+
+            @if ($actionError)
+                <div class="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                    <svg class="w-4 h-4 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span>{{ $actionError }}</span>
+                </div>
+            @endif
+
             <!-- Master Order Summary Card -->
             <div class="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
                 <div class="flex flex-wrap items-baseline justify-between gap-4 border-b border-slate-100 pb-4">
@@ -68,6 +82,22 @@
                             </svg>
                             Print Tax Invoice & Challan
                         </a>
+
+                        @php
+                            $canCancelOrder = $order->orderStatus?->slug !== 'cancelled' && 
+                                $order->subOrders->every(fn($s) => in_array($s->fulfillmentStatus?->slug, ['unfulfilled', 'processing']));
+                        @endphp
+
+                        @if ($canCancelOrder)
+                            <button 
+                                type="button" 
+                                wire:click="cancelEntireOrder"
+                                wire:confirm="Are you sure you want to cancel this entire order? All reserved items will be released back to inventory."
+                                class="px-3 py-1 rounded-lg border border-rose-200 hover:border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition cursor-pointer"
+                            >
+                                Cancel Order
+                            </button>
+                        @endif
 
                         <span class="px-2.5 py-1 rounded-full text-xs font-bold" style="background-color: {{ $order->orderStatus?->badge_color }}20; color: {{ $order->orderStatus?->badge_color }};">
                             {{ $order->orderStatus?->name }}
@@ -139,6 +169,40 @@
                             </div>
                         </div>
 
+                        <!-- Package Action Controls (Cancel / Return Dispute) -->
+                        <div class="flex items-center justify-between text-xs pt-1">
+                            <div>
+                                @if ($subOrder->fulfillmentStatus?->slug === 'delivered')
+                                    @php
+                                        $pendingReturn = $subOrder->returnRequests->firstWhere('status', 'pending');
+                                    @endphp
+                                    @if ($pendingReturn)
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold">
+                                            ⏳ Return Dispute Pending Review ({{ ucfirst($pendingReturn->requested_action) }})
+                                        </span>
+                                    @else
+                                        <button 
+                                            type="button" 
+                                            wire:click="openReturnModal({{ $subOrder->id }})"
+                                            class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold text-xs transition cursor-pointer"
+                                        >
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z"/></svg>
+                                            Request Return / Dispute
+                                        </button>
+                                    @endif
+                                @elseif ($subOrder->fulfillmentStatus?->slug === 'unfulfilled')
+                                    <button 
+                                        type="button" 
+                                        wire:click="cancelSubOrderConsignment({{ $subOrder->id }})"
+                                        wire:confirm="Cancel this package consignment? Reserved items will be released."
+                                        class="px-2.5 py-1 rounded-lg border border-rose-200 hover:border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[11px] transition cursor-pointer"
+                                    >
+                                        Cancel Package
+                                    </button>
+                                @endif
+                            </div>
+                        </div>
+
                         <!-- Courier Milestone Timeline -->
                         <div class="space-y-3 pt-2">
                             <h5 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Milestone Timeline</h5>
@@ -167,6 +231,96 @@
                         </div>
                     </div>
                 @endforeach
+            </div>
+        </div>
+    @endif
+
+    <!-- Return / Dispute Request Modal -->
+    @if ($showReturnModal)
+        <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-6 shadow-2xl border border-slate-200 relative animate-in fade-in duration-200">
+                <button 
+                    wire:click="closeReturnModal" 
+                    class="absolute top-5 right-5 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 cursor-pointer"
+                >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-rose-100 text-rose-800">
+                        Escrow Dispute Resolution
+                    </span>
+                    <h2 class="text-xl font-black text-slate-900 mt-1">Initiate Return or Replacement</h2>
+                    <p class="text-xs text-slate-500 mt-0.5">
+                        Delivered packages are covered under the B2B Haat 48-Hour Inspection Guarantee.
+                    </p>
+                </div>
+
+                <form wire:submit="submitReturnRequest" class="space-y-4 text-xs">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Reason for Return *</label>
+                        <select 
+                            wire:model="returnReason" 
+                            class="w-full py-2.5 px-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
+                        >
+                            <option value="defective_item">Defective or Malfunctioning Item</option>
+                            <option value="damaged_goods">Damaged during Courier Transit</option>
+                            <option value="incorrect_variation">Wrong Item / Color / Variation Sent</option>
+                            <option value="not_as_described">Specification or Quality Mismatch</option>
+                            <option value="other">Other Issue</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Preferred Resolution *</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="flex items-center gap-2 p-3 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50 {{ $returnRequestedAction === 'refund' ? 'border-indigo-600 bg-indigo-50/50' : '' }}">
+                                <input type="radio" value="refund" wire:model.live="returnRequestedAction" class="text-indigo-600 focus:ring-indigo-500"/>
+                                <div>
+                                    <strong class="block text-slate-900">Full Refund</strong>
+                                    <span class="text-[10px] text-slate-500">Credited back</span>
+                                </div>
+                            </label>
+
+                            <label class="flex items-center gap-2 p-3 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50 {{ $returnRequestedAction === 'replacement' ? 'border-indigo-600 bg-indigo-50/50' : '' }}">
+                                <input type="radio" value="replacement" wire:model.live="returnRequestedAction" class="text-indigo-600 focus:ring-indigo-500"/>
+                                <div>
+                                    <strong class="block text-slate-900">Replacement</strong>
+                                    <span class="text-[10px] text-slate-500">Free exchange</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Detailed Explanation *</label>
+                        <textarea 
+                            rows="3" 
+                            wire:model="returnDescription" 
+                            placeholder="Please describe the defect, damage, or discrepancy in detail..."
+                            class="w-full py-2 px-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                        ></textarea>
+                        @error('returnDescription') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div class="pt-2 flex items-center justify-end gap-3">
+                        <button 
+                            type="button" 
+                            wire:click="closeReturnModal" 
+                            class="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold cursor-pointer"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            type="submit" 
+                            wire:loading.attr="disabled"
+                            class="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                        >
+                            <svg wire:loading class="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                            <span>Submit Return Request</span>
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     @endif

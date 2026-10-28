@@ -59,6 +59,7 @@ class SystemLookupSeeder extends Seeder
             ['name' => 'Out for Delivery', 'slug' => 'out_for_delivery', 'badge_color' => '#F59E0B', 'sort_order' => 5],
             ['name' => 'Delivered', 'slug' => 'delivered', 'badge_color' => '#10B981', 'sort_order' => 6],
             ['name' => 'Returned', 'slug' => 'returned', 'badge_color' => '#EF4444', 'sort_order' => 7],
+            ['name' => 'Cancelled', 'slug' => 'cancelled', 'badge_color' => '#6B7280', 'sort_order' => 8],
         ];
         foreach ($fulfillmentStatuses as $status) {
             FulfillmentStatus::firstOrCreate(['slug' => $status['slug']], $status);

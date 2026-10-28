@@ -17,6 +17,7 @@ use App\Models\PaymentStatus;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\ProductPrice;
+use App\Models\ProductReview;
 use App\Models\ProductVariation;
 use App\Models\Role;
 use App\Models\SalesChannel;
@@ -87,7 +88,7 @@ class DemoCatalogSeeder extends Seeder
         );
 
         // 3. Wholesale Buyer
-        User::firstOrCreate(
+        $wholesaleUser = User::firstOrCreate(
             ['email' => 'buyer@boutique.com'],
             [
                 'role_id' => $wholesaleRole->id,
@@ -111,15 +112,50 @@ class DemoCatalogSeeder extends Seeder
         );
 
         CustomerAddress::firstOrCreate(
-            ['user_id' => $retailUser->id],
+            ['user_id' => $retailUser->id, 'address_title' => 'Home'],
             [
-                'address_title' => 'Home',
                 'recipient_name' => 'Tanvir Hasan',
                 'recipient_phone' => '+8801700000004',
                 'street_address' => 'House 14, Road 5, Dhanmondi',
                 'city' => 'Dhaka',
                 'postal_code' => '1205',
                 'is_default' => true,
+            ]
+        );
+
+        CustomerAddress::firstOrCreate(
+            ['user_id' => $retailUser->id, 'address_title' => 'Uttara Branch Outlet'],
+            [
+                'recipient_name' => 'Tanvir Hasan',
+                'recipient_phone' => '+8801700000004',
+                'street_address' => 'Plot 22, Sector 3, Uttara',
+                'city' => 'Dhaka',
+                'postal_code' => '1230',
+                'is_default' => false,
+            ]
+        );
+
+        CustomerAddress::firstOrCreate(
+            ['user_id' => $wholesaleUser->id, 'address_title' => 'Boutique Salon HQ'],
+            [
+                'recipient_name' => 'Farhana Akter',
+                'recipient_phone' => '+8801700000003',
+                'street_address' => 'Road 11, Block D, Banani',
+                'city' => 'Dhaka',
+                'postal_code' => '1213',
+                'is_default' => true,
+            ]
+        );
+
+        CustomerAddress::firstOrCreate(
+            ['user_id' => $wholesaleUser->id, 'address_title' => 'Chittagong Distribution Hub'],
+            [
+                'recipient_name' => 'Karim Ullah',
+                'recipient_phone' => '+8801700000003',
+                'street_address' => 'GEC Circle, Nasirabad',
+                'city' => 'Chittagong',
+                'postal_code' => '4000',
+                'is_default' => false,
             ]
         );
 
@@ -220,7 +256,8 @@ class DemoCatalogSeeder extends Seeder
             ]
         );
 
-        // Wholesale Price: min_quantity 50, price 110.00
+        // Wholesale Price Tiers:
+        // Tier 1: 50-99 units @ ৳110.00
         ProductPrice::firstOrCreate(
             [
                 'product_id' => $product->id,
@@ -229,8 +266,36 @@ class DemoCatalogSeeder extends Seeder
                 'min_quantity' => 50,
             ],
             [
-                'max_quantity' => null,
+                'max_quantity' => 99,
                 'unit_price' => 110.00,
+            ]
+        );
+
+        // Tier 2: 100-249 units @ ৳95.00 (Save 14%)
+        ProductPrice::firstOrCreate(
+            [
+                'product_id' => $product->id,
+                'variation_id' => null,
+                'sales_channel_id' => $wholesaleChannel->id,
+                'min_quantity' => 100,
+            ],
+            [
+                'max_quantity' => 249,
+                'unit_price' => 95.00,
+            ]
+        );
+
+        // Tier 3: 250+ units @ ৳85.00 (Save 23%)
+        ProductPrice::firstOrCreate(
+            [
+                'product_id' => $product->id,
+                'variation_id' => null,
+                'sales_channel_id' => $wholesaleChannel->id,
+                'min_quantity' => 250,
+            ],
+            [
+                'max_quantity' => null,
+                'unit_price' => 85.00,
             ]
         );
 
@@ -332,6 +397,41 @@ class DemoCatalogSeeder extends Seeder
                     'hub_location' => 'Tejgaon Central Sorting Hub',
                     'description' => 'Package picked up from supplier and in transit to delivery hub.',
                     'logged_at' => now()->subHours(12),
+                ]
+            );
+
+            // 8. Sample Reviews
+            ProductReview::firstOrCreate(
+                [
+                    'product_id' => $product->id,
+                    'user_id' => $retailUser->id,
+                ],
+                [
+                    'order_id' => $demoOrder->id,
+                    'sub_order_id' => $demoSubOrder->id,
+                    'rating' => 5,
+                    'title' => 'Superior UV Finish & Long Lasting!',
+                    'comment' => 'Received the 15ml Gel Polish in Dhaka via Steadfast in under 24 hours. The Ruby Red finish is ultra vibrant and cures completely in 60s under LED. Perfect retail packaging.',
+                    'is_verified_purchase' => true,
+                    'is_approved' => true,
+                    'seller_reply' => 'Thank you for your review! We formulate all gel polishes with high-pigment European resin. Looking forward to your next order!',
+                    'seller_replied_at' => now()->subHours(6),
+                ]
+            );
+
+            ProductReview::firstOrCreate(
+                [
+                    'product_id' => $product->id,
+                    'user_id' => $wholesaleUser->id,
+                ],
+                [
+                    'rating' => 5,
+                    'title' => 'Top Quality for Wholesale Salon Distribution',
+                    'comment' => 'Procured a bulk carton lot for our beauty salons across Dhanmondi and Banani. The MOQ pricing is unbeatable directly from the factory, and customer feedback has been exceptional.',
+                    'is_verified_purchase' => false,
+                    'is_approved' => true,
+                    'seller_reply' => 'We appreciate your business! Feel free to request a custom RFQ anytime for custom branding or larger batch runs.',
+                    'seller_replied_at' => now()->subHours(2),
                 ]
             );
         }

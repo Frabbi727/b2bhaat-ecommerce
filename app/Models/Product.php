@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -86,6 +87,26 @@ class Product extends Model
         return $this->hasMany(ProductPrice::class);
     }
 
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(ProductReview::class);
+    }
+
+    public function approvedReviews(): HasMany
+    {
+        return $this->hasMany(ProductReview::class)->where('is_approved', true);
+    }
+
+    public function wishlists(): HasMany
+    {
+        return $this->hasMany(Wishlist::class);
+    }
+
+    public function favoritedByUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'wishlists')->withTimestamps();
+    }
+
     public function retailPrice()
     {
         return $this->hasOne(ProductPrice::class)
@@ -97,6 +118,14 @@ class Product extends Model
     public function wholesalePrice()
     {
         return $this->hasOne(ProductPrice::class)
+            ->whereHas('salesChannel', fn (Builder $q) => $q->where('slug', SalesChannel::WHOLESALE))
+            ->whereNull('variation_id')
+            ->orderBy('min_quantity');
+    }
+
+    public function wholesalePrices(): HasMany
+    {
+        return $this->hasMany(ProductPrice::class)
             ->whereHas('salesChannel', fn (Builder $q) => $q->where('slug', SalesChannel::WHOLESALE))
             ->whereNull('variation_id')
             ->orderBy('min_quantity');

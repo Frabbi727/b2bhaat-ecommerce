@@ -76,6 +76,42 @@ class EscrowLedgerService
     }
 
     /**
+     * Credit seller wallet directly for delivered COD sub-orders.
+     */
+    public function creditDeliveredSubOrder(SubOrder $subOrder): WalletTransaction
+    {
+        return DB::transaction(function () use ($subOrder) {
+            /** @var SellerWallet $wallet */
+            $wallet = SellerWallet::firstOrCreate(
+                ['seller_id' => $subOrder->seller_id],
+                ['available_balance' => 0.00, 'escrow_held_balance' => 0.00]
+            );
+
+            $wallet = SellerWallet::where('id', $wallet->id)->lockForUpdate()->firstOrFail();
+
+            $netEarnings = $subOrder->net_earnings;
+
+            if ($wallet->escrow_held_balance >= $netEarnings) {
+                $wallet->decrement('escrow_held_balance', $netEarnings);
+            } elseif ($wallet->escrow_held_balance > 0) {
+                $wallet->update(['escrow_held_balance' => 0.00]);
+            }
+
+            $wallet->increment('available_balance', $netEarnings);
+            $wallet->refresh();
+
+            return WalletTransaction::create([
+                'seller_wallet_id' => $wallet->id,
+                'sub_order_id' => $subOrder->id,
+                'transaction_type' => WalletTransaction::TYPE_ESCROW_RELEASE,
+                'amount' => $netEarnings,
+                'running_balance' => $wallet->available_balance,
+                'reference_note' => "Settled net earnings to wallet for delivered Sub-Order #{$subOrder->sub_order_number}",
+            ]);
+        });
+    }
+
+    /**
      * Request payout withdrawal from seller's available balance.
      *
      * @throws Exception

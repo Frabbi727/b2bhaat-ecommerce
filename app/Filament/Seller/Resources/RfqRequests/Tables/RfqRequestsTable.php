@@ -102,6 +102,15 @@ class RfqRequestsTable
                             ->success()
                             ->send();
                     }),
+
+                Action::make('print_quotation')
+                    ->label('Print Quotation')
+                    ->icon('heroicon-o-printer')
+                    ->color('gray')
+                    ->url(fn (RfqRequest $record): string => route('rfq.quotation.print', $record->id))
+                    ->openUrlInNewTab()
+                    ->visible(fn (RfqRequest $record): bool => in_array($record->status, ['quoted', 'accepted'])),
+
                 EditAction::make(),
             ])
             ->toolbarActions([

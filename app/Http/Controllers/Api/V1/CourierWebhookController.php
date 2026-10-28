@@ -4,14 +4,18 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\FulfillmentStatus;
-use App\Models\OrderTrackingLog;
 use App\Models\SubOrder;
+use App\Services\Logistics\CourierStatusService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class CourierWebhookController extends Controller
 {
+    public function __construct(
+        protected CourierStatusService $courierStatusService
+    ) {}
+
     /**
      * Ingest courier status callback / webhook event.
      */
@@ -50,22 +54,18 @@ class CourierWebhookController extends Controller
         $fulfillmentStatus = FulfillmentStatus::where('slug', $statusSlug)->first()
             ?? FulfillmentStatus::where('slug', 'in_transit')->firstOrFail();
 
-        $subOrder->update([
-            'fulfillment_status_id' => $fulfillmentStatus->id,
-        ]);
-
         $loggedAt = ! empty($validated['timestamp'])
             ? Carbon::parse($validated['timestamp'])
             : now();
 
-        OrderTrackingLog::create([
-            'sub_order_id' => $subOrder->id,
-            'fulfillment_status_id' => $fulfillmentStatus->id,
-            'title' => $validated['title'] ?? ('Courier Update: '.$fulfillmentStatus->name),
-            'description' => $validated['description'] ?? "Status updated via {$subOrder->courier_name} webhook.",
-            'hub_location' => $validated['hub_location'] ?? 'Courier Hub',
-            'logged_at' => $loggedAt,
-        ]);
+        $this->courierStatusService->updateStatus(
+            subOrder: $subOrder,
+            statusSlug: $fulfillmentStatus->slug,
+            hubLocation: $validated['hub_location'] ?? 'Courier Hub',
+            title: $validated['title'] ?? ('Courier Update: '.$fulfillmentStatus->name),
+            description: $validated['description'] ?? "Status updated via {$subOrder->courier_name} webhook.",
+            timestamp: $loggedAt,
+        );
 
         return response()->json([
             'success' => true,

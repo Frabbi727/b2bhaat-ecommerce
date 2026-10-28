@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Storefront;
 
+use App\Models\CustomerAddress;
 use App\Models\Order;
 use App\Models\OrderStatus;
 use App\Models\PaymentMethod;
@@ -20,6 +21,12 @@ use Livewire\Component;
 #[Layout('layouts.storefront')]
 class CheckoutComponent extends Component
 {
+    public ?int $selectedAddressId = null;
+
+    public bool $saveToAddressBook = false;
+
+    public string $newAddressTitle = 'Office / Warehouse';
+
     public string $recipientName = '';
 
     public string $recipientPhone = '';
@@ -49,20 +56,34 @@ class CheckoutComponent extends Component
         if ($user) {
             $this->recipientName = $user->name;
             $this->recipientPhone = $user->phone ?? '+8801700000004';
-            $defaultAddress = $user->addresses()->where('is_default', true)->first();
+            $defaultAddress = $user->addresses()->where('is_default', true)->first()
+                ?? $user->addresses()->first();
+
             if ($defaultAddress) {
-                $this->streetAddress = $defaultAddress->street_address;
-                $this->city = $defaultAddress->city;
-                $this->postalCode = $defaultAddress->postal_code;
-                if (strtolower($defaultAddress->city) !== 'dhaka') {
-                    $this->deliveryZone = 'outside_dhaka';
-                }
+                $this->selectSavedAddress($defaultAddress->id);
             }
         }
 
         $defaultMethod = PaymentMethod::where('slug', 'mock_gateway')->first()
             ?? PaymentMethod::where('is_active', true)->first();
         $this->selectedPaymentMethodId = $defaultMethod?->id;
+    }
+
+    public function selectSavedAddress(?int $addressId): void
+    {
+        $this->selectedAddressId = $addressId;
+
+        if ($addressId && Auth::check()) {
+            $addr = Auth::user()->addresses()->find($addressId);
+            if ($addr) {
+                $this->recipientName = $addr->recipient_name;
+                $this->recipientPhone = $addr->recipient_phone;
+                $this->streetAddress = $addr->street_address;
+                $this->city = $addr->city;
+                $this->postalCode = $addr->postal_code;
+                $this->deliveryZone = strtolower($addr->city) === 'dhaka' ? 'inside_dhaka' : 'outside_dhaka';
+            }
+        }
     }
 
     public function getShippingFee(): float
@@ -173,6 +194,20 @@ class CheckoutComponent extends Component
                 }
             }
 
+            // Save address to address book if requested by customer
+            if ($this->saveToAddressBook && Auth::check()) {
+                CustomerAddress::create([
+                    'user_id' => $customer->id,
+                    'address_title' => $this->newAddressTitle ?: 'Consignment Address',
+                    'recipient_name' => $this->recipientName,
+                    'recipient_phone' => $this->recipientPhone,
+                    'street_address' => $this->streetAddress,
+                    'city' => $this->city,
+                    'postal_code' => $this->postalCode,
+                    'is_default' => $customer->addresses()->count() === 0,
+                ]);
+            }
+
             $cart->clear();
 
             $this->redirectRoute('tracking.show', [
@@ -192,6 +227,7 @@ class CheckoutComponent extends Component
         $shippingFee = $this->getShippingFee();
         $grandTotal = $subtotal + $shippingFee;
         $paymentMethods = PaymentMethod::where('is_active', true)->get();
+        $savedAddresses = Auth::check() ? Auth::user()->addresses()->latest()->get() : collect();
 
         return view('livewire.storefront.checkout-component', [
             'items' => $items,
@@ -199,6 +235,7 @@ class CheckoutComponent extends Component
             'shippingFee' => $shippingFee,
             'grandTotal' => $grandTotal,
             'paymentMethods' => $paymentMethods,
+            'savedAddresses' => $savedAddresses,
         ]);
     }
 }

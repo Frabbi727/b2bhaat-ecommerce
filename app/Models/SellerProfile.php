@@ -16,6 +16,9 @@ class SellerProfile extends Model
         'tax_id_number',
         'commission_rate_percentage',
         'is_approved',
+        'is_on_vacation',
+        'vacation_message',
+        'vacation_ends_at',
     ];
 
     protected function casts(): array
@@ -23,6 +26,8 @@ class SellerProfile extends Model
         return [
             'commission_rate_percentage' => 'decimal:2',
             'is_approved' => 'boolean',
+            'is_on_vacation' => 'boolean',
+            'vacation_ends_at' => 'date',
         ];
     }
 

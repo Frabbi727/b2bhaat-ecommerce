@@ -52,6 +52,11 @@ class SubOrder extends Model
         return $this->hasMany(OrderTrackingLog::class)->orderBy('logged_at', 'desc');
     }
 
+    public function returnRequests(): HasMany
+    {
+        return $this->hasMany(ReturnRequest::class);
+    }
+
     public function getNetEarningsAttribute(): float
     {
         return (float) ($this->subtotal - $this->commission_amount);

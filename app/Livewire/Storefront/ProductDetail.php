@@ -2,9 +2,12 @@
 
 namespace App\Livewire\Storefront;
 
+use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\ProductReview;
 use App\Models\RfqRequest;
 use App\Models\SalesChannel;
+use App\Models\Wishlist;
 use App\Services\Cart\CartSessionService;
 use Exception;
 use Livewire\Attributes\Layout;
@@ -48,6 +51,21 @@ class ProductDetail extends Component
 
     public bool $rfqSuccess = false;
 
+    // Customer Reviews state
+    public int $reviewRating = 5;
+
+    public string $reviewTitle = '';
+
+    public string $reviewComment = '';
+
+    public string $reviewFilterRating = 'all';
+
+    public string $reviewSuccessMessage = '';
+
+    public string $reviewErrorMessage = '';
+
+    public bool $isInWishlist = false;
+
     public function mount(string $slug): void
     {
         $this->product = Product::with([
@@ -78,12 +96,25 @@ class ProductDetail extends Component
             $this->rfqBuyerEmail = $user->email;
             $this->rfqBuyerPhone = $user->phone ?? '';
             $this->rfqCompanyName = $user->business_name ?? '';
+            $this->isInWishlist = $user->wishlists()->where('product_id', $this->product->id)->exists();
         }
+    }
+
+    public function getIsSellerOnVacationProperty(): bool
+    {
+        return (bool) $this->product->seller?->sellerProfile?->is_on_vacation;
     }
 
     public function addToCartRetail(): void
     {
         $this->resetMessages();
+
+        if ($this->isSellerOnVacation) {
+            $this->errorMessage = 'This merchant is currently on vacation mode. Ordering is temporarily disabled.';
+
+            return;
+        }
+
         $this->retailQuantity = max(1, (int) $this->retailQuantity);
 
         if ($this->product->variations->isNotEmpty()) {
@@ -127,10 +158,22 @@ class ProductDetail extends Component
     public function addBulkMatrixToCart(): void
     {
         $this->resetMessages();
+
+        if ($this->isSellerOnVacation) {
+            $this->errorMessage = 'This merchant is currently on vacation mode. Ordering is temporarily disabled.';
+
+            return;
+        }
+
         $cart = app(CartSessionService::class);
 
         $wholesalePrice = $this->product->prices
             ->first(fn ($p) => $p->salesChannel?->slug === SalesChannel::WHOLESALE && is_null($p->variation_id));
+
+        $wholesaleTiers = $this->product->prices
+            ->filter(fn ($p) => $p->salesChannel?->slug === SalesChannel::WHOLESALE && is_null($p->variation_id))
+            ->sortBy('min_quantity')
+            ->values();
 
         $moq = $wholesalePrice?->min_quantity ?? 1;
 
@@ -161,6 +204,16 @@ class ProductDetail extends Component
             }
         }
 
+        // Resolve progressive volume tier price based on total lot quantity
+        $wholesaleTiers = $this->product->prices
+            ->filter(fn ($p) => $p->salesChannel?->slug === SalesChannel::WHOLESALE && is_null($p->variation_id))
+            ->sortBy('min_quantity');
+
+        $matchedTier = $wholesaleTiers->filter(fn ($p) => $totalUnits >= $p->min_quantity)->last()
+            ?? $wholesaleTiers->first();
+
+        $tierUnitPrice = $matchedTier ? (float) $matchedTier->unit_price : null;
+
         try {
             $addedCount = 0;
             foreach ($this->matrixQuantities as $variationId => $qty) {
@@ -170,7 +223,8 @@ class ProductDetail extends Component
                         productId: $this->product->id,
                         variationId: (int) $variationId,
                         channelSlug: SalesChannel::WHOLESALE,
-                        quantity: $qty
+                        quantity: $qty,
+                        overrideUnitPrice: $tierUnitPrice
                     );
                     $addedCount += $qty;
                 }
@@ -185,6 +239,33 @@ class ProductDetail extends Component
             $this->dispatch('cartUpdated');
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
+        }
+    }
+
+    public function toggleWishlist(): void
+    {
+        if (! auth()->check()) {
+            $this->redirect(route('filament.seller.auth.login'));
+
+            return;
+        }
+
+        $userId = auth()->id();
+        $existing = Wishlist::where('user_id', $userId)
+            ->where('product_id', $this->product->id)
+            ->first();
+
+        if ($existing) {
+            $existing->delete();
+            $this->isInWishlist = false;
+            $this->feedbackMessage = 'Product removed from your Wishlist.';
+        } else {
+            Wishlist::create([
+                'user_id' => $userId,
+                'product_id' => $this->product->id,
+            ]);
+            $this->isInWishlist = true;
+            $this->feedbackMessage = 'Product added to your Wishlist!';
         }
     }
 
@@ -233,6 +314,61 @@ class ProductDetail extends Component
         $this->rfqSuccess = true;
     }
 
+    public function setFilterRating(string $filter): void
+    {
+        $this->reviewFilterRating = $filter;
+    }
+
+    public function submitReview(): void
+    {
+        $this->reviewSuccessMessage = '';
+        $this->reviewErrorMessage = '';
+
+        if (! auth()->check()) {
+            $this->reviewErrorMessage = 'You must be logged in to submit a review.';
+
+            return;
+        }
+
+        $this->validate([
+            'reviewRating' => 'required|integer|min:1|max:5',
+            'reviewTitle' => 'nullable|string|max:150',
+            'reviewComment' => 'required|string|min:5|max:2000',
+        ], [
+            'reviewRating.min' => 'Please select at least 1 star.',
+            'reviewRating.max' => 'Maximum rating is 5 stars.',
+            'reviewComment.min' => 'Please provide at least 5 characters in your feedback.',
+        ]);
+
+        $userId = auth()->id();
+
+        // Check if verified purchase
+        $hasPurchased = OrderItem::where('product_id', $this->product->id)
+            ->whereHas('order', fn ($q) => $q->where('customer_id', $userId))
+            ->exists();
+
+        ProductReview::updateOrCreate(
+            [
+                'product_id' => $this->product->id,
+                'user_id' => $userId,
+            ],
+            [
+                'rating' => $this->reviewRating,
+                'title' => $this->reviewTitle,
+                'comment' => $this->reviewComment,
+                'is_verified_purchase' => $hasPurchased,
+                'is_approved' => true,
+            ]
+        );
+
+        $this->reviewTitle = '';
+        $this->reviewComment = '';
+        $this->reviewRating = 5;
+        $this->reviewSuccessMessage = $hasPurchased
+            ? 'Thank you! Your verified purchase review has been published.'
+            : 'Thank you! Your customer review has been published.';
+    }
+
     protected function resetMessages(): void
     {
         $this->feedbackMessage = '';
@@ -250,10 +386,70 @@ class ProductDetail extends Component
         $wholesalePrice = $this->product->prices
             ->first(fn ($p) => $p->salesChannel?->slug === SalesChannel::WHOLESALE && is_null($p->variation_id));
 
+        $wholesaleTiers = $this->product->prices
+            ->filter(fn ($p) => $p->salesChannel?->slug === SalesChannel::WHOLESALE && is_null($p->variation_id))
+            ->sortBy('min_quantity')
+            ->values();
+
+        // Reviews calculations
+        $approvedReviewsQuery = $this->product->reviews()->where('is_approved', true);
+        $totalReviews = (clone $approvedReviewsQuery)->count();
+        $averageRating = $totalReviews > 0 ? round((float) (clone $approvedReviewsQuery)->avg('rating'), 1) : 0;
+
+        $ratingDistribution = [];
+        if ($totalReviews > 0) {
+            $counts = (clone $approvedReviewsQuery)
+                ->selectRaw('rating, count(*) as count')
+                ->groupBy('rating')
+                ->pluck('count', 'rating');
+
+            foreach ([5, 4, 3, 2, 1] as $star) {
+                $count = (int) $counts->get($star, 0);
+                $ratingDistribution[$star] = [
+                    'count' => $count,
+                    'percentage' => round(($count / $totalReviews) * 100),
+                ];
+            }
+        } else {
+            foreach ([5, 4, 3, 2, 1] as $star) {
+                $ratingDistribution[$star] = ['count' => 0, 'percentage' => 0];
+            }
+        }
+
+        // Filtered reviews list
+        $reviewsListQuery = (clone $approvedReviewsQuery)
+            ->with(['user', 'product.seller.sellerProfile'])
+            ->latest('id');
+
+        if (in_array($this->reviewFilterRating, ['1', '2', '3', '4', '5'])) {
+            $reviewsListQuery->where('rating', (int) $this->reviewFilterRating);
+        } elseif ($this->reviewFilterRating === 'verified') {
+            $reviewsListQuery->where('is_verified_purchase', true);
+        }
+
+        $reviews = $reviewsListQuery->get();
+
+        $userHasPurchased = auth()->check()
+            ? OrderItem::where('product_id', $this->product->id)
+                ->whereHas('order', fn ($q) => $q->where('customer_id', auth()->id()))
+                ->exists()
+            : false;
+
+        $existingUserReview = auth()->check()
+            ? $this->product->reviews()->where('user_id', auth()->id())->first()
+            : null;
+
         return view('livewire.storefront.product-detail', [
             'isWholesaleUser' => $isWholesaleUser,
             'retailPrice' => $retailPrice,
             'wholesalePrice' => $wholesalePrice,
+            'wholesaleTiers' => $wholesaleTiers,
+            'totalReviews' => $totalReviews,
+            'averageRating' => $averageRating,
+            'ratingDistribution' => $ratingDistribution,
+            'reviews' => $reviews,
+            'userHasPurchased' => $userHasPurchased,
+            'existingUserReview' => $existingUserReview,
         ]);
     }
 }

@@ -18,10 +18,48 @@
         <div class="lg:col-span-7 space-y-6">
             <!-- Shipping Information -->
             <div class="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
-                <h3 class="font-bold text-slate-900 text-sm border-b border-slate-100 pb-3 flex items-center gap-2">
-                    <span class="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs">1</span>
-                    Delivery & Consignment Address
+                <h3 class="font-bold text-slate-900 text-sm border-b border-slate-100 pb-3 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs">1</span>
+                        Delivery & Consignment Address
+                    </div>
+                    @auth
+                        <a href="{{ route('customer.addresses') }}" class="text-xs font-semibold text-indigo-600 hover:underline">
+                            Manage Address Book &rarr;
+                        </a>
+                    @endauth
                 </h3>
+
+                @if ($savedAddresses->isNotEmpty())
+                    <div class="space-y-2 pb-2">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Select Saved Address (1-Click)</label>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            @foreach ($savedAddresses as $addr)
+                                <div 
+                                    wire:click="selectSavedAddress({{ $addr->id }})"
+                                    class="p-3.5 rounded-xl border text-xs cursor-pointer transition relative {{ $selectedAddressId === $addr->id ? 'border-indigo-600 bg-indigo-50/60 ring-2 ring-indigo-500/20 shadow-xs' : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100/70' }}"
+                                >
+                                    <div class="flex items-center justify-between font-bold text-slate-900">
+                                        <span>{{ $addr->address_title ?: 'Saved Address' }}</span>
+                                        @if ($addr->is_default)
+                                            <span class="px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-100 text-indigo-700 uppercase">Default</span>
+                                        @endif
+                                    </div>
+                                    <div class="text-slate-600 font-medium mt-1">{{ $addr->recipient_name }} • {{ $addr->recipient_phone }}</div>
+                                    <div class="text-slate-500 text-[11px] mt-0.5 truncate">{{ $addr->street_address }}, {{ $addr->city }}</div>
+                                </div>
+                            @endforeach
+
+                            <div 
+                                wire:click="selectSavedAddress(null)"
+                                class="p-3.5 rounded-xl border border-dashed text-xs cursor-pointer transition flex items-center justify-center gap-2 {{ is_null($selectedAddressId) ? 'border-indigo-600 bg-indigo-50/40 text-indigo-700 font-bold' : 'border-slate-300 text-slate-600 hover:bg-slate-50' }}"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                                <span>Enter New / Custom Address</span>
+                            </div>
+                        </div>
+                    </div>
+                @endif
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                     <div>
@@ -104,6 +142,25 @@
                         />
                         @error('postalCode') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
                     </div>
+
+                    @auth
+                        <div class="sm:col-span-2 pt-3 border-t border-slate-100 space-y-2">
+                            <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800">
+                                <input type="checkbox" wire:model.live="saveToAddressBook" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                                <span>Save this address to my Address Book for future one-click orders</span>
+                            </label>
+                            @if ($saveToAddressBook)
+                                <div class="pl-6">
+                                    <input 
+                                        type="text" 
+                                        wire:model="newAddressTitle" 
+                                        placeholder="e.g. Uttara Distribution Center / Home / Dhanmondi Salon" 
+                                        class="w-full text-xs py-1.5 px-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+                            @endif
+                        </div>
+                    @endauth
                 </div>
             </div>
 

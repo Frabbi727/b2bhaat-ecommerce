@@ -89,6 +89,19 @@ class SellerWalletsTable
                                 ->send();
                         }
                     }),
+
+                Action::make('printStatement')
+                    ->label('Official Statement')
+                    ->icon('heroicon-o-document-text')
+                    ->color('primary')
+                    ->url(fn () => route('seller.wallet.statement.print'))
+                    ->openUrlInNewTab(),
+
+                Action::make('downloadCsv')
+                    ->label('Export CSV Ledger')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->color('gray')
+                    ->url(fn () => route('seller.wallet.statement.csv')),
             ]);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOneThrough;
 
 class OrderItem extends Model
 {
@@ -29,6 +30,11 @@ class OrderItem extends Model
     public function subOrder(): BelongsTo
     {
         return $this->belongsTo(SubOrder::class);
+    }
+
+    public function order(): HasOneThrough
+    {
+        return $this->hasOneThrough(Order::class, SubOrder::class, 'id', 'id', 'sub_order_id', 'parent_order_id');
     }
 
     public function product(): BelongsTo

@@ -67,6 +67,33 @@
         <div class="absolute -right-16 -top-16 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
     </div>
 
+    <!-- Vacation Notice Banner -->
+    @if ($sellerProfile->is_on_vacation)
+        <div class="rounded-2xl bg-amber-50 border border-amber-300 p-5 text-amber-950 shadow-sm flex items-start gap-4">
+            <span class="text-3xl p-2 bg-amber-100 rounded-xl shrink-0">🏖️</span>
+            <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                    <h3 class="font-bold text-sm text-amber-950">Factory Currently on Vacation Mode</h3>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-200 text-amber-800 uppercase tracking-wider">
+                        Dispatches Paused
+                    </span>
+                </div>
+                <p class="text-xs text-amber-800/90 leading-relaxed">
+                    {{ $sellerProfile->vacation_message ?: 'This store has temporarily paused factory dispatches and order processing.' }}
+                </p>
+                @if ($sellerProfile->vacation_ends_at)
+                    <div class="text-xs font-semibold text-amber-900 pt-0.5 flex items-center gap-1.5">
+                        <svg class="w-4 h-4 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                        Expected reopening: {{ \Carbon\Carbon::parse($sellerProfile->vacation_ends_at)->format('M d, Y') }}
+                    </div>
+                @endif
+                <div class="pt-1 text-[11px] text-amber-700 font-medium">
+                    Catalog items are available for browsing; new purchases and dispatches will resume upon store reopening.
+                </div>
+            </div>
+        </div>
+    @endif
+
     <!-- Wholesale Buyer Incentive Banner -->
     @if (! $isWholesaleUser)
         <div class="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">

@@ -39,6 +39,18 @@ class OrderSplitterService
     public function createAndSplitOrder(User $customer, array $data): Order
     {
         return DB::transaction(function () use ($customer, $data) {
+            // 0. Verify no participating vendor is currently on vacation mode
+            $productIds = collect($data['items'])->pluck('product_id')->unique()->filter();
+            $vacationProducts = Product::with('seller.sellerProfile')
+                ->whereIn('id', $productIds)
+                ->get()
+                ->filter(fn ($p) => (bool) $p->seller?->sellerProfile?->is_on_vacation);
+
+            if ($vacationProducts->isNotEmpty()) {
+                $storeName = $vacationProducts->first()->seller?->sellerProfile?->store_name ?? 'A merchant';
+                throw new \Exception("Cannot place order: {$storeName} is currently on vacation mode.");
+            }
+
             // 1. Reserve stock atomically
             $reservationItems = [];
             foreach ($data['items'] as $item) {

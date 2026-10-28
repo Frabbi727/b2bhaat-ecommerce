@@ -29,6 +29,13 @@
                     <a href="{{ route('customer.orders') }}" class="text-xs px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 font-semibold">
                         My Orders
                     </a>
+                    <a href="{{ route('customer.addresses') }}" class="text-xs px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 font-semibold">
+                        Address Book
+                    </a>
+                    <a href="{{ route('customer.wishlist') }}" class="text-xs px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-rose-300 border border-slate-700 font-semibold flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5 fill-rose-400" viewBox="0 0 24 24"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                        Wishlist
+                    </a>
                     <form action="{{ route('logout') }}" method="POST" class="inline">
                         @csrf
                         <button type="submit" class="text-rose-400 hover:text-rose-300 underline text-xs">Logout</button>
@@ -103,6 +110,8 @@
                 <a href="/seller" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100">Seller Center Portal (/seller)</a>
                 <a href="/admin" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100">Super Admin Portal (/admin)</a>
                 @auth
+                    <a href="{{ route('customer.wishlist') }}" class="block px-3 py-2 rounded-lg text-sm font-semibold text-rose-600 hover:bg-rose-50">My Wishlist & Saved</a>
+                    <a href="{{ route('customer.addresses') }}" class="block px-3 py-2 rounded-lg text-sm font-semibold text-slate-900 hover:bg-slate-100">Delivery Address Book</a>
                     <a href="{{ route('customer.orders') }}" class="block px-3 py-2 rounded-lg text-sm font-semibold text-slate-900 hover:bg-slate-100">My Orders & Receipts</a>
                 @endauth
             </div>
