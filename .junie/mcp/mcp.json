@@ -1,0 +1,11 @@
+{
+    "mcpServers": {
+        "laravel-boost": {
+            "command": "/opt/homebrew/Cellar/php/8.5.8/bin/php",
+            "args": [
+                "/Users/fazlerabbi/Desktop/projects/TONMY SOFT/b2bhaat-ecommerce/artisan",
+                "boost:mcp"
+            ]
+        }
+    }
+}
