@@ -66,6 +66,7 @@ class DemoCatalogSeeder extends Seeder
                 'is_active' => true,
             ]
         );
+        $seller->update(['role_id' => $sellerRole->id]);
 
         SellerProfile::firstOrCreate(
             ['user_id' => $seller->id],
