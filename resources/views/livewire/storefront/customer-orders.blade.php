@@ -92,6 +92,15 @@
                                         @endif
                                     </div>
 
+                                    @if ($subOrder->is_self_delivered && $subOrder->handover_code && $subOrder->fulfillmentStatus?->slug !== 'delivered')
+                                        <div class="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 flex items-center justify-between">
+                                            <span class="text-[11px] font-semibold">Handover Code (Give to Driver):</span>
+                                            <span class="font-mono font-black text-xs px-2 py-0.5 rounded bg-amber-200/90 text-amber-950 tracking-wider">
+                                                {{ $subOrder->handover_code }}
+                                            </span>
+                                        </div>
+                                    @endif
+
                                     <div class="border-t border-slate-200/60 pt-2 space-y-1">
                                         @foreach ($subOrder->items as $item)
                                             <div class="flex justify-between text-slate-700 text-[11px]">

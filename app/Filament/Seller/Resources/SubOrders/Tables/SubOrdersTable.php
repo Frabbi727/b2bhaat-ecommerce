@@ -7,6 +7,7 @@ use App\Models\OrderTrackingLog;
 use App\Models\SubOrder;
 use App\Services\Logistics\CourierBookingService;
 use App\Services\Logistics\CourierStatusService;
+use App\Services\Logistics\SelfDeliveryService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -46,9 +47,14 @@ class SubOrdersTable
                         default => Color::Amber,
                     }),
                 TextColumn::make('courier_name')
-                    ->label('Courier')
+                    ->label('Courier / Fleet')
                     ->placeholder('Unassigned')
                     ->searchable(),
+                TextColumn::make('is_self_delivered')
+                    ->label('Delivery Mode')
+                    ->badge()
+                    ->formatStateUsing(fn (bool $state) => $state ? 'Factory Direct Fleet' : 'Courier')
+                    ->color(fn (bool $state) => $state ? Color::Indigo : Color::Slate),
                 TextColumn::make('tracking_number')
                     ->label('Tracking #')
                     ->fontFamily('mono')
@@ -220,6 +226,75 @@ class SubOrdersTable
                     ->color('gray')
                     ->url(fn (SubOrder $record) => route('seller.sub_order.challan', $record->sub_order_number))
                     ->openUrlInNewTab(),
+
+                // 6. Factory Direct Fleet Dispatch (Decision D5)
+                Action::make('dispatchFactoryFleet')
+                    ->label('Dispatch Factory Fleet')
+                    ->icon('heroicon-o-truck')
+                    ->color('warning')
+                    ->visible(fn (SubOrder $record) => ! $record->is_self_delivered && in_array($record->fulfillmentStatus?->slug, ['unfulfilled', 'processing']))
+                    ->schema([
+                        TextInput::make('hub_location')
+                            ->label('Factory Dispatch Bay / Hub Location')
+                            ->default(fn (SubOrder $record) => ($record->seller?->sellerProfile?->store_name ?? 'Factory').' Factory Bay, Dhaka')
+                            ->required(),
+                        TextInput::make('driver_contact')
+                            ->label('Fleet Driver / Representative Phone')
+                            ->placeholder('e.g. +8801700000000')
+                            ->required(),
+                        Textarea::make('dispatch_note')
+                            ->label('Dispatch & Delivery Instructions')
+                            ->default('Direct truck fleet delivery. Customer OTP handover code required at destination.')
+                            ->required(),
+                    ])
+                    ->action(function (SubOrder $record, array $data): void {
+                        $code = app(SelfDeliveryService::class)->dispatchSelfDelivery(
+                            subOrder: $record,
+                            hubLocation: $data['hub_location'],
+                            driverContact: $data['driver_contact'],
+                            dispatchNote: $data['dispatch_note']
+                        );
+
+                        Notification::make()
+                            ->title('Dispatched via Factory Direct Fleet!')
+                            ->body("Handover verification code {$code} generated for the recipient.")
+                            ->success()
+                            ->send();
+                    }),
+
+                // 7. Verify Customer Handover Code (Decision D5)
+                Action::make('verifyHandoverCode')
+                    ->label('Confirm Handover Code')
+                    ->icon('heroicon-o-key')
+                    ->color('success')
+                    ->visible(fn (SubOrder $record) => $record->is_self_delivered && $record->fulfillmentStatus?->slug !== 'delivered')
+                    ->schema([
+                        TextInput::make('handover_code')
+                            ->label('6-Digit Customer Handover Code')
+                            ->placeholder('e.g. 849201')
+                            ->required()
+                            ->length(6),
+                    ])
+                    ->action(function (SubOrder $record, array $data): void {
+                        try {
+                            app(SelfDeliveryService::class)->verifyAndConfirmHandover(
+                                subOrder: $record,
+                                inputCode: $data['handover_code']
+                            );
+
+                            Notification::make()
+                                ->title('Handover Confirmed & Package Delivered!')
+                                ->body("Handover code verified successfully. Sub-Order #{$record->sub_order_number} marked as Delivered and ৳{$record->net_earnings} settled to wallet.")
+                                ->success()
+                                ->send();
+                        } catch (\Exception $e) {
+                            Notification::make()
+                                ->title('Verification Failed')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
 
                 // 6. Automated Courier Pickup Booking
                 Action::make('bookCourierPickup')

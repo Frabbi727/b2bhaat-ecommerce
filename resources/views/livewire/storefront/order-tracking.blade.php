@@ -153,6 +153,37 @@
                             </div>
                         </div>
 
+                        <!-- Self-Delivery Handover Code Banner (Decision D5) -->
+                        @if ($subOrder->is_self_delivered)
+                            <div class="p-4 rounded-xl border {{ $subOrder->fulfillmentStatus?->slug === 'delivered' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-amber-50 border-amber-300 text-amber-950 shadow-xs' }}">
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div class="space-y-0.5">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xl">🚛</span>
+                                            <h5 class="font-bold text-sm">
+                                                {{ $subOrder->fulfillmentStatus?->slug === 'delivered' ? 'Factory Fleet Handover Verified' : 'Direct Factory Fleet Self-Delivery' }}
+                                            </h5>
+                                        </div>
+                                        <p class="text-xs text-slate-600">
+                                            @if ($subOrder->fulfillmentStatus?->slug === 'delivered')
+                                                Handover confirmed on {{ $subOrder->handover_confirmed_at?->format('M d, Y h:i A') ?? 'delivery' }}.
+                                            @else
+                                                Provide this 6-digit handover code to the factory delivery agent upon physical receipt and inspection.
+                                            @endif
+                                        </p>
+                                    </div>
+                                    @if ($subOrder->handover_code && $subOrder->fulfillmentStatus?->slug !== 'delivered')
+                                        <div class="text-center sm:text-right shrink-0">
+                                            <span class="text-[10px] uppercase font-bold text-slate-500 block">Buyer Handover Code:</span>
+                                            <div class="inline-block px-4 py-1.5 rounded-lg bg-amber-200/80 border border-amber-400 font-mono font-black text-xl text-amber-950 tracking-widest shadow-inner">
+                                                {{ $subOrder->handover_code }}
+                                            </div>
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                        @endif
+
                         <!-- Items in Package -->
                         <div class="space-y-1.5 text-xs">
                             <span class="text-slate-400 font-semibold uppercase text-[10px]">Package Contents:</span>
