@@ -18,7 +18,21 @@ class SellerProfileResource extends Resource
 {
     protected static ?string $model = SellerProfile::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingStorefront;
+
+    protected static ?string $navigationLabel = 'Seller Profiles';
+
+    public static function getNavigationBadge(): ?string
+    {
+        $count = SellerProfile::where('is_approved', false)->whereNull('rejected_at')->count();
+
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): string|array|null
+    {
+        return 'warning';
+    }
 
     public static function form(Schema $schema): Schema
     {

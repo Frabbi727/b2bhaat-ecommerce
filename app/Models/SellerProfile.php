@@ -19,6 +19,9 @@ class SellerProfile extends Model
         'outside_dhaka_rate',
         'free_shipping_threshold',
         'is_approved',
+        'rejection_reason',
+        'approved_at',
+        'rejected_at',
         'is_on_vacation',
         'vacation_message',
         'vacation_ends_at',
@@ -32,9 +35,26 @@ class SellerProfile extends Model
             'outside_dhaka_rate' => 'decimal:2',
             'free_shipping_threshold' => 'decimal:2',
             'is_approved' => 'boolean',
+            'approved_at' => 'datetime',
+            'rejected_at' => 'datetime',
             'is_on_vacation' => 'boolean',
             'vacation_ends_at' => 'date',
         ];
+    }
+
+    public function isPending(): bool
+    {
+        return ! $this->is_approved && $this->rejected_at === null;
+    }
+
+    public function isRejected(): bool
+    {
+        return ! $this->is_approved && $this->rejected_at !== null;
+    }
+
+    public function isApproved(): bool
+    {
+        return (bool) $this->is_approved;
     }
 
     public function user(): BelongsTo

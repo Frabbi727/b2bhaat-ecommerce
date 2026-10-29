@@ -28,6 +28,9 @@ class User extends Authenticatable implements FilamentUser
         'password',
         'is_active',
         'is_wholesale_approved',
+        'wholesale_rejection_reason',
+        'wholesale_approved_at',
+        'wholesale_rejected_at',
     ];
 
     protected $hidden = [
@@ -42,7 +45,19 @@ class User extends Authenticatable implements FilamentUser
             'password' => 'hashed',
             'is_active' => 'boolean',
             'is_wholesale_approved' => 'boolean',
+            'wholesale_approved_at' => 'datetime',
+            'wholesale_rejected_at' => 'datetime',
         ];
+    }
+
+    public function isWholesalePending(): bool
+    {
+        return ! $this->is_wholesale_approved && $this->wholesale_rejected_at === null && (filled($this->trade_license_number) || filled($this->business_name));
+    }
+
+    public function isWholesaleRejected(): bool
+    {
+        return ! $this->is_wholesale_approved && $this->wholesale_rejected_at !== null;
     }
 
     public function role(): BelongsTo

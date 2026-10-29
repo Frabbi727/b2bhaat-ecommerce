@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\ReturnRequest;
 use App\Models\SellerProfile;
 use App\Models\SellerWallet;
+use App\Models\User;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -22,9 +23,13 @@ class AdminStatsOverview extends StatsOverviewWidget
 
         $approvedMerchants = SellerProfile::where('is_approved', true)->count();
 
-        $pendingMerchants = SellerProfile::where('is_approved', false)->count();
+        $pendingMerchants = SellerProfile::where('is_approved', false)->whereNull('rejected_at')->count();
+        $pendingWholesale = User::where('is_wholesale_approved', false)
+            ->whereNull('wholesale_rejected_at')
+            ->where(fn ($q) => $q->whereNotNull('trade_license_number')->orWhereNotNull('business_name'))
+            ->count();
         $pendingReturns = ReturnRequest::where('status', 'pending')->count();
-        $totalPendingReview = $pendingMerchants + $pendingReturns;
+        $totalPendingReview = $pendingMerchants + $pendingWholesale + $pendingReturns;
 
         return [
             Stat::make('Platform Settled GMV', '৳'.number_format($totalGmv, 2))
@@ -43,7 +48,7 @@ class AdminStatsOverview extends StatsOverviewWidget
                 ->color('emerald'),
 
             Stat::make('Pending Admin Actions', (string) $totalPendingReview)
-                ->description("{$pendingMerchants} merchant KYC, {$pendingReturns} disputes")
+                ->description("{$pendingMerchants} stores, {$pendingWholesale} wholesale, {$pendingReturns} disputes")
                 ->descriptionIcon('heroicon-m-bell-alert')
                 ->color($totalPendingReview > 0 ? 'warning' : 'gray'),
         ];

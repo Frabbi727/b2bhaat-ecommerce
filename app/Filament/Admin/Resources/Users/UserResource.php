@@ -23,6 +23,24 @@ class UserResource extends Resource
 
     protected static UnitEnum|string|null $navigationGroup = 'User & Sourcing Management';
 
+    public static function getNavigationBadge(): ?string
+    {
+        $count = User::where('is_wholesale_approved', false)
+            ->whereNull('wholesale_rejected_at')
+            ->where(function ($q) {
+                $q->whereNotNull('trade_license_number')
+                    ->orWhereNotNull('business_name');
+            })
+            ->count();
+
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): string|array|null
+    {
+        return 'warning';
+    }
+
     public static function form(Schema $schema): Schema
     {
         return UserForm::configure($schema);
