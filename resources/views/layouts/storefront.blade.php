@@ -3,120 +3,202 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ $title ?? 'B2B Haat - Hybrid B2B & B2C Marketplace' }}</title>
+    <title>{{ $title ?? 'B2B Haat - Premium E-Commerce & Wholesale Marketplace' }}</title>
+    <meta name="description" content="{{ $metaDescription ?? 'Bangladesh\'s trusted multi-vendor marketplace for factory-direct electronics, smart TVs, home appliances, and wholesale sourcing with verified escrow protection.' }}">
+    <link rel="canonical" href="{{ url()->current() }}">
+
+    <!-- Open Graph / Social SEO -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ url()->current() }}">
+    <meta property="og:title" content="{{ $title ?? 'B2B Haat - Premium E-Commerce & Wholesale Marketplace' }}">
+    <meta property="og:description" content="{{ $metaDescription ?? 'Shop authentic electronics, smart TVs, appliances, and factory-direct inventory with nationwide delivery.' }}">
+    <meta property="og:image" content="{{ $metaImage ?? 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=1200' }}">
+
+    <!-- Twitter Cards -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ $title ?? 'B2B Haat - Premium E-Commerce & Wholesale Marketplace' }}">
+    <meta name="twitter:description" content="{{ $metaDescription ?? 'Shop authentic electronics, smart TVs, appliances, and factory-direct inventory with nationwide delivery.' }}">
+    <meta name="twitter:image" content="{{ $metaImage ?? 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=1200' }}">
+
+    @stack('jsonld')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
-<body class="flex flex-col min-h-screen text-slate-800 antialiased font-sans">
-    <!-- Top Bar: Channel Mode & Quick Demo Switcher -->
-    <header class="bg-slate-900 text-slate-200 text-xs py-2 px-4 border-b border-slate-800">
+<body class="flex flex-col min-h-screen text-slate-800 antialiased font-sans" style="scrollbar-gutter: stable;">
+    <!-- Top Announcement Strip (Promotional Banner or Delivery Notice) -->
+    @php
+        $topStrip = \App\Models\Banner::active()->forPosition('top_strip')->first();
+        $helpline = \App\Models\StoreSetting::get('helpline_phone', '+880 9612-445566');
+    @endphp
+
+    <header class="bg-slate-950 text-slate-300 text-xs py-2 px-4 border-b border-slate-800">
         <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-2">
             <div class="flex items-center gap-3">
-                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-medium">
+                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-medium text-[11px]">
                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                     Verified Factory Direct
                 </span>
-                <span class="hidden sm:inline text-slate-400">|</span>
-                <span class="text-slate-300">Dual-Channel Sourcing Engine (Wholesale MOQ & Retail Available)</span>
+                <span class="hidden sm:inline text-slate-700">|</span>
+                @if ($topStrip)
+                    <a href="{{ $topStrip->link_url }}" class="hover:text-white transition flex items-center gap-1 text-amber-300 font-medium">
+                        <span>{{ $topStrip->title }}</span>
+                        <span class="text-slate-400 hidden md:inline">— {{ $topStrip->subtitle }}</span>
+                    </a>
+                @else
+                    <span class="text-slate-400">Free Islandwide Delivery on Orders Over ৳2,500</span>
+                @endif
             </div>
 
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-4 text-[11px]">
+                <div class="hidden md:flex items-center gap-1 text-slate-400">
+                    <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                    <span>Helpline: <strong class="text-slate-200">{{ $helpline }}</strong></span>
+                </div>
+                <span class="hidden sm:inline text-slate-700">|</span>
+                <a href="{{ route('tracking.index') }}" class="hover:text-white transition flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    Track Package
+                </a>
+                <span class="hidden sm:inline text-slate-700">|</span>
                 @auth
-                    <span class="text-slate-300">
-                        Logged in as: <strong class="text-emerald-400">{{ auth()->user()->name }}</strong> 
-                        ({{ auth()->user()->role?->name ?? 'User' }})
-                    </span>
-                    <a href="{{ route('customer.orders') }}" class="text-xs px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 font-semibold">
-                        My Orders
-                    </a>
-                    <a href="{{ route('customer.addresses') }}" class="text-xs px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 font-semibold">
-                        Address Book
-                    </a>
-                    <a href="{{ route('customer.wishlist') }}" class="text-xs px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-rose-300 border border-slate-700 font-semibold flex items-center gap-1">
-                        <svg class="w-3.5 h-3.5 fill-rose-400" viewBox="0 0 24 24"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-                        Wishlist
+                    <a href="{{ route('customer.orders') }}" class="text-indigo-300 hover:text-indigo-200 font-semibold">
+                        {{ auth()->user()->name }}
                     </a>
                     <form action="{{ route('logout') }}" method="POST" class="inline">
                         @csrf
-                        <button type="submit" class="text-rose-400 hover:text-rose-300 underline text-xs">Logout</button>
+                        <button type="submit" class="text-rose-400 hover:text-rose-300 underline">Logout</button>
                     </form>
                 @else
-                    <div class="flex flex-wrap items-center gap-2">
-                        <span class="text-slate-400 hidden sm:inline">Demo Personas:</span>
-                        <a href="{{ route('demo.login', 'retail') }}" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px]">Retail Buyer</a>
-                        <a href="{{ route('demo.login', 'wholesale') }}" class="px-2 py-0.5 rounded bg-indigo-900/60 hover:bg-indigo-800 text-indigo-200 border border-indigo-700 text-[11px]">Wholesale B2B</a>
-                        <a href="{{ route('demo.login', 'seller') }}" class="px-2 py-0.5 rounded bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 border border-emerald-700 text-[11px]">Seller Portal</a>
-                        <a href="{{ route('demo.login', 'admin') }}" class="px-2 py-0.5 rounded bg-amber-900/60 hover:bg-amber-800 text-amber-200 border border-amber-700 text-[11px]">Admin</a>
+                    <div class="flex items-center gap-2">
+                        <span class="text-slate-400">Demo Login:</span>
+                        <a href="{{ route('demo.login', 'retail') }}" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700">Buyer</a>
+                        <a href="{{ route('demo.login', 'wholesale') }}" class="px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-200 hover:bg-indigo-900 border border-indigo-800">Wholesale</a>
+                        <a href="{{ route('demo.login', 'seller') }}" class="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-200 hover:bg-emerald-900 border border-emerald-800">Seller</a>
+                        <a href="{{ route('demo.login', 'admin') }}" class="px-1.5 py-0.5 rounded bg-amber-950 text-amber-200 hover:bg-amber-900 border border-amber-800">Admin</a>
                     </div>
                 @endauth
             </div>
         </div>
     </header>
 
-    <!-- Main Navigation -->
-    <nav x-data="{ mobileOpen: false }" class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
-            <div class="flex items-center gap-8">
-                <a href="{{ route('catalog.index') }}" class="flex items-center gap-2 text-xl font-bold tracking-tight text-slate-900">
-                    <span class="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-black text-lg shadow-sm">B2B</span>
-                    <span>B2B <span class="text-indigo-600">Haat</span></span>
-                </a>
+    <!-- Main Header with Live Search, Logo & Action Icons -->
+    <div class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
+            <!-- Brand Logo -->
+            <a href="{{ route('catalog.index') }}" class="flex items-center gap-2.5 text-xl font-black tracking-tight text-slate-900 shrink-0">
+                <span class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-700 to-indigo-500 text-white flex items-center justify-center font-black text-base shadow-sm">
+                    B2B
+                </span>
+                <span class="hidden sm:inline">B2B <span class="text-indigo-600">Haat</span></span>
+            </a>
 
-                <div class="hidden lg:flex items-center gap-6 text-sm font-medium">
-                    <a href="{{ route('catalog.index') }}" class="text-slate-700 hover:text-indigo-600 transition">Marketplace Catalog</a>
-                    <a href="{{ route('wholesale.upgrade') }}" class="text-indigo-600 hover:text-indigo-700 font-semibold transition flex items-center gap-1">
-                        Wholesale KYC
-                        <span class="text-[10px] px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700 font-bold uppercase">B2B</span>
-                    </a>
-                    <a href="{{ route('tracking.index') }}" class="text-slate-700 hover:text-indigo-600 transition">Track Package</a>
-                    <a href="{{ route('seller.register') }}" class="text-emerald-700 hover:text-emerald-800 font-semibold transition">Open Factory Store</a>
-                    <a href="/seller" class="text-slate-700 hover:text-indigo-600 transition flex items-center gap-1">
-                        Seller Center
-                        <span class="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">Portal</span>
-                    </a>
-                    <a href="/admin" class="text-slate-700 hover:text-indigo-600 transition flex items-center gap-1">
-                        Admin
-                        <span class="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">Portal</span>
-                    </a>
-                </div>
+            <!-- Central Autocomplete Live Search -->
+            <div class="flex-1 max-w-2xl mx-2">
+                <livewire:storefront.header-search />
             </div>
 
-            <div class="flex items-center gap-3">
-                <livewire:storefront.cart-badge />
-
-                <!-- Mobile Menu Button -->
-                <button 
-                    @click="mobileOpen = !mobileOpen" 
-                    type="button" 
-                    class="lg:hidden p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 focus:outline-none"
-                    aria-label="Toggle navigation"
+            <!-- Customer Actions: Wishlist, Cart, Account -->
+            <div class="flex items-center gap-3 shrink-0">
+                <!-- Wishlist -->
+                @php
+                    $wishlistCount = auth()->check() ? auth()->user()->wishlists()->count() : 0;
+                @endphp
+                <a
+                    href="{{ route('customer.wishlist') }}"
+                    class="relative p-2 rounded-xl text-slate-600 hover:text-rose-600 hover:bg-rose-50 transition flex items-center justify-center"
+                    title="My Wishlist"
                 >
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path x-show="!mobileOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                        <path x-show="mobileOpen" x-cloak stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
                     </svg>
-                </button>
-            </div>
-        </div>
+                    @if ($wishlistCount > 0)
+                        <span class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
+                            {{ $wishlistCount }}
+                        </span>
+                    @endif
+                </a>
 
-        <!-- Mobile Menu Dropdown -->
-        <div x-show="mobileOpen" x-cloak class="lg:hidden border-t border-slate-200 bg-white px-4 pt-3 pb-5 space-y-3 shadow-lg">
-            <div class="space-y-1">
-                <a href="{{ route('catalog.index') }}" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100">Marketplace Catalog</a>
-                <a href="{{ route('wholesale.upgrade') }}" class="block px-3 py-2 rounded-lg text-sm font-semibold text-indigo-600 hover:bg-indigo-50">Wholesale KYC Verification (B2B)</a>
-                <a href="{{ route('tracking.index') }}" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100">Track Package / Courier Consignment</a>
-                <a href="{{ route('seller.register') }}" class="block px-3 py-2 rounded-lg text-sm font-semibold text-emerald-700 hover:bg-emerald-50">Open Factory Store (Merchant Onboarding)</a>
-                <div class="border-t border-slate-100 pt-2 my-2"></div>
-                <a href="/seller" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100">Seller Center Portal (/seller)</a>
-                <a href="/admin" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100">Super Admin Portal (/admin)</a>
+                <!-- Cart Badge -->
+                <livewire:storefront.cart-badge />
+
+                <!-- Customer Account Dropdown -->
                 @auth
-                    <a href="{{ route('customer.wishlist') }}" class="block px-3 py-2 rounded-lg text-sm font-semibold text-rose-600 hover:bg-rose-50">My Wishlist & Saved</a>
-                    <a href="{{ route('customer.addresses') }}" class="block px-3 py-2 rounded-lg text-sm font-semibold text-slate-900 hover:bg-slate-100">Delivery Address Book</a>
-                    <a href="{{ route('customer.orders') }}" class="block px-3 py-2 rounded-lg text-sm font-semibold text-slate-900 hover:bg-slate-100">My Orders & Receipts</a>
+                    <div class="relative" x-data="{ open: false }">
+                        <button
+                            @click="open = !open"
+                            type="button"
+                            class="flex items-center gap-1.5 p-1.5 rounded-xl border border-slate-200 hover:border-slate-300 text-xs font-semibold text-slate-800 transition"
+                        >
+                            <span class="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                                {{ substr(auth()->user()->name, 0, 1) }}
+                            </span>
+                            <span class="hidden lg:inline max-w-[90px] truncate">{{ auth()->user()->name }}</span>
+                            <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                        </button>
+                        <div
+                            x-show="open"
+                            @click.outside="open = false"
+                            x-cloak
+                            class="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-50 text-xs divide-y divide-slate-100"
+                        >
+                            <div class="px-3 py-2 text-slate-500">
+                                <div>Signed in as</div>
+                                <div class="font-bold text-slate-900 truncate">{{ auth()->user()->email }}</div>
+                            </div>
+                            <div class="py-1">
+                                <a href="{{ route('customer.orders') }}" class="block px-3 py-1.5 text-slate-700 hover:bg-slate-50">My Orders & Receipts</a>
+                                <a href="{{ route('customer.addresses') }}" class="block px-3 py-1.5 text-slate-700 hover:bg-slate-50">Saved Delivery Addresses</a>
+                                <a href="{{ route('customer.wishlist') }}" class="block px-3 py-1.5 text-slate-700 hover:bg-slate-50">Saved Wishlist</a>
+                            </div>
+                            <div class="py-1">
+                                <form action="{{ route('logout') }}" method="POST">
+                                    @csrf
+                                    <button type="submit" class="w-full text-left px-3 py-1.5 text-rose-600 hover:bg-rose-50 font-semibold">Sign Out</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
                 @endauth
             </div>
         </div>
-    </nav>
+
+        <!-- Category Navigation Rail -->
+        @php
+            $navCategories = \App\Models\Category::where('is_active', true)->whereNull('parent_id')->orderBy('sort_order')->take(8)->get();
+        @endphp
+        <div class="border-t border-slate-100 bg-slate-50/70 hidden md:block">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between text-xs font-semibold text-slate-700">
+                <div class="flex items-center gap-6 overflow-x-auto py-2.5 no-scrollbar">
+                    <a href="{{ route('catalog.index') }}" class="flex items-center gap-1.5 text-indigo-600 font-bold hover:text-indigo-800 transition shrink-0">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
+                        All Categories
+                    </a>
+                    @foreach ($navCategories as $navCat)
+                        <a
+                            href="{{ route('catalog.index', ['category' => $navCat->id]) }}"
+                            class="hover:text-indigo-600 transition shrink-0"
+                        >
+                            {{ $navCat->name }}
+                        </a>
+                    @endforeach
+                </div>
+
+                <div class="flex items-center gap-4 shrink-0 py-2.5">
+                    <a href="{{ route('catalog.index') }}#flash-sales" class="flex items-center gap-1 text-rose-600 font-bold hover:text-rose-700 transition">
+                        <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+                        ⚡ Flash Deals
+                    </a>
+                    <span class="text-slate-300">|</span>
+                    <a href="{{ route('wholesale.upgrade') }}" class="text-indigo-600 hover:text-indigo-700 transition flex items-center gap-1">
+                        Wholesale KYC
+                        <span class="px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700 text-[10px] uppercase font-bold">B2B</span>
+                    </a>
+                    <span class="text-slate-300">|</span>
+                    <a href="{{ route('seller.register') }}" class="text-emerald-700 hover:text-emerald-800 transition">Open Factory Store</a>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Global Flash Alerts -->
     @if (session('success') || session('status'))
@@ -144,48 +226,109 @@
         {{ $slot }}
     </main>
 
-    <!-- Footer -->
-    <footer class="bg-slate-900 text-slate-400 text-sm py-12 mt-16 border-t border-slate-800">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8">
+    <!-- Commercial Retail Footer with Trust Signals & Guarantees -->
+    <footer class="bg-slate-900 text-slate-400 text-sm mt-20 border-t border-slate-800">
+        <!-- Trust Badges Rail -->
+        <div class="border-b border-slate-800 bg-slate-950/60 py-8">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-2 md:grid-cols-4 gap-6 text-center md:text-left">
+                <div class="flex items-center gap-3 justify-center md:justify-start">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                    </div>
+                    <div>
+                        <div class="text-white text-xs font-bold">100% Genuine Products</div>
+                        <div class="text-[11px] text-slate-400">Official Brand Authorized Warranty</div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 justify-center md:justify-start">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    </div>
+                    <div>
+                        <div class="text-white text-xs font-bold">7-Day Easy Returns</div>
+                        <div class="text-[11px] text-slate-400">Hassle-free replacement guarantee</div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 justify-center md:justify-start">
+                    <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <div>
+                        <div class="text-white text-xs font-bold">Secure Digital Payments</div>
+                        <div class="text-[11px] text-slate-400">bKash, Nagad, Cards & COD</div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 justify-center md:justify-start">
+                    <div class="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    </div>
+                    <div>
+                        <div class="text-white text-xs font-bold">Fast Express Delivery</div>
+                        <div class="text-[11px] text-slate-400">24-hour delivery inside Dhaka</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer Columns -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 grid grid-cols-1 md:grid-cols-4 gap-8">
             <div class="space-y-3">
                 <div class="text-white font-bold text-lg flex items-center gap-2">
                     <span class="w-6 h-6 rounded bg-indigo-600 text-white flex items-center justify-center font-bold text-xs">B2B</span>
-                    <span>B2B Haat Platform</span>
+                    <span>B2B Haat</span>
                 </div>
                 <p class="text-xs leading-relaxed text-slate-400">
-                    The hybrid e-commerce marketplace engine powering factory-direct bulk wholesale & single-unit consumer retail across all 64 districts in Bangladesh.
+                    The hybrid e-commerce retail & factory-direct bulk wholesale platform connecting manufacturers, verified merchants, and shoppers across Bangladesh.
                 </p>
-                <div class="text-xs text-slate-500">
-                    Built with Laravel 11, Filament v5, Livewire v3 & PostgreSQL 17.
+                <div class="text-xs text-slate-400 pt-2">
+                    <div>Customer Service: <strong class="text-white">{{ $helpline }}</strong></div>
+                    <div>Email: <strong class="text-white">support@b2bhaat.com</strong></div>
                 </div>
             </div>
+
             <div>
-                <h4 class="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Market Channels</h4>
+                <h4 class="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Product Categories</h4>
                 <ul class="space-y-2 text-xs">
-                    <li><a href="{{ route('catalog.index') }}" class="hover:text-white transition">Wholesale Catalog (MOQ Enforced)</a></li>
-                    <li><a href="{{ route('catalog.index') }}" class="hover:text-white transition">Retail Storefront (Single Unit)</a></li>
-                    <li><a href="{{ route('wholesale.upgrade') }}" class="hover:text-white transition">Wholesale KYC Registration</a></li>
-                    <li><a href="{{ route('tracking.index') }}" class="hover:text-white transition">Courier Tracking Service</a></li>
+                    @foreach ($navCategories->take(5) as $fc)
+                        <li><a href="{{ route('catalog.index', ['category' => $fc->id]) }}" class="hover:text-white transition">{{ $fc->name }}</a></li>
+                    @endforeach
+                    <li><a href="{{ route('catalog.index') }}" class="hover:text-white transition font-semibold text-indigo-400">View All Categories &rarr;</a></li>
                 </ul>
             </div>
+
             <div>
-                <h4 class="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Portals & Workspaces</h4>
+                <h4 class="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Customer Care</h4>
                 <ul class="space-y-2 text-xs">
-                    <li><a href="/seller" class="hover:text-white transition">Seller Center Portal (/seller)</a></li>
-                    <li><a href="/admin" class="hover:text-white transition">Platform Super Admin (/admin)</a></li>
-                    <li><a href="{{ route('seller.register') }}" class="hover:text-white transition">Open Factory Store Application</a></li>
-                    <li><a href="{{ route('customer.orders') }}" class="hover:text-white transition">My Order History & Receipts</a></li>
+                    <li><a href="{{ route('tracking.index') }}" class="hover:text-white transition">Track Your Courier Consignment</a></li>
+                    <li><a href="{{ route('customer.orders') }}" class="hover:text-white transition">Order History & Invoices</a></li>
+                    <li><a href="{{ route('customer.wishlist') }}" class="hover:text-white transition">My Wishlist</a></li>
+                    <li><a href="{{ route('seller.register') }}" class="hover:text-white transition">Merchant / Factory Onboarding</a></li>
+                    <li><a href="{{ route('wholesale.upgrade') }}" class="hover:text-white transition">B2B Wholesale KYC Verification</a></li>
                 </ul>
             </div>
+
             <div>
-                <h4 class="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Architecture Guarantees</h4>
-                <ul class="space-y-2 text-xs text-slate-400">
-                    <li class="flex items-center gap-1.5"><span class="text-emerald-400">✓</span> Server-Side Price & Margin Masking</li>
-                    <li class="flex items-center gap-1.5"><span class="text-emerald-400">✓</span> Pessimistic Row Locking Concurrency</li>
-                    <li class="flex items-center gap-1.5"><span class="text-emerald-400">✓</span> Multi-Vendor Sub-Order Splitting</li>
-                    <li class="flex items-center gap-1.5"><span class="text-emerald-400">✓</span> 48-Hour Escrow Settlement Ledger</li>
-                </ul>
+                <h4 class="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Payment & Business</h4>
+                <p class="text-xs text-slate-400 mb-3">
+                    We accept Cash on Delivery, bKash, Nagad, Visa, Mastercard, and Bank Transfers.
+                </p>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="px-2.5 py-1 rounded bg-slate-800 text-slate-200 border border-slate-700 text-[10px] font-bold">bKash</span>
+                    <span class="px-2.5 py-1 rounded bg-slate-800 text-slate-200 border border-slate-700 text-[10px] font-bold">Nagad</span>
+                    <span class="px-2.5 py-1 rounded bg-slate-800 text-slate-200 border border-slate-700 text-[10px] font-bold">Visa / Master</span>
+                    <span class="px-2.5 py-1 rounded bg-slate-800 text-slate-200 border border-slate-700 text-[10px] font-bold">COD</span>
+                </div>
+                <div class="mt-4 pt-4 border-t border-slate-800 text-[11px] text-slate-500">
+                    Portals: <a href="/seller" class="text-indigo-400 hover:underline">Seller Center</a> | <a href="/admin" class="text-amber-400 hover:underline">Super Admin</a>
+                </div>
             </div>
+        </div>
+
+        <div class="border-t border-slate-800/80 py-4 text-center text-xs text-slate-500">
+            &copy; {{ date('Y') }} B2B Haat E-Commerce Platform. All rights reserved. Built with Laravel 13, Livewire 3, Tailwind CSS & PostgreSQL.
         </div>
     </footer>
 

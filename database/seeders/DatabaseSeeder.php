@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             SystemLookupSeeder::class,
             DemoCatalogSeeder::class,
+            PromotionsAndStoreSettingsSeeder::class,
         ]);
     }
 }

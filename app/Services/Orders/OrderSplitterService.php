@@ -92,7 +92,11 @@ class OrderSplitterService
                 ? (float) $data['shipping_amount']
                 : $calculatedShippingAmount;
 
-            $grandTotal = $itemsTotal + $shippingAmount;
+            $discountAmount = isset($data['discount_amount'])
+                ? (float) $data['discount_amount']
+                : 0.00;
+
+            $grandTotal = max(0.00, round($itemsTotal + $shippingAmount - $discountAmount, 2));
 
             $orderNumber = 'ORD-'.date('Ymd').'-'.strtoupper(Str::random(6));
 
@@ -103,10 +107,13 @@ class OrderSplitterService
                 'order_status_id' => $pendingStatus->id,
                 'payment_status_id' => $unpaidStatus->id,
                 'payment_method_id' => $data['payment_method_id'],
+                'coupon_id' => $data['coupon_id'] ?? null,
+                'coupon_code' => $data['coupon_code'] ?? null,
                 'shipping_address' => $data['shipping_address'],
                 'total_amount' => $grandTotal,
                 'tax_amount' => 0.00,
                 'shipping_amount' => $shippingAmount,
+                'discount_amount' => $discountAmount,
             ]);
 
             // 4. Group order items by seller

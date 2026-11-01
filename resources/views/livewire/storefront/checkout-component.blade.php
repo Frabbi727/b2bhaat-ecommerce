@@ -168,7 +168,7 @@
             <div class="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
                 <h3 class="font-bold text-slate-900 text-sm border-b border-slate-100 pb-3 flex items-center gap-2">
                     <span class="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs">2</span>
-                    Payment & Escrow Channel
+                    Payment Method
                 </h3>
 
                 <div class="space-y-3">
@@ -183,14 +183,29 @@
                                     class="text-indigo-600 focus:ring-indigo-500"
                                 />
                                 <div>
-                                    <div class="text-xs font-bold text-slate-900">{{ $pm->name }}</div>
-                                    <div class="text-[11px] text-slate-500">
-                                        @if ($pm->slug === 'mock_gateway')
-                                            Immediate payment confirmation & escrow hold simulation
+                                    <div class="text-xs font-bold text-slate-900 flex items-center gap-2">
+                                        <span>{{ $pm->name }}</span>
+                                        @if ($pm->slug === 'bkash')
+                                            <span class="px-1.5 py-0.2 bg-[#E2136E]/10 text-[#E2136E] text-[10px] font-bold rounded">bKash</span>
+                                        @elseif ($pm->slug === 'nagad')
+                                            <span class="px-1.5 py-0.2 bg-[#F7941D]/10 text-[#F7941D] text-[10px] font-bold rounded">Nagad</span>
+                                        @elseif ($pm->slug === 'sslcommerz')
+                                            <span class="px-1.5 py-0.2 bg-blue-50 text-blue-700 text-[10px] font-bold rounded">Visa/Mastercard/NetBanking</span>
                                         @elseif ($pm->slug === 'cod')
-                                            Pay upon physical package inspection & delivery
+                                            <span class="px-1.5 py-0.2 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded">Cash on Delivery</span>
+                                        @endif
+                                    </div>
+                                    <div class="text-[11px] text-slate-500 mt-0.5">
+                                        @if ($pm->slug === 'cod')
+                                            Pay in cash upon physical package delivery to your doorstep
+                                        @elseif ($pm->slug === 'bkash')
+                                            Direct bKash payment with instant TrxID confirmation
+                                        @elseif ($pm->slug === 'nagad')
+                                            Direct Nagad payment with instant TrxID confirmation
+                                        @elseif ($pm->slug === 'sslcommerz')
+                                            Cards (Visa, Mastercard, Amex) & Internet Banking
                                         @else
-                                            Secure automated online checkout
+                                            Automated sandbox testing & escrow hold
                                         @endif
                                     </div>
                                 </div>
@@ -201,6 +216,41 @@
                         </label>
                     @endforeach
                 </div>
+
+                <!-- MFS Detail Inputs for bKash & Nagad -->
+                @if ($selectedMethod && in_array($selectedMethod->slug, ['bkash', 'nagad']))
+                    <div class="mt-4 p-4 rounded-xl border border-indigo-200 bg-indigo-50/40 space-y-3 text-xs">
+                        <div class="flex items-center gap-2 font-bold text-slate-900">
+                            <span class="w-2 h-2 rounded-full {{ $selectedMethod->slug === 'bkash' ? 'bg-[#E2136E]' : 'bg-[#F7941D]' }}"></span>
+                            <span>{{ $selectedMethod->name }} Instructions:</span>
+                        </div>
+                        <p class="text-slate-600 text-[11px] leading-relaxed">
+                            Please make payment of <strong class="text-indigo-700">৳{{ number_format($grandTotal, 2) }}</strong> to our Merchant Account: <span class="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">01700-000004</span>. Then enter your sender mobile number and the Transaction ID (TrxID) below:
+                        </p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                            <div>
+                                <label class="block font-semibold text-slate-700 mb-1">Your Sender Mobile Number *</label>
+                                <input 
+                                    type="text" 
+                                    wire:model="mfsSenderNumber" 
+                                    placeholder="01XXXXXXXXX" 
+                                    class="w-full py-2 px-3 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 font-mono text-xs"
+                                />
+                                @error('mfsSenderNumber') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
+                            </div>
+                            <div>
+                                <label class="block font-semibold text-slate-700 mb-1">Transaction ID (TrxID) *</label>
+                                <input 
+                                    type="text" 
+                                    wire:model="mfsTransactionId" 
+                                    placeholder="e.g. 9J82KD8X" 
+                                    class="w-full py-2 px-3 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 uppercase font-mono text-xs"
+                                />
+                                @error('mfsTransactionId') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
+                            </div>
+                        </div>
+                    </div>
+                @endif
             </div>
         </div>
 
@@ -224,11 +274,60 @@
                     @endforeach
                 </div>
 
+                <!-- Coupon Box in Checkout -->
+                <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                    <div class="flex items-center justify-between text-xs font-bold text-slate-800">
+                        <span class="flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+                            Promotional Coupon
+                        </span>
+                        @if ($appliedCoupon)
+                            <button type="button" wire:click="removeCheckoutCoupon" class="text-rose-600 underline text-[11px] font-semibold hover:text-rose-800">Remove</button>
+                        @endif
+                    </div>
+
+                    @if ($appliedCoupon)
+                        <div class="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between">
+                            <span class="font-mono font-bold">{{ $appliedCoupon['code'] }}</span>
+                            <span class="font-bold">-৳{{ number_format($discountAmount, 2) }}</span>
+                        </div>
+                    @else
+                        <div class="flex gap-2">
+                            <input 
+                                type="text" 
+                                wire:model="checkoutCouponCode" 
+                                placeholder="Coupon code" 
+                                class="flex-1 uppercase text-xs py-1.5 px-3 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-mono"
+                            />
+                            <button 
+                                type="button" 
+                                wire:click="applyCheckoutCoupon" 
+                                class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-lg transition cursor-pointer"
+                            >
+                                Apply
+                            </button>
+                        </div>
+                    @endif
+
+                    @if ($couponMessage)
+                        <p class="text-[11px] font-semibold text-emerald-600">{{ $couponMessage }}</p>
+                    @endif
+                    @if ($couponError)
+                        <p class="text-[11px] font-semibold text-rose-600">{{ $couponError }}</p>
+                    @endif
+                </div>
+
                 <div class="border-t border-slate-100 pt-3 space-y-1.5 text-xs">
                     <div class="flex justify-between text-slate-600">
                         <span>Items Subtotal:</span>
                         <span class="font-bold text-slate-900">৳{{ number_format($subtotal, 2) }}</span>
                     </div>
+                    @if ($discountAmount > 0)
+                        <div class="flex justify-between text-emerald-700 font-semibold">
+                            <span>Promotional Discount:</span>
+                            <span class="font-bold font-mono">-৳{{ number_format($discountAmount, 2) }}</span>
+                        </div>
+                    @endif
                     <div class="space-y-1">
                         <div class="flex justify-between text-slate-600">
                             <span>Courier & Delivery Freight:</span>
@@ -250,10 +349,6 @@
                                 @endforeach
                             </div>
                         @endif
-                    </div>
-                    <div class="flex justify-between text-slate-600">
-                        <span>Platform Commission:</span>
-                        <span class="text-slate-500 italic">Deducted from vendor payout</span>
                     </div>
                     <div class="border-t border-slate-200 pt-2 flex justify-between items-baseline">
                         <span class="text-sm font-bold text-slate-900">Grand Total:</span>

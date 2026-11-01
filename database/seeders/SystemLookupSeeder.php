@@ -91,6 +91,7 @@ class SystemLookupSeeder extends Seeder
         $paymentMethods = [
             ['name' => 'Cash on Delivery (COD)', 'slug' => 'cod', 'is_active' => true],
             ['name' => 'bKash Gateway', 'slug' => 'bkash', 'is_active' => true],
+            ['name' => 'Nagad Gateway', 'slug' => 'nagad', 'is_active' => true],
             ['name' => 'SSLCommerz Gateway', 'slug' => 'sslcommerz', 'is_active' => true],
             ['name' => 'Mock Sandbox Gateway', 'slug' => 'mock_gateway', 'is_active' => true],
         ];

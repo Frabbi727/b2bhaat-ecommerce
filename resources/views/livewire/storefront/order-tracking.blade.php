@@ -108,7 +108,7 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs text-slate-600">
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs text-slate-600">
                     <div>
                         <span class="text-slate-400 block">Placed On:</span>
                         <strong class="text-slate-800">{{ $order->created_at->format('M d, Y h:i A') }}</strong>
@@ -118,8 +118,15 @@
                         <strong class="text-slate-800">{{ $order->paymentMethod?->name }}</strong>
                     </div>
                     <div>
+                        <span class="text-slate-400 block">Courier / Freight:</span>
+                        <strong class="text-slate-800">{{ $order->shipping_amount == 0 ? 'Free Delivery' : '৳' . number_format($order->shipping_amount, 2) }}</strong>
+                    </div>
+                    <div>
                         <span class="text-slate-400 block">Total Amount:</span>
                         <strong class="text-slate-900 text-sm">৳{{ number_format($order->total_amount, 2) }}</strong>
+                        @if ($order->discount_amount > 0)
+                            <span class="block text-[11px] text-emerald-600 font-semibold font-mono">(Saved ৳{{ number_format($order->discount_amount, 2) }})</span>
+                        @endif
                     </div>
                 </div>
             </div>

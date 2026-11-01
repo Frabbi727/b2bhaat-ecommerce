@@ -19,10 +19,24 @@ class Product extends Model
         'unit_id',
         'title',
         'slug',
+        'sku',
+        'model_number',
         'short_description',
         'full_description',
+        'specifications',
+        'features',
+        'regular_price',
         'buy_price',
+        'warranty_period',
+        'warranty_policy',
+        'delivery_info',
         'has_variations',
+        'is_featured',
+        'is_flash_sale',
+        'flash_sale_price',
+        'flash_sale_end',
+        'views_count',
+        'sales_count',
         'is_active',
     ];
 
@@ -33,8 +47,17 @@ class Product extends Model
     protected function casts(): array
     {
         return [
+            'regular_price' => 'decimal:2',
             'buy_price' => 'decimal:2',
+            'flash_sale_price' => 'decimal:2',
             'has_variations' => 'boolean',
+            'is_featured' => 'boolean',
+            'is_flash_sale' => 'boolean',
+            'flash_sale_end' => 'datetime',
+            'specifications' => 'array',
+            'features' => 'array',
+            'views_count' => 'integer',
+            'sales_count' => 'integer',
             'is_active' => 'boolean',
         ];
     }
@@ -136,10 +159,68 @@ class Product extends Model
         return $query->where('is_active', true);
     }
 
+    public function scopeFeatured(Builder $query): Builder
+    {
+        return $query->where('is_featured', true);
+    }
+
+    public function scopeFlashSale(Builder $query): Builder
+    {
+        $now = now();
+
+        return $query->where('is_flash_sale', true)
+            ->where(function (Builder $q) use ($now) {
+                $q->whereNull('flash_sale_end')->orWhere('flash_sale_end', '>=', $now);
+            });
+    }
+
     public function scopeForChannel(Builder $query, string $channelSlug): Builder
     {
         return $query->whereHas('salesChannel', function (Builder $q) use ($channelSlug) {
             $q->whereIn('slug', [$channelSlug, SalesChannel::BOTH]);
         });
+    }
+
+    public function getEffectiveSellingPriceAttribute(): float
+    {
+        if ($this->is_flash_sale && $this->flash_sale_price && (! $this->flash_sale_end || $this->flash_sale_end->isFuture())) {
+            return (float) $this->flash_sale_price;
+        }
+
+        if ($this->relationLoaded('retailPrice') && $this->retailPrice) {
+            return (float) $this->retailPrice->unit_price;
+        }
+
+        $retail = $this->retailPrice;
+        if ($retail) {
+            return (float) $retail->unit_price;
+        }
+
+        return (float) ($this->regular_price ?? 0.0);
+    }
+
+    public function getDiscountPercentageAttribute(): ?int
+    {
+        $regular = (float) ($this->regular_price ?? 0.0);
+        $selling = $this->effective_selling_price;
+
+        if ($regular > 0 && $regular > $selling) {
+            return (int) round((($regular - $selling) / $regular) * 100);
+        }
+
+        return null;
+    }
+
+    public function getSavingsAmountAttribute(): float
+    {
+        $regular = (float) ($this->regular_price ?? 0.0);
+        $selling = $this->effective_selling_price;
+
+        return max(0.0, round($regular - $selling, 2));
+    }
+
+    public function getIsFlashSaleActiveAttribute(): bool
+    {
+        return $this->is_flash_sale && (! $this->flash_sale_end || $this->flash_sale_end->isFuture());
     }
 }

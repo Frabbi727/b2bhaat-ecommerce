@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Storefront;
 
+use App\Models\Coupon;
 use App\Models\CustomerAddress;
 use App\Models\OrderStatus;
 use App\Models\PaymentMethod;
@@ -9,6 +10,7 @@ use App\Models\PaymentStatus;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\Cart\CartSessionService;
+use App\Services\Cart\CouponService;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Logistics\ShippingCalculatorService;
 use App\Services\Orders\OrderSplitterService;
@@ -41,6 +43,16 @@ class CheckoutComponent extends Component
 
     public ?int $selectedPaymentMethodId = null;
 
+    public string $mfsSenderNumber = '';
+
+    public string $mfsTransactionId = '';
+
+    public string $checkoutCouponCode = '';
+
+    public string $couponMessage = '';
+
+    public string $couponError = '';
+
     public string $errorMessage = '';
 
     public function mount(): void
@@ -56,6 +68,7 @@ class CheckoutComponent extends Component
         if ($user) {
             $this->recipientName = $user->name;
             $this->recipientPhone = $user->phone ?? '+8801700000004';
+            $this->mfsSenderNumber = $user->phone ?? '';
             $defaultAddress = $user->addresses()->where('is_default', true)->first()
                 ?? $user->addresses()->first();
 
@@ -64,9 +77,41 @@ class CheckoutComponent extends Component
             }
         }
 
-        $defaultMethod = PaymentMethod::where('slug', 'mock_gateway')->first()
+        $defaultMethod = PaymentMethod::where('slug', 'cod')->first()
+            ?? PaymentMethod::where('slug', 'mock_gateway')->first()
             ?? PaymentMethod::where('is_active', true)->first();
         $this->selectedPaymentMethodId = $defaultMethod?->id;
+    }
+
+    public function applyCheckoutCoupon(): void
+    {
+        $this->couponError = '';
+        $this->couponMessage = '';
+
+        $code = trim($this->checkoutCouponCode);
+        if ($code === '') {
+            $this->couponError = 'Please enter a coupon code.';
+
+            return;
+        }
+
+        $cart = app(CartSessionService::class);
+        $result = $cart->applyCoupon($code, Auth::id());
+
+        if ($result['valid']) {
+            $this->couponMessage = $result['message'];
+            $this->checkoutCouponCode = '';
+        } else {
+            $this->couponError = $result['message'] ?? 'Invalid coupon code.';
+        }
+    }
+
+    public function removeCheckoutCoupon(): void
+    {
+        $cart = app(CartSessionService::class);
+        $cart->removeCoupon();
+        $this->couponMessage = '';
+        $this->couponError = '';
     }
 
     public function selectSavedAddress(?int $addressId): void
@@ -129,6 +174,18 @@ class CheckoutComponent extends Component
             'streetAddress.min' => 'Please provide a detailed street, road, or warehouse address.',
         ]);
 
+        $paymentMethod = PaymentMethod::find($this->selectedPaymentMethodId);
+
+        if ($paymentMethod && in_array($paymentMethod->slug, ['bkash', 'nagad'])) {
+            $this->validate([
+                'mfsSenderNumber' => ['required', 'string', 'regex:/^(\+?8801|01)\d{7,9}$/'],
+                'mfsTransactionId' => 'required|string|min:6|max:40',
+            ], [
+                'mfsSenderNumber.required' => "Please enter your {$paymentMethod->name} sender mobile number.",
+                'mfsTransactionId.required' => "Please provide the transaction ID (TrxID) from your {$paymentMethod->name} payment.",
+            ]);
+        }
+
         $cart = app(CartSessionService::class);
         $items = $cart->getItems();
 
@@ -156,18 +213,31 @@ class CheckoutComponent extends Component
             }
 
             $shippingFee = $this->getShippingFee();
+            $appliedCoupon = $cart->getCoupon();
+            $discountAmount = $cart->getDiscountAmount();
+
+            $shippingAddressPayload = [
+                'recipient_name' => $this->recipientName,
+                'recipient_phone' => $this->recipientPhone,
+                'street_address' => $this->streetAddress,
+                'city' => $this->city,
+                'postal_code' => $this->postalCode,
+                'delivery_zone' => $this->deliveryZone,
+            ];
+
+            if ($paymentMethod && in_array($paymentMethod->slug, ['bkash', 'nagad'])) {
+                $shippingAddressPayload['mfs_gateway'] = $paymentMethod->slug;
+                $shippingAddressPayload['mfs_sender_number'] = $this->mfsSenderNumber;
+                $shippingAddressPayload['mfs_transaction_id'] = $this->mfsTransactionId;
+            }
 
             $orderPayload = [
                 'payment_method_id' => $this->selectedPaymentMethodId,
                 'shipping_amount' => $shippingFee,
-                'shipping_address' => [
-                    'recipient_name' => $this->recipientName,
-                    'recipient_phone' => $this->recipientPhone,
-                    'street_address' => $this->streetAddress,
-                    'city' => $this->city,
-                    'postal_code' => $this->postalCode,
-                    'delivery_zone' => $this->deliveryZone,
-                ],
+                'coupon_id' => $appliedCoupon['id'] ?? null,
+                'coupon_code' => $appliedCoupon['code'] ?? null,
+                'discount_amount' => $discountAmount,
+                'shipping_address' => $shippingAddressPayload,
                 'items' => array_values(array_map(function ($item) {
                     return [
                         'product_id' => $item['product_id'],
@@ -182,10 +252,9 @@ class CheckoutComponent extends Component
             $splitter = app(OrderSplitterService::class);
             $order = $splitter->createAndSplitOrder($customer, $orderPayload);
 
-            $paymentMethod = PaymentMethod::find($this->selectedPaymentMethodId);
             $escrowService = app(EscrowLedgerService::class);
 
-            if ($paymentMethod && in_array($paymentMethod->slug, ['mock_gateway', 'bkash', 'sslcommerz'])) {
+            if ($paymentMethod && in_array($paymentMethod->slug, ['mock_gateway', 'bkash', 'nagad', 'sslcommerz'])) {
                 $paidStatus = PaymentStatus::where('slug', 'paid')->firstOrFail();
                 $confirmedStatus = OrderStatus::where('slug', 'confirmed')->firstOrFail();
 
@@ -196,6 +265,24 @@ class CheckoutComponent extends Component
 
                 foreach ($order->subOrders as $subOrder) {
                     $escrowService->holdInEscrow($subOrder);
+                }
+            } elseif ($paymentMethod && $paymentMethod->slug === 'cod') {
+                $confirmedStatus = OrderStatus::where('slug', 'confirmed')->firstOrFail();
+                $order->update([
+                    'order_status_id' => $confirmedStatus->id,
+                ]);
+            }
+
+            // Record coupon usage if applied
+            if ($appliedCoupon && ! empty($appliedCoupon['id'])) {
+                $couponModel = Coupon::find($appliedCoupon['id']);
+                if ($couponModel) {
+                    app(CouponService::class)->recordUsage(
+                        coupon: $couponModel,
+                        userId: $customer->id,
+                        orderId: $order->id,
+                        discountAmount: $discountAmount
+                    );
                 }
             }
 
@@ -229,19 +316,25 @@ class CheckoutComponent extends Component
         $cart = app(CartSessionService::class);
         $items = $cart->getItems();
         $subtotal = $cart->getSubtotal();
+        $appliedCoupon = $cart->getCoupon();
+        $discountAmount = $cart->getDiscountAmount();
         $shippingBreakdown = $this->getShippingBreakdown();
         $shippingFee = (float) $shippingBreakdown['total_shipping'];
-        $grandTotal = $subtotal + $shippingFee;
+        $grandTotal = max(0.00, round($subtotal + $shippingFee - $discountAmount, 2));
         $paymentMethods = PaymentMethod::where('is_active', true)->get();
+        $selectedMethod = PaymentMethod::find($this->selectedPaymentMethodId);
         $savedAddresses = Auth::check() ? Auth::user()->addresses()->latest()->get() : collect();
 
         return view('livewire.storefront.checkout-component', [
             'items' => $items,
             'subtotal' => $subtotal,
+            'appliedCoupon' => $appliedCoupon,
+            'discountAmount' => $discountAmount,
             'shippingFee' => $shippingFee,
             'shippingBreakdown' => $shippingBreakdown,
             'grandTotal' => $grandTotal,
             'paymentMethods' => $paymentMethods,
+            'selectedMethod' => $selectedMethod,
             'savedAddresses' => $savedAddresses,
         ]);
     }

@@ -10,6 +10,7 @@ use App\Models\SalesChannel;
 use App\Models\Wishlist;
 use App\Services\Cart\CartSessionService;
 use Exception;
+use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -66,6 +67,13 @@ class ProductDetail extends Component
 
     public bool $isInWishlist = false;
 
+    // Gallery & UI State
+    public int $activeImageIndex = 0;
+
+    public string $activeTab = 'specifications';
+
+    public bool $showFullscreenGallery = false;
+
     public function mount(string $slug): void
     {
         $this->product = Product::with([
@@ -97,6 +105,72 @@ class ProductDetail extends Component
             $this->rfqBuyerPhone = $user->phone ?? '';
             $this->rfqCompanyName = $user->business_name ?? '';
             $this->isInWishlist = $user->wishlists()->where('product_id', $this->product->id)->exists();
+        }
+
+        // Track recently viewed products in session
+        $recent = session()->get('recently_viewed_products', []);
+        $recent = array_diff($recent, [$this->product->id]);
+        array_unshift($recent, $this->product->id);
+        session()->put('recently_viewed_products', array_slice($recent, 0, 6));
+
+        // Increment view count
+        $this->product->increment('views_count');
+    }
+
+    public function selectImage(int $index): void
+    {
+        $this->activeImageIndex = $index;
+    }
+
+    public function toggleFullscreenGallery(): void
+    {
+        $this->showFullscreenGallery = ! $this->showFullscreenGallery;
+    }
+
+    public function buyNowRetail(): mixed
+    {
+        $this->addToCartRetail();
+
+        if (empty($this->errorMessage)) {
+            return $this->redirect(route('checkout.index'));
+        }
+
+        return null;
+    }
+
+    public function addBundleToCart(int $secondaryProductId): void
+    {
+        $this->resetMessages();
+
+        $secondary = Product::with(['retailPrice', 'variations', 'seller.sellerProfile'])->find($secondaryProductId);
+        if (! $secondary) {
+            $this->errorMessage = 'Bundle product not found.';
+
+            return;
+        }
+
+        // Add main product
+        $this->addToCartRetail();
+        if (! empty($this->errorMessage)) {
+            return;
+        }
+
+        // Add secondary bundle product
+        $cart = app(CartSessionService::class);
+        $varId = $secondary->variations->first()?->id;
+
+        try {
+            $cart->addItem(
+                productId: $secondary->id,
+                variationId: $varId,
+                channelSlug: SalesChannel::RETAIL,
+                quantity: 1
+            );
+
+            $this->feedbackMessage = "Added bundle lot ({$this->product->title} + {$secondary->title}) to your cart!";
+            $this->dispatch('cartUpdated');
+        } catch (Exception $e) {
+            $this->errorMessage = $e->getMessage();
         }
     }
 
@@ -439,6 +513,30 @@ class ProductDetail extends Component
             ? $this->product->reviews()->where('user_id', auth()->id())->first()
             : null;
 
+        // Recommendations & Discovery (Pickaboo reference standard)
+        $relatedProducts = Product::query()
+            ->active()
+            ->where('id', '!=', $this->product->id)
+            ->where(function (Builder $q) {
+                $q->where('category_id', $this->product->category_id)
+                    ->orWhere('brand_id', $this->product->brand_id);
+            })
+            ->with(['primaryImage', 'brand', 'retailPrice'])
+            ->take(4)
+            ->get();
+
+        $frequentlyBoughtTogether = Product::query()
+            ->active()
+            ->where('id', '!=', $this->product->id)
+            ->with(['primaryImage', 'brand', 'retailPrice'])
+            ->take(2)
+            ->get();
+
+        $recentIds = array_diff(session()->get('recently_viewed_products', []), [$this->product->id]);
+        $recentlyViewed = ! empty($recentIds)
+            ? Product::query()->active()->whereIn('id', $recentIds)->with(['primaryImage', 'brand', 'retailPrice'])->take(4)->get()
+            : collect();
+
         return view('livewire.storefront.product-detail', [
             'isWholesaleUser' => $isWholesaleUser,
             'retailPrice' => $retailPrice,
@@ -450,6 +548,9 @@ class ProductDetail extends Component
             'reviews' => $reviews,
             'userHasPurchased' => $userHasPurchased,
             'existingUserReview' => $existingUserReview,
+            'relatedProducts' => $relatedProducts,
+            'frequentlyBoughtTogether' => $frequentlyBoughtTogether,
+            'recentlyViewed' => $recentlyViewed,
         ]);
     }
 }

@@ -140,18 +140,29 @@
 
             <!-- Financial Calculation Table -->
             <div class="flex justify-end pt-4">
-                <div class="w-72 space-y-2 text-xs border-t border-slate-200 pt-4">
+                <div class="w-80 space-y-2 text-xs border-t border-slate-200 pt-4">
+                    @php
+                        $rawSubtotal = $order->subOrders->sum('subtotal');
+                    @endphp
                     <div class="flex justify-between text-slate-600">
                         <span>Items Subtotal:</span>
-                        <span class="font-mono font-bold text-slate-900">৳{{ number_format($order->total_amount, 2) }}</span>
+                        <span class="font-mono font-bold text-slate-900">৳{{ number_format($rawSubtotal > 0 ? $rawSubtotal : $order->total_amount, 2) }}</span>
                     </div>
+                    @if ($order->discount_amount > 0)
+                        <div class="flex justify-between text-emerald-700 font-semibold">
+                            <span>Promotional Discount ({{ $order->coupon_code }}):</span>
+                            <span class="font-mono font-bold">-৳{{ number_format($order->discount_amount, 2) }}</span>
+                        </div>
+                    @endif
                     <div class="flex justify-between text-slate-600">
                         <span>Delivery / Freight:</span>
-                        <span class="font-mono text-emerald-600 font-bold">Free Shipping</span>
+                        <span class="font-mono {{ $order->shipping_amount == 0 ? 'text-emerald-600 font-bold' : 'text-slate-800 font-bold' }}">
+                            {{ $order->shipping_amount == 0 ? 'Free Shipping' : '৳' . number_format($order->shipping_amount, 2) }}
+                        </span>
                     </div>
                     <div class="flex justify-between text-slate-600">
                         <span>Applicable VAT / Tax:</span>
-                        <span class="font-mono text-slate-500">Included in rates</span>
+                        <span class="font-mono text-slate-500">Included</span>
                     </div>
                     <div class="border-t border-slate-900 pt-2 flex justify-between items-baseline text-sm">
                         <span class="font-black text-slate-900">Total Payable:</span>

@@ -2,6 +2,7 @@
 
 namespace App\Services\Cart;
 
+use App\Models\Coupon;
 use App\Models\Product;
 use App\Models\SalesChannel;
 use Exception;
@@ -10,6 +11,8 @@ use Illuminate\Support\Facades\Session;
 class CartSessionService
 {
     protected const SESSION_KEY = 'b2bhaat_cart_items';
+
+    protected const COUPON_KEY = 'b2bhaat_applied_coupon';
 
     /**
      * @return array<string, array<string, mixed>>
@@ -132,6 +135,78 @@ class CartSessionService
     public function clear(): void
     {
         Session::forget(self::SESSION_KEY);
+        Session::forget(self::COUPON_KEY);
+    }
+
+    public function applyCoupon(string $code, ?int $userId = null): array
+    {
+        $couponService = app(CouponService::class);
+        $result = $couponService->applyCoupon($code, $this->getSubtotal(), $userId);
+
+        if ($result['valid'] && $result['coupon']) {
+            Session::put(self::COUPON_KEY, [
+                'id' => $result['coupon']->id,
+                'code' => $result['coupon']->code,
+                'name' => $result['coupon']->name,
+                'discount' => $result['discount'],
+            ]);
+        }
+
+        return $result;
+    }
+
+    public function removeCoupon(): void
+    {
+        Session::forget(self::COUPON_KEY);
+    }
+
+    /**
+     * @return array{id: int, code: string, name: string, discount: float}|null
+     */
+    public function getAppliedCoupon(): ?array
+    {
+        $couponData = Session::get(self::COUPON_KEY);
+        if (! $couponData) {
+            return null;
+        }
+
+        // Re-verify against current subtotal
+        $coupon = Coupon::find($couponData['id']);
+        if (! $coupon || ! $coupon->is_active) {
+            $this->removeCoupon();
+
+            return null;
+        }
+
+        $validation = $coupon->validateForSubtotal($this->getSubtotal(), auth()->id());
+        if (! $validation['valid']) {
+            $this->removeCoupon();
+
+            return null;
+        }
+
+        $discount = $coupon->calculateDiscount($this->getSubtotal());
+        $couponData['discount'] = $discount;
+        Session::put(self::COUPON_KEY, $couponData);
+
+        return $couponData;
+    }
+
+    public function getCoupon(): ?array
+    {
+        return $this->getAppliedCoupon();
+    }
+
+    public function getDiscountAmount(): float
+    {
+        $coupon = $this->getAppliedCoupon();
+
+        return $coupon ? (float) $coupon['discount'] : 0.00;
+    }
+
+    public function getSubtotalAfterDiscount(): float
+    {
+        return max(0.00, round($this->getSubtotal() - $this->getDiscountAmount(), 2));
     }
 
     public function getSubtotal(): float

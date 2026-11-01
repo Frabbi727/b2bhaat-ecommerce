@@ -17,10 +17,31 @@
 
     @if ($errorMessage)
         <div class="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
-            <svg class="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
             <span>{{ $errorMessage }}</span>
+        </div>
+    @endif
+
+    @if ($couponSuccessMessage)
+        <div class="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+                <span>{{ $couponSuccessMessage }}</span>
+            </div>
+            <button wire:click="removeCoupon" class="text-xs underline text-emerald-900 font-bold hover:text-emerald-700">Remove</button>
+        </div>
+    @endif
+
+    @if ($couponErrorMessage)
+        <div class="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
+            <svg class="w-4 h-4 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ $couponErrorMessage }}</span>
         </div>
     @endif
 
@@ -101,15 +122,25 @@
                                 <span class="text-sm font-extrabold text-slate-900">৳{{ number_format($lineTotal, 2) }}</span>
                             </div>
 
-                            <button 
-                                wire:click="removeItem('{{ $item['key'] }}')" 
-                                class="text-slate-400 hover:text-rose-500 transition" 
-                                title="Remove Item"
-                            >
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                </svg>
-                            </button>
+                            <div class="flex items-center gap-2">
+                                <button
+                                    wire:click="moveToWishlist('{{ $item['key'] }}', {{ $item['product_id'] }})"
+                                    class="p-1 text-slate-400 hover:text-indigo-600 transition"
+                                    title="Move to Wishlist"
+                                >
+                                    <svg class="w-4 h-4 fill-none stroke-current" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                                </button>
+
+                                <button 
+                                    wire:click="removeItem('{{ $item['key'] }}')" 
+                                    class="p-1 text-slate-400 hover:text-rose-500 transition" 
+                                    title="Remove Item"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 @endforeach
@@ -141,6 +172,44 @@
                     <p class="text-[10px] text-slate-400">All wholesale & retail orders above ৳10,000 qualify for free courier shipping across all 64 districts.</p>
                 </div>
 
+                <!-- Coupon Code Box -->
+                <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
+                    <h4 class="font-bold text-slate-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+                        Apply Promotional Coupon
+                    </h4>
+
+                    @if ($appliedCoupon)
+                        <div class="flex items-center justify-between p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs">
+                            <div>
+                                <span class="font-mono font-black tracking-wider uppercase">{{ $appliedCoupon['code'] }}</span>
+                                <span class="text-[11px] text-emerald-700 block font-medium">Applied: ৳{{ number_format($discountAmount, 2) }} discount</span>
+                            </div>
+                            <button 
+                                wire:click="removeCoupon" 
+                                class="px-2.5 py-1 text-xs font-bold text-rose-600 hover:text-rose-800 bg-white rounded-lg border border-rose-200 shadow-2xs"
+                            >
+                                Remove
+                            </button>
+                        </div>
+                    @else
+                        <form wire:submit.prevent="applyCoupon" class="flex gap-2">
+                            <input 
+                                type="text" 
+                                wire:model="couponCode" 
+                                placeholder="Coupon code (e.g. WELCOME10)" 
+                                class="flex-1 uppercase text-xs py-2 px-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 font-mono"
+                            />
+                            <button 
+                                type="submit" 
+                                class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
+                            >
+                                Apply
+                            </button>
+                        </form>
+                    @endif
+                </div>
+
                 <div class="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
                     <h3 class="font-bold text-slate-900 text-sm border-b border-slate-100 pb-3">Order Summary</h3>
 
@@ -153,6 +222,12 @@
                             <span>Subtotal:</span>
                             <span class="font-bold text-slate-900">৳{{ number_format($subtotal, 2) }}</span>
                         </div>
+                        @if ($discountAmount > 0)
+                            <div class="flex justify-between text-emerald-700 font-semibold">
+                                <span>Coupon Discount ({{ $appliedCoupon['code'] ?? '' }}):</span>
+                                <span class="font-bold font-mono">-৳{{ number_format($discountAmount, 2) }}</span>
+                            </div>
+                        @endif
                         <div class="flex justify-between text-slate-600">
                             <span>Shipping / Freight:</span>
                             <span class="text-slate-500">
@@ -167,7 +242,7 @@
 
                     <div class="border-t border-slate-100 pt-3 flex justify-between items-baseline">
                         <span class="text-sm font-bold text-slate-900">Estimated Total:</span>
-                        <span class="text-xl font-black text-indigo-600">৳{{ number_format($subtotal, 2) }}</span>
+                        <span class="text-xl font-black text-indigo-600">৳{{ number_format($subtotalAfterDiscount, 2) }}</span>
                     </div>
 
                     <div class="space-y-2 pt-2">

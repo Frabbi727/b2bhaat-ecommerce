@@ -15,10 +15,13 @@ class Order extends Model
         'order_status_id',
         'payment_status_id',
         'payment_method_id',
+        'coupon_id',
+        'coupon_code',
         'shipping_address',
         'total_amount',
         'tax_amount',
         'shipping_amount',
+        'discount_amount',
     ];
 
     protected function casts(): array
@@ -28,6 +31,7 @@ class Order extends Model
             'total_amount' => 'decimal:2',
             'tax_amount' => 'decimal:2',
             'shipping_amount' => 'decimal:2',
+            'discount_amount' => 'decimal:2',
         ];
     }
 
@@ -49,6 +53,11 @@ class Order extends Model
     public function paymentMethod(): BelongsTo
     {
         return $this->belongsTo(PaymentMethod::class);
+    }
+
+    public function coupon(): BelongsTo
+    {
+        return $this->belongsTo(Coupon::class);
     }
 
     public function subOrders(): HasMany

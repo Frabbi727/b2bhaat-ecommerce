@@ -99,6 +99,57 @@ class ProductForm
                             ->helperText('Deactivating immediately hides this item from all storefront queries.'),
                     ]),
 
+                Section::make('Pickaboo Specifications & Warranty')
+                    ->description('Manufacturer model, master SKU, strikethrough MSRP, and brand warranty coverage.')
+                    ->schema([
+                        Grid::make(3)->schema([
+                            TextInput::make('sku')
+                                ->label('Master SKU')
+                                ->placeholder('e.g. HAIER-H55M80GUX-TV'),
+
+                            TextInput::make('model_number')
+                                ->label('Model Number')
+                                ->placeholder('e.g. H55M80GUX'),
+
+                            TextInput::make('regular_price')
+                                ->label('Regular MSRP (Crossed-Out Price Tk)')
+                                ->prefix('৳')
+                                ->numeric()
+                                ->helperText('Displayed with strikethrough styling to show buyer savings.'),
+                        ]),
+
+                        Grid::make(2)->schema([
+                            TextInput::make('warranty_period')
+                                ->label('Warranty Period')
+                                ->placeholder('e.g. 2 Years Official Brand Warranty'),
+
+                            TextInput::make('delivery_info')
+                                ->label('Delivery Highlight')
+                                ->placeholder('e.g. Express 24-48 Hours Delivery Across Bangladesh'),
+                        ]),
+
+                        Textarea::make('warranty_policy')
+                            ->label('Detailed Warranty Policy')
+                            ->rows(2)
+                            ->placeholder('e.g. 2 Years Panel Warranty, 2 Years Spare Parts, 4 Years Free Service.'),
+
+                        Grid::make(3)->schema([
+                            Toggle::make('is_featured')
+                                ->label('Feature on Homepage')
+                                ->default(false),
+
+                            Toggle::make('is_flash_sale')
+                                ->label('Include in Flash Sale')
+                                ->default(false),
+
+                            TextInput::make('flash_sale_price')
+                                ->label('Flash Sale Special Price (Tk)')
+                                ->prefix('৳')
+                                ->numeric()
+                                ->helperText('Overrides standard retail price during active flash sale.'),
+                        ]),
+                    ]),
+
                 Section::make('Channel Tier Pricing (Tk)')
                     ->description('Set distinct retail rates and wholesale bulk minimum order thresholds.')
                     ->schema([
