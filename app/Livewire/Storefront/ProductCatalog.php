@@ -52,6 +52,16 @@ class ProductCatalog extends Component
 
     public string $errorMessage = '';
 
+    public bool $showQuickView = false;
+
+    public ?Product $quickViewProduct = null;
+
+    public ?int $quickViewVariationId = null;
+
+    public int $quickViewQuantity = 1;
+
+    public string $quickViewActiveImageUrl = '';
+
     public function mount(): void
     {
         // Bind incoming request parameters if present
@@ -60,6 +70,119 @@ class ProductCatalog extends Component
         }
         if (request()->has('search')) {
             $this->search = (string) request('search');
+        }
+    }
+
+    public function openQuickView(int $productId): void
+    {
+        $this->resetMessages();
+        $this->quickViewProduct = Product::with([
+            'images',
+            'category',
+            'brand',
+            'seller.sellerProfile',
+            'retailPrice',
+            'wholesalePrice',
+            'prices',
+            'variations.attributeValues.attribute',
+        ])->find($productId);
+
+        if (! $this->quickViewProduct) {
+            $this->errorMessage = 'Product not found.';
+
+            return;
+        }
+
+        $this->quickViewActiveImageUrl = $this->quickViewProduct->primaryImage?->image_url
+            ?? $this->quickViewProduct->images->first()?->image_url
+            ?? 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=800';
+
+        $firstVariation = $this->quickViewProduct->variations->where('is_active', true)->first()
+            ?? $this->quickViewProduct->variations->first();
+        $this->quickViewVariationId = $firstVariation?->id;
+        $this->quickViewQuantity = 1;
+        $this->showQuickView = true;
+    }
+
+    public function closeQuickView(): void
+    {
+        $this->showQuickView = false;
+        $this->quickViewProduct = null;
+        $this->quickViewVariationId = null;
+        $this->quickViewQuantity = 1;
+        $this->quickViewActiveImageUrl = '';
+    }
+
+    public function selectQuickViewImage(string $url): void
+    {
+        $this->quickViewActiveImageUrl = $url;
+    }
+
+    public function selectQuickViewVariation(int $variationId): void
+    {
+        $this->quickViewVariationId = $variationId;
+    }
+
+    public function updateQuickViewQuantity(int $amount): void
+    {
+        $newQty = $this->quickViewQuantity + $amount;
+        if ($newQty >= 1) {
+            $this->quickViewQuantity = $newQty;
+        }
+    }
+
+    public function quickViewAddToCart(CartSessionService $cart): void
+    {
+        if (! $this->quickViewProduct) {
+            return;
+        }
+
+        if ($this->quickViewProduct->seller?->sellerProfile?->is_on_vacation) {
+            $this->errorMessage = 'This merchant is on vacation mode and cannot accept orders right now.';
+
+            return;
+        }
+
+        try {
+            $cart->addItem(
+                productId: $this->quickViewProduct->id,
+                variationId: $this->quickViewVariationId,
+                channelSlug: SalesChannel::RETAIL,
+                quantity: $this->quickViewQuantity
+            );
+
+            $this->feedbackMessage = "Added {$this->quickViewQuantity}x '{$this->quickViewProduct->title}' to your cart.";
+            $this->dispatch('cartUpdated');
+            $this->closeQuickView();
+        } catch (Exception $e) {
+            $this->errorMessage = $e->getMessage();
+        }
+    }
+
+    public function quickViewBuyNow(CartSessionService $cart): void
+    {
+        if (! $this->quickViewProduct) {
+            return;
+        }
+
+        if ($this->quickViewProduct->seller?->sellerProfile?->is_on_vacation) {
+            $this->errorMessage = 'This merchant is on vacation mode and cannot accept orders right now.';
+
+            return;
+        }
+
+        try {
+            $cart->addItem(
+                productId: $this->quickViewProduct->id,
+                variationId: $this->quickViewVariationId,
+                channelSlug: SalesChannel::RETAIL,
+                quantity: $this->quickViewQuantity
+            );
+
+            $this->dispatch('cartUpdated');
+            $this->redirect(route('checkout.index'));
+        } catch (Exception $e) {
+            $this->errorMessage = $e->getMessage();
         }
     }
 

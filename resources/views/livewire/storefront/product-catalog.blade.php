@@ -319,6 +319,17 @@
                                     >
                                         <svg class="w-4 h-4 {{ in_array($product->id, $userWishlistIds) ? 'fill-rose-500 text-rose-500' : 'currentColor' }}" viewBox="0 0 24 24"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
                                     </button>
+
+                                    <!-- Quick View Hover Action -->
+                                    <button
+                                        type="button"
+                                        wire:click="openQuickView({{ $product->id }})"
+                                        class="absolute inset-x-3 bottom-3 py-2 px-3 rounded-xl bg-slate-900/90 hover:bg-slate-950 text-white text-xs font-bold backdrop-blur-xs opacity-0 group-hover:opacity-100 transition duration-200 flex items-center justify-center gap-1.5 shadow-md cursor-pointer z-10"
+                                        title="Quick View"
+                                    >
+                                        <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                        <span>Quick View</span>
+                                    </button>
                                 </div>
 
                                 <!-- Brand & Warranty Badge -->
@@ -359,16 +370,17 @@
                                 </div>
 
                                 <div class="grid grid-cols-2 gap-2">
-                                    <a
-                                        href="{{ route('catalog.show', $product->slug) }}"
-                                        class="py-2 text-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
+                                    <button
+                                        type="button"
+                                        wire:click="openQuickView({{ $product->id }})"
+                                        class="py-2 text-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
                                     >
-                                        Details
-                                    </a>
+                                        <span>Quick View</span>
+                                    </button>
                                     <button
                                         type="button"
                                         wire:click="quickAddToCart({{ $product->id }})"
-                                        class="py-2 text-center rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs flex items-center justify-center gap-1"
+                                        class="py-2 text-center rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs flex items-center justify-center gap-1 cursor-pointer"
                                     >
                                         <span>Add to Cart</span>
                                     </button>
@@ -423,6 +435,17 @@
                                     >
                                         <svg class="w-4 h-4 {{ in_array($item->id, $userWishlistIds) ? 'fill-rose-500 text-rose-500' : 'currentColor' }}" viewBox="0 0 24 24"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
                                     </button>
+
+                                    <!-- Quick View Hover Action -->
+                                    <button
+                                        type="button"
+                                        wire:click="openQuickView({{ $item->id }})"
+                                        class="absolute inset-x-2.5 bottom-2.5 py-1.5 px-2 rounded-xl bg-slate-900/90 hover:bg-slate-950 text-white text-[11px] font-bold backdrop-blur-xs opacity-0 group-hover:opacity-100 transition duration-200 flex items-center justify-center gap-1 shadow-md cursor-pointer z-10"
+                                        title="Quick View"
+                                    >
+                                        <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                        <span>Quick View</span>
+                                    </button>
                                 </div>
 
                                 <div class="text-[11px] font-bold text-indigo-600 uppercase mb-1">
@@ -453,13 +476,22 @@
                                     </span>
                                 </div>
 
-                                <button
-                                    type="button"
-                                    wire:click="quickAddToCart({{ $item->id }})"
-                                    class="w-full py-2 text-center rounded-xl bg-slate-900 hover:bg-indigo-600 text-white text-xs font-bold transition shadow-xs"
-                                >
-                                    {{ $item->has_variations && $item->variations->count() > 1 ? 'Select Options' : 'Add to Cart' }}
-                                </button>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        wire:click="openQuickView({{ $item->id }})"
+                                        class="py-2 text-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition cursor-pointer"
+                                    >
+                                        Quick View
+                                    </button>
+                                    <button
+                                        type="button"
+                                        wire:click="quickAddToCart({{ $item->id }})"
+                                        class="py-2 text-center rounded-xl bg-slate-900 hover:bg-indigo-600 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+                                    >
+                                        {{ $item->has_variations && $item->variations->count() > 1 ? 'Options' : 'Add' }}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     @endforeach
@@ -642,6 +674,17 @@
                                         >
                                             <svg class="w-4 h-4 {{ in_array($item->id, $userWishlistIds) ? 'fill-rose-500 text-rose-500' : 'currentColor' }}" viewBox="0 0 24 24"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
                                         </button>
+
+                                        <!-- Quick View Hover Action -->
+                                        <button
+                                            type="button"
+                                            wire:click="openQuickView({{ $item->id }})"
+                                            class="absolute inset-x-2.5 bottom-2.5 py-1.5 px-2 rounded-xl bg-slate-900/90 hover:bg-slate-950 text-white text-[11px] font-bold backdrop-blur-xs opacity-0 group-hover:opacity-100 transition duration-200 flex items-center justify-center gap-1 shadow-md cursor-pointer z-10"
+                                            title="Quick View"
+                                        >
+                                            <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                            <span>Quick View</span>
+                                        </button>
                                     </div>
 
                                     <div class="flex items-center gap-1.5 text-[11px] mb-1">
@@ -679,16 +722,17 @@
                                     </div>
 
                                     <div class="grid grid-cols-2 gap-2">
-                                        <a
-                                            href="{{ route('catalog.show', $item->slug) }}"
-                                            class="py-2 text-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
+                                        <button
+                                            type="button"
+                                            wire:click="openQuickView({{ $item->id }})"
+                                            class="py-2 text-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition cursor-pointer"
                                         >
-                                            View
-                                        </a>
+                                            Quick View
+                                        </button>
                                         <button
                                             type="button"
                                             wire:click="quickAddToCart({{ $item->id }})"
-                                            class="py-2 text-center rounded-xl bg-slate-900 hover:bg-indigo-600 text-white text-xs font-bold transition shadow-xs"
+                                            class="py-2 text-center rounded-xl bg-slate-900 hover:bg-indigo-600 text-white text-xs font-bold transition shadow-xs cursor-pointer"
                                         >
                                             Add
                                         </button>
@@ -706,4 +750,219 @@
             </div>
         </div>
     </div>
+
+    <!-- ================= QUICK VIEW MODAL ================= -->
+    @if ($showQuickView && $quickViewProduct)
+        <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
+            <div 
+                class="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative animate-in fade-in duration-200 my-8"
+                @click.away="$wire.closeQuickView()"
+            >
+                <!-- Close Button -->
+                <button
+                    type="button"
+                    wire:click="closeQuickView"
+                    class="absolute top-5 right-5 p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition z-10 cursor-pointer"
+                    title="Close"
+                >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                    <!-- Left: Product Image Gallery -->
+                    <div class="space-y-4">
+                        <div class="relative aspect-4/3 sm:aspect-square bg-slate-100 rounded-2xl overflow-hidden border border-slate-200">
+                            <img 
+                                src="{{ $quickViewActiveImageUrl }}" 
+                                alt="{{ $quickViewProduct->title }}" 
+                                class="w-full h-full object-cover transition duration-300"
+                            />
+
+                            @if ($quickViewProduct->discount_percentage)
+                                <span class="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-rose-600 text-white font-black text-xs shadow-md">
+                                    -{{ $quickViewProduct->discount_percentage }}% OFF
+                                </span>
+                            @endif
+
+                            @if ($quickViewProduct->seller?->sellerProfile?->is_on_vacation)
+                                <div class="absolute bottom-3 inset-x-3 p-2 bg-amber-500/90 backdrop-blur-xs text-white text-xs font-bold text-center rounded-xl shadow-xs">
+                                    Seller Currently on Vacation
+                                </div>
+                            @endif
+                        </div>
+
+                        <!-- Thumbnails -->
+                        @if ($quickViewProduct->images->count() > 1)
+                            <div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                                @foreach ($quickViewProduct->images as $img)
+                                    <button
+                                        type="button"
+                                        wire:click="selectQuickViewImage('{{ $img->image_url }}')"
+                                        class="shrink-0 w-16 h-16 rounded-xl border-2 overflow-hidden transition cursor-pointer {{ $quickViewActiveImageUrl === $img->image_url ? 'border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs' : 'border-slate-200 hover:border-slate-300 opacity-70 hover:opacity-100' }}"
+                                    >
+                                        <img src="{{ $img->image_url }}" alt="Thumbnail" class="w-full h-full object-cover"/>
+                                    </button>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+
+                    <!-- Right: Product Information & Purchase Controls -->
+                    <div class="space-y-4 text-xs">
+                        <!-- Brand & Meta -->
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700">
+                                    {{ $quickViewProduct->category?->name ?? 'Electronics' }}
+                                </span>
+                                @if ($quickViewProduct->brand)
+                                    <span class="text-slate-400 font-bold uppercase">{{ $quickViewProduct->brand->name }}</span>
+                                @endif
+                                @if ($quickViewProduct->model_number)
+                                    <span class="text-slate-300">•</span>
+                                    <span class="font-mono text-slate-400">Mod: {{ $quickViewProduct->model_number }}</span>
+                                @endif
+                            </div>
+
+                            <h2 class="text-lg sm:text-xl font-black text-slate-900 leading-snug tracking-tight">
+                                <a href="{{ route('catalog.show', $quickViewProduct->slug) }}" class="hover:text-indigo-600 transition">
+                                    {{ $quickViewProduct->title }}
+                                </a>
+                            </h2>
+
+                            <div class="flex items-center gap-2 text-slate-500 pt-0.5">
+                                <span>Sold by: <strong class="text-slate-700 font-semibold">{{ $quickViewProduct->seller?->sellerProfile?->store_name ?? 'Factory Direct' }}</strong></span>
+                                @if ($quickViewProduct->seller?->sellerProfile?->is_approved)
+                                    <span class="text-emerald-600 flex items-center gap-0.5 font-semibold text-[11px]">
+                                        <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                                        Verified
+                                    </span>
+                                @endif
+                            </div>
+                        </div>
+
+                        <!-- Price Block -->
+                        <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-baseline justify-between gap-4">
+                            <div>
+                                <span class="text-slate-400 text-[11px] block">Special Selling Price</span>
+                                <div class="flex items-baseline gap-2.5">
+                                    <span class="text-2xl font-black text-slate-900">৳{{ number_format($quickViewProduct->effective_selling_price, 2) }}</span>
+                                    @if ($quickViewProduct->regular_price && (float) $quickViewProduct->regular_price > $quickViewProduct->effective_selling_price)
+                                        <span class="text-sm text-slate-400 line-through">৳{{ number_format((float) $quickViewProduct->regular_price, 2) }}</span>
+                                    @endif
+                                </div>
+                            </div>
+
+                            @if ($quickViewProduct->savings_amount > 0)
+                                <div class="text-right">
+                                    <span class="px-2 py-1 rounded-lg text-xs font-black bg-emerald-100 text-emerald-800 inline-block shadow-2xs">
+                                        Save ৳{{ number_format($quickViewProduct->savings_amount, 0) }}
+                                    </span>
+                                </div>
+                            @endif
+                        </div>
+
+                        <!-- Highlights & Warranty -->
+                        <div class="grid grid-cols-2 gap-2 text-[11px]">
+                            @if ($quickViewProduct->warranty_period)
+                                <div class="p-2 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-1.5 text-slate-700">
+                                    <span>🛡️</span>
+                                    <span class="font-medium truncate">{{ $quickViewProduct->warranty_period }}</span>
+                                </div>
+                            @endif
+                            <div class="p-2 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-1.5 text-slate-700">
+                                <span>🚚</span>
+                                <span class="font-medium truncate">{{ $quickViewProduct->delivery_info ?? '24-48 Hours Express Delivery' }}</span>
+                            </div>
+                        </div>
+
+                        <!-- Variations Selector -->
+                        @if ($quickViewProduct->variations->isNotEmpty())
+                            <div class="space-y-1.5 pt-1">
+                                <label class="block font-bold text-slate-800 uppercase tracking-wider text-[10px]">Select Variation</label>
+                                <div class="flex flex-wrap gap-2">
+                                    @foreach ($quickViewProduct->variations as $var)
+                                        @php
+                                            $attrSummary = $var->attributeValues->pluck('value')->implode(' / ') ?: $var->sku;
+                                        @endphp
+                                        <button
+                                            type="button"
+                                            wire:click="selectQuickViewVariation({{ $var->id }})"
+                                            class="px-3 py-1.5 rounded-xl border text-xs cursor-pointer transition {{ $quickViewVariationId === $var->id ? 'border-indigo-600 bg-indigo-50/70 text-indigo-900 font-bold ring-2 ring-indigo-500/20 shadow-xs' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700' }}"
+                                        >
+                                            {{ $attrSummary }}
+                                            <span class="text-[10px] text-slate-400 font-mono ml-1">({{ $var->stock_quantity }} left)</span>
+                                        </button>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
+
+                        <!-- Quantity & Stock Status -->
+                        <div class="flex items-center justify-between pt-2">
+                            <div class="flex items-center gap-3">
+                                <span class="font-bold text-slate-700">Quantity:</span>
+                                <div class="flex items-center border border-slate-300 rounded-xl overflow-hidden bg-slate-50">
+                                    <button
+                                        type="button"
+                                        wire:click="updateQuickViewQuantity(-1)"
+                                        class="px-3 py-1.5 text-slate-700 hover:bg-slate-200 font-bold cursor-pointer"
+                                    >
+                                        -
+                                    </button>
+                                    <span class="px-4 py-1.5 font-bold text-slate-900 text-xs min-w-8 text-center bg-white">
+                                        {{ $quickViewQuantity }}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        wire:click="updateQuickViewQuantity(1)"
+                                        class="px-3 py-1.5 text-slate-700 hover:bg-slate-200 font-bold cursor-pointer"
+                                    >
+                                        +
+                                    </button>
+                                </div>
+                            </div>
+
+                            <span class="inline-flex items-center gap-1.5 text-emerald-700 font-bold text-[11px] bg-emerald-50 px-2.5 py-1 rounded-full">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                In Stock Ready to Dispatch
+                            </span>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="space-y-2 pt-2 border-t border-slate-100">
+                            <div class="grid grid-cols-2 gap-3">
+                                <button
+                                    type="button"
+                                    wire:click="quickViewAddToCart"
+                                    class="py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition cursor-pointer"
+                                >
+                                    <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                                    <span>Add to Cart</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    wire:click="quickViewBuyNow"
+                                    class="py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition cursor-pointer"
+                                >
+                                    <span>Instant Buy Now &rarr;</span>
+                                </button>
+                            </div>
+
+                            <div class="text-center pt-1">
+                                <a 
+                                    href="{{ route('catalog.show', $quickViewProduct->slug) }}" 
+                                    class="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline inline-flex items-center gap-1"
+                                >
+                                    <span>View Full Product Specifications, Tabs & Reviews</span>
+                                    <span>&rarr;</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
 </div>

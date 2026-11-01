@@ -181,4 +181,61 @@ class HeaderSearchAndHomepageTest extends TestCase
             ->assertSee('Budget Cable')
             ->assertSee('to your cart');
     }
+
+    public function test_quick_view_modal_opens_and_allows_instant_add_to_cart_and_buy_now(): void
+    {
+        $sellerRole = Role::where('slug', 'seller')->firstOrFail();
+        $seller = User::create([
+            'role_id' => $sellerRole->id,
+            'name' => 'Gadget Hub',
+            'email' => 'gadget@hub.com',
+            'password' => bcrypt('password'),
+        ]);
+
+        $channel = SalesChannel::where('slug', SalesChannel::RETAIL)->firstOrFail();
+        $unit = Unit::where('symbol', 'pc')->firstOrFail();
+
+        $cat = Category::create([
+            'name' => 'Wearables',
+            'slug' => 'wearables',
+            'is_active' => true,
+        ]);
+
+        $product = Product::create([
+            'seller_id' => $seller->id,
+            'category_id' => $cat->id,
+            'sales_channel_id' => $channel->id,
+            'unit_id' => $unit->id,
+            'title' => 'Fitness Smart Band 8',
+            'slug' => 'fitness-smart-band-8',
+            'sku' => 'BAND8-BLK',
+            'model_number' => 'SB-800',
+            'regular_price' => 4500.00,
+            'buy_price' => 2200.00,
+            'warranty_period' => '1 Year Official Warranty',
+            'is_active' => true,
+        ]);
+
+        ProductPrice::create([
+            'product_id' => $product->id,
+            'sales_channel_id' => $channel->id,
+            'min_quantity' => 1,
+            'unit_price' => 3800.00,
+        ]);
+
+        Livewire::test(ProductCatalog::class)
+            ->assertSet('showQuickView', false)
+            ->call('openQuickView', $product->id)
+            ->assertSet('showQuickView', true)
+            ->assertSee('Fitness Smart Band 8')
+            ->assertSee('Special Selling Price')
+            ->assertSee('৳3,800.00')
+            ->assertSee('Save ৳700')
+            ->call('updateQuickViewQuantity', 1)
+            ->assertSet('quickViewQuantity', 2)
+            ->call('quickViewAddToCart')
+            ->assertDispatched('cartUpdated')
+            ->assertSet('showQuickView', false)
+            ->assertSee('Added 2x');
+    }
 }
