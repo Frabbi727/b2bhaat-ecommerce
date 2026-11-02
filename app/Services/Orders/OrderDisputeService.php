@@ -10,6 +10,7 @@ use App\Models\ReturnRequest;
 use App\Models\SubOrder;
 use App\Models\User;
 use App\Services\Inventory\StockReservationService;
+use App\Services\Settings\StoreConfigurationService;
 use Exception;
 use Illuminate\Support\Facades\DB;
 
@@ -30,6 +31,11 @@ class OrderDisputeService
 
         if (in_array($statusSlug, ['shipped', 'in_transit', 'out_for_delivery', 'delivered'])) {
             throw new Exception("Consignment #{$subOrder->sub_order_number} has already been dispatched with courier ({$subOrder->courier_name}). It cannot be cancelled. You may submit a return request upon delivery.");
+        }
+
+        $windowHours = app(StoreConfigurationService::class)->getOrderCancellationWindowHours();
+        if ($subOrder->created_at && $subOrder->created_at->addHours($windowHours)->isPast()) {
+            throw new Exception("Cancellation window of {$windowHours} hours has elapsed. Consignment #{$subOrder->sub_order_number} cannot be cancelled online. Please contact support.");
         }
 
         if ($statusSlug === 'cancelled') {

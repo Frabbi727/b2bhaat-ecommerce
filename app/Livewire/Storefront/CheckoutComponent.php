@@ -8,12 +8,14 @@ use App\Models\OrderStatus;
 use App\Models\PaymentMethod;
 use App\Models\PaymentStatus;
 use App\Models\Role;
+use App\Models\SalesChannel;
 use App\Models\User;
 use App\Services\Cart\CartSessionService;
 use App\Services\Cart\CouponService;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Logistics\ShippingCalculatorService;
 use App\Services\Orders\OrderSplitterService;
+use App\Services\Settings\StoreConfigurationService;
 use Exception;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -191,6 +193,38 @@ class CheckoutComponent extends Component
 
         if (empty($items)) {
             $this->errorMessage = 'Your cart is empty.';
+
+            return;
+        }
+
+        $config = app(StoreConfigurationService::class);
+
+        // 1. Guest checkout policy safeguard
+        if (! Auth::check() && ! $config->isGuestCheckoutAllowed()) {
+            $this->errorMessage = 'Guest checkout is disabled. Please sign in to complete your purchase.';
+
+            return;
+        }
+
+        // 2. Minimum order amount safeguards
+        $subtotal = $cart->getSubtotal();
+        $isWholesale = collect($items)->contains(fn ($i) => ($i['sales_channel_id'] ?? null) === SalesChannel::where('slug', SalesChannel::WHOLESALE)->value('id'));
+        $channel = $isWholesale ? 'wholesale' : 'retail';
+        $minBasket = $config->getMinOrderAmount($channel);
+
+        if ($subtotal < $minBasket) {
+            $this->errorMessage = "Minimum order amount for {$channel} orders is ৳".number_format($minBasket, 0);
+
+            return;
+        }
+
+        // 3. Cash on Delivery (COD) maximum order limit safeguard
+        $shippingFee = $this->getShippingFee();
+        $discountAmount = $cart->getDiscountAmount();
+        $grandTotal = max(0.00, round($subtotal + $shippingFee - $discountAmount, 2));
+
+        if ($paymentMethod && $paymentMethod->slug === 'cod' && $grandTotal > $config->getCodMaxLimit()) {
+            $this->errorMessage = 'Cash on Delivery is only available for orders up to ৳'.number_format($config->getCodMaxLimit(), 0);
 
             return;
         }

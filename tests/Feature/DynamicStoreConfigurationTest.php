@@ -5,10 +5,17 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Filament\Admin\Pages\StoreSettings;
+use App\Livewire\Storefront\CheckoutComponent;
+use App\Models\FulfillmentStatus;
+use App\Models\Order;
+use App\Models\PaymentMethod;
 use App\Models\Product;
+use App\Models\SalesChannel;
 use App\Models\StoreSetting;
 use App\Models\User;
+use App\Services\Cart\CartSessionService;
 use App\Services\Logistics\ShippingCalculatorService;
+use App\Services\Orders\OrderDisputeService;
 use App\Services\Settings\StoreConfigurationService;
 use Database\Seeders\DatabaseSeeder;
 use Filament\Facades\Filament;
@@ -105,5 +112,39 @@ class DynamicStoreConfigurationTest extends TestCase
 
         $res = $calc->calculateShipping($items, 'inside_dhaka');
         $this->assertEquals(90.00, (float) $res['total_shipping']);
+    }
+
+    public function test_checkout_enforces_cod_ceiling_and_dispute_respects_cancellation_window(): void
+    {
+        $config = app(StoreConfigurationService::class);
+        $config->set('cod_max_order_limit', 5000.00, 'checkout', 'float');
+        $config->set('cancellation_window_hours', 12, 'checkout', 'integer');
+
+        $buyer = User::where('email', 'customer@retail.com')->firstOrFail();
+        $this->actingAs($buyer);
+
+        // Place an order exceeding 5000 Tk and verify COD is restricted
+        $cart = app(CartSessionService::class);
+        $product = Product::where('slug', 'haier-55-inch-mini-led-4k-uhd-google-tv-h55m80gux')->firstOrFail();
+        $cart->addItem($product->id, null, SalesChannel::RETAIL, 1);
+
+        $codMethod = PaymentMethod::where('slug', 'cod')->firstOrFail();
+
+        Livewire::test(CheckoutComponent::class)
+            ->set('selectedPaymentMethodId', $codMethod->id)
+            ->call('placeOrder')
+            ->assertSee('Cash on Delivery is only available for orders up to ৳5,000');
+
+        // Verify dispute cancellation window is respected
+        $order = Order::firstOrFail();
+        $subOrder = $order->subOrders()->firstOrFail();
+        $unfulfilledStatus = FulfillmentStatus::where('slug', 'unfulfilled')->firstOrFail();
+        $subOrder->fulfillment_status_id = $unfulfilledStatus->id;
+        $subOrder->created_at = now()->subHours(15);
+        $subOrder->save();
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Cancellation window of 12 hours has elapsed');
+        app(OrderDisputeService::class)->cancelSubOrder($subOrder);
     }
 }
