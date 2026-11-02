@@ -10,3 +10,6 @@ Artisan::command('inspire', function () {
 
 // Automatically check and release delivered escrow funds every hour
 Schedule::command('escrow:release-delivered')->hourly();
+
+// Automatically cancel expired unpaid reservations and release stock every 5 minutes
+Schedule::command('inventory:release-expired-reservations')->everyFiveMinutes();
