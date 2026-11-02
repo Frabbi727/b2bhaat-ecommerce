@@ -93,6 +93,14 @@
                     </div>
 
                     <div class="sm:col-span-2 space-y-1.5 pt-1">
+                        @php
+                            $storeConfig = app(\App\Services\Settings\StoreConfigurationService::class);
+                            $insideFee = $storeConfig->getDeliveryFee('inside_dhaka');
+                            $outsideFee = $storeConfig->getDeliveryFee('outside_dhaka');
+                            $freeThreshold = $storeConfig->getFreeShippingThreshold();
+                            $insideSla = $storeConfig->getDeliverySla('inside_dhaka');
+                            $outsideSla = $storeConfig->getDeliverySla('outside_dhaka');
+                        @endphp
                         <label class="block font-semibold text-slate-700">Delivery Region / Courier Zone *</label>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <label class="flex items-center justify-between p-3 rounded-xl border cursor-pointer transition {{ $deliveryZone === 'inside_dhaka' ? 'border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-500/20' : 'border-slate-200 hover:bg-slate-50' }}">
@@ -100,11 +108,11 @@
                                     <input type="radio" wire:model.live="deliveryZone" value="inside_dhaka" class="text-indigo-600 focus:ring-indigo-500"/>
                                     <div>
                                         <div class="font-bold text-slate-900">Inside Dhaka</div>
-                                        <div class="text-[10px] text-slate-500">24-48 Hours Express Delivery</div>
+                                        <div class="text-[10px] text-slate-500">{{ $insideSla }} Express Delivery</div>
                                     </div>
                                 </div>
                                 <span class="font-bold text-indigo-600 font-mono">
-                                    {{ $subtotal >= 10000 ? 'Free' : '৳70' }}
+                                    {{ $subtotal >= $freeThreshold ? 'Free' : '৳' . number_format($insideFee, 0) }}
                                 </span>
                             </label>
 
@@ -113,11 +121,11 @@
                                     <input type="radio" wire:model.live="deliveryZone" value="outside_dhaka" class="text-indigo-600 focus:ring-indigo-500"/>
                                     <div>
                                         <div class="font-bold text-slate-900">Outside Dhaka (All Districts)</div>
-                                        <div class="text-[10px] text-slate-500">48-72 Hours Courier Delivery</div>
+                                        <div class="text-[10px] text-slate-500">{{ $outsideSla }} Courier Delivery</div>
                                     </div>
                                 </div>
                                 <span class="font-bold text-indigo-600 font-mono">
-                                    {{ $subtotal >= 10000 ? 'Free' : '৳130' }}
+                                    {{ $subtotal >= $freeThreshold ? 'Free' : '৳' . number_format($outsideFee, 0) }}
                                 </span>
                             </label>
                         </div>

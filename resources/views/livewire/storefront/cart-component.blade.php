@@ -150,7 +150,8 @@
             <div class="lg:col-span-4 space-y-4">
                 <!-- Free Shipping Progress -->
                 @php
-                    $freeShippingThreshold = 10000.00;
+                    $storeConfig = app(\App\Services\Settings\StoreConfigurationService::class);
+                    $freeShippingThreshold = $storeConfig->getFreeShippingThreshold();
                     $progressPercentage = min(100, round(($subtotal / $freeShippingThreshold) * 100));
                 @endphp
                 <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-2">
@@ -169,7 +170,7 @@
                     <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                         <div class="h-2 rounded-full transition-all duration-500 {{ $subtotal >= $freeShippingThreshold ? 'bg-emerald-500' : 'bg-indigo-600' }}" style="width: {{ $progressPercentage }}%"></div>
                     </div>
-                    <p class="text-[10px] text-slate-400">All wholesale & retail orders above ৳10,000 qualify for free courier shipping across all 64 districts.</p>
+                    <p class="text-[10px] text-slate-400">All wholesale & retail orders above ৳{{ number_format($freeShippingThreshold, 0) }} qualify for free courier shipping across all 64 districts.</p>
                 </div>
 
                 <!-- Coupon Code Box -->

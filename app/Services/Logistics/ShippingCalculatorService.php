@@ -1,8 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Logistics;
 
 use App\Models\Product;
+use App\Services\Settings\StoreConfigurationService;
 
 class ShippingCalculatorService
 {
@@ -11,6 +14,12 @@ class ShippingCalculatorService
     public const DEFAULT_OUTSIDE_DHAKA_RATE = 130.00;
 
     public const DEFAULT_FREE_SHIPPING_THRESHOLD = 10000.00;
+
+    public function __construct(
+        protected ?StoreConfigurationService $config = null
+    ) {
+        $this->config = $config ?? app(StoreConfigurationService::class);
+    }
 
     /**
      * Calculate delivery fees partitioned per vendor based on Decision D6 rules.
@@ -22,7 +31,7 @@ class ShippingCalculatorService
      *     variation_id?: ?int,
      *     sales_channel_id?: int
      * }> $items
-     * @param  string  $deliveryZone  'inside_dhaka' or 'outside_dhaka'
+     * @param  string  $deliveryZone  'inside_dhaka', 'sub_dhaka', or 'outside_dhaka'
      * @return array{
      *     total_shipping: float,
      *     vendors: array<int, array{
@@ -76,24 +85,22 @@ class ShippingCalculatorService
                 $vendorSubtotal += ($item['unit_price'] * $item['quantity']);
             }
 
-            // Resolve threshold
+            // Resolve threshold: seller override, or dynamic platform default
             $threshold = $profile?->free_shipping_threshold !== null
                 ? (float) $profile->free_shipping_threshold
-                : self::DEFAULT_FREE_SHIPPING_THRESHOLD;
+                : $this->config->getFreeShippingThreshold();
 
             $isFree = $vendorSubtotal >= $threshold;
 
             if ($isFree) {
                 $vendorShipping = 0.00;
             } else {
-                if ($deliveryZone === 'outside_dhaka') {
-                    $vendorShipping = $profile?->outside_dhaka_rate !== null
-                        ? (float) $profile->outside_dhaka_rate
-                        : self::DEFAULT_OUTSIDE_DHAKA_RATE;
+                if ($deliveryZone === 'outside_dhaka' && $profile?->outside_dhaka_rate !== null) {
+                    $vendorShipping = (float) $profile->outside_dhaka_rate;
+                } elseif ($deliveryZone === 'inside_dhaka' && $profile?->inside_dhaka_rate !== null) {
+                    $vendorShipping = (float) $profile->inside_dhaka_rate;
                 } else {
-                    $vendorShipping = $profile?->inside_dhaka_rate !== null
-                        ? (float) $profile->inside_dhaka_rate
-                        : self::DEFAULT_INSIDE_DHAKA_RATE;
+                    $vendorShipping = $this->config->getDeliveryFee($deliveryZone);
                 }
             }
 

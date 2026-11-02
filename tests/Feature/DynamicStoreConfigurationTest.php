@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Filament\Admin\Pages\StoreSettings;
+use App\Models\Product;
 use App\Models\StoreSetting;
 use App\Models\User;
+use App\Services\Logistics\ShippingCalculatorService;
 use App\Services\Settings\StoreConfigurationService;
 use Database\Seeders\DatabaseSeeder;
 use Filament\Facades\Filament;
@@ -74,5 +76,34 @@ class DynamicStoreConfigurationTest extends TestCase
         // Seller is forbidden
         $this->actingAs($seller);
         $this->get('/admin/store-settings')->assertForbidden();
+    }
+
+    public function test_shipping_calculator_uses_dynamic_freight_rates_and_threshold(): void
+    {
+        $config = app(StoreConfigurationService::class);
+        $config->set('delivery_fee_inside_dhaka', 90.00, 'delivery', 'float');
+        $config->set('free_shipping_threshold', 15000.00, 'delivery', 'float');
+
+        $calc = app(ShippingCalculatorService::class);
+        $product = Product::firstOrFail();
+
+        // Clear seller custom overrides if any so platform defaults apply
+        if ($product->seller?->sellerProfile) {
+            $product->seller->sellerProfile->update([
+                'inside_dhaka_rate' => null,
+                'outside_dhaka_rate' => null,
+                'free_shipping_threshold' => null,
+            ]);
+        }
+
+        $items = [[
+            'product_id' => $product->id,
+            'variation_id' => null,
+            'quantity' => 1,
+            'unit_price' => 2000.00,
+        ]];
+
+        $res = $calc->calculateShipping($items, 'inside_dhaka');
+        $this->assertEquals(90.00, (float) $res['total_shipping']);
     }
 }
