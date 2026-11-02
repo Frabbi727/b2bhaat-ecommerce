@@ -111,7 +111,7 @@ class CartCouponCheckoutAndPromotionsTest extends TestCase
         $discount = $cart->getDiscountAmount();
         $this->assertGreaterThan(0, $discount);
 
-        $codMethod = PaymentMethod::where('slug', 'cod')->firstOrFail();
+        $paymentMethod = PaymentMethod::where('slug', 'sslcommerz')->firstOrFail();
 
         $comp = Livewire::test(CheckoutComponent::class)
             ->set('recipientName', 'Tanvir Ahmed')
@@ -120,7 +120,7 @@ class CartCouponCheckoutAndPromotionsTest extends TestCase
             ->set('city', 'Dhaka')
             ->set('postalCode', '1230')
             ->set('deliveryZone', 'inside_dhaka')
-            ->set('selectedPaymentMethodId', $codMethod->id)
+            ->set('selectedPaymentMethodId', $paymentMethod->id)
             ->call('placeOrder')
             ->assertHasNoErrors();
 

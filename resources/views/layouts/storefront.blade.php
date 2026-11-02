@@ -30,6 +30,7 @@
         $topStrip = \App\Models\Banner::active()->forPosition('top_strip')->first();
         $storeConfig = app(\App\Services\Settings\StoreConfigurationService::class);
         $identity = $storeConfig->getStoreIdentity();
+        $helpline = $identity['helpline'];
     @endphp
 
     <header class="bg-slate-950 text-slate-300 text-xs py-2 px-4 border-b border-slate-800">
@@ -279,14 +280,14 @@
             <div class="space-y-3">
                 <div class="text-white font-bold text-lg flex items-center gap-2">
                     <span class="w-6 h-6 rounded bg-indigo-600 text-white flex items-center justify-center font-bold text-xs">B2B</span>
-                    <span>B2B Haat</span>
+                    <span>{{ $identity['name'] }}</span>
                 </div>
                 <p class="text-xs leading-relaxed text-slate-400">
                     The hybrid e-commerce retail & factory-direct bulk wholesale platform connecting manufacturers, verified merchants, and shoppers across Bangladesh.
                 </p>
                 <div class="text-xs text-slate-400 pt-2">
-                    <div>Customer Service: <strong class="text-white">{{ $helpline }}</strong></div>
-                    <div>Email: <strong class="text-white">support@b2bhaat.com</strong></div>
+                    <div>Customer Service: <strong class="text-white">{{ $identity['helpline'] }}</strong></div>
+                    <div>Email: <strong class="text-white">{{ $identity['email'] }}</strong></div>
                 </div>
             </div>
 
