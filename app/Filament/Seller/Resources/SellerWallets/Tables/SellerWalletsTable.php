@@ -4,6 +4,7 @@ namespace App\Filament\Seller\Resources\SellerWallets\Tables;
 
 use App\Models\SellerWallet;
 use App\Services\Escrow\EscrowLedgerService;
+use App\Services\Settings\StoreConfigurationService;
 use Exception;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
@@ -48,8 +49,9 @@ class SellerWalletsTable
                             ->prefix('৳')
                             ->numeric()
                             ->required()
+                            ->minValue(fn () => app(StoreConfigurationService::class)->getMinPayoutAmount())
                             ->maxValue(fn (SellerWallet $record) => (float) $record->available_balance)
-                            ->helperText(fn (SellerWallet $record) => 'Max available: ৳'.number_format($record->available_balance, 2)),
+                            ->helperText(fn (SellerWallet $record) => 'Min: ৳'.number_format(app(StoreConfigurationService::class)->getMinPayoutAmount(), 2).' | Max: ৳'.number_format($record->available_balance, 2)),
 
                         Select::make('payout_channel')
                             ->label('Payout Disbursement Channel')

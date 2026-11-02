@@ -38,6 +38,7 @@ class WalletTransactionsTable
                         'payout' => Color::Rose,
                         'escrow_release' => Color::Emerald,
                         'escrow_hold' => Color::Amber,
+                        'escrow_refund' => Color::Indigo,
                         default => Color::Gray,
                     }),
 
@@ -65,6 +66,7 @@ class WalletTransactionsTable
                         'payout' => 'Payout Requests (Withdrawals)',
                         'escrow_hold' => 'Escrow Holds',
                         'escrow_release' => 'Escrow Releases',
+                        'escrow_refund' => 'Escrow Refunds (Cancellations)',
                     ]),
             ])
             ->recordActions([

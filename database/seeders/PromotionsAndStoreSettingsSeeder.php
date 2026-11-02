@@ -65,6 +65,10 @@ class PromotionsAndStoreSettingsSeeder extends Seeder
         StoreSetting::setTypedValue('cod_max_order_limit', 50000.00, 'checkout', 'float');
         StoreSetting::setTypedValue('return_window_days', 7, 'checkout', 'integer');
 
+        // Group: financial
+        StoreSetting::setTypedValue('min_payout_amount', 500.00, 'financial', 'float');
+        StoreSetting::setTypedValue('escrow_holding_period_hours', 48, 'financial', 'integer');
+
         // 2. Promotional Banners
         Banner::updateOrCreate(
             ['title' => 'Haier 4K Mini LED Google TV Fest'],

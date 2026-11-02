@@ -73,6 +73,9 @@ class StoreSettings extends Page
             'min_order_amount_retail' => $service->getMinOrderAmount('retail'),
             'min_order_amount_wholesale' => $service->getMinOrderAmount('wholesale'),
             'cod_max_order_limit' => $service->getCodMaxLimit(),
+
+            'min_payout_amount' => $service->getMinPayoutAmount(),
+            'escrow_holding_period_hours' => $service->getEscrowHoldingPeriodHours(),
         ]);
     }
 
@@ -219,6 +222,26 @@ class StoreSettings extends Page
                                         ->required(),
                                 ]),
                             ]),
+
+                        Tab::make('Escrow & Financial Settlement')
+                            ->icon('heroicon-o-banknotes')
+                            ->schema([
+                                Grid::make(2)->schema([
+                                    TextInput::make('min_payout_amount')
+                                        ->label('Minimum Seller Payout Request Amount')
+                                        ->numeric()
+                                        ->prefix('৳')
+                                        ->helperText('Sellers cannot request withdrawals below this limit.')
+                                        ->required(),
+
+                                    TextInput::make('escrow_holding_period_hours')
+                                        ->label('Delivered Escrow Maturity Period')
+                                        ->suffix('hours')
+                                        ->numeric()
+                                        ->helperText('Hours after delivery before funds automatically mature into available balance.')
+                                        ->required(),
+                                ]),
+                            ]),
                     ]),
             ]);
     }
@@ -304,6 +327,14 @@ class StoreSettings extends Page
         }
         if (isset($state['cod_max_order_limit'])) {
             $service->set('cod_max_order_limit', (float) $state['cod_max_order_limit'], 'checkout', 'float');
+        }
+
+        // Financial & Settlement
+        if (isset($state['min_payout_amount'])) {
+            $service->set('min_payout_amount', (float) $state['min_payout_amount'], 'financial', 'float');
+        }
+        if (isset($state['escrow_holding_period_hours'])) {
+            $service->set('escrow_holding_period_hours', (int) $state['escrow_holding_period_hours'], 'financial', 'integer');
         }
 
         Notification::make()

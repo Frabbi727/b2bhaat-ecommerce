@@ -11,6 +11,8 @@ class WalletTransaction extends Model
 
     public const TYPE_ESCROW_RELEASE = 'escrow_release';
 
+    public const TYPE_ESCROW_REFUND = 'escrow_refund';
+
     public const TYPE_PAYOUT = 'payout';
 
     protected $fillable = [

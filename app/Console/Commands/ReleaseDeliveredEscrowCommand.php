@@ -6,6 +6,7 @@ use App\Models\FulfillmentStatus;
 use App\Models\SubOrder;
 use App\Models\WalletTransaction;
 use App\Services\Escrow\EscrowLedgerService;
+use App\Services\Settings\StoreConfigurationService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 
@@ -16,21 +17,24 @@ class ReleaseDeliveredEscrowCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'escrow:release-delivered {--hours=48 : Minimum hours post-delivery required to release}';
+    protected $signature = 'escrow:release-delivered {--hours= : Minimum hours post-delivery required to release (defaults to dynamic store setting)}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Automatically releases held escrow funds to seller available balance for orders delivered >= 48 hours ago.';
+    protected $description = 'Automatically releases held escrow funds to seller available balance for orders delivered >= holding threshold.';
 
     /**
      * Execute the console command.
      */
     public function handle(EscrowLedgerService $escrowService): int
     {
-        $hours = (int) $this->option('hours');
+        $hoursOption = $this->option('hours');
+        $hours = ($hoursOption !== null && $hoursOption !== '')
+            ? (int) $hoursOption
+            : app(StoreConfigurationService::class)->getEscrowHoldingPeriodHours();
         $thresholdTime = Carbon::now()->subHours($hours);
 
         $deliveredStatus = FulfillmentStatus::where('slug', 'delivered')->first();

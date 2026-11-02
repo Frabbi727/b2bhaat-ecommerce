@@ -110,6 +110,7 @@ class WalletStatementController extends Controller
                 $typeLabel = match ($txn->transaction_type) {
                     'escrow_hold' => 'Escrow Hold',
                     'escrow_release' => 'Settled to Balance',
+                    'escrow_refund' => 'Escrow Refund (Cancelled)',
                     'payout' => 'Payout Withdrawal',
                     default => ucfirst(str_replace('_', ' ', $txn->transaction_type)),
                 };

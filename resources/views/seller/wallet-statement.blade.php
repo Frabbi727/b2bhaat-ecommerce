@@ -134,6 +134,7 @@
                             @php
                                 $isCredit = in_array($txn->transaction_type, ['escrow_release']);
                                 $isHold = $txn->transaction_type === 'escrow_hold';
+                                $isRefund = $txn->transaction_type === 'escrow_refund';
                                 $isPayout = $txn->transaction_type === 'payout';
                             @endphp
                             <tr class="hover:bg-slate-50/50 transition">
@@ -151,6 +152,10 @@
                                     @elseif ($isHold)
                                         <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
                                             ⏳ Escrow Hold
+                                        </span>
+                                    @elseif ($isRefund)
+                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800">
+                                            ↺ Escrow Refund
                                         </span>
                                     @elseif ($isPayout)
                                         <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-800">

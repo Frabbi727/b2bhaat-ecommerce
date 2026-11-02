@@ -6,9 +6,11 @@ use App\Models\FulfillmentStatus;
 use App\Models\Order;
 use App\Models\OrderStatus;
 use App\Models\OrderTrackingLog;
+use App\Models\PaymentStatus;
 use App\Models\ReturnRequest;
 use App\Models\SubOrder;
 use App\Models\User;
+use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Settings\StoreConfigurationService;
 use Exception;
@@ -17,7 +19,8 @@ use Illuminate\Support\Facades\DB;
 class OrderDisputeService
 {
     public function __construct(
-        protected StockReservationService $stockReservationService
+        protected StockReservationService $stockReservationService,
+        protected EscrowLedgerService $escrowLedgerService
     ) {}
 
     /**
@@ -65,7 +68,10 @@ class OrderDisputeService
                 'fulfillment_status_id' => $cancelledFulfillment->id,
             ]);
 
-            // 3. Create tracking log
+            // 3. Refund held escrow if funds were locked upon customer payment
+            $this->escrowLedgerService->refundCancelledEscrow($subOrder, $reason);
+
+            // 4. Create tracking log
             OrderTrackingLog::create([
                 'sub_order_id' => $subOrder->id,
                 'fulfillment_status_id' => $cancelledFulfillment->id,
@@ -75,7 +81,7 @@ class OrderDisputeService
                 'logged_at' => now(),
             ]);
 
-            // 4. Reconcile parent order: if all sub-orders are cancelled, mark parent order cancelled
+            // 5. Reconcile parent order: if all sub-orders are cancelled, mark parent order cancelled & refunded
             $parentOrder = $subOrder->order;
             if ($parentOrder) {
                 $allCancelled = $parentOrder->subOrders()
@@ -86,6 +92,11 @@ class OrderDisputeService
                     $cancelledOrderStatus = OrderStatus::where('slug', 'cancelled')->first();
                     if ($cancelledOrderStatus) {
                         $parentOrder->update(['order_status_id' => $cancelledOrderStatus->id]);
+                    }
+
+                    $refundedPaymentStatus = PaymentStatus::where('slug', 'refunded')->first();
+                    if ($refundedPaymentStatus && $parentOrder->paymentStatus?->slug === 'paid') {
+                        $parentOrder->update(['payment_status_id' => $refundedPaymentStatus->id]);
                     }
                 }
             }

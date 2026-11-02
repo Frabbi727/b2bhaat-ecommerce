@@ -158,4 +158,20 @@ class StoreConfigurationService
             default => (float) $this->get('min_order_amount_retail', 200.00),
         };
     }
+
+    /**
+     * Get minimum payout withdrawal request amount.
+     */
+    public function getMinPayoutAmount(): float
+    {
+        return (float) $this->get('min_payout_amount', 500.00);
+    }
+
+    /**
+     * Get holding period in hours before delivered escrow funds transition to available balance.
+     */
+    public function getEscrowHoldingPeriodHours(): int
+    {
+        return (int) $this->get('escrow_holding_period_hours', 48);
+    }
 }

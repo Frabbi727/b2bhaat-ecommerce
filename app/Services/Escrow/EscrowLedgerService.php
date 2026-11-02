@@ -6,16 +6,29 @@ use App\Models\SellerWallet;
 use App\Models\SubOrder;
 use App\Models\User;
 use App\Models\WalletTransaction;
+use App\Services\Settings\StoreConfigurationService;
 use Exception;
 use Illuminate\Support\Facades\DB;
 
 class EscrowLedgerService
 {
+    public function __construct(
+        protected StoreConfigurationService $config
+    ) {}
+
     /**
      * Hold sub-order net earnings in seller's escrow held balance upon customer payment.
      */
     public function holdInEscrow(SubOrder $subOrder): WalletTransaction
     {
+        $existingHold = WalletTransaction::where('sub_order_id', $subOrder->id)
+            ->where('transaction_type', WalletTransaction::TYPE_ESCROW_HOLD)
+            ->first();
+
+        if ($existingHold) {
+            return $existingHold;
+        }
+
         return DB::transaction(function () use ($subOrder) {
             /** @var SellerWallet $wallet */
             $wallet = SellerWallet::firstOrCreate(
@@ -46,6 +59,14 @@ class EscrowLedgerService
      */
     public function releaseFromEscrow(SubOrder $subOrder): WalletTransaction
     {
+        $existingRelease = WalletTransaction::where('sub_order_id', $subOrder->id)
+            ->where('transaction_type', WalletTransaction::TYPE_ESCROW_RELEASE)
+            ->first();
+
+        if ($existingRelease) {
+            return $existingRelease;
+        }
+
         return DB::transaction(function () use ($subOrder) {
             /** @var SellerWallet $wallet */
             $wallet = SellerWallet::where('seller_id', $subOrder->seller_id)
@@ -80,6 +101,14 @@ class EscrowLedgerService
      */
     public function creditDeliveredSubOrder(SubOrder $subOrder): WalletTransaction
     {
+        $existingRelease = WalletTransaction::where('sub_order_id', $subOrder->id)
+            ->where('transaction_type', WalletTransaction::TYPE_ESCROW_RELEASE)
+            ->first();
+
+        if ($existingRelease) {
+            return $existingRelease;
+        }
+
         return DB::transaction(function () use ($subOrder) {
             /** @var SellerWallet $wallet */
             $wallet = SellerWallet::firstOrCreate(
@@ -112,14 +141,65 @@ class EscrowLedgerService
     }
 
     /**
+     * Refund held escrow funds when an unfulfilled consignment is cancelled.
+     */
+    public function refundCancelledEscrow(SubOrder $subOrder, string $reason = 'Consignment cancelled'): ?WalletTransaction
+    {
+        $existingRefund = WalletTransaction::where('sub_order_id', $subOrder->id)
+            ->where('transaction_type', WalletTransaction::TYPE_ESCROW_REFUND)
+            ->first();
+
+        if ($existingRefund) {
+            return $existingRefund;
+        }
+
+        $holdTx = WalletTransaction::where('sub_order_id', $subOrder->id)
+            ->where('transaction_type', WalletTransaction::TYPE_ESCROW_HOLD)
+            ->first();
+
+        if (! $holdTx) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($subOrder, $holdTx, $reason) {
+            /** @var SellerWallet|null $wallet */
+            $wallet = SellerWallet::where('seller_id', $subOrder->seller_id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $wallet) {
+                return null;
+            }
+
+            $refundAmount = min((float) $holdTx->amount, (float) $wallet->escrow_held_balance);
+
+            if ($refundAmount > 0) {
+                $wallet->decrement('escrow_held_balance', $refundAmount);
+                $wallet->refresh();
+            }
+
+            return WalletTransaction::create([
+                'seller_wallet_id' => $wallet->id,
+                'sub_order_id' => $subOrder->id,
+                'transaction_type' => WalletTransaction::TYPE_ESCROW_REFUND,
+                'amount' => (float) $holdTx->amount,
+                'running_balance' => $wallet->available_balance,
+                'reference_note' => "Escrow hold refunded due to cancellation of Sub-Order #{$subOrder->sub_order_number}: {$reason}",
+            ]);
+        });
+    }
+
+    /**
      * Request payout withdrawal from seller's available balance.
      *
      * @throws Exception
      */
     public function requestPayout(User $seller, float $amount, ?string $note = null): WalletTransaction
     {
-        if ($amount <= 0) {
-            throw new Exception('Payout withdrawal amount must be greater than zero.');
+        $minPayout = $this->config->getMinPayoutAmount();
+
+        if ($amount < $minPayout) {
+            throw new Exception("Payout withdrawal amount must be at least ৳{$minPayout}. Requested: ৳{$amount}");
         }
 
         return DB::transaction(function () use ($seller, $amount, $note) {
