@@ -95,6 +95,7 @@ class StoreSetting extends Model
         );
 
         Cache::forget("store_setting_{$key}");
+        Cache::forget('store_settings_all_grouped');
 
         return $record;
     }
