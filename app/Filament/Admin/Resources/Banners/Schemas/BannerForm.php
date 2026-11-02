@@ -31,7 +31,7 @@ class BannerForm
                         ]),
 
                         Grid::make(3)->schema([
-                            TextInput::make('badge')
+                            TextInput::make('badge_text')
                                 ->label('Promotional Badge')
                                 ->placeholder('e.g. Flash Deal / New Launch'),
 
@@ -49,7 +49,7 @@ class BannerForm
                 Section::make('Creative Assets & Positioning')
                     ->description('Desktop and mobile banner image URLs and display sequence.')
                     ->schema([
-                        TextInput::make('image_url')
+                        TextInput::make('desktop_image_url')
                             ->label('Desktop Banner Image URL')
                             ->placeholder('https://images.unsplash.com/photo-...')
                             ->required(),
@@ -62,12 +62,12 @@ class BannerForm
                             Select::make('position')
                                 ->label('Placement Position')
                                 ->options([
-                                    'hero' => 'Main Hero Slider',
-                                    'top_strip' => 'Top Announcement Strip',
+                                    'hero_slider' => 'Main Hero Slider',
+                                    'promo_strip' => 'Promotional Ribbon Strip',
                                     'middle_grid' => 'Mid-Page Banner Grid',
-                                    'sidebar' => 'Category Sidebar',
+                                    'sidebar' => 'Category Sidebar Card',
                                 ])
-                                ->default('hero')
+                                ->default('hero_slider')
                                 ->required(),
 
                             TextInput::make('sort_order')
@@ -82,11 +82,11 @@ class BannerForm
                         ]),
 
                         Grid::make(2)->schema([
-                            DateTimePicker::make('starts_at')
+                            DateTimePicker::make('start_at')
                                 ->label('Campaign Start Date & Time')
                                 ->nullable(),
 
-                            DateTimePicker::make('ends_at')
+                            DateTimePicker::make('end_at')
                                 ->label('Campaign Expiration Date & Time')
                                 ->nullable(),
                         ]),

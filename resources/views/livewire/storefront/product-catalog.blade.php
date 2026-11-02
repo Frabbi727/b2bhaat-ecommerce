@@ -392,6 +392,28 @@
             </div>
         @endif
 
+        <!-- ================= PROMOTIONAL STRIP BANNERS ================= -->
+        @if ($promoStripBanners->isNotEmpty())
+            <div class="grid grid-cols-1 md:grid-cols-{{ min(2, $promoStripBanners->count()) }} gap-4">
+                @foreach ($promoStripBanners as $banner)
+                    <a href="{{ $banner->link_url }}" class="group relative rounded-2xl overflow-hidden block border border-slate-200 shadow-xs hover:shadow-md transition">
+                        <img src="{{ $banner->desktop_image_url }}" alt="{{ $banner->title }}" class="w-full h-36 sm:h-44 object-cover group-hover:scale-102 transition duration-500">
+                        <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent flex flex-col justify-end p-4 text-white">
+                            @if ($banner->badge_text)
+                                <span class="inline-block text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-rose-600 text-white w-max mb-1">
+                                    {{ $banner->badge_text }}
+                                </span>
+                            @endif
+                            <h3 class="text-sm sm:text-base font-extrabold">{{ $banner->title }}</h3>
+                            @if ($banner->subtitle)
+                                <p class="text-xs text-slate-200 line-clamp-1">{{ $banner->subtitle }}</p>
+                            @endif
+                        </div>
+                    </a>
+                @endforeach
+            </div>
+        @endif
+
         <!-- ================= FEATURED PRODUCTS SECTION ================= -->
         @if ($featuredProducts->isNotEmpty())
             <div class="space-y-4">

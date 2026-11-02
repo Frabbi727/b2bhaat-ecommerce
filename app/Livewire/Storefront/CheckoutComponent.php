@@ -51,6 +51,8 @@ class CheckoutComponent extends Component
 
     public string $checkoutCouponCode = '';
 
+    public ?array $appliedCoupon = null;
+
     public string $couponMessage = '';
 
     public string $couponError = '';
@@ -83,6 +85,7 @@ class CheckoutComponent extends Component
             ?? PaymentMethod::where('slug', 'mock_gateway')->first()
             ?? PaymentMethod::where('is_active', true)->first();
         $this->selectedPaymentMethodId = $defaultMethod?->id;
+        $this->appliedCoupon = $cart->getCoupon();
     }
 
     public function applyCheckoutCoupon(): void
@@ -103,8 +106,15 @@ class CheckoutComponent extends Component
         if ($result['valid']) {
             $this->couponMessage = $result['message'];
             $this->checkoutCouponCode = '';
+            $this->appliedCoupon = $result['coupon'] ? [
+                'id' => $result['coupon']->id,
+                'code' => $result['coupon']->code,
+                'name' => $result['coupon']->name,
+                'discount' => $result['discount'],
+            ] : null;
         } else {
             $this->couponError = $result['message'] ?? 'Invalid coupon code.';
+            $this->appliedCoupon = null;
         }
     }
 
@@ -112,6 +122,7 @@ class CheckoutComponent extends Component
     {
         $cart = app(CartSessionService::class);
         $cart->removeCoupon();
+        $this->appliedCoupon = null;
         $this->couponMessage = '';
         $this->couponError = '';
     }
@@ -247,8 +258,27 @@ class CheckoutComponent extends Component
             }
 
             $shippingFee = $this->getShippingFee();
-            $appliedCoupon = $cart->getCoupon();
+            $appliedCoupon = $this->appliedCoupon ?? $cart->getCoupon();
             $discountAmount = $cart->getDiscountAmount();
+
+            if ($appliedCoupon && ! empty($appliedCoupon['code'])) {
+                $couponService = app(CouponService::class);
+                $validation = $couponService->applyCoupon(
+                    code: (string) $appliedCoupon['code'],
+                    subtotal: $subtotal,
+                    userId: $customer->id
+                );
+
+                if (! $validation['valid']) {
+                    $cart->removeCoupon();
+                    $this->appliedCoupon = null;
+                    throw new Exception("Promotional coupon cannot be redeemed: {$validation['message']}");
+                }
+
+                $discountAmount = (float) $validation['discount'];
+            } else {
+                $discountAmount = 0.00;
+            }
 
             $shippingAddressPayload = [
                 'recipient_name' => $this->recipientName,

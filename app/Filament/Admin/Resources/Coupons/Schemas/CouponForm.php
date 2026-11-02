@@ -70,7 +70,7 @@ class CouponForm
                     ->description('Set redemption caps and active promotional campaign dates.')
                     ->schema([
                         Grid::make(3)->schema([
-                            TextInput::make('usage_limit')
+                            TextInput::make('usage_limit_total')
                                 ->label('Total Usage Limit')
                                 ->numeric()
                                 ->nullable()
@@ -89,7 +89,7 @@ class CouponForm
                         ]),
 
                         Grid::make(2)->schema([
-                            DateTimePicker::make('starts_at')
+                            DateTimePicker::make('start_at')
                                 ->label('Valid From')
                                 ->nullable(),
 

@@ -43,7 +43,7 @@ class CouponsTable
                     ->numeric()
                     ->sortable(),
 
-                TextColumn::make('usage_limit')
+                TextColumn::make('usage_limit_total')
                     ->label('Limit')
                     ->placeholder('Unlimited')
                     ->sortable(),

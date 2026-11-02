@@ -16,7 +16,7 @@ class BannersTable
     {
         return $table
             ->columns([
-                ImageColumn::make('image_url')
+                ImageColumn::make('desktop_image_url')
                     ->label('Preview')
                     ->circular(false)
                     ->square(),
@@ -41,13 +41,13 @@ class BannersTable
                     ->label('Active')
                     ->boolean(),
 
-                TextColumn::make('starts_at')
+                TextColumn::make('start_at')
                     ->label('Starts')
                     ->dateTime('M d, Y')
                     ->sortable()
                     ->placeholder('Always'),
 
-                TextColumn::make('ends_at')
+                TextColumn::make('end_at')
                     ->label('Expires')
                     ->dateTime('M d, Y')
                     ->sortable()

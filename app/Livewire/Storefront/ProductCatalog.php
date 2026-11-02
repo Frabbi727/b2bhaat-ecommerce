@@ -328,6 +328,7 @@ class ProductCatalog extends Component
         $brands = Brand::where('is_active', true)->orderBy('name')->get();
         $featuredSellers = SellerProfile::where('is_approved', true)->with('user')->withCount('products')->take(4)->get();
         $heroBanners = Banner::active()->forPosition('hero_slider')->get();
+        $promoStripBanners = Banner::active()->forPosition('promo_strip')->get();
 
         // Flash Sales Section Products
         $flashSaleProducts = Product::query()
@@ -448,6 +449,7 @@ class ProductCatalog extends Component
             'featuredSellers' => $featuredSellers,
             'isWholesaleUser' => $isWholesaleUser,
             'heroBanners' => $heroBanners,
+            'promoStripBanners' => $promoStripBanners,
             'flashSaleProducts' => $flashSaleProducts,
             'featuredProducts' => $featuredProducts,
             'userWishlistIds' => $userWishlistIds,

@@ -13,3 +13,6 @@ Schedule::command('escrow:release-delivered')->hourly();
 
 // Automatically cancel expired unpaid reservations and release stock every 5 minutes
 Schedule::command('inventory:release-expired-reservations')->everyFiveMinutes();
+
+// Automatically synchronize active flash sales, banners, and coupon promotions hourly
+Schedule::command('promotions:sync-active-campaigns')->hourly();
