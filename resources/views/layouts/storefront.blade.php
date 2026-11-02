@@ -224,12 +224,12 @@
     @endif
 
     <!-- Main Content -->
-    <main class="flex-1">
+    <main class="flex-1 pb-16 md:pb-0">
         {{ $slot }}
     </main>
 
     <!-- Commercial Retail Footer with Trust Signals & Guarantees -->
-    <footer class="bg-slate-900 text-slate-400 text-sm mt-20 border-t border-slate-800">
+    <footer class="bg-slate-900 text-slate-400 text-sm mt-20 border-t border-slate-800 pb-16 md:pb-0">
         <!-- Trust Badges Rail -->
         <div class="border-b border-slate-800 bg-slate-950/60 py-8">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-2 md:grid-cols-4 gap-6 text-center md:text-left">
@@ -333,6 +333,40 @@
             &copy; {{ date('Y') }} B2B Haat E-Commerce Platform. All rights reserved. Built with Laravel 13, Livewire 3, Tailwind CSS & PostgreSQL.
         </div>
     </footer>
+
+    <!-- Mobile App Bottom Navigation Bar -->
+    <nav class="md:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-slate-200 z-40 py-2 px-3 flex justify-around items-center text-[10px] font-semibold text-slate-600 shadow-lg">
+        <a href="{{ route('catalog.index') }}" class="flex flex-col items-center gap-0.5 {{ request()->routeIs('catalog.index') && !request()->hasAny(['search', 'category']) ? 'text-indigo-600 font-bold' : 'hover:text-indigo-600' }}">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+            <span>Home</span>
+        </a>
+        <a href="{{ route('catalog.index') }}#flash-sales" class="flex flex-col items-center gap-0.5 hover:text-rose-600">
+            <svg class="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            <span>Deals</span>
+        </a>
+        <a href="{{ route('cart.index') }}" class="flex flex-col items-center gap-0.5 relative {{ request()->routeIs('cart.index') ? 'text-indigo-600 font-bold' : 'hover:text-indigo-600' }}">
+            <div class="relative">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+                @php
+                    $cartCount = app(\App\Services\Cart\CartSessionService::class)->getItemCount();
+                @endphp
+                @if ($cartCount > 0)
+                    <span class="absolute -top-1 -right-2 px-1 rounded-full bg-indigo-600 text-white text-[9px] font-bold min-w-[14px] text-center">
+                        {{ $cartCount }}
+                    </span>
+                @endif
+            </div>
+            <span>Cart</span>
+        </a>
+        <a href="{{ route('tracking.index') }}" class="flex flex-col items-center gap-0.5 {{ request()->routeIs('tracking.index') ? 'text-indigo-600 font-bold' : 'hover:text-indigo-600' }}">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+            <span>Track</span>
+        </a>
+        <a href="{{ auth()->check() ? route('customer.orders') : route('demo.login', 'retail') }}" class="flex flex-col items-center gap-0.5 {{ request()->routeIs('customer.orders') ? 'text-indigo-600 font-bold' : 'hover:text-indigo-600' }}">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+            <span>{{ auth()->check() ? 'Account' : 'Login' }}</span>
+        </a>
+    </nav>
 
     @livewireScripts
 </body>
