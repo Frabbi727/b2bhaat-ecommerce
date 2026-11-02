@@ -272,7 +272,8 @@ class ProductCatalog extends Component
     public function toggleWishlist(int $productId): void
     {
         if (! auth()->check()) {
-            $this->redirect(route('demo.login', 'retail'));
+            session()->flash('error', 'Please sign in to save products to your wishlist.');
+            $this->redirect(route('login'));
 
             return;
         }

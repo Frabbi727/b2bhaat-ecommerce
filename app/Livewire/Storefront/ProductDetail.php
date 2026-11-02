@@ -329,7 +329,8 @@ class ProductDetail extends Component
     public function toggleWishlist(): void
     {
         if (! auth()->check()) {
-            $this->redirect(route('filament.seller.auth.login'));
+            session()->flash('error', 'Please sign in to save products to your wishlist.');
+            $this->redirect(route('login'));
 
             return;
         }

@@ -25,7 +25,7 @@ class CustomerWishlistTest extends TestCase
     public function test_guest_is_redirected_to_login_when_accessing_wishlist_page(): void
     {
         $response = $this->get(route('customer.wishlist'));
-        $response->assertRedirect(route('filament.seller.auth.login'));
+        $response->assertRedirect(route('login'));
     }
 
     public function test_authenticated_customer_can_view_empty_wishlist(): void
@@ -75,7 +75,7 @@ class CustomerWishlistTest extends TestCase
 
         Livewire::test(ProductDetail::class, ['slug' => $product->slug])
             ->call('toggleWishlist')
-            ->assertRedirect(route('filament.seller.auth.login'));
+            ->assertRedirect(route('login'));
 
         $this->assertEquals(0, Wishlist::count());
     }

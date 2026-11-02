@@ -9,6 +9,7 @@ use App\Livewire\Storefront\BecomeSeller;
 use App\Livewire\Storefront\CartComponent;
 use App\Livewire\Storefront\CheckoutComponent;
 use App\Livewire\Storefront\CustomerAddresses;
+use App\Livewire\Storefront\CustomerAuth;
 use App\Livewire\Storefront\CustomerOrders;
 use App\Livewire\Storefront\CustomerWishlist;
 use App\Livewire\Storefront\OrderTracking;
@@ -22,6 +23,8 @@ use Illuminate\Support\Facades\Route;
 
 // Storefront & Catalog
 Route::get('/', ProductCatalog::class)->name('catalog.index');
+Route::get('/login', CustomerAuth::class)->name('login');
+Route::get('/register', CustomerAuth::class)->name('register');
 Route::get('/store/{slug}', SellerStore::class)->name('store.show');
 Route::get('/product/{slug}', ProductDetail::class)->name('catalog.show');
 Route::get('/cart', CartComponent::class)->name('cart.index');

@@ -6,6 +6,8 @@
     <title>{{ $title ?? 'B2B Haat - Premium E-Commerce & Wholesale Marketplace' }}</title>
     <meta name="description" content="{{ $metaDescription ?? 'Bangladesh\'s trusted multi-vendor marketplace for factory-direct electronics, smart TVs, home appliances, and wholesale sourcing with verified escrow protection.' }}">
     <link rel="canonical" href="{{ url()->current() }}">
+    <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
+    <meta name="theme-color" content="#4338ca">
 
     <!-- Open Graph / Social SEO -->
     <meta property="og:type" content="website">
@@ -72,11 +74,24 @@
                     </form>
                 @else
                     <div class="flex items-center gap-2">
-                        <span class="text-slate-400">Demo Login:</span>
-                        <a href="{{ route('demo.login', 'retail') }}" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700">Buyer</a>
-                        <a href="{{ route('demo.login', 'wholesale') }}" class="px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-200 hover:bg-indigo-900 border border-indigo-800">Wholesale</a>
-                        <a href="{{ route('demo.login', 'seller') }}" class="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-200 hover:bg-emerald-900 border border-emerald-800">Seller</a>
-                        <a href="{{ route('demo.login', 'admin') }}" class="px-1.5 py-0.5 rounded bg-amber-950 text-amber-200 hover:bg-amber-900 border border-amber-800">Admin</a>
+                        <a href="{{ route('login') }}" class="text-white hover:text-indigo-300 font-semibold transition flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
+                            Sign In
+                        </a>
+                        <span class="text-slate-700">/</span>
+                        <a href="{{ route('register') }}" class="text-indigo-300 hover:text-white font-semibold transition">
+                            Register
+                        </a>
+                        @if (! app()->isProduction())
+                            <span class="hidden xl:inline text-slate-700">|</span>
+                            <div class="hidden xl:flex items-center gap-1 text-[10px]">
+                                <span class="text-slate-500">Demo:</span>
+                                <a href="{{ route('demo.login', 'retail') }}" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700">Buyer</a>
+                                <a href="{{ route('demo.login', 'wholesale') }}" class="px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 hover:bg-indigo-900 border border-indigo-800">Wholesale</a>
+                                <a href="{{ route('demo.login', 'seller') }}" class="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 hover:bg-emerald-900 border border-emerald-800">Seller</a>
+                                <a href="{{ route('demo.login', 'admin') }}" class="px-1.5 py-0.5 rounded bg-amber-950 text-amber-300 hover:bg-amber-900 border border-amber-800">Admin</a>
+                            </div>
+                        @endif
                     </div>
                 @endauth
             </div>
@@ -362,7 +377,7 @@
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
             <span>Track</span>
         </a>
-        <a href="{{ auth()->check() ? route('customer.orders') : route('demo.login', 'retail') }}" class="flex flex-col items-center gap-0.5 {{ request()->routeIs('customer.orders') ? 'text-indigo-600 font-bold' : 'hover:text-indigo-600' }}">
+        <a href="{{ auth()->check() ? route('customer.orders') : route('login') }}" class="flex flex-col items-center gap-0.5 {{ request()->routeIs('customer.orders', 'login', 'register') ? 'text-indigo-600 font-bold' : 'hover:text-indigo-600' }}">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
             <span>{{ auth()->check() ? 'Account' : 'Login' }}</span>
         </a>

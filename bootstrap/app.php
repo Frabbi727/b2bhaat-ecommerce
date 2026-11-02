@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\SecurityHeadersMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,12 +14,20 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->web(append: [
+            SecurityHeadersMiddleware::class,
+        ]);
+
         $middleware->redirectGuestsTo(function (Request $request): string {
             if ($request->is('admin*')) {
                 return route('filament.admin.auth.login');
             }
 
-            return route('filament.seller.auth.login');
+            if ($request->is('seller*')) {
+                return route('filament.seller.auth.login');
+            }
+
+            return route('login');
         });
     })
     ->withExceptions(function (Exceptions $exceptions): void {
