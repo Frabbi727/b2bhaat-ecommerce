@@ -29,19 +29,32 @@
 </head>
 <body class="bg-slate-100 text-slate-900 font-sans p-4 sm:p-8 min-h-screen flex flex-col items-center justify-start">
     <!-- Non-print Action Bar -->
-    <div class="no-print w-full max-w-4xl mb-4 flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-300 shadow-sm">
+    <div class="no-print w-full max-w-4xl mb-4 flex items-center justify-between flex-wrap gap-3 bg-white p-4 rounded-2xl border border-slate-300 shadow-sm">
         <a href="javascript:history.back()" class="text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1">
             &larr; Return to Previous Screen
         </a>
-        <button 
-            onclick="window.print()" 
-            class="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-sm flex items-center gap-2 cursor-pointer"
-        >
-            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-            </svg>
-            Print Commercial Quotation (A4)
-        </button>
+        <div class="flex items-center gap-3">
+            @if ($rfq->seller_quoted_price && auth()->check() && (auth()->id() === $rfq->buyer_id || strtolower((string) auth()->user()->email) === strtolower((string) $rfq->buyer_email)))
+                <form action="{{ route('rfq.quotation.accept', $rfq->id) }}" method="POST" class="inline">
+                    @csrf
+                    <button 
+                        type="submit" 
+                        class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-sm flex items-center gap-2 cursor-pointer"
+                    >
+                        <span>✓ Accept Quote & Order (৳{{ number_format((float) $rfq->seller_quoted_price, 2) }}/unit)</span>
+                    </button>
+                </form>
+            @endif
+            <button 
+                onclick="window.print()" 
+                class="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-sm flex items-center gap-2 cursor-pointer"
+            >
+                <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                </svg>
+                Print Quotation (A4)
+            </button>
+        </div>
     </div>
 
     <!-- Official Pro-Forma Quotation Sheet -->

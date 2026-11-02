@@ -1,9 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Storefront;
 
 use App\Http\Controllers\Controller;
 use App\Models\RfqRequest;
+use App\Models\SalesChannel;
+use App\Services\Cart\CartSessionService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -46,5 +51,48 @@ class QuotationController extends Controller
             'totalQuotedAmount' => $totalQuotedAmount,
             'sellerProfile' => $rfq->seller?->sellerProfile,
         ]);
+    }
+
+    /**
+     * Accept the seller's custom quoted rate and convert RFQ into an active wholesale cart item.
+     */
+    public function acceptAndAddToCart(Request $request, int $id): RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            abort(401, 'Please log in to accept commercial quotations.');
+        }
+
+        $rfq = RfqRequest::with(['product'])->findOrFail($id);
+
+        $isBuyer = $rfq->buyer_id === $user->id
+            || ($rfq->buyer_email && strtolower($rfq->buyer_email) === strtolower((string) $user->email));
+
+        if (! $isBuyer && ! $user->isSuperAdmin()) {
+            abort(403, 'Only the prospective buyer can accept this custom quotation.');
+        }
+
+        if (empty($rfq->seller_quoted_price)) {
+            return redirect()->back()->with('error', 'This RFQ has not yet received an official quotation from the seller.');
+        }
+
+        // 1. Mark RFQ status as accepted
+        $rfq->update(['status' => 'accepted']);
+
+        // 2. Add item to cart with locked wholesale quotation unit price
+        $cart = app(CartSessionService::class);
+        $cart->addItem(
+            productId: $rfq->product_id,
+            variationId: null,
+            channelSlug: SalesChannel::WHOLESALE,
+            quantity: (int) $rfq->target_quantity,
+            overrideUnitPrice: (float) $rfq->seller_quoted_price
+        );
+
+        return redirect()->route('checkout.index')->with(
+            'success',
+            "Quotation #QT-RFQ-{$rfq->id} accepted! Added {$rfq->target_quantity}x units at the agreed factory rate of ৳".number_format((float) $rfq->seller_quoted_price, 2).'.'
+        );
     }
 }
