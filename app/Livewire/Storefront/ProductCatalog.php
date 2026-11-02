@@ -48,6 +48,12 @@ class ProductCatalog extends Component
     #[Url(as: 'flash_sale')]
     public bool $onlyFlashSale = false;
 
+    #[Url(as: 'in_stock')]
+    public bool $inStockOnly = false;
+
+    #[Url(as: 'verified_only')]
+    public bool $verifiedSupplierOnly = false;
+
     public string $feedbackMessage = '';
 
     public string $errorMessage = '';
@@ -238,6 +244,16 @@ class ProductCatalog extends Component
         $this->resetPage();
     }
 
+    public function updatedInStockOnly(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedVerifiedSupplierOnly(): void
+    {
+        $this->resetPage();
+    }
+
     public function resetFilters(): void
     {
         $this->search = '';
@@ -248,6 +264,8 @@ class ProductCatalog extends Component
         $this->minPrice = null;
         $this->maxPrice = null;
         $this->onlyFlashSale = false;
+        $this->inStockOnly = false;
+        $this->verifiedSupplierOnly = false;
         $this->resetPage();
     }
 
@@ -367,11 +385,17 @@ class ProductCatalog extends Component
 
         if ($this->search) {
             $like = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
-            $query->where(function ($q) use ($like) {
-                $q->where('title', $like, '%'.$this->search.'%')
-                    ->orWhere('sku', $like, '%'.$this->search.'%')
-                    ->orWhere('model_number', $like, '%'.$this->search.'%')
-                    ->orWhere('short_description', $like, '%'.$this->search.'%');
+            $term = '%'.$this->search.'%';
+            $query->where(function ($q) use ($like, $term) {
+                $q->where('title', $like, $term)
+                    ->orWhere('sku', $like, $term)
+                    ->orWhere('model_number', $like, $term)
+                    ->orWhere('short_description', $like, $term)
+                    ->orWhere('full_description', $like, $term)
+                    ->orWhereHas('brand', fn ($b) => $b->where('name', $like, $term))
+                    ->orWhereHas('category', fn ($c) => $c->where('name', $like, $term))
+                    ->orWhereHas('seller.sellerProfile', fn ($s) => $s->where('store_name', $like, $term))
+                    ->orWhereHas('variations', fn ($v) => $v->where('sku', $like, $term));
             });
         }
 
@@ -388,6 +412,18 @@ class ProductCatalog extends Component
 
         if ($this->onlyFlashSale) {
             $query->flashSale();
+        }
+
+        if ($this->inStockOnly) {
+            $query->whereHas('variations', function ($v) {
+                $v->where('stock_quantity', '>', 0);
+            });
+        }
+
+        if ($this->verifiedSupplierOnly) {
+            $query->whereHas('seller.sellerProfile', function ($s) {
+                $s->where('is_approved', true);
+            });
         }
 
         if ($this->channelFilter !== 'all') {
@@ -440,7 +476,9 @@ class ProductCatalog extends Component
             || $this->channelFilter !== 'all'
             || ! is_null($this->minPrice)
             || ! is_null($this->maxPrice)
-            || $this->onlyFlashSale;
+            || $this->onlyFlashSale
+            || $this->inStockOnly
+            || $this->verifiedSupplierOnly;
 
         return view('livewire.storefront.product-catalog', [
             'products' => $products,

@@ -73,13 +73,21 @@ class HeaderSearch extends Component
                 ->active()
                 ->with(['primaryImage', 'brand', 'retailPrice'])
                 ->where(function ($q) use ($like, $searchTerm) {
-                    $q->where('title', $like, "%{$searchTerm}%")
-                        ->orWhere('sku', $like, "%{$searchTerm}%")
-                        ->orWhere('model_number', $like, "%{$searchTerm}%")
-                        ->orWhere('short_description', $like, "%{$searchTerm}%");
+                    $term = "%{$searchTerm}%";
+                    $q->where('title', $like, $term)
+                        ->orWhere('sku', $like, $term)
+                        ->orWhere('model_number', $like, $term)
+                        ->orWhere('short_description', $like, $term)
+                        ->orWhereHas('brand', fn ($b) => $b->where('name', $like, $term))
+                        ->orWhereHas('category', fn ($c) => $c->where('name', $like, $term))
+                        ->orWhereHas('seller.sellerProfile', fn ($s) => $s->where('store_name', $like, $term))
+                        ->orWhereHas('variations', fn ($v) => $v->where('sku', $like, $term));
                 })
                 ->when($this->selectedCategory, function ($q) {
-                    $q->where('category_id', $this->selectedCategory);
+                    $q->where(function ($sub) {
+                        $sub->where('category_id', $this->selectedCategory)
+                            ->orWhereHas('category', fn ($c) => $c->where('parent_id', $this->selectedCategory));
+                    });
                 })
                 ->take(6)
                 ->get();

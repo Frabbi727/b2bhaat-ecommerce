@@ -587,13 +587,75 @@
         </div>
 
         <!-- Catalog Layout: Sidebar + Product Grid -->
+        @if ($isFiltering)
+            <!-- Active Filter Chips -->
+            <div class="flex items-center gap-2 flex-wrap text-xs bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                <span class="font-bold text-slate-500">Active Filters:</span>
+                @if ($search)
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 font-medium">
+                        Search: "{{ $search }}"
+                        <button type="button" wire:click="$set('search', '')" class="text-indigo-600 hover:text-indigo-900 text-sm font-bold">&times;</button>
+                    </span>
+                @endif
+                @if ($selectedCategoryId)
+                    @php
+                        $activeCat = $categories->firstWhere('id', $selectedCategoryId) ?? $categories->flatMap->children->firstWhere('id', $selectedCategoryId);
+                    @endphp
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 font-medium">
+                        Category: {{ $activeCat?->name ?? $selectedCategoryId }}
+                        <button type="button" wire:click="$set('selectedCategoryId', null)" class="text-indigo-600 hover:text-indigo-900 text-sm font-bold">&times;</button>
+                    </span>
+                @endif
+                @if ($selectedBrandId)
+                    @php $activeBrand = $brands->firstWhere('id', $selectedBrandId); @endphp
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 font-medium">
+                        Brand: {{ $activeBrand?->name ?? $selectedBrandId }}
+                        <button type="button" wire:click="$set('selectedBrandId', null)" class="text-indigo-600 hover:text-indigo-900 text-sm font-bold">&times;</button>
+                    </span>
+                @endif
+                @if ($channelFilter !== 'all')
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 font-medium">
+                        Channel: {{ ucfirst($channelFilter) }}
+                        <button type="button" wire:click="$set('channelFilter', 'all')" class="text-indigo-600 hover:text-indigo-900 text-sm font-bold">&times;</button>
+                    </span>
+                @endif
+                @if (!is_null($minPrice) || !is_null($maxPrice))
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 font-medium">
+                        Price: ৳{{ $minPrice ?? '0' }} - {{ $maxPrice ? '৳'.$maxPrice : 'Any' }}
+                        <button type="button" wire:click="$set('minPrice', null); $set('maxPrice', null)" class="text-indigo-600 hover:text-indigo-900 text-sm font-bold">&times;</button>
+                    </span>
+                @endif
+                @if ($onlyFlashSale)
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-100 text-rose-800 font-medium">
+                        ⚡ Flash Sale
+                        <button type="button" wire:click="$set('onlyFlashSale', false)" class="text-rose-600 hover:text-rose-900 text-sm font-bold">&times;</button>
+                    </span>
+                @endif
+                @if ($inStockOnly)
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-medium">
+                        📦 In Stock Only
+                        <button type="button" wire:click="$set('inStockOnly', false)" class="text-emerald-600 hover:text-emerald-900 text-sm font-bold">&times;</button>
+                    </span>
+                @endif
+                @if ($verifiedSupplierOnly)
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-100 text-teal-800 font-medium">
+                        🛡️ Verified Suppliers
+                        <button type="button" wire:click="$set('verifiedSupplierOnly', false)" class="text-teal-600 hover:text-teal-900 text-sm font-bold">&times;</button>
+                    </span>
+                @endif
+                <button type="button" wire:click="resetFilters" class="text-xs text-rose-600 hover:text-rose-800 font-semibold underline ml-2">
+                    Clear all
+                </button>
+            </div>
+        @endif
+
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
             <!-- Left Filter Sidebar -->
             <div class="lg:col-span-1 space-y-6">
                 <!-- Categories Filter -->
                 <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
                     <h3 class="text-xs font-bold uppercase tracking-wider text-slate-900">Categories</h3>
-                    <div class="space-y-1 max-h-60 overflow-y-auto text-xs">
+                    <div class="space-y-1 max-h-64 overflow-y-auto text-xs">
                         <button
                             type="button"
                             wire:click="$set('selectedCategoryId', null)"
@@ -602,16 +664,31 @@
                             All Categories
                         </button>
                         @foreach ($categories as $cat)
-                            <button
-                                type="button"
-                                wire:click="selectCategory({{ $cat->id }})"
-                                class="w-full text-left px-2 py-1.5 rounded-lg transition flex items-center justify-between {{ $selectedCategoryId === $cat->id ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-50' }}"
-                            >
-                                <span class="truncate">{{ $cat->name }}</span>
-                                @if ($cat->children->isNotEmpty())
-                                    <span class="text-[10px] text-slate-400">({{ $cat->children->count() }})</span>
+                            <div>
+                                <button
+                                    type="button"
+                                    wire:click="selectCategory({{ $cat->id }})"
+                                    class="w-full text-left px-2 py-1.5 rounded-lg transition flex items-center justify-between {{ $selectedCategoryId === $cat->id ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-50' }}"
+                                >
+                                    <span class="truncate">{{ $cat->name }}</span>
+                                    @if ($cat->children->isNotEmpty())
+                                        <span class="text-[10px] text-slate-400">({{ $cat->children->count() }})</span>
+                                    @endif
+                                </button>
+                                @if ($cat->children->isNotEmpty() && ($selectedCategoryId === $cat->id || $cat->children->contains('id', $selectedCategoryId)))
+                                    <div class="pl-3 py-1 space-y-0.5 border-l-2 border-indigo-100 ml-2 mt-0.5">
+                                        @foreach ($cat->children as $child)
+                                            <button
+                                                type="button"
+                                                wire:click="selectCategory({{ $child->id }})"
+                                                class="w-full text-left px-2 py-1 rounded text-[11px] transition flex items-center justify-between {{ $selectedCategoryId === $child->id ? 'bg-indigo-100 text-indigo-800 font-bold' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"
+                                            >
+                                                <span class="truncate">{{ $child->name }}</span>
+                                            </button>
+                                        @endforeach
+                                    </div>
                                 @endif
-                            </button>
+                            </div>
                         @endforeach
                     </div>
                 </div>
@@ -637,16 +714,62 @@
                     </div>
                 @endif
 
-                <!-- Flash Sale Filter Checkbox -->
-                <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
-                    <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800">
-                        <input
-                            type="checkbox"
-                            wire:model.live="onlyFlashSale"
-                            class="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
-                        />
-                        <span>⚡ Flash Sale Deals Only</span>
-                    </label>
+                <!-- Price Range Filter -->
+                <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-900">Price Range (৳)</h3>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                            <label class="block text-[10px] font-semibold text-slate-500 mb-1">Min Price</label>
+                            <input
+                                type="number"
+                                min="0"
+                                placeholder="Min ৳"
+                                wire:model.blur="minPrice"
+                                class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-semibold text-slate-500 mb-1">Max Price</label>
+                            <input
+                                type="number"
+                                min="0"
+                                placeholder="Max ৳"
+                                wire:model.blur="maxPrice"
+                                class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stock, Trust & Promotion Filters -->
+                <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-900">Deals & Availability</h3>
+                    <div class="space-y-2">
+                        <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800">
+                            <input
+                                type="checkbox"
+                                wire:model.live="onlyFlashSale"
+                                class="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                            />
+                            <span>⚡ Flash Sale Deals</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800">
+                            <input
+                                type="checkbox"
+                                wire:model.live="inStockOnly"
+                                class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span>📦 In Stock Only</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800">
+                            <input
+                                type="checkbox"
+                                wire:model.live="verifiedSupplierOnly"
+                                class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                            />
+                            <span>🛡️ Verified Suppliers Only</span>
+                        </label>
+                    </div>
                 </div>
             </div>
 
