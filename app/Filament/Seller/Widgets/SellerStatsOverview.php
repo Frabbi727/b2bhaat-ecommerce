@@ -1,8 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Seller\Widgets;
 
-use App\Models\Product;
 use App\Models\RfqRequest;
 use App\Models\SellerWallet;
 use App\Models\SubOrder;
@@ -32,14 +33,22 @@ class SellerStatsOverview extends StatsOverviewWidget
             ->where('status', 'pending')
             ->count();
 
-        $activeProducts = Product::where('seller_id', $sellerId)
-            ->where('is_active', true)
-            ->count();
+        // 7-day sparkline from seller sub-orders
+        $days = collect(range(6, 0))->map(fn ($i) => now()->subDays($i)->format('Y-m-d'));
+        $recentSubOrders = SubOrder::where('seller_id', $sellerId)
+            ->where('created_at', '>=', now()->subDays(7)->startOfDay())
+            ->get();
+
+        $sparklineEarnings = [];
+        foreach ($days as $dateStr) {
+            $sparklineEarnings[] = (float) $recentSubOrders->filter(fn ($s) => $s->created_at->format('Y-m-d') === $dateStr)->sum('subtotal');
+        }
 
         return [
             Stat::make('Available Payout Balance', '৳'.number_format($availableBalance, 2))
                 ->description('Settled earnings ready to withdraw')
                 ->descriptionIcon('heroicon-m-banknotes')
+                ->chart($sparklineEarnings)
                 ->color('success'),
 
             Stat::make('Escrow In-Transit Reserve', '৳'.number_format($escrowBalance, 2))

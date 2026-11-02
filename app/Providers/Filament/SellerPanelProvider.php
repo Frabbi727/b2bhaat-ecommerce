@@ -3,7 +3,9 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Seller\Widgets\SellerRecentOrdersWidget;
+use App\Filament\Seller\Widgets\SellerRevenueChart;
 use App\Filament\Seller\Widgets\SellerStatsOverview;
+use App\Filament\Seller\Widgets\SellerStockAlertsWidget;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -45,6 +47,8 @@ class SellerPanelProvider extends PanelProvider
             ->discoverWidgets(in: app_path('Filament/Seller/Widgets'), for: 'App\Filament\Seller\Widgets')
             ->widgets([
                 SellerStatsOverview::class,
+                SellerRevenueChart::class,
+                SellerStockAlertsWidget::class,
                 SellerRecentOrdersWidget::class,
             ])
             ->middleware([

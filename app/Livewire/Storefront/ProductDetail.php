@@ -233,6 +233,13 @@ class ProductDetail extends Component
     {
         $this->resetMessages();
 
+        $user = auth()->user();
+        if (! $user || (! $user->isWholesaleBuyer() && ! $user->isSuperAdmin())) {
+            $this->errorMessage = 'Wholesale volume tier sourcing is reserved for verified wholesale business accounts. Please upgrade your account.';
+
+            return;
+        }
+
         if ($this->isSellerOnVacation) {
             $this->errorMessage = 'This merchant is currently on vacation mode. Ordering is temporarily disabled.';
 

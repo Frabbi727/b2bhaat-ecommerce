@@ -28,7 +28,7 @@ Route::get('/cart', CartComponent::class)->name('cart.index');
 Route::get('/checkout', CheckoutComponent::class)->name('checkout.index');
 Route::get('/track', OrderTracking::class)->name('tracking.index');
 Route::get('/track/view', OrderTracking::class)->name('tracking.show');
-Route::get('/my-orders', CustomerOrders::class)->name('customer.orders');
+Route::get('/my-orders', CustomerOrders::class)->name('customer.orders')->middleware('auth');
 Route::get('/my-addresses', CustomerAddresses::class)->name('customer.addresses')->middleware('auth');
 Route::get('/my-wishlist', CustomerWishlist::class)->name('customer.wishlist')->middleware('auth');
 Route::get('/wholesale/upgrade', WholesaleUpgrade::class)->name('wholesale.upgrade');

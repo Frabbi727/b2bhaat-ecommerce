@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Admin\Widgets;
 
 use App\Models\Order;
@@ -16,11 +18,10 @@ class AdminStatsOverview extends StatsOverviewWidget
 
     protected function getStats(): array
     {
-        $totalGmv = (float) Order::whereHas('paymentStatus', fn ($q) => $q->where('slug', 'paid'))
-            ->sum('total_amount');
+        $paidOrders = Order::whereHas('paymentStatus', fn ($q) => $q->where('slug', 'paid'))->get();
+        $totalGmv = (float) $paidOrders->sum('total_amount');
 
-        $totalEscrow = SellerWallet::sum('escrow_held_balance');
-
+        $totalEscrow = (float) SellerWallet::sum('escrow_held_balance');
         $approvedMerchants = SellerProfile::where('is_approved', true)->count();
 
         $pendingMerchants = SellerProfile::where('is_approved', false)->whereNull('rejected_at')->count();
@@ -31,10 +32,18 @@ class AdminStatsOverview extends StatsOverviewWidget
         $pendingReturns = ReturnRequest::where('status', 'pending')->count();
         $totalPendingReview = $pendingMerchants + $pendingWholesale + $pendingReturns;
 
+        // 7-day sparkline calculations from database
+        $days = collect(range(6, 0))->map(fn ($i) => now()->subDays($i)->format('Y-m-d'));
+        $sparklineGmv = [];
+        foreach ($days as $dateStr) {
+            $sparklineGmv[] = (float) $paidOrders->filter(fn ($o) => $o->created_at->format('Y-m-d') === $dateStr)->sum('total_amount');
+        }
+
         return [
             Stat::make('Platform Settled GMV', '৳'.number_format($totalGmv, 2))
                 ->description('Paid & settled marketplace volume')
                 ->descriptionIcon('heroicon-m-banknotes')
+                ->chart($sparklineGmv)
                 ->color('success'),
 
             Stat::make('Active Escrow Reserve', '৳'.number_format($totalEscrow, 2))

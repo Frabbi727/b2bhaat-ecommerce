@@ -2,6 +2,8 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Admin\Widgets\AdminFulfillmentDistributionChart;
+use App\Filament\Admin\Widgets\AdminOrdersRevenueChart;
 use App\Filament\Admin\Widgets\AdminStatsOverview;
 use App\Filament\Admin\Widgets\LatestOrdersWidget;
 use Filament\Http\Middleware\Authenticate;
@@ -39,6 +41,8 @@ class AdminPanelProvider extends PanelProvider
             ->discoverWidgets(in: app_path('Filament/Admin/Widgets'), for: 'App\Filament\Admin\Widgets')
             ->widgets([
                 AdminStatsOverview::class,
+                AdminOrdersRevenueChart::class,
+                AdminFulfillmentDistributionChart::class,
                 LatestOrdersWidget::class,
             ])
             ->middleware([
