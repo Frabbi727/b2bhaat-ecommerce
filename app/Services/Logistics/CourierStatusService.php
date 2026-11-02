@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Logistics;
 
 use App\Models\FulfillmentStatus;
@@ -8,13 +10,15 @@ use App\Models\OrderTrackingLog;
 use App\Models\PaymentStatus;
 use App\Models\SubOrder;
 use App\Services\Escrow\EscrowLedgerService;
+use App\Services\Inventory\StockReservationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class CourierStatusService
 {
     public function __construct(
-        protected EscrowLedgerService $escrowLedgerService
+        protected EscrowLedgerService $escrowLedgerService,
+        protected StockReservationService $stockReservationService
     ) {}
 
     /**
@@ -48,7 +52,56 @@ class CourierStatusService
             if ($statusSlug === 'delivered') {
                 $this->handleDeliveredSettlement($subOrder);
             }
+
+            // Lifecycle event: Returned (RTO / Refusal)
+            if ($statusSlug === 'returned') {
+                $this->handleReturnedConsignment($subOrder);
+            }
         });
+    }
+
+    protected function handleReturnedConsignment(SubOrder $subOrder): void
+    {
+        // 1. Release reserved stock back to variation catalog
+        $stockItems = [];
+        foreach ($subOrder->items as $item) {
+            if ($item->variation_id) {
+                $stockItems[] = [
+                    'variation_id' => $item->variation_id,
+                    'quantity' => $item->quantity,
+                ];
+            }
+        }
+
+        if (! empty($stockItems)) {
+            $this->stockReservationService->releaseStock($stockItems);
+        }
+
+        // 2. Refund escrow if held
+        $this->escrowLedgerService->refundCancelledEscrow($subOrder, 'Returned to origin (RTO) by courier service');
+
+        // 3. Reconcile parent order if all sub-orders are returned/cancelled
+        $parentOrder = $subOrder->order;
+        if ($parentOrder) {
+            $terminalSlugs = ['returned', 'cancelled'];
+            $terminalIds = FulfillmentStatus::whereIn('slug', $terminalSlugs)->pluck('id');
+
+            $allTerminal = $parentOrder->subOrders()
+                ->whereNotIn('fulfillment_status_id', $terminalIds)
+                ->doesntExist();
+
+            if ($allTerminal) {
+                $cancelledStatus = OrderStatus::where('slug', 'cancelled')->first();
+                if ($cancelledStatus) {
+                    $parentOrder->update(['order_status_id' => $cancelledStatus->id]);
+                }
+
+                $refundedPaymentStatus = PaymentStatus::where('slug', 'refunded')->first();
+                if ($refundedPaymentStatus && $parentOrder->paymentStatus?->slug === 'paid') {
+                    $parentOrder->update(['payment_status_id' => $refundedPaymentStatus->id]);
+                }
+            }
+        }
     }
 
     protected function handleDeliveredSettlement(SubOrder $subOrder): void

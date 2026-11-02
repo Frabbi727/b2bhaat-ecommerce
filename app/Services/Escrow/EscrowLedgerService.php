@@ -190,6 +190,55 @@ class EscrowLedgerService
     }
 
     /**
+     * Reverse and refund settlement when an approved return request is processed.
+     */
+    public function refundReturnedSubOrder(SubOrder $subOrder, string $reason = 'Return approved'): ?WalletTransaction
+    {
+        $existingReturnRefund = WalletTransaction::where('sub_order_id', $subOrder->id)
+            ->where('transaction_type', WalletTransaction::TYPE_ESCROW_REFUND)
+            ->first();
+
+        if ($existingReturnRefund) {
+            return $existingReturnRefund;
+        }
+
+        return DB::transaction(function () use ($subOrder, $reason) {
+            /** @var SellerWallet|null $wallet */
+            $wallet = SellerWallet::where('seller_id', $subOrder->seller_id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $wallet) {
+                return null;
+            }
+
+            $netEarnings = $subOrder->net_earnings;
+
+            if ($wallet->available_balance >= $netEarnings) {
+                $wallet->decrement('available_balance', $netEarnings);
+            } elseif ($wallet->escrow_held_balance >= $netEarnings) {
+                $wallet->decrement('escrow_held_balance', $netEarnings);
+            } else {
+                $remaining = $netEarnings - (float) $wallet->available_balance;
+                $wallet->update(['available_balance' => 0.00]);
+                if ($wallet->escrow_held_balance > 0) {
+                    $wallet->decrement('escrow_held_balance', min($remaining, (float) $wallet->escrow_held_balance));
+                }
+            }
+            $wallet->refresh();
+
+            return WalletTransaction::create([
+                'seller_wallet_id' => $wallet->id,
+                'sub_order_id' => $subOrder->id,
+                'transaction_type' => WalletTransaction::TYPE_ESCROW_REFUND,
+                'amount' => $netEarnings,
+                'running_balance' => $wallet->available_balance,
+                'reference_note' => "Settlement reversed due to approved return of Sub-Order #{$subOrder->sub_order_number}: {$reason}",
+            ]);
+        });
+    }
+
+    /**
      * Request payout withdrawal from seller's available balance.
      *
      * @throws Exception

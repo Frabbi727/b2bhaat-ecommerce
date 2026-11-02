@@ -92,7 +92,16 @@
             </div>
             <div class="text-right">
                 <span class="text-slate-500 block text-[10px] uppercase font-sans">Consignment / Tracking:</span>
-                <strong class="text-emerald-700 text-sm">{{ $subOrder->tracking_number ?? 'UNASSIGNED' }}</strong>
+                <strong class="text-emerald-700 text-sm">
+                    @if ($subOrder->tracking_url)
+                        <a href="{{ $subOrder->tracking_url }}" target="_blank" rel="noopener noreferrer" class="hover:underline text-emerald-700 inline-flex items-center gap-1">
+                            <span>{{ $subOrder->tracking_number }}</span>
+                            <span class="text-[10px] no-print">↗</span>
+                        </a>
+                    @else
+                        {{ $subOrder->tracking_number ?? 'UNASSIGNED' }}
+                    @endif
+                </strong>
             </div>
         </div>
 

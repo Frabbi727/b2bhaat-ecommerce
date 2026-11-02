@@ -154,7 +154,15 @@
                                 </span>
                                 @if ($subOrder->tracking_number)
                                     <div class="text-xs font-mono text-slate-700">
-                                        {{ $subOrder->courier_name ?? 'Courier' }}: <strong>{{ $subOrder->tracking_number }}</strong>
+                                        {{ $subOrder->courier_name ?? 'Courier' }}: 
+                                        @if ($subOrder->tracking_url)
+                                            <a href="{{ $subOrder->tracking_url }}" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:text-indigo-800 underline font-bold inline-flex items-center gap-1" title="Open live courier tracking page">
+                                                <span>{{ $subOrder->tracking_number }}</span>
+                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                            </a>
+                                        @else
+                                            <strong>{{ $subOrder->tracking_number }}</strong>
+                                        @endif
                                     </div>
                                 @endif
                             </div>

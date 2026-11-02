@@ -68,4 +68,35 @@ class SubOrder extends Model
     {
         return (float) ($this->subtotal - $this->commission_amount);
     }
+
+    public function getTrackingUrlAttribute(): ?string
+    {
+        if (empty($this->tracking_number)) {
+            return null;
+        }
+
+        $courier = strtolower($this->courier_name ?? '');
+
+        if (str_contains($courier, 'steadfast')) {
+            return "https://steadfast.com.bd/t/{$this->tracking_number}";
+        }
+
+        if (str_contains($courier, 'pathao')) {
+            return "https://merchant.pathao.com/tracking?consignment_id={$this->tracking_number}";
+        }
+
+        if (str_contains($courier, 'redx')) {
+            return "https://redx.com.bd/track?trackingId={$this->tracking_number}";
+        }
+
+        if (str_contains($courier, 'paperfly')) {
+            return "https://paperfly.com.bd/tracking?id={$this->tracking_number}";
+        }
+
+        if (str_contains($courier, 'sundarban')) {
+            return "https://sundarbancourierltd.com/track/{$this->tracking_number}";
+        }
+
+        return null;
+    }
 }

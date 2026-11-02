@@ -189,14 +189,61 @@ class OrderDisputeService
                         'fulfillment_status_id' => $returnedStatus->id,
                     ]);
 
+                    // 1. Reverse financial settlement if refund was requested
+                    if ($returnRequest->requested_action === 'refund') {
+                        $this->escrowLedgerService->refundReturnedSubOrder(
+                            $returnRequest->subOrder,
+                            $note ?? 'Customer return approved by seller'
+                        );
+                    }
+
+                    // 2. Restock returned goods to variation catalog inventory
+                    $stockItems = [];
+                    foreach ($returnRequest->subOrder->items as $item) {
+                        if ($item->variation_id) {
+                            $stockItems[] = [
+                                'variation_id' => $item->variation_id,
+                                'quantity' => $item->quantity,
+                            ];
+                        }
+                    }
+
+                    if (! empty($stockItems)) {
+                        $this->stockReservationService->releaseStock($stockItems);
+                    }
+
+                    // 3. Create tracking timeline log
                     OrderTrackingLog::create([
                         'sub_order_id' => $returnRequest->sub_order_id,
                         'fulfillment_status_id' => $returnedStatus->id,
                         'title' => 'Return Approved by Supplier',
-                        'description' => "Return approved: {$note}. Replacement or refund initiated.",
+                        'description' => "Return approved: {$note}. Settlement reversed and inventory restored.",
                         'hub_location' => 'Merchant Hub',
                         'logged_at' => now(),
                     ]);
+
+                    // 4. Reconcile parent order if all sibling consignments are returned or cancelled
+                    $parentOrder = $returnRequest->subOrder->order;
+                    if ($parentOrder) {
+                        $terminalSlugs = ['returned', 'cancelled'];
+                        $terminalIds = FulfillmentStatus::whereIn('slug', $terminalSlugs)->pluck('id');
+
+                        $allTerminal = $parentOrder->subOrders()
+                            ->whereNotIn('fulfillment_status_id', $terminalIds)
+                            ->doesntExist();
+
+                        if ($allTerminal) {
+                            $cancelledStatus = OrderStatus::where('slug', 'cancelled')->first();
+                            if ($cancelledStatus) {
+                                $parentOrder->update(['order_status_id' => $cancelledStatus->id]);
+                            }
+
+                            $refundedPaymentStatus = PaymentStatus::where('slug', 'refunded')->first();
+                            if ($refundedPaymentStatus && $parentOrder->paymentStatus?->slug === 'paid') {
+                                $parentOrder->update(['payment_status_id' => $refundedPaymentStatus->id]);
+                            }
+                        }
+                    }
                 }
             }
         });
