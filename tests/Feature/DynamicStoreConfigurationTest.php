@@ -147,4 +147,23 @@ class DynamicStoreConfigurationTest extends TestCase
         $this->expectExceptionMessage('Cancellation window of 12 hours has elapsed');
         app(OrderDisputeService::class)->cancelSubOrder($subOrder);
     }
+
+    public function test_tax_invoice_renders_dynamic_vat_bin_and_company_address(): void
+    {
+        $config = app(StoreConfigurationService::class);
+        $config->set('store_name', 'B2Bhaat Megastore', 'general', 'string');
+        $config->set('vat_bin_number', 'BIN-999888777-0001', 'general', 'string');
+        $config->set('store_address', 'Level 5, Gulshan Tower, Dhaka-1212', 'general', 'string');
+
+        $order = Order::firstOrFail();
+        $admin = User::where('email', 'admin@b2bhaat.com')->firstOrFail();
+
+        $this->actingAs($admin);
+        $response = $this->get(route('order.invoice', $order->order_number));
+
+        $response->assertSuccessful();
+        $response->assertSee('B2Bhaat Megastore');
+        $response->assertSee('BIN-999888777-0001');
+        $response->assertSee('Gulshan Tower');
+    }
 }

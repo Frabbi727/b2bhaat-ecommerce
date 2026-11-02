@@ -28,6 +28,10 @@
             </button>
         </div>
 
+        @php
+            $storeConfig = app(\App\Services\Settings\StoreConfigurationService::class);
+            $identity = $storeConfig->getStoreIdentity();
+        @endphp
         <!-- Invoice Printable Paper -->
         <div class="invoice-box bg-white p-8 sm:p-12 rounded-3xl border border-slate-200 shadow-sm space-y-8">
             <!-- Header -->
@@ -35,10 +39,12 @@
                 <div>
                     <div class="flex items-center gap-2">
                         <span class="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-black text-lg">B2B</span>
-                        <h1 class="text-2xl font-black text-slate-900 tracking-tight">B2B <span class="text-indigo-600">Haat</span></h1>
+                        <h1 class="text-2xl font-black text-slate-900 tracking-tight">{{ $identity['name'] }}</h1>
                     </div>
                     <p class="text-xs text-slate-500 mt-1">Hybrid Wholesale & Retail Marketplace Platform</p>
-                    <p class="text-[11px] text-slate-400">Dhaka, Bangladesh • support@b2bhaat.com</p>
+                    <p class="text-[11px] text-slate-500 font-mono mt-0.5">{{ $identity['address'] }}</p>
+                    <p class="text-[11px] text-slate-400">Helpline: {{ $identity['helpline'] }} • {{ $identity['email'] }}</p>
+                    <p class="text-[11px] font-bold text-indigo-700 font-mono mt-1">VAT / BIN: {{ $identity['vat_bin'] }}</p>
                 </div>
 
                 <div class="text-right space-y-1">
@@ -175,7 +181,7 @@
             <div class="border-t border-slate-200 pt-8 mt-12 grid grid-cols-2 text-center text-xs text-slate-400">
                 <div class="space-y-1">
                     <div class="border-b border-slate-300 w-48 mx-auto pb-6"></div>
-                    <div>Prepared by B2B Haat System</div>
+                    <div>Prepared by {{ $identity['name'] }} System</div>
                 </div>
                 <div class="space-y-1">
                     <div class="border-b border-slate-300 w-48 mx-auto pb-6"></div>
