@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Filament\Admin\Pages\StoreSettings;
 use App\Models\StoreSetting;
+use App\Models\User;
 use App\Services\Settings\StoreConfigurationService;
 use Database\Seeders\DatabaseSeeder;
+use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class DynamicStoreConfigurationTest extends TestCase
@@ -45,5 +49,30 @@ class DynamicStoreConfigurationTest extends TestCase
         $this->assertTrue($service->isGuestCheckoutAllowed());
         $this->assertEquals(24, $service->getOrderCancellationWindowHours());
         $this->assertEquals(50000.00, $service->getCodMaxLimit());
+    }
+
+    public function test_super_admin_can_update_settings_and_sellers_are_forbidden(): void
+    {
+        $admin = User::where('email', 'admin@b2bhaat.com')->firstOrFail();
+        $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        // Admin can access
+        $this->actingAs($admin);
+        Livewire::test(StoreSettings::class)
+            ->assertSuccessful()
+            ->set('data.delivery_fee_inside_dhaka', 85.00)
+            ->set('data.free_shipping_threshold', 12000.00)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $service = app(StoreConfigurationService::class);
+        $this->assertEquals(85.00, $service->getDeliveryFee('inside_dhaka'));
+        $this->assertEquals(12000.00, $service->getFreeShippingThreshold());
+
+        // Seller is forbidden
+        $this->actingAs($seller);
+        $this->get('/admin/store-settings')->assertForbidden();
     }
 }
