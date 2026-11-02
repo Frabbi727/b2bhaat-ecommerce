@@ -45,6 +45,10 @@ Route::post('/seller/products/stock/import', [ProductStockBulkController::class,
 
 // Quick Demo Persona Switcher (Convenient for Pair-Programming & Verification)
 Route::get('/demo-login/{role}', function (string $role) {
+    if (! app()->environment('local', 'testing')) {
+        abort(403, 'Demo login switcher is disabled in production environments.');
+    }
+
     $emailMap = [
         'retail' => 'customer@retail.com',
         'wholesale' => 'buyer@boutique.com',
