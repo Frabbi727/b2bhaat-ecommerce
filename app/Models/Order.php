@@ -22,6 +22,9 @@ class Order extends Model
         'tax_amount',
         'shipping_amount',
         'discount_amount',
+        'invoice_token',
+        'tracking_token',
+        'sms_confirmation_sent_at',
     ];
 
     protected function casts(): array
@@ -32,7 +35,22 @@ class Order extends Model
             'tax_amount' => 'decimal:2',
             'shipping_amount' => 'decimal:2',
             'discount_amount' => 'decimal:2',
+            'sms_confirmation_sent_at' => 'datetime',
         ];
+    }
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function (Order $order): void {
+            if (empty($order->invoice_token)) {
+                $order->invoice_token = bin2hex(random_bytes(20));
+            }
+            if (empty($order->tracking_token)) {
+                $order->tracking_token = bin2hex(random_bytes(20));
+            }
+        });
     }
 
     public function customer(): BelongsTo

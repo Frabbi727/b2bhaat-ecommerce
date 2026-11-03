@@ -31,6 +31,7 @@ class User extends Authenticatable implements FilamentUser
         'wholesale_rejection_reason',
         'wholesale_approved_at',
         'wholesale_rejected_at',
+        'phone_verified_at',
     ];
 
     protected $hidden = [
@@ -42,6 +43,7 @@ class User extends Authenticatable implements FilamentUser
     {
         return [
             'email_verified_at' => 'datetime',
+            'phone_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
             'is_wholesale_approved' => 'boolean',
