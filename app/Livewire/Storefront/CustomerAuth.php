@@ -124,7 +124,10 @@ class CustomerAuth extends Component
 
         $user = $isEmail
             ? User::where('email', strtolower($identifier))->first()
-            : User::where('phone', $normalizedPhone ?? $identifier)->first();
+            : User::where(function ($q) use ($identifier, $normalizedPhone) {
+                $q->where('phone', $normalizedPhone ?? $identifier)
+                    ->orWhere('phone', $identifier);
+            })->first();
 
         if (! $user || ! Hash::check($this->loginPassword, $user->password)) {
             RateLimiter::hit($throttleKey, 60);

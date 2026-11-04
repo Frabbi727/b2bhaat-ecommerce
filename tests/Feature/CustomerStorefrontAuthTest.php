@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Livewire\Storefront\CustomerAuth;
+use App\Models\Otp;
 use App\Models\User;
+use App\Services\Sms\Contracts\SmsGatewayInterface;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\PromotionsAndStoreSettingsSeeder;
 use Database\Seeders\SystemLookupSeeder;
@@ -94,6 +96,26 @@ class CustomerStorefrontAuthTest extends TestCase
             ->set('agreeTerms', true)
             ->call('register')
             ->assertHasNoErrors()
+            ->assertSet('step', 'otp_verification');
+
+        $otp = Otp::where('phone', '8801899123456')->first();
+        $this->assertNotNull($otp);
+
+        $mockDriver = app(SmsGatewayInterface::class);
+        $lastSent = end($mockDriver->sentMessages);
+        preg_match('/\b(\d{6})\b/', $lastSent['message'], $matches);
+        $code = $matches[1] ?? '123456';
+
+        Livewire::test(CustomerAuth::class, ['tab' => 'register'])
+            ->set('step', 'otp_verification')
+            ->set('registerName', 'Rahim Chowdhury')
+            ->set('registerPhone', '01899123456')
+            ->set('registerEmail', 'rahim@b2bhaat-test.com')
+            ->set('registerPassword', 'SecretPass123!')
+            ->set('registerPasswordConfirmation', 'SecretPass123!')
+            ->set('otpCode', $code)
+            ->call('completeRegistration')
+            ->assertHasNoErrors()
             ->assertRedirect(route('customer.orders'));
 
         $this->assertAuthenticated();
@@ -101,7 +123,7 @@ class CustomerStorefrontAuthTest extends TestCase
         $user = User::where('email', 'rahim@b2bhaat-test.com')->first();
         $this->assertNotNull($user);
         $this->assertEquals('Rahim Chowdhury', $user->name);
-        $this->assertEquals('01899123456', $user->phone);
+        $this->assertEquals('8801899123456', $user->phone);
         $this->assertTrue($user->isRetailBuyer());
     }
 
