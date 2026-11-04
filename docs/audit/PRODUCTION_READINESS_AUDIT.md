@@ -35,10 +35,10 @@
 |---|---|
 | Features inventoried | 49 ([FEATURE_INVENTORY.md](FEATURE_INVENTORY.md)) |
 | Existing automated tests | 266 passing, 1129 assertions (unchanged by this audit) |
-| Audit probes run | 29 (13 + 7 + 8 + 1); **19 confirmed defects**, 9 confirmed correct behaviour, 1 measurement ([TESTING_REPORT.md](TESTING_REPORT.md)) |
+| Audit probes run | 31 (13 + 7 + 8 + 1 + 2 final-review); **21 confirmed defects**, 9 confirmed correct behaviour, 1 measurement ([TESTING_REPORT.md](TESTING_REPORT.md)) |
 | Prior risks R-01…R-31 | 1 fixed · 9 partially or mostly fixed · 18 still open · 2 pending owner decision · 1 partially decided |
-| **Register rows** | **58** — **P0 12** · **P1 16** · P2 19 · P3 11 |
-| Status | Open 56 · Pending owner decision 2 · Still suspected (code-read only): PRA-011, PRA-027, PRA-012 |
+| **Register rows** | **59** — **P0 14** · **P1 15** · P2 19 · P3 11 |
+| Status | Open 57 · Pending owner decision 2 · Marked Suspected: PRA-011, PRA-027, PRA-012. Other rows whose only evidence is [R] (e.g. PRA-013, PRA-016, PRA-020, PRA-028, PRA-058) are also code-read only; see each row's Evidence |
 
 **Verdict: not production-ready.** The storefront, catalog, order splitting and dashboards are solid and well tested. Every P0 sits in money, authentication or permissions:
 
@@ -50,8 +50,10 @@
 - Factory prices are shown to everyone, and wholesale access is self-granted: PRA-050, PRA-008
 - Sellers can edit their own commission: PRA-005
 - A production seed creates a super admin with password `password`: PRA-056
+- Anyone with an order number can cancel it, and anyone can open a return on any delivered sub-order: PRA-059 (added after final review)
+- Anyone with an order number can read the customer's invoice: PRA-009 (regraded P1 → P0 after final review)
 
-None of these needs an owner decision to fix.
+None of these needs an owner decision to fix. (How manual bKash/Nagad payments are handled until a gateway exists is an owner choice; see PRA-006.)
 
 **Pending owner decision (not defects):** Q4 commission tiers and coupon funding · Q5 VAT/tax · Q7 returns and disputes policy · Q8 refund method and timing · Q10 seller-and-buyer accounts · Q11 wholesale buyers using retail prices · Q12 guest-checkout policy · Q13 extra admin roles (PRA-042) · Q15 RFQ scope · Q16 API client (R-13, token expiry) · Q17 hosting · Q18 language · courier provider (PRA-020) · payment gateway (Q1/D8).
 
@@ -75,7 +77,7 @@ These feed the deployment-checklist plan:
 | Issue ID | Module | Description | Current behaviour | Expected behaviour | Business impact | Priority | Recommended solution | Dependencies | Testing requirements | Implementation status |
 |---|---|---|---|---|---|---|---|---|---|---|
 | PRA-035 | Auth / OTP | The fallback OTP `123456` logs in as any user in production | `OtpService::verify` (`app/Services/Sms/OtpService.php:97`) accepts the configured default OTP (default `123456`, also editable in `/admin/sms-settings`) in every environment, even when no OTP was requested. Confirmed: under `APP_ENV=production` the code `123456` logged the probe in as another seller [T-probe C.1] | The fallback works only in `local`/`testing`, and only for a phone that has a pending OTP. Production ignores `SMS_DEFAULT_OTP` and the admin setting | Account takeover of any customer or seller who registered by phone, including access to the seller panel and wallet payouts | P0 | Gate the fallback with `app()->environment('local','testing')`, remove the `'123456'` config default, and hide the admin field in production | — | Probe C.1. Also: non-production still works [T `tests/Feature/Sms/*`] | Open |
-| PRA-050 | Catalog / Wholesale | Wholesale tier prices shown to guests and retail buyers on the web (D3) | `product-detail.blade.php:376` renders 'Factory Volume Tier Brackets' whenever `$wholesaleTiers` is not empty, with no role or approval check. Confirmed as a guest: 50+ ৳110, 100–249 ৳95, 250+ ৳85 [B]. `ChannelVisibilityTest` covers only the API resource | Per D3, only admin-approved wholesale buyers see wholesale prices. Others see the teaser ('wholesale pricing available — apply') | The core B2B promise to sellers (hidden factory prices) is broken; retail buyers see the factory margin | P0 | Wrap the tier block in an approved-wholesale check (shared helper with PRA-008) and show the teaser otherwise | PRA-008 | Feature test: GET product page as guest/retail doesn't contain the tier prices; as an approved wholesale buyer it does | Open |
+| PRA-050 | Catalog / Wholesale | Wholesale tier prices shown to guests and retail buyers on the web (D3) | `product-detail.blade.php:361-376` renders 'Factory Volume Tier Brackets' (heading at :364, table inside the `@if` at :376) whenever `$wholesaleTiers` is not empty, with no role or approval check. Confirmed as a guest: 50+ ৳110, 100–249 ৳95, 250+ ৳85 [B]. `ChannelVisibilityTest` covers only the API resource | Per D3, only admin-approved wholesale buyers see wholesale prices. Others see the teaser ('wholesale pricing available — apply') | The core B2B promise to sellers (hidden factory prices) is broken; retail buyers see the factory margin | P0 | Wrap the tier block in an approved-wholesale check (shared helper with PRA-008) and show the teaser otherwise | PRA-008 | Feature test: GET product page as guest/retail doesn't contain the tier prices; as an approved wholesale buyer it does | Open |
 | PRA-007 | Checkout / Auth | Guest checkout creates a loginable account with the password 'password' (R-10 / D-04 / L-14) | `CheckoutComponent.php:249-258` calls `User::firstOrCreate(['email' => 'guest_'.time().'@b2bhaat.com'], [..., 'password' => Hash::make('password'), 'is_active' => true])`. Two guests checking out in the same second share one account. A returning guest's phone collides with the unique `users.phone`. Confirmed: `Hash::check('password')` returns true [T-probe `test_r10_…`] | Guest orders use a random, unusable password (or no user account). A unique email per order. A returning phone is linked rather than failing | Anyone can log in as a guest (guessable email plus known password) and see their name, phone, address and orders | P0 | Random 64-character password and a UUID email, or a nullable `customer_id` with guest contact on the order. Look up an existing user by phone first | Guest-checkout policy (Q12) is pending, but the security fix doesn't depend on it | Probe A.9. Also: two guests in the same second get separate accounts; a repeat phone doesn't fail | Open |
 | PRA-006 | Checkout / Payments | Online payment marked Paid with no verification (R-02 / D8) | `CheckoutComponent::placeOrder` (`app/Livewire/Storefront/CheckoutComponent.php:323`) sets the order to `paid` and holds escrow for `mock_gateway`, `bkash`, `nagad` and `sslcommerz`, based only on the TrxID the customer types in. Payment methods are validated with `exists`, not `is_active`, so an inactive method can be selected by tampering. Confirmed: a fake bKash TrxID produces a paid order [T-probe `test_r02_…`] | Per D8: no live gateway yet. The mock gateway is unavailable in production. Manual MFS payments stay `unpaid` / `pending verification` until an admin verifies the TrxID | Orders ship without payment. Escrow 'holds' money that was never received | P0 | Production gate on `mock_gateway`. Manual bKash/Nagad payments go to `unpaid` plus an admin 'Verify payment' action that then holds escrow. Validate that the method is active | Gateway choice (Q1, Pending owner decision) only for automatic verification. `inventory:release-expired-reservations` cancels `pending`+`unpaid` orders after 15 min, so the awaiting-verification state must be excluded | Probe A.8. Also: an inactive method can't be selected; mock is rejected in production | Open |
 | PRA-002 | Escrow | COD delivery and release take money from other orders' escrow (R-05 / D-01) | `creditDeliveredSubOrder` subtracts this sub-order's net from `escrow_held_balance` even though a COD sub-order was never held. `releaseFromEscrow` releases `min(held, net)` without checking that this sub-order's hold exists. Confirmed: another order's escrow 4,500 → 3,600 after a COD delivery [T-probe `test_r05_cod_delivery_does_not_consume_other_orders_escrow`] | Each release and refund moves only the amount held for that sub-order (its own `escrow_hold` row). COD creates its hold at delivery (D2) | Wallet balances become wrong. Sellers are paid from unrelated orders. The ledger cannot be reconciled | P0 | Key every release and refund on the sub-order's own hold transaction, and refuse when none exists. Add a reconciliation check: wallet balances = sum of ledger rows | PRA-001 | Fix the probe (A.3). Also add a ledger-sum assertion after hold → release → refund → payout | Open |
@@ -86,6 +88,8 @@ These feed the deployment-checklist plan:
 | PRA-004 | Seller panel / Fulfilment | Seller can mark courier shipments delivered and run 'Simulate Courier' (R-15 / D4) | `SubOrdersTable` `markDelivered` (`app/Filament/Seller/Resources/SubOrders/Tables/SubOrdersTable.php:137`) and `simulateCourier` (`:162`, a testing tool with a 'Delivered & Cash Collected' option) appear on shipped, in-transit and out-for-delivery sub-orders in every environment. Confirmed visible [T-probe `test_r15_…`] | Per D4, courier shipments are marked delivered only by the signed webhook. Self-delivery is confirmed only with the handover code (D5). The simulator is never available in production | A seller can confirm their own delivery and collect money without delivering | P0 | Remove `markDelivered` for courier shipments. Gate `simulateCourier` to `local`/`testing` only | — | Probe A.5. Also: the handover-code flow is still allowed for self-delivery | Open |
 | PRA-005 | Seller panel / Orders | Seller can create, edit and delete sub-orders, including the money fields (R-04 / D-08) | `SubOrderResource` registers Create/Edit pages. `EditSubOrder` has `DeleteAction`, and the table has `DeleteBulkAction`. `SubOrderForm` edits `subtotal`, `commission_amount`, `seller_id` (any seller), `parent_order_id` and `sub_order_number`. Confirmed: `/seller/sub-orders/create` returns 200, and commission 100 → 0 was saved [T-probes `test_r04_…`]. `FilamentPanelsSmokeTest::test_seller_resources_tables_render` asserts the create page loads | Sellers can view their sub-orders and run fulfilment actions only. Money fields, ownership and parent are read-only. No create or delete | Commission fraud. A seller can delete or reassign orders. Order totals stop adding up | P0 | Remove the create/edit pages and delete actions (keep a read-only view page). Add a `SubOrderPolicy` denying create/update/delete to sellers. Update the smoke test to expect 403 | Smoke test must change | Probes A.6, A.7. Also: a seller cannot reach another seller's sub-order (Task 5) | Open |
 | PRA-008 | Wholesale / Roles | Wholesale buyers approve themselves; the application overwrites seller and admin roles (R-07 / D3) | `WholesaleUpgrade::applyForWholesale` (`app/Livewire/Storefront/WholesaleUpgrade.php:80-99`) sets `role_id = wholesale_buyer` and `is_wholesale_approved = true` immediately. `Api\V1\AuthController::registerWholesale` grants the role too. `User::isWholesaleBuyer()` checks only the role. Confirmed by both probes [T-probe `test_r07_…`] | Per D3: the application creates a pending request. Wholesale prices and bulk ordering need `is_wholesale_approved` set by an admin in KYC Approvals. Seller and admin roles are never changed by this form | Anyone sees wholesale prices and buys at wholesale (this voids R-06's gate). A seller loses panel access | P0 | Store a pending application and leave the role unchanged until approval. `isWholesaleBuyer()` requires approval. Block the form for seller and admin users | — | Probes A.10, A.11 | Open |
+| PRA-059 | Tracking / Disputes | Anonymous visitors can cancel orders and open returns from the public tracking page (new, final review) | `OrderTracking::cancelEntireOrder` (`app/Livewire/Storefront/OrderTracking.php:134`) cancels whatever order the search found; the phone is optional (`:115`). `submitReturnRequest` (`:191-206`) loads any sub-order by the client-set `selectedSubOrderId`, without scoping it to the searched order, and for guests uses the order's own customer as the requester, so the ownership check at `OrderDisputeService.php:145` always passes. Confirmed: a guest cancelled an order with only its number, and a guest filed a return on sub-order 1 without finding any order [T-probe E.1, E.2] | Write actions (cancel, return) need the logged-in owner, or a tracking session verified by exact phone. The sub-order must belong to the searched order | Anyone who sees an order number (SMS, label, challan) can cancel it; anyone can freeze a seller's payout by filing returns (worse after Phase B, when pending returns block release) | P0 | Scope `selectedSubOrderId` to `$this->order`. Require an authenticated owner, or an exact-phone-verified tracking session, before any write. Throttle | PRA-009, PRA-026 | Probes E.1, E.2 | Open |
+| PRA-009 | Invoices / Privacy | Anyone with an order number can open its invoice (R-14 / L-08) | `/order/{order_number}/invoice` has no auth middleware. `InvoiceController::show` checks ownership only when a user is logged in. Guests get the full invoice: name, phone, address, items. Confirmed: guest request returns 200 [T-probe `test_r14_…`]. The API tracking endpoint matches the phone with `LIKE %…%`, and the phone is optional | The order-number route requires auth plus ownership. Guests use the `invoice_token` URL. Tracking needs the exact phone. Lookups are throttled | Customer personal data leaks to anyone who sees an order number (it appears in SMS, labels and challans) | P0 | Add `auth` to the order-number route. Require an exact phone match in `TrackingController` and `OrderTracking`. Throttle `track`, `invoice`, `api/v1/orders/track` | — | Probe A.12. Also: partial phone → 404; the 11th request in a minute → 429 | Open |
 | PRA-025 | Cart / Wholesale | Cart breaks MOQ-across-variations (D7) and the lot tier price (R-09) | The matrix adds lines with the lot-tier price, but each line stores `min_quantity` = the full MOQ. `CartSessionService::updateQuantity:133` rejects a line below the MOQ, and re-prices it on the line's own quantity. Checkout never re-checks the lot MOQ. Confirmed: 26 + 24 (MOQ 50), raising one line → exception [T-probe B.2] | MOQ and tier are judged on the product's total wholesale quantity across its variation lines, both in the cart and at checkout | Wholesale buyers can't adjust bulk orders, or can check out below the MOQ by removing a line | P1 | Compute the MOQ and tier per (product, wholesale) group in `CartSessionService` (add, update and remove re-price every line in the group), and validate the group MOQ in `placeOrder` | — | Probe B.2. Also: remove one line below the lot MOQ → checkout blocked | Open |
 | PRA-010 | Catalog | Inactive products still viewable and orderable by URL (R-11) | `ProductDetail::mount` and `Api\V1\CatalogController::show` load by slug without an `is_active` filter. Confirmed: a deactivated product returns 200 on web and API [T-probe `test_r11_…`] | Inactive products return 404, and adding one to the cart is refused | Delisted or banned products keep selling | P1 | Add an `is_active` (and active-seller) scope in both places and in `CartSessionService::addItem` | — | Probe A.13 | Open |
 | PRA-020 | Courier integration | Courier booking is simulated (no courier API) | `CourierBookingService.php:51` generates `PREFIX-ymd-rand(10000,99999)` as the tracking number. No courier is contacted. [R] | Booking calls the chosen courier's API and stores its consignment ID | D4 needs a real courier to send delivery webhooks; collisions are possible | P1 | Pending owner decision: which courier (Steadfast, Pathao, RedX). Until then, label it as manual booking and let the seller enter the real tracking number | Owner decision | — | Pending owner decision |
@@ -94,7 +98,6 @@ These feed the deployment-checklist plan:
 | PRA-026 | Escrow / Returns | Escrow released while a return request is open | `ReleaseDeliveredEscrowCommand` releases every delivered sub-order past the holding period without checking `return_requests`. Confirmed [T-probe B.5] | Sub-orders with a pending return or dispute are skipped until it is resolved | The seller is paid out, then the refund has no funds | P1 | Add `whereDoesntHave('returnRequests', pending)` to the release query | PRA-001 | Probe B.5 | Open |
 | PRA-051 | Fulfilment / COD | COD amount on labels and challans leaves out the delivery fee and discount | `ShippingLabelController.php:46,88` sets `codAmount = subtotal`. `delivery-challan.blade.php:130` prints `subtotal`. Confirmed: order DEMO01 total ৳570, challan says collect ৳500 [B] | The COD amount the courier collects per parcel = what the customer owes for that sub-order: subtotal + that sub-order's shipping − its share of the discount, and Σ over sub-orders = order total | Under-collection of every COD delivery fee; cash reconciliation gaps | P1 | Add `SubOrder::codCollectAmount()`, which allocates the order discount proportionally, and use it in both views | PRA-030 | Test: 2-seller COD order with discount → Σ COD amounts = order total | Open |
 | PRA-011 | Inventory | Products without variations have no stock control (R-08 / D-05) | Stock exists only on `product_variations.stock_quantity`. `OrderSplitterService.php:59` reserves stock only for items that have a `variation_id`. [R] | Every sellable unit has a stock count that is reserved at order and released on cancel/RTO | Unlimited overselling of simple products | P1 | Either require a default variation for every product (simplest: auto-create one) or add product-level stock. Auto-creating keeps one stock path | — | New test: ordering a simple product with stock 1 twice → second order refused | Open (Suspected — confirm in Task 4) |
-| PRA-009 | Invoices / Privacy | Anyone with an order number can open its invoice (R-14 / L-08) | `/order/{order_number}/invoice` has no auth middleware. `InvoiceController::show` checks ownership only when a user is logged in. Guests get the full invoice: name, phone, address, items. Confirmed: guest request returns 200 [T-probe `test_r14_…`]. The API tracking endpoint matches the phone with `LIKE %…%`, and the phone is optional | The order-number route requires auth plus ownership. Guests use the `invoice_token` URL. Tracking needs the exact phone. Lookups are throttled | Customer personal data leaks to anyone who sees an order number (it appears in SMS, labels and challans) | P1 | Add `auth` to the order-number route. Require an exact phone match in `TrackingController` and `OrderTracking`. Throttle `track`, `invoice`, `api/v1/orders/track` | — | Probe A.12. Also: partial phone → 404; the 11th request in a minute → 429 | Open |
 | PRA-013 | Payouts | Payout lifecycle has no status, rejection or reversal (R-16 / D-03) | `requestPayout` debits available balance at once. The admin `markDisbursed` action only appends `[DISBURSED - TrxID…]` to `reference_note`. There is no reject or reverse, so a rejected payout can't return funds. [R] | A payout has a status (requested → disbursed or rejected). Rejection credits the amount back with a ledger row | Finance can't reject wrong payouts. Status lives in free text | P1 | Add a `status` column to payout transactions (migration), plus approve/reject actions that write ledger rows | Payout policy (Q13 finance role) is optional | Test: reject → available balance restored, and the ledger sum still matches | Open |
 | PRA-027 | Refunds | No customer refund record for partial cancellation or return | `cancelSubOrder` sets the parent to `refunded` only when **all** sub-orders are cancelled. Approved returns reverse the seller side only. Nothing records the amount owed back to the customer or when it was paid. [R] | Each cancellation or approved return of a paid sub-order creates a refund record (amount, method, status), which finance completes | Customers owed money with no trace; finance can't reconcile | P1 | Add a `refunds` table plus an admin action to mark refunds paid. Method and timing are **Pending owner decision** (Q8), but recording the amount owed doesn't depend on it | Q8 for the method | Test: cancel 1 of 2 paid sub-orders → one refund row for exactly its subtotal + shipping | Open (Suspected) |
 | PRA-036 | Security / Rate limiting | No rate limiting on the API, tracking, invoice or webhook | Only `CustomerAuth::login` (5/min) and `OtpService` throttle anything. Confirmed: 12 bad `POST /api/v1/auth/login` calls → 422, never 429; 70 tracking lookups → never 429 [T-probe C.5, C.6] | `throttle` on `api/*` (e.g. 60/min), `auth/login` (5/min per email+IP), `track*`, `invoice/*` and the webhook | Brute-force passwords; scrape orders | P1 | Define named rate limiters in `AppServiceProvider` and apply them to the route groups | — | Probes C.5, C.6 | Open |
@@ -161,7 +164,7 @@ These feed the deployment-checklist plan:
 | R-22 | No variation matrix / image upload for sellers | **Partially fixed**: variation and price repeaters exist; no image upload | [R] `ProductForm.php:156,196` | PRA-058 |
 | R-23 | RFQ dead-ends; RFQ form leaks users | **Partially fixed** — RFQ accept → order exists [T] `WholesaleRfqAndQuotationLifecycleTest`; form still leaks users | [R] | PRA-012 |
 | R-24 | No notifications | **Partially fixed**: OTP and order-confirmation SMS work [T] `tests/Feature/Sms/*`; status SMS is never triggered; no email (channel choice is Pending owner decision) | [T], [R] | PRA-029 |
-| R-25 | No policies, throttling, token expiry; raw errors | **Open** — `app/Policies` empty; throttling only on `CustomerAuth` login | [R] | Task 5 |
+| R-25 | No policies, throttling, token expiry; raw errors | **Open** — `app/Policies` empty; throttling only on `CustomerAuth` login | [R] | PRA-043, PRA-036, PRA-038 |
 | R-26 | Shipping-fee ownership and tax undefined | **Partially decided** — D6 decided fees; tax **Pending owner decision** (Q5) | — | — |
 | R-27 | Missing DB constraints, indexes, audit history | **Open** | [C] schema | PRA-044, PRA-045, PRA-046 |
 | R-28 | Tests on SQLite only | **Open** | [R] `phpunit.xml` | PRA-021 |
@@ -974,6 +977,75 @@ class QueryCountProbeTest extends TestCase
         }
         fwrite(STDERR, 'QUERYCOUNTS='.json_encode($results).PHP_EOL);
         $this->assertTrue(true);
+    }
+}
+```
+
+</details>
+
+## Appendix E: Final-review probes
+
+Added on 2026-11-05 after the Phase A final review, then deleted. 2 probes: **2 failed (defects confirmed).** The demo seed has one order, so E.1 files the return without finding any order.
+
+| Ref | Probe | Result |
+|---|---|---|
+| E.1 | `test_anonymous_guest_cannot_file_return_by_sub_order_id` | FAIL — return row created for sub-order 1 |
+| E.2 | `test_guest_cannot_cancel_order_with_only_order_number` | FAIL — order cancelled |
+
+<details><summary>Probe source</summary>
+
+```php
+<?php
+
+namespace Tests\Feature\AuditProbe;
+
+use App\Livewire\Storefront\OrderTracking;
+use App\Models\FulfillmentStatus;
+use App\Models\OrderStatus;
+use App\Models\SubOrder;
+use Database\Seeders\DemoCatalogSeeder;
+use Database\Seeders\SystemLookupSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
+use Tests\TestCase;
+
+class TrackingWriteProbeTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(SystemLookupSeeder::class);
+        $this->seed(DemoCatalogSeeder::class);
+    }
+
+    public function test_anonymous_guest_cannot_file_return_by_sub_order_id(): void
+    {
+        $victim = SubOrder::with('order')->firstOrFail();
+        $victim->update(['fulfillment_status_id' => FulfillmentStatus::where('slug', 'delivered')->value('id')]);
+
+        Livewire::test(OrderTracking::class, ['orderNumber' => 'NOT-A-REAL-ORDER'])
+            ->set('selectedSubOrderId', $victim->id)
+            ->set('returnReason', 'defective_item')
+            ->set('returnRequestedAction', 'refund')
+            ->set('returnDescription', 'Attacker filed this return anonymously.')
+            ->call('submitReturnRequest');
+
+        $this->assertDatabaseMissing('return_requests', ['sub_order_id' => $victim->id]);
+    }
+
+    public function test_guest_cannot_cancel_order_with_only_order_number(): void
+    {
+        $order = SubOrder::firstOrFail()->order;
+        $order->subOrders()->update(['fulfillment_status_id' => FulfillmentStatus::where('slug', 'unfulfilled')->value('id')]);
+        $order->update(['order_status_id' => OrderStatus::where('slug', 'pending')->value('id')]);
+
+        Livewire::test(OrderTracking::class, ['orderNumber' => $order->order_number])
+            ->call('searchOrder')
+            ->call('cancelEntireOrder');
+
+        $this->assertNotSame('cancelled', $order->fresh()->orderStatus?->slug);
     }
 }
 ```

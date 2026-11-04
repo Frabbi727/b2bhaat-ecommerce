@@ -60,8 +60,10 @@ Throwaway tests written during the audit, run against the audited code, then **d
 | C.7 | `test_s7_api_wholesale_registration_does_not_grant_wholesale_role` | API approval gate | **FAIL** | PRA-008 |
 | C.8 | `test_s8_api_seller_registration_is_not_auto_approved` | Seller approval gate | PASS | — |
 | D.1 | `test_query_counts` | N+1 detection | Measurement (flat; no N+1) | — |
+| E.1 | `test_anonymous_guest_cannot_file_return_by_sub_order_id` | Tracking-page write auth | **FAIL** | PRA-059 |
+| E.2 | `test_guest_cannot_cancel_order_with_only_order_number` | Tracking-page write auth | **FAIL** | PRA-059 |
 
-**Totals:** 29 probes: 19 FAIL (defects confirmed), 9 PASS, 1 measurement.
+**Totals:** 31 probes: 21 FAIL (defects confirmed), 9 PASS, 1 measurement. E.1–E.2 were added after the Phase A final review.
 
 Two probes needed setup fixes before their results meant anything. Both corrections are recorded here:
 - **A.3** first errored because it used a payment status `pending` that doesn't exist; it was re-run with `unpaid`.

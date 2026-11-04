@@ -23,22 +23,22 @@
 ## Review Focus
 
 1. **Webhook retries:** a courier sends `delivered` twice, or `delivered` after `returned`. Task 7's transition test covers both.
-2. **Mixed carts:** a two-seller order with one seller self-delivering and one courier, paid by COD with a coupon. Task 8 and Task 14 share that fixture (`tests/Feature/Support/MixedOrderFixture.php`).
+2. **Mixed carts:** a two-seller order with one seller self-delivering and one courier, paid by COD with a coupon. Task 8 creates that fixture (`tests/Feature/Support/MixedOrderFixture.php`) and tests it; Task 14 and Task 16 reuse it.
 3. **An existing approved wholesale buyer** after Task 4 must keep access. The test asserts that a seeded `buyer@boutique.com` still sees tiers.
-4. **Users with existing `+880` phones** must not be locked out by the OTP change (Task 1). Its test logs in a seeded user with a real OTP.
+4. **Users with existing `+880` phones** must not be locked out by the OTP change (Task 1). Task 1 pulls in PRA-037 (phone-format mismatch) and its test logs in a user stored as `+880…` with a real OTP.
 5. **A seller whose available balance goes negative** after a return reversal (Task 8 ruling) can't request a payout. The test belongs in Task 8.
 
 ---
 
-### Task 1: PRA-035 — fallback OTP only outside production
+### Task 1: PRA-035 + PRA-037 — fallback OTP only outside production; OTP login matches stored phone formats
 
-**Files:** Modify `app/Services/Sms/OtpService.php:96-112`, `config/sms.php:8`, `app/Filament/Admin/Pages/SmsSettings.php` (hide the `default_otp` field in production). Test: `tests/Feature/Sms/OtpFallbackSecurityTest.php`.
+**Files:** Modify `app/Services/Sms/OtpService.php:96-112`, `config/sms.php:8`, `app/Filament/Admin/Pages/SmsSettings.php` (hide the `default_otp` field in production). Also `CustomerAuth::verifyLoginOtp` (and the register/login lookups): find the user by phone matching any stored form of the normalized number (`880…`, `+880…`, `0…`), via a `User::wherePhone(string $phone)` scope. Test: `tests/Feature/Sms/OtpFallbackSecurityTest.php`.
 
-- [ ] Step 1: Copy probe C.1 as `test_default_otp_cannot_log_in_in_production`. Add `test_default_otp_still_works_in_testing_when_otp_pending` (send an OTP, then verify with `123456` → success) and `test_default_otp_fails_when_no_otp_was_requested_even_in_testing`.
+- [ ] Step 1: Copy probe C.1 as `test_default_otp_cannot_log_in_in_production`. Add `test_default_otp_still_works_in_testing_when_otp_pending` (send an OTP, then verify with `123456` → success), `test_default_otp_fails_when_no_otp_was_requested_even_in_testing`, and `test_user_stored_with_plus_880_phone_logs_in_with_real_otp` (user phone `+8801799887766`, request OTP for `01799887766`, read the code from `MockDriver`, verify → authenticated as that user).
 - [ ] Step 2: Run `php artisan test --compact tests/Feature/Sms/OtpFallbackSecurityTest.php`. Expected: the production test FAILS (authenticated), and the no-request test FAILS.
 - [ ] Step 3: In `OtpService::verify`, accept the fallback only when `app()->environment('local','testing')` **and** a pending OTP row exists for the phone and purpose. Change the `config/sms.php` default to `env('SMS_DEFAULT_OTP')` (null).
 - [ ] Step 4: Run the test file, then the full suite. Expected: PASS. Existing `tests/Feature/Sms/*` stay green (they set `SMS_DRIVER=mock`; if any rely on the fallback without a pending OTP, add a `send()` first).
-- [ ] Step 5: Commit `fix(auth): restrict fallback OTP to local/testing with pending OTP (PRA-035)`.
+- [ ] Step 5: Commit `fix(auth): restrict fallback OTP to local/testing; match stored phone formats (PRA-035, PRA-037)`.
 
 ### Task 2: PRA-056 — production-safe seeding + create-admin command
 
@@ -59,9 +59,10 @@
 - [ ] Step 1: Copy probe A.9. Add:
   - `test_two_guests_in_same_second_get_distinct_accounts` (freeze time with `$this->travelTo`)
   - `test_returning_guest_phone_reuses_existing_user_without_error`
+  - `test_guest_phone_matching_seller_account_is_refused`
 - [ ] Step 2: Run. Expected: A.9 FAILS; the same-second test FAILS.
 - [ ] Step 3: Implement `ResolveCheckoutCustomer`:
-  - Look up an existing user by normalized phone (`PhoneNormalizer`).
+  - Look up an existing user by normalized phone (`User::wherePhone`, Task 1). Link the order only when that user is a retail customer or an earlier guest; if the phone belongs to a seller, admin or wholesale account, stop with "This phone belongs to a registered account. Please sign in to order." (Ruling: never attach anonymous orders to privileged accounts. Cost if wrong: one extra sign-in for those users.)
   - Otherwise create one with email `guest+{uuid}@guest.b2bhaat.invalid`, password `Hash::make(Str::random(64))`, and phone normalized.
   - Use it in `placeOrder`.
 - [ ] Step 4: Run the tests and the full suite. Expected: PASS.
@@ -73,7 +74,7 @@
 - `app/Models/User.php`: `isWholesaleBuyer(): bool` now requires `role.slug === 'wholesale_buyer' && is_wholesale_approved`. New `canSeeWholesalePrices(): bool` = `isSuperAdmin() || isWholesaleBuyer()`.
 - `app/Livewire/Storefront/WholesaleUpgrade.php:78-100`: store the application only, leaving `role_id` and `is_wholesale_approved` unchanged. Refuse for sellers and admins with a message.
 - `app/Http/Controllers/Api/V1/AuthController.php` `registerWholesale`: create a `retail_buyer` with business fields; the application is pending.
-- `resources/views/livewire/storefront/product-detail.blade.php:376`: wrap the tier block in `@if (auth()->user()?->canSeeWholesalePrices())`, else show the teaser.
+- `resources/views/livewire/storefront/product-detail.blade.php:361-376` (the heading at :364 sits outside the existing `@if`): wrap the whole tier section in `@if (auth()->user()?->canSeeWholesalePrices())`, else show the teaser.
 - `ProductDetail::addBulkMatrixToCart:239`: use `canSeeWholesalePrices()`.
 
 `KycApprovals::confirmApproveWholesale` already sets the role and the approval; keep it.
@@ -165,7 +166,9 @@ Test: `tests/Feature/SellerCourierActionsTest.php`.
   - if still held, refund the hold
 - Remove `creditDeliveredSubOrder`.
 - `CourierStatusService::handleDeliveredSettlement` calls `holdInEscrow` (idempotent: prepaid is already held; COD and self-delivery are held now, per D2) and never releases.
-- `ReleaseDeliveredEscrowCommand` skips sub-orders with `returnRequests()->where('status', ReturnRequest::STATUS_PENDING)`.
+- `ReleaseDeliveredEscrowCommand` skips sub-orders with `returnRequests()->where('status', ReturnRequest::STATUS_PENDING)`, and handles a `null` return from `releaseFromEscrow` (`:72-74` reads `$tx->amount` today) by logging and continuing.
+- `CourierStatusService` on `returned` (Task 7 allows `delivered → returned`) calls `reverseReturnedSubOrder`, so a courier return after release reverses the seller credit.
+- Create `tests/Feature/Support/MixedOrderFixture.php`: `MixedOrderFixture::create(): Order` builds 2 sellers (seller A self-delivers with fee ৳70, seller B ships by courier), COD, ৳50 coupon.
 - `routes/console.php`: `->withoutOverlapping()->onOneServer()` on all three schedules.
 - `EscrowLedgerService::requestPayout`: refuse when `available_balance <= 0` (already effectively covered by the amount check).
 - Migration: unique `(sub_order_id, transaction_type)` on `wallet_transactions`, guarded to throw if duplicates exist.
@@ -179,6 +182,9 @@ Test: `tests/Feature/SellerCourierActionsTest.php`.
   - `test_release_without_hold_releases_nothing`
   - `test_negative_balance_blocks_payout`
   - `test_wallet_transactions_unique_per_sub_order_and_type` (second insert throws `UniqueConstraintViolationException`)
+  - `test_mixed_cod_order_holds_and_releases_per_sub_order` (fixture; deliver both, release after 48 h; each seller gets exactly `sellerPayableAmount()`; wallet balances = ledger sums)
+  - `test_release_command_continues_when_a_sub_order_has_no_hold`
+  - `test_courier_returned_after_release_reverses_seller_credit`
 - [ ] Step 2: Run. Expected: A.2, A.3, B.4, B.5 and the new tests FAIL. B.7 passes.
 - [ ] Step 3: Implement the interfaces above. Update callers: `OrderDisputeService::resolveReturnRequest` → `reverseReturnedSubOrder`; `SubOrdersTable` copy (PRA-054).
 - [ ] Step 4: Run `EscrowIntegrityTest`, `EscrowSettlementTest`, `EscrowSettlementAndPayoutAuditTest`, `EscrowCronAndWebhookTest`, `OrderFulfillmentAndReturnLifecyclesTest`, `OrderDisputeAndCancellationTest`, then the full suite. Update existing assertions that expected available balance credited at delivery: they encoded PRA-001. Expected: PASS.
@@ -195,6 +201,8 @@ Test: `tests/Feature/SellerCourierActionsTest.php`.
   - `sslcommerz` → rejected with "not available yet" (D8)
 - Admin `OrdersTable`: action `verifyPayment` (visible when `awaiting_verification`) → `paid` + `holdInEscrow` for each sub-order, in one transaction.
 - The reservation-expiry job already filters `unpaid`, so verification orders are not auto-cancelled; assert it.
+- Nothing ships unverified: seller dispatch actions (courier booking, self-delivery dispatch, labels) are hidden unless the parent order is `paid` or its method is COD. `CourierStatusService::handleDeliveredSettlement` sets the parent order to `paid` **only for COD** (today `:116-118` flips any non-paid order).
+- Ruling: keep bKash/Nagad with manual admin verification instead of disabling them until a gateway exists. Because nothing ships before verification, a fake TrxID can't result in a payout. Cost if wrong: hide two payment methods. Owner may override (listed for the owner).
 
 **Test:** `tests/Feature/PaymentVerificationTest.php`.
 
@@ -203,6 +211,8 @@ Test: `tests/Feature/SellerCourierActionsTest.php`.
   - `test_inactive_method_rejected`
   - `test_admin_verify_marks_paid_and_holds_escrow`
   - `test_awaiting_verification_not_cancelled_by_reservation_job` (`travel(20)->minutes()`, run the command, order still confirmed)
+  - `test_seller_cannot_dispatch_awaiting_verification_order` (`assertActionHidden` on the dispatch actions)
+  - `test_delivery_does_not_mark_unverified_prepaid_order_paid`
 - [ ] Step 2: Run. Expected: FAIL.
 - [ ] Step 3: Implement.
 - [ ] Step 4: Run the tests plus `CartCouponCheckoutAndPromotionsTest`, `CustomerAddressAndCheckoutTest`, `ProductionReadinessAndSecurityAuditTest::test_end_to_end_full_purchase_lifecycle` (keeps `mock_gateway` in `testing`), then the full suite. Expected: PASS.
@@ -218,28 +228,29 @@ Test: `tests/Feature/SellerCourierActionsTest.php`.
 - [ ] Step 4: Run the tests and the full suite. Expected: PASS.
 - [ ] Step 5: Commit `fix(catalog): hide and block inactive products (PRA-010)`.
 
-### Task 11: PRA-009 + PRA-036 — invoice privacy, exact-phone tracking, rate limits
+### Task 11: PRA-009 + PRA-036 + PRA-059 — invoice privacy, tracking-page write auth, exact-phone tracking, rate limits
 
 **Files:**
 - `routes/web.php`: add `auth` to `order.invoice`.
 - `TrackingController::track` and `OrderTracking`: require `phone`, match `PhoneNormalizer::normalize()` exactly against `shipping_address->recipient_phone` or the customer phone.
+- `OrderTracking` write actions (`cancelEntireOrder`, `cancelSubOrderConsignment`, `submitReturnRequest`): allowed only for the logged-in order owner, or a guest whose search in this component matched by exact phone (store `bool $verifiedByPhone`, set only in `searchOrder`). `submitReturnRequest` loads the sub-order with `where('parent_order_id', $this->order?->id)`.
 - `AppServiceProvider::boot`: `RateLimiter::for('api', 60/min per IP)`, `for('login', 5/min per email|ip)`, `for('public-lookup', 20/min per IP)`.
 - `routes/api.php`: `throttle:api` on the group, `throttle:login` on `auth/login`.
 - `routes/web.php`: `throttle:public-lookup` on `track*`, `invoice/{token}`.
 
 **Test:** `tests/Feature/PublicLookupSecurityTest.php`.
 
-- [ ] Step 1: Copy probes A.12, C.5, C.6. Add `test_partial_phone_does_not_match` and `test_invoice_token_still_public`.
+- [ ] Step 1: Copy probes A.12, C.5, C.6, E.1, E.2. Add `test_partial_phone_does_not_match`, `test_invoice_token_still_public`, `test_owner_can_still_cancel_own_order`, and `test_exact_phone_verified_guest_can_file_return`.
 - [ ] Step 2: Run. Expected: FAIL.
 - [ ] Step 3: Implement.
 - [ ] Step 4: Run the tests, `ProductionReadinessAndSecurityAuditTest`, `CourierDeliveryLifecycleTest`, `ApiEndpointsTest`, then the full suite. Expected: PASS.
-- [ ] Step 5: Commit `fix(security): invoice auth, exact-phone tracking, rate limits (PRA-009, PRA-036)`.
+- [ ] Step 5: Commit `fix(security): invoice auth, tracking write auth, exact-phone tracking, rate limits (PRA-009, PRA-036, PRA-059)`.
 
 ### Task 12: PRA-025 — wholesale MOQ and tier per product lot
 
-**Interfaces:** `CartSessionService::repriceWholesaleGroup(int $productId): void`. It sums the quantities of every wholesale line of the product, resolves the tier on that total, writes that unit price to every line, and stores `lot_quantity`. It's called at the end of `addItem`, `updateQuantity` and `removeItem` for wholesale lines. `updateQuantity` checks the **group** total against the MOQ. Add `CartSessionService::wholesaleMoqViolations(): array<int, array{product_id:int, title:string, quantity:int, moq:int}>`; `CheckoutComponent::placeOrder` aborts when it's non-empty. Test: `tests/Feature/WholesaleLotMoqTest.php`.
+**Interfaces:** `CartSessionService::repriceWholesaleGroup(int $productId): void`. It sums the quantities of every wholesale line of the product, resolves the tier on that total, writes that unit price to every line, and stores `lot_quantity`. It's called at the end of `addItem`, `updateQuantity` and `removeItem` for wholesale lines. `updateQuantity` checks the **group** total against the MOQ. Lines added with an RFQ `overrideUnitPrice` (`QuotationController.php:85-90`) carry `is_quoted = true` and are never re-priced (today `updateQuantity:145-147` overwrites them too). Add `CartSessionService::wholesaleMoqViolations(): array<int, array{product_id:int, title:string, quantity:int, moq:int}>`; `CheckoutComponent::placeOrder` aborts when it's non-empty. Test: `tests/Feature/WholesaleLotMoqTest.php`.
 
-- [ ] Step 1: Copy probe B.2. Add `test_removing_a_line_below_lot_moq_blocks_checkout` and `test_lot_tier_price_drops_when_total_crosses_tier`.
+- [ ] Step 1: Copy probe B.2. Add `test_removing_a_line_below_lot_moq_blocks_checkout`, `test_lot_tier_price_drops_when_total_crosses_tier`, and `test_quoted_rfq_line_keeps_negotiated_price_after_quantity_change`.
 - [ ] Step 2: Run. Expected: FAIL.
 - [ ] Step 3: Implement.
 - [ ] Step 4: Run the tests, `CartTierPricingRecalculationTest`, `WholesaleTierPricingTest`, then the full suite. Expected: PASS.
@@ -251,13 +262,13 @@ Test: `tests/Feature/SellerCourierActionsTest.php`.
 
 **Files:**
 - `Product` `booted()` hook `created`: if `!has_variations`, create the default variation (stock 0).
-- Migration (data, reversible no-op down): create default variations for existing products without any, with `stock_quantity` = 0, and log the count.
+- Migration (additive data, `down()` deletes only the variations it created, identified by the `-DEFAULT` SKU): create default variations for existing products without any, with `stock_quantity` = 0, and print the affected product IDs. Ruling: stock 0 is the safe default (never oversell); those products show "Out of stock" until the seller enters stock. Phase C's checklist gets the step "sellers set stock for simple products before go-live". Cost if wrong: a launch-day listing gap, not lost money.
 - `ProductDetail::addToCartRetail` and the cart: resolve the default variation when none is selected.
 - Seller `ProductForm`: when `has_variations` is false, show a "Stock" field bound to the default variation.
 
 **Test:** `tests/Feature/SimpleProductStockTest.php`.
 
-- [ ] Step 1: Write `test_simple_product_with_stock_one_cannot_be_ordered_twice` (split two orders of qty 1 → second throws `InsufficientStockException`) and `test_existing_simple_products_get_default_variation`.
+- [ ] Step 1: Write `test_simple_product_with_stock_one_cannot_be_ordered_twice` (split two orders of qty 1 → second throws `InsufficientStockException`), `test_existing_simple_products_get_default_variation`, and `test_seller_sets_simple_product_stock_in_form`.
 - [ ] Step 2: Run. Expected: FAIL.
 - [ ] Step 3: Implement.
 - [ ] Step 4: Run the tests and the full suite (catalog and cart tests that use base items). Expected: PASS.
@@ -265,7 +276,7 @@ Test: `tests/Feature/SellerCourierActionsTest.php`.
 
 ### Task 14: PRA-051 — correct COD collection amount
 
-**Interfaces:** `SubOrder::codCollectAmount(): float` = `subtotal + shipping_amount − allocatedDiscount()`. `allocatedDiscount()` is the order `discount_amount × (this subtotal / Σ sibling subtotals)`, rounded to 2 places, with the rounding remainder on the sub-order with the largest subtotal. 0 when the order is prepaid. Used in `ShippingLabelController.php:46,88` and `delivery-challan.blade.php:130`.
+**Interfaces:** `SubOrder::allocatedDiscount(): float` is the order `discount_amount × (this subtotal / Σ sibling subtotals)`, rounded to 2 places, with the rounding remainder on the sub-order with the largest subtotal. It always allocates, whatever the payment method. `SubOrder::paidAmount(): float` = `subtotal + shipping_amount − allocatedDiscount()`. `SubOrder::codCollectAmount(): float` = `paidAmount()` for COD orders and 0 for prepaid orders. Used in `ShippingLabelController.php:46,88` and `delivery-challan.blade.php:130`.
 
 Test: `tests/Feature/CodCollectionAmountTest.php` using `tests/Feature/Support/MixedOrderFixture.php` (2 sellers, ৳50 coupon, COD).
 
@@ -278,7 +289,7 @@ Test: `tests/Feature/CodCollectionAmountTest.php` using `tests/Feature/Support/M
 ### Task 15: PRA-013 — payout status, approve, reject
 
 **Files:**
-- Migration: `wallet_transactions.status` string nullable, default null. Payouts use `requested|disbursed|rejected`. Backfill: payouts whose note contains `[DISBURSED` → `disbursed`, others → `requested`.
+- Migration: `wallet_transactions.status` string nullable, default null. Payouts use `requested|disbursed|rejected`. Backfill (separate migration): first count payouts whose note contains `[DISBURSED`; print the count; then set those to `disbursed` and the rest to `requested`. It touches only the new `status` column, so `down()` sets `status` back to null.
 - `WalletTransaction::STATUS_*` constants.
 - `EscrowLedgerService::disbursePayout(WalletTransaction $payout, string $trxId): void` and `rejectPayout(WalletTransaction $payout, string $reason): WalletTransaction` (credits available back, with a new type `payout_reversal`).
 - Admin `WalletTransactionsTable`: replace `markDisbursed` with `disburse` and `reject` actions (`requiresConfirmation`).
@@ -299,7 +310,7 @@ Test: `tests/Feature/CodCollectionAmountTest.php` using `tests/Feature/Support/M
 **Files:**
 - Migration `refunds` (`id`, `order_id` FK restrict, `sub_order_id` FK restrict nullable, `amount` decimal(12,2), `reason`, `status` `pending|paid`, `method` nullable, `reference` nullable, `paid_at` nullable, timestamps).
 - `App\Models\Refund`.
-- `OrderDisputeService::cancelSubOrder` and `resolveReturnRequest(approved, refund)` create a `Refund` for `codCollectAmount()`-equivalent paid amount (`subtotal + shipping − allocated discount`) **only when the parent order is paid**.
+- `OrderDisputeService::cancelSubOrder` and `resolveReturnRequest(approved, refund)` create a `Refund` for `SubOrder::paidAmount()` (Task 14) **only when the parent order is paid**.
 - Admin `OrdersTable` gets a "Refunds" relation or action to mark refunds paid.
 
 The method and timing are Q8 (Pending owner decision). The record doesn't depend on them.
@@ -311,7 +322,7 @@ The method and timing are Q8 (Pending owner decision). The record doesn't depend
   - `test_cod_unpaid_cancel_creates_no_refund`
   - `test_approved_return_creates_refund`
 - [ ] Step 2: Run. Expected: FAIL.
-- [ ] Step 3: Implement (depends on Task 14's `allocatedDiscount()`).
+- [ ] Step 3: Implement (depends on Task 14's `paidAmount()`). Add `test_prepaid_refund_excludes_allocated_coupon_share` using `MixedOrderFixture` switched to a paid method.
 - [ ] Step 4: Run the tests, `OrderDisputeAndCancellationTest`, `OrderFulfillmentAndReturnLifecyclesTest`, then the full suite. Expected: PASS.
 - [ ] Step 5: Commit `feat(refunds): record customer refunds owed on cancellation and return (PRA-027)`.
 
@@ -382,7 +393,7 @@ Test: `tests/Feature/SellerProductImageUploadTest.php`.
 **Files:** `docs/audit/PRODUCTION_READINESS_AUDIT.md` (statuses), `docs/audit/TESTING_REPORT.md` ("Phase B" section: test count before/after and the new test files), `CLAUDE.md` + `docs/BUSINESS_AND_SYSTEM_ARCHITECTURE.md` version strings (PRA-023: Laravel 13 / Filament 5), and tick the boxes in `docs/superpowers/plans/2026-11-03-sms-gateway-otp-order-notifications.md`.
 
 - [ ] Step 1: Run `php artisan test --compact`. Expected: all pass, count > 266. Record the numbers.
-- [ ] Step 2: Re-run every Appendix A–C probe that failed (copied into the suite during Tasks 1–19). Expected: all pass.
+- [ ] Step 2: Re-run every Appendix A–C and E probe that failed (copied into the suite during Tasks 1–19). Expected: all pass.
 - [ ] Step 3: Update the docs.
 - [ ] Step 4: Commit `docs(audit): phase B results`.
 
