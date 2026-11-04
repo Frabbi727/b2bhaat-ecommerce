@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Services\Sms\Support\PhoneNormalizer;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -110,6 +112,18 @@ class User extends Authenticatable implements FilamentUser
     public function favoriteProducts(): BelongsToMany
     {
         return $this->belongsToMany(Product::class, 'wishlists')->withTimestamps();
+    }
+
+    /**
+     * Match a phone in any stored Bangladeshi format (8801…, +8801…, 01…).
+     *
+     * @param  Builder<User>  $query
+     */
+    public function scopeWherePhone(Builder $query, string $phone): void
+    {
+        $normalized = PhoneNormalizer::normalize($phone);
+
+        $query->whereIn('phone', [$normalized, '+'.$normalized, substr($normalized, 2)]);
     }
 
     public function isSuperAdmin(): bool

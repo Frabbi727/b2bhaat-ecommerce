@@ -96,11 +96,13 @@
                             <span class="text-[11px] text-slate-500">Failed attempts before an OTP is locked out against brute-force (default: 5).</span>
                         </div>
 
+                        @if (\App\Filament\Admin\Pages\SmsSettings::fallbackOtpAllowed())
                         <div>
                             <label class="block text-xs font-semibold text-slate-700 mb-1">Testing / Emergency Fallback Default OTP</label>
                             <input type="text" wire:model="default_otp" placeholder="e.g. 123456 (leave empty to disable)" class="w-full text-xs rounded-xl border-slate-300 font-mono text-indigo-700 font-bold"/>
-                            <span class="text-[11px] text-amber-600">Temporary fallback code (e.g. 123456) when SMS provider server is down or during production testing. Clear to disable.</span>
+                            <span class="text-[11px] text-amber-600">Temporary fallback code (e.g. 123456) when the SMS provider is down during local testing. Works only in local/testing environments. Clear to disable.</span>
                         </div>
+                        @endif
                     </div>
                 </div>
             </div>

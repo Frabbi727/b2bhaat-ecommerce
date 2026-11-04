@@ -50,11 +50,16 @@ class SmsSettings extends Page
 
     public int $otp_max_attempts = 5;
 
-    public ?string $default_otp = '123456';
+    public ?string $default_otp = null;
 
     public ?string $liveBalance = null;
 
     public string $testPhone = '';
+
+    public static function fallbackOtpAllowed(): bool
+    {
+        return app()->environment('local', 'testing');
+    }
 
     public static function canAccess(): bool
     {
@@ -76,7 +81,7 @@ class SmsSettings extends Page
         $this->otp_expiry_minutes = (int) SmsSetting::get('otp_expiry_minutes', config('sms.otp.expiry_minutes', 5));
         $this->otp_cooldown_seconds = (int) SmsSetting::get('otp_cooldown_seconds', config('sms.otp.cooldown_seconds', 60));
         $this->otp_max_attempts = (int) SmsSetting::get('otp_max_attempts', config('sms.otp.max_attempts', 5));
-        $this->default_otp = (string) SmsSetting::get('default_otp', config('sms.default_otp', '123456'));
+        $this->default_otp = (string) SmsSetting::get('default_otp', config('sms.default_otp'));
     }
 
     public function save(): void
@@ -92,7 +97,9 @@ class SmsSettings extends Page
         SmsSetting::set('otp_expiry_minutes', (string) $this->otp_expiry_minutes);
         SmsSetting::set('otp_cooldown_seconds', (string) $this->otp_cooldown_seconds);
         SmsSetting::set('otp_max_attempts', (string) $this->otp_max_attempts);
-        SmsSetting::set('default_otp', $this->default_otp ?? '');
+        if (self::fallbackOtpAllowed()) {
+            SmsSetting::set('default_otp', $this->default_otp ?? '');
+        }
 
         Notification::make()
             ->title('SMS & OTP Settings Saved')

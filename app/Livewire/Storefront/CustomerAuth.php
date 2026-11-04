@@ -124,10 +124,9 @@ class CustomerAuth extends Component
 
         $user = $isEmail
             ? User::where('email', strtolower($identifier))->first()
-            : User::where(function ($q) use ($identifier, $normalizedPhone) {
-                $q->where('phone', $normalizedPhone ?? $identifier)
-                    ->orWhere('phone', $identifier);
-            })->first();
+            : ($normalizedPhone !== null
+                ? User::wherePhone($normalizedPhone)->first()
+                : User::where('phone', $identifier)->first());
 
         if (! $user || ! Hash::check($this->loginPassword, $user->password)) {
             RateLimiter::hit($throttleKey, 60);
@@ -167,7 +166,7 @@ class CustomerAuth extends Component
         ]);
 
         $normalized = PhoneNormalizer::normalize($this->otpPhone);
-        $user = User::where('phone', $normalized)->first();
+        $user = User::wherePhone($normalized)->first();
 
         if (! $user) {
             $this->errorMessage = 'No customer account found with this phone number. Please register first.';
@@ -223,7 +222,7 @@ class CustomerAuth extends Component
             return;
         }
 
-        $user = User::where('phone', $normalized)->firstOrFail();
+        $user = User::wherePhone($normalized)->firstOrFail();
 
         Auth::login($user, $this->remember);
         if (request()->hasSession()) {
@@ -252,7 +251,7 @@ class CustomerAuth extends Component
                         return;
                     }
                     $normalized = PhoneNormalizer::normalize($value);
-                    if (User::where('phone', $normalized)->exists()) {
+                    if (User::wherePhone($normalized)->exists()) {
                         $fail('An account with this phone number already exists.');
                     }
                 },

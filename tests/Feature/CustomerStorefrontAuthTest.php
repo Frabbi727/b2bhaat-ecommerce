@@ -61,10 +61,10 @@ class CustomerStorefrontAuthTest extends TestCase
     public function test_customer_can_login_with_valid_phone_number_and_password(): void
     {
         $retailUser = User::where('email', 'customer@retail.com')->firstOrFail();
-        $retailUser->update(['phone' => '01711223344']);
+        $retailUser->update(['phone' => '01799001122']);
 
         Livewire::test(CustomerAuth::class)
-            ->set('loginIdentifier', '01711223344')
+            ->set('loginIdentifier', '01799001122')
             ->set('loginPassword', 'password')
             ->call('login')
             ->assertHasNoErrors()

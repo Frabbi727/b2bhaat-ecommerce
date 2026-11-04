@@ -105,7 +105,8 @@ class OtpServiceTest extends TestCase
     {
         config(['sms.default_otp' => '123456']);
 
-        // Even with an expired or newly requested OTP, default testing OTP verifies successfully
+        // In testing, the default OTP verifies a pending OTP (it never works without one)
+        $this->otpService->sendOtp('01712345678', 'registration');
         $res = $this->otpService->verify('01712345678', '123456', 'registration');
         $this->assertTrue($res['success']);
     }

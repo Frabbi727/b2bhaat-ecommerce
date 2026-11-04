@@ -89,26 +89,40 @@ class OtpService
      *
      * @return array{success: bool, error?: string, attempts_left?: int}
      */
+    /**
+     * The fallback OTP is a local/testing convenience only; it is never honoured in other environments.
+     */
+    private function fallbackOtpMatches(string $code): bool
+    {
+        if (! app()->environment('local', 'testing')) {
+            return false;
+        }
+
+        $defaultOtp = SmsSetting::get('default_otp', config('sms.default_otp'));
+
+        return ! empty($defaultOtp) && trim($code) === (string) $defaultOtp;
+    }
+
     public function verify(string $phone, string $code, string $purpose = 'verification'): array
     {
         $normalized = PhoneNormalizer::normalize($phone);
 
-        // Fallback default testing OTP (e.g. 123456) for when SMS provider is offline or for production testing
-        $defaultOtp = SmsSetting::get('default_otp', config('sms.default_otp'));
-        if (! empty($defaultOtp) && trim($code) === (string) $defaultOtp) {
-            $otp = Otp::where('phone', $normalized)
+        if ($this->fallbackOtpMatches($code)) {
+            $pendingOtp = Otp::where('phone', $normalized)
                 ->where('purpose', $purpose)
                 ->whereNull('verified_at')
                 ->latest('id')
                 ->first();
 
-            $otp?->update([
-                'verified_at' => Carbon::now(),
-            ]);
+            if ($pendingOtp) {
+                $pendingOtp->update([
+                    'verified_at' => Carbon::now(),
+                ]);
 
-            return [
-                'success' => true,
-            ];
+                return [
+                    'success' => true,
+                ];
+            }
         }
 
         $otp = Otp::where('phone', $normalized)
