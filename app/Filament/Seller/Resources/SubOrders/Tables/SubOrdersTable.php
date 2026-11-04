@@ -131,37 +131,16 @@ class SubOrdersTable
                             ->send();
                     }),
 
-                // 2. Mark Delivered Action (triggers settlement and parent reconciliation)
-                Action::make('markDelivered')
-                    ->label('Mark Delivered')
-                    ->icon('heroicon-o-check-circle')
-                    ->color('success')
-                    ->visible(fn (SubOrder $record) => in_array($record->fulfillmentStatus?->slug, ['shipped', 'in_transit', 'out_for_delivery']))
-                    ->requiresConfirmation()
-                    ->modalHeading('Confirm Delivery Handover')
-                    ->modalDescription('Has the customer received and accepted this consignment? Marking as delivered confirms COD cash collection and settles net earnings into your seller wallet balance.')
-                    ->action(function (SubOrder $record): void {
-                        app(CourierStatusService::class)->updateStatus(
-                            subOrder: $record,
-                            statusSlug: 'delivered',
-                            hubLocation: 'Customer Destination',
-                            title: 'Consignment Delivered',
-                            description: 'Parcel confirmed delivered by courier. Cash on delivery collected and net earnings settled to seller wallet.'
-                        );
+                // Courier deliveries are confirmed only by the signed courier webhook (D4);
+                // self-deliveries only by the buyer's handover code (D5). Sellers cannot mark delivery.
 
-                        Notification::make()
-                            ->title('Delivery Confirmed & Settled')
-                            ->body("Sub-Order #{$record->sub_order_number} marked delivered. Net earnings (৳{$record->net_earnings}) credited to your wallet.")
-                            ->success()
-                            ->send();
-                    }),
-
-                // 3. Courier Status Simulator (Testing tool for status progression)
+                // 2. Courier Status Simulator (local/testing only)
                 Action::make('simulateCourier')
                     ->label('Simulate Courier')
                     ->icon('heroicon-o-bolt')
                     ->color('info')
-                    ->visible(fn (SubOrder $record) => in_array($record->fulfillmentStatus?->slug, ['shipped', 'in_transit', 'out_for_delivery']))
+                    ->visible(fn (SubOrder $record) => app()->environment('local', 'testing')
+                        && in_array($record->fulfillmentStatus?->slug, ['shipped', 'in_transit', 'out_for_delivery']))
                     ->schema([
                         Select::make('status')
                             ->label('New Courier Progression State')
