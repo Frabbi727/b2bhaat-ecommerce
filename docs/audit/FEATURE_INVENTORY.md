@@ -27,7 +27,7 @@
 | F-007 | Checkout (address, zone fee, min basket, COD ceiling) | `/checkout` → `CheckoutComponent` | CustomerAddressAndCheckoutTest, DynamicStoreConfigurationTest, StorefrontResponsivenessAndCartCheckoutUXTest | Partial — see PRA rows on payment & guest [R] |
 | F-008 | Guest checkout | `CheckoutComponent::placeOrder` guest branch | CustomerAddressAndCheckoutTest (partial) | Broken — guessable account w/ fixed password [R] |
 | F-009 | Online payment (bKash/Nagad/SSLCommerz/mock) | `CheckoutComponent` paid branch | CartCouponCheckoutAndPromotionsTest | Broken — marks Paid without verification (D8) [R] |
-| F-010 | Cash on Delivery | `CheckoutComponent` COD branch | DynamicStoreConfigurationTest | Untested end-to-end (verify T4) |
+| F-010 | Cash on Delivery | `CheckoutComponent` COD branch | DynamicStoreConfigurationTest | Partial: works; remittance not recorded (PRA-030); challan under-collects (PRA-051) [B] |
 | F-011 | Order tracking (phone+number, token) | `/track`, `/track/view`, `/track/{token}` → `OrderTracking` | CourierDeliveryLifecycleTest, OrderDisputeAndCancellationTest | Working [T] (PII check T5) |
 | F-012 | Tokenized invoice | `/invoice/{token}`, `/order/{order_number}/invoice` → `InvoiceController` | SellerOnboardingAndInvoiceTest | Working [T] (auth check T5) |
 | F-013 | Registration & login with OTP | `/register`, `/login` → `CustomerAuth`, `OtpService` | CustomerStorefrontAuthTest, tests/Feature/Sms/* | Working [T] |
@@ -42,8 +42,8 @@
 | ID | Feature | Entry point | Covering tests | Status |
 |---|---|---|---|---|
 | F-020 | Wholesale upgrade request (trade licence upload) | `/wholesale/upgrade` → `WholesaleUpgrade` | WholesaleUpgradeTest | Working [T] (upload check T5) |
-| F-021 | Wholesale tier prices gated by approval (D3) | `ProductDetail`, API catalog | WholesaleTierPricingTest, ChannelVisibilityTest | Verify T3 (R-06/R-07) |
-| F-022 | MOQ across variations (D7) | `CartSessionService` | WholesaleTierPricingTest | Verify T4 |
+| F-021 | Wholesale tier prices gated by approval (D3) | `ProductDetail`, API catalog | WholesaleTierPricingTest, ChannelVisibilityTest | **Broken**: self-approval (PRA-008); tiers visible to guests on the web (PRA-050) [T-probe A.10, B] |
+| F-022 | MOQ across variations (D7) | `CartSessionService` | WholesaleTierPricingTest | **Broken** in the cart after the matrix add (PRA-025) [T-probe B.2] |
 | F-023 | RFQ request, quotation print, accept → order | `rfq/{id}/quotation`, `rfq/{id}/accept-order` → `QuotationController` | RfqSystemTest, WholesaleRfqAndQuotationLifecycleTest, WholesaleQuotationProFormaTest | Working [T]; scope Pending owner decision (Q15) |
 
 ## Seller
@@ -51,12 +51,12 @@
 | ID | Feature | Entry point | Covering tests | Status |
 |---|---|---|---|---|
 | F-030 | Become a seller (onboarding) | `/become-a-seller` → `BecomeSeller` | SellerOnboardingAndInvoiceTest | Working [T] |
-| F-031 | Seller dashboard widgets (stats, revenue, recent orders, stock alerts) | `Seller/Widgets/*` | FilamentPanelsSmokeTest, RoleBasedAccessControlAndDashboardsTest, MerchantVacationModeAndStockAlertsTest | Working [T] (numbers verified T7) |
+| F-031 | Seller dashboard widgets (stats, revenue, recent orders, stock alerts) | `Seller/Widgets/*` | FilamentPanelsSmokeTest, RoleBasedAccessControlAndDashboardsTest, MerchantVacationModeAndStockAlertsTest | Working [T]; copy contradicts the 48 h rule (PRA-054) [B] |
 | F-032 | Products, variations, tier prices | `Seller/Resources/Products` | FilamentPanelsSmokeTest | Untested beyond render |
 | F-033 | Bulk stock CSV export/import | `/seller/products/stock/{export,import}` → `ProductStockBulkController` | BulkStockImportExportTest | Working [T] (upload check T5) |
 | F-034 | Sub-order fulfilment (dispatch, courier booking, self-delivery, handover code) | `Seller/Resources/SubOrders` table actions | CourierBookingAndChallanTest, FactorySelfDeliveryAndHandoverCodeTest | Partial — seller can mark courier delivered / simulate courier; financial fields editable [R] |
 | F-035 | Shipping label & delivery challan print | `/seller/sub-order/{n}/{shipping-label,challan}` | ShippingLabelTest, CourierBookingAndChallanTest | Working [T]; fake fallback phone [R] |
-| F-036 | Wallet, statement print/CSV | `Seller/Resources/SellerWallets`, `/seller/wallet/statement{,/export}` | WalletStatementTest, EscrowSettlementAndPayoutAuditTest | Verify T4 |
+| F-036 | Wallet, statement print/CSV | `Seller/Resources/SellerWallets`, `/seller/wallet/statement{,/export}` | WalletStatementTest, EscrowSettlementAndPayoutAuditTest | Works with real data [B]; ledger doesn't reconcile with seeded balances (PRA-056); fake fallback credentials (PRA-055) |
 | F-037 | Return requests handling | `Seller/Resources/ReturnRequests` | OrderFulfillmentAndReturnLifecyclesTest | Working [T]; policy Pending (Q7) |
 | F-038 | RFQ quoting | `Seller/Resources/RfqRequests` | WholesaleRfqAndQuotationLifecycleTest | Working [T] |
 | F-039 | Review moderation/reply | `Seller/Resources/ProductReviews` | ProductReviewTest | Working [T] |
@@ -66,11 +66,11 @@
 
 | ID | Feature | Entry point | Covering tests | Status |
 |---|---|---|---|---|
-| F-050 | Admin dashboard (stats, revenue chart, fulfilment chart, latest orders) | `Admin/Widgets/*` | AdminDashboardAnalyticsTest | Working [T] (numbers verified T7) |
+| F-050 | Admin dashboard (stats, revenue chart, fulfilment chart, latest orders) | `Admin/Widgets/*` | AdminDashboardAnalyticsTest | Working [T]; KPIs match the DB [B] |
 | F-051 | KYC approvals (seller + wholesale) | `Admin/Pages/KycApprovals` | AdminKycApprovalInboxTest | Working [T] |
-| F-052 | Orders management | `Admin/Resources/Orders` (create/edit) | FilamentPanelsSmokeTest | Untested beyond render; manual create of orders bypasses splitter [verify T4] |
+| F-052 | Orders management | `Admin/Resources/Orders` (create/edit) | FilamentPanelsSmokeTest | Partial: manual create bypasses the engine (PRA-049); orders hard-deletable (PRA-044) [R] |
 | F-053 | Users, seller profiles | `Admin/Resources/{Users,SellerProfiles}` | FilamentPanelsSmokeTest | Untested beyond render |
-| F-054 | Wallet transactions / payouts | `Admin/Resources/WalletTransactions` | EscrowSettlementAndPayoutAuditTest | Verify T3 (R-16) |
+| F-054 | Wallet transactions / payouts | `Admin/Resources/WalletTransactions` | EscrowSettlementAndPayoutAuditTest | Partial: disburse only, no reject (PRA-013) [R] |
 | F-055 | Categories, banners, coupons | `Admin/Resources/{Categories,Banners,Coupons}` | PromotionsCampaignAndCouponHardeningTest, PromotionsAndBusinessLogicTest | Working [T] |
 | F-056 | Store settings (identity, delivery, inventory, checkout) | `Admin/Pages/StoreSettings` | DynamicStoreConfigurationTest | Working [T] |
 | F-057 | SMS settings, templates, logs, balance | `Admin/Pages/SmsSettings`, `Admin/Resources/{SmsTemplates,SmsLogs}` | tests/Feature/Sms/* | Working [T] |
@@ -79,23 +79,23 @@
 
 | ID | Feature | Entry point | Covering tests | Status |
 |---|---|---|---|---|
-| F-060 | API auth (register retail/wholesale/seller, login) | `api/v1/auth/*` | ApiEndpointsTest | Verify T5 (R-13); client Pending owner decision (Q16) |
-| F-061 | API catalog with channel price masking | `api/v1/catalog/products{,/slug}` | ApiEndpointsTest | Verify T5 |
-| F-062 | API order tracking | `api/v1/orders/track` | ApiEndpointsTest | Verify T5 |
+| F-060 | API auth (register retail/wholesale/seller, login) | `api/v1/auth/*` | ApiEndpointsTest | Partial: wholesale API self-grants role (PRA-008) [T-probe C.7]; no rate limit (PRA-036); client is Pending owner decision (Q16) |
+| F-061 | API catalog with channel price masking | `api/v1/catalog/products{,/slug}` | ApiEndpointsTest | Working [T]; no rate limit (PRA-036) |
+| F-062 | API order tracking | `api/v1/orders/track` | ApiEndpointsTest | Working [T]; no rate limit (PRA-036) |
 
 ## Courier (system)
 
 | ID | Feature | Entry point | Covering tests | Status |
 |---|---|---|---|---|
-| F-063 | Courier status webhook | `api/v1/webhooks/courier` | EscrowCronAndWebhookTest, CourierDeliveryLifecycleTest | Verify T3 (R-03) |
+| F-063 | Courier status webhook | `api/v1/webhooks/courier` | EscrowCronAndWebhookTest, CourierDeliveryLifecycleTest | **Broken**: unsigned (PRA-003) [T-probe A.4] |
 
 ## System / automation
 
 | ID | Feature | Entry point | Covering tests | Status |
 |---|---|---|---|---|
-| F-070 | Escrow auto-release after 48 h | `escrow:release-delivered` hourly | EscrowCronAndWebhookTest | Verify T4 |
-| F-071 | Expired stock reservation release | `inventory:release-expired-reservations` every 5 min | InventoryReservationAndBackorderPolicyTest | Verify T4 |
-| F-072 | Campaign/banner/coupon sync | `promotions:sync-active-campaigns` hourly | PromotionsCampaignAndCouponHardeningTest | Verify T4 |
+| F-070 | Escrow auto-release after 48 h | `escrow:release-delivered` hourly | EscrowCronAndWebhookTest | **Broken**: delivery pays out immediately, so the 48 h job has nothing to release (PRA-001); ignores open disputes (PRA-026). The job itself waits 48 h correctly [T-probe B.6] |
+| F-071 | Expired stock reservation release | `inventory:release-expired-reservations` every 5 min | InventoryReservationAndBackorderPolicyTest | Working [T], ran manually exit 0 [C]; no overlap guard (PRA-014) |
+| F-072 | Campaign/banner/coupon sync | `promotions:sync-active-campaigns` hourly | PromotionsCampaignAndCouponHardeningTest | Working [T], ran manually exit 0 [C]; no overlap guard (PRA-014) |
 | F-073 | SMS dispatch (OTP, order confirmation, status) | `SendSmsJob` (queued) | tests/Feature/Sms/* | Working [T] (mock driver) |
 
 ## Dev only
