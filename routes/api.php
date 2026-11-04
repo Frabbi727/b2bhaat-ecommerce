@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\CourierWebhookController;
 use App\Http\Controllers\Api\V1\TrackingController;
+use App\Http\Middleware\VerifyCourierSignature;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -28,6 +29,7 @@ Route::prefix('v1')->group(function () {
 
     // 4. Logistics & Courier Webhooks
     Route::prefix('webhooks')->group(function () {
-        Route::post('courier', [CourierWebhookController::class, 'handle']);
+        Route::post('courier', [CourierWebhookController::class, 'handle'])
+            ->middleware([VerifyCourierSignature::class, 'throttle:120,1']);
     });
 });

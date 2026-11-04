@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Logistics;
 
+use App\Exceptions\InvalidStatusTransitionException;
 use App\Models\FulfillmentStatus;
 use App\Models\OrderStatus;
 use App\Models\OrderTrackingLog;
@@ -16,6 +17,31 @@ use Illuminate\Support\Facades\DB;
 
 class CourierStatusService
 {
+    /**
+     * Legal fulfilment moves. A courier may skip intermediate scans, so later states are reachable directly.
+     *
+     * @var array<string, list<string>>
+     */
+    public const ALLOWED_TRANSITIONS = [
+        'unfulfilled' => ['processing', 'shipped', 'in_transit', 'cancelled'],
+        'processing' => ['shipped', 'in_transit', 'out_for_delivery', 'delivered', 'returned', 'cancelled'],
+        'shipped' => ['in_transit', 'out_for_delivery', 'delivered', 'returned'],
+        'in_transit' => ['out_for_delivery', 'delivered', 'returned'],
+        'out_for_delivery' => ['in_transit', 'delivered', 'returned'],
+        'delivered' => ['returned'],
+        'returned' => [],
+        'cancelled' => [],
+    ];
+
+    public static function canTransition(?string $from, string $to): bool
+    {
+        if ($from === null) {
+            return true;
+        }
+
+        return in_array($to, self::ALLOWED_TRANSITIONS[$from] ?? [], true);
+    }
+
     public function __construct(
         protected EscrowLedgerService $escrowLedgerService,
         protected StockReservationService $stockReservationService
@@ -23,6 +49,9 @@ class CourierStatusService
 
     /**
      * Update courier status for a sub-order, record tracking log, and trigger settlement if delivered.
+     * Repeating the current status is a no-op; an illegal move throws.
+     *
+     * @throws InvalidStatusTransitionException
      */
     public function updateStatus(
         SubOrder $subOrder,
@@ -33,6 +62,17 @@ class CourierStatusService
         ?Carbon $timestamp = null
     ): void {
         DB::transaction(function () use ($subOrder, $statusSlug, $hubLocation, $title, $description, $timestamp) {
+            $subOrder = SubOrder::whereKey($subOrder->getKey())->lockForUpdate()->with('fulfillmentStatus')->firstOrFail();
+            $currentSlug = $subOrder->fulfillmentStatus?->slug;
+
+            if ($currentSlug === $statusSlug) {
+                return;
+            }
+
+            if (! self::canTransition($currentSlug, $statusSlug)) {
+                throw InvalidStatusTransitionException::between($currentSlug, $statusSlug);
+            }
+
             $fulfillmentStatus = FulfillmentStatus::where('slug', $statusSlug)->firstOrFail();
 
             $subOrder->update([

@@ -261,7 +261,7 @@ class OrderFulfillmentAndReturnLifecyclesTest extends TestCase
             'commission_amount' => 200.00,
         ]);
 
-        $response = $this->postJson('/api/v1/webhooks/courier', [
+        $response = $this->signedCourierPost([
             'tracking_number' => 'RDX-261102-12345',
             'status' => 'in_transit',
             'hub_location' => 'Tejgaon Central Sorting Facility',

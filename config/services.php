@@ -2,6 +2,10 @@
 
 return [
 
+    'courier' => [
+        'webhook_secret' => env('COURIER_WEBHOOK_SECRET'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

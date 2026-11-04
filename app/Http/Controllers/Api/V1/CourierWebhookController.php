@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Exceptions\InvalidStatusTransitionException;
 use App\Http\Controllers\Controller;
 use App\Models\FulfillmentStatus;
 use App\Models\SubOrder;
@@ -11,6 +12,7 @@ use App\Services\Logistics\CourierStatusService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class CourierWebhookController extends Controller
 {
@@ -26,7 +28,7 @@ class CourierWebhookController extends Controller
         $validated = $request->validate([
             'tracking_number' => 'required_without:sub_order_number|nullable|string',
             'sub_order_number' => 'required_without:tracking_number|nullable|string',
-            'status' => 'required|string', // e.g. 'delivered', 'in_transit', 'out_for_delivery', 'returned'
+            'status' => ['required', 'string', Rule::in(array_keys(CourierStatusService::ALLOWED_TRANSITIONS))],
             'title' => 'nullable|string',
             'description' => 'nullable|string',
             'hub_location' => 'nullable|string',
@@ -51,23 +53,25 @@ class CourierWebhookController extends Controller
             ], 404);
         }
 
-        // Map status
-        $statusSlug = strtolower(trim($validated['status']));
-        $fulfillmentStatus = FulfillmentStatus::where('slug', $statusSlug)->first()
-            ?? FulfillmentStatus::where('slug', 'in_transit')->firstOrFail();
+        $fulfillmentStatus = FulfillmentStatus::where('slug', $validated['status'])->firstOrFail();
 
-        $loggedAt = ! empty($validated['timestamp'])
+        // Delivery time always comes from the server so it cannot be backdated past the escrow hold window.
+        $loggedAt = ($fulfillmentStatus->slug !== 'delivered' && ! empty($validated['timestamp']))
             ? Carbon::parse($validated['timestamp'])
             : now();
 
-        $this->courierStatusService->updateStatus(
-            subOrder: $subOrder,
-            statusSlug: $fulfillmentStatus->slug,
-            hubLocation: $validated['hub_location'] ?? 'Courier Hub',
-            title: $validated['title'] ?? ('Courier Update: '.$fulfillmentStatus->name),
-            description: $validated['description'] ?? "Status updated via {$subOrder->courier_name} webhook.",
-            timestamp: $loggedAt,
-        );
+        try {
+            $this->courierStatusService->updateStatus(
+                subOrder: $subOrder,
+                statusSlug: $fulfillmentStatus->slug,
+                hubLocation: $validated['hub_location'] ?? 'Courier Hub',
+                title: $validated['title'] ?? ('Courier Update: '.$fulfillmentStatus->name),
+                description: $validated['description'] ?? "Status updated via {$subOrder->courier_name} webhook.",
+                timestamp: $loggedAt,
+            );
+        } catch (InvalidStatusTransitionException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 409);
+        }
 
         return response()->json([
             'success' => true,

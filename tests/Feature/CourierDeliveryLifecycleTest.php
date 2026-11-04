@@ -100,7 +100,7 @@ class CourierDeliveryLifecycleTest extends TestCase
         $subOrder = SubOrder::firstOrFail();
         $subOrder->update(['tracking_number' => 'STDFST-TEST-9988']);
 
-        $response = $this->postJson('/api/v1/webhooks/courier', [
+        $response = $this->signedCourierPost([
             'tracking_number' => 'STDFST-TEST-9988',
             'status' => 'out_for_delivery',
             'hub_location' => 'Mirpur Delivery Hub',

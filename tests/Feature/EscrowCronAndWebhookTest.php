@@ -54,7 +54,7 @@ class EscrowCronAndWebhookTest extends TestCase
             'commission_amount' => 50.00,
         ]);
 
-        $response = $this->postJson('/api/v1/webhooks/courier', [
+        $response = $this->signedCourierPost([
             'tracking_number' => 'ST-WH-12345',
             'status' => 'delivered',
             'title' => 'Delivered to Recipient',
