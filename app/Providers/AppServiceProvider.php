@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Services\Sms\Contracts\SmsGatewayInterface;
+use App\Services\Sms\SmsManager;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -11,7 +13,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton('sms', function ($app) {
+            return new SmsManager($app);
+        });
+
+        $this->app->bind(SmsGatewayInterface::class, function ($app) {
+            return $app['sms']->driver();
+        });
     }
 
     /**
