@@ -77,7 +77,7 @@ class SellerRecentOrdersWidget extends TableWidget
                     ->label('View Package')
                     ->icon('heroicon-o-eye')
                     ->color('indigo')
-                    ->url(fn (SubOrder $record): string => SubOrderResource::getUrl('edit', ['record' => $record])),
+                    ->url(fn (SubOrder $record): string => SubOrderResource::getUrl('view', ['record' => $record])),
             ]);
     }
 }

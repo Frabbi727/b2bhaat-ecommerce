@@ -102,6 +102,6 @@ class FilamentPanelsSmokeTest extends TestCase
 
         $this->get('/seller/products/create')->assertSuccessful();
         $this->get('/seller/rfq-requests/create')->assertSuccessful();
-        $this->get('/seller/sub-orders/create')->assertSuccessful();
+        $this->get('/seller/sub-orders/create')->assertNotFound(); // sub-orders are read-only for sellers (PRA-005)
     }
 }

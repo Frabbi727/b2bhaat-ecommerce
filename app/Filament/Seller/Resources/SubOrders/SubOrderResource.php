@@ -2,9 +2,8 @@
 
 namespace App\Filament\Seller\Resources\SubOrders;
 
-use App\Filament\Seller\Resources\SubOrders\Pages\CreateSubOrder;
-use App\Filament\Seller\Resources\SubOrders\Pages\EditSubOrder;
 use App\Filament\Seller\Resources\SubOrders\Pages\ListSubOrders;
+use App\Filament\Seller\Resources\SubOrders\Pages\ViewSubOrder;
 use App\Filament\Seller\Resources\SubOrders\Schemas\SubOrderForm;
 use App\Filament\Seller\Resources\SubOrders\Tables\SubOrdersTable;
 use App\Models\SubOrder;
@@ -48,8 +47,7 @@ class SubOrderResource extends Resource
     {
         return [
             'index' => ListSubOrders::route('/'),
-            'create' => CreateSubOrder::route('/create'),
-            'edit' => EditSubOrder::route('/{record}/edit'),
+            'view' => ViewSubOrder::route('/{record}'),
         ];
     }
 }

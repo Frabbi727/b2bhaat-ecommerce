@@ -3,9 +3,12 @@
 namespace App\Filament\Seller\Resources\SubOrders\Pages;
 
 use App\Filament\Seller\Resources\SubOrders\SubOrderResource;
-use Filament\Resources\Pages\CreateRecord;
+use Filament\Resources\Pages\ViewRecord;
 
-class CreateSubOrder extends CreateRecord
+/**
+ * Sellers can read a sub-order but never edit its money, ownership or parent (PRA-005).
+ */
+class ViewSubOrder extends ViewRecord
 {
     protected static string $resource = SubOrderResource::class;
 }

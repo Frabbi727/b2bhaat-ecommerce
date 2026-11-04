@@ -9,9 +9,7 @@ use App\Services\Logistics\CourierBookingService;
 use App\Services\Logistics\CourierStatusService;
 use App\Services\Logistics\SelfDeliveryService;
 use Filament\Actions\Action;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -350,12 +348,7 @@ class SubOrdersTable
                             ->send();
                     }),
 
-                EditAction::make(),
-            ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
+                ViewAction::make(),
             ]);
     }
 }
