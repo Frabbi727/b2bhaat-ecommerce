@@ -14,10 +14,13 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call([
-            SystemLookupSeeder::class,
-            DemoCatalogSeeder::class,
-            PromotionsAndStoreSettingsSeeder::class,
-        ]);
+        $this->call(ProductionSeeder::class);
+
+        if (app()->environment('local', 'testing')) {
+            $this->call([
+                DemoCatalogSeeder::class,
+                PromotionsAndStoreSettingsSeeder::class,
+            ]);
+        }
     }
 }
