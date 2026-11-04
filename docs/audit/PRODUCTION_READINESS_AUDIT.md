@@ -74,6 +74,12 @@
 | PRA-041 | Configuration | `.env.example` ships development defaults | `APP_DEBUG=true`, `LOG_LEVEL=debug`, `DB_CONNECTION=sqlite`, `SESSION_ENCRYPT=false`, no `SMS_*` or courier secrets listed [R] | A production-ready template, plus the deploy checklist listing every variable | Misconfigured production | P2 | Phase C | PRA-022 | Phase C walkthrough | Open |
 | PRA-042 | Roles | The `admin` role can't enter the admin panel | `canAccessPanel('admin')` uses `isSuperAdmin()` = slug `super_admin` only. The docs describe `admin` as an admin persona [R] | Decide whether `admin` (staff) gets limited admin access. **Pending owner decision** (Q13, extra admin roles) | — | P3 | — | Q13 | — | Pending owner decision |
 | PRA-043 | Authorization | No Policy classes (R-25 / L-12) | `app/Policies` is empty. Isolation relies on panel gating plus `getEloquentQuery` scoping, which works for reads [T-probe C.2], but Filament grants create/edit/delete by default (which is how PRA-005 happened) [R] | A policy for every model exposed in a panel (SubOrder, Product, RfqRequest, WalletTransaction, ReturnRequest, Order, User), denying by default | The next resource added will repeat PRA-005 | P2 | Add policies alongside the PRA-005/012 fixes | PRA-005, PRA-012 | Policy tests per role | Open |
+| PRA-044 | Database / Finance | Orders and seller wallets can be hard-deleted, erasing financial history | Admin `OrdersTable` (bulk) and `EditOrder` have Delete. `orders` cascades to sub-orders, items, tracking logs and returns; `wallet_transactions.sub_order_id` is set to NULL. Deleting a seller user cascades to `seller_wallets` → `wallet_transactions`. No soft deletes [R, C schema] | Financial records (orders, sub-orders, wallet transactions, wallets) are never hard-deleted. Orders get cancelled; users get deactivated | Lost audit trail; escrow balances that can't be reconciled; legal and tax exposure | P1 | Remove the Delete actions on Orders and Users (use deactivate/cancel), change wallet and ledger FKs to RESTRICT, and consider `SoftDeletes` on orders and users | PRA-043 (policies) | Tests: admin can't delete an order; deleting a user with a wallet is refused | Open |
+| PRA-045 | Database / Performance | Missing indexes and a missing tier-uniqueness constraint | No index on `sub_orders.tracking_number`, `order_tracking_logs(sub_order_id, logged_at)`, `orders(order_status_id, created_at)`, `rfq_requests(seller_id, status)`, `wallet_transactions(seller_wallet_id, created_at)`. No unique key on `product_prices(product_id, variation_id, sales_channel_id, min_quantity)` [C schema] | Indexes on every lookup and filter column; unique price tiers | Slow webhook and dashboards as data grows; duplicate tiers give ambiguous prices | P2 | One additive migration (indexes only; check for duplicates before the unique key) | — | Migration up/down on a fresh DB | Open |
+| PRA-046 | Database | No CHECK constraints on stock or balances | `stock_quantity`, `available_balance` and `escrow_held_balance` can go negative at the database level [C schema] | `CHECK (... >= 0)` on MySQL 8+/PostgreSQL, or application-level guards plus tests | A bug becomes silent negative money | P3 | Add after the PRA-002 rework (existing data must be valid first) | PRA-002 | — | Open |
+| PRA-047 | Checkout | Order placement isn't atomic | After `createAndSplitOrder` commits, `placeOrder` updates payment/order status, holds escrow, records coupon usage and saves the address as separate writes. A failure midway leaves a paid order without escrow, or a coupon unused [R] | All of placement in one transaction (or a service with compensation) | Inconsistent orders under errors | P2 | Move the post-split steps into one `DB::transaction` inside a `PlaceOrderAction` service (pairs with PRA-024) | PRA-006, PRA-024 | Test: force an escrow exception → no order persists | Open |
+| PRA-048 | Promotions | Coupon usage limits can be exceeded under concurrency | `CouponService` reads `used_count` and writes it back without a lock [R] | Locked increment inside the order transaction | Over-redeemed promotions | P3 | `lockForUpdate` on the coupon row inside the PRA-047 transaction | PRA-047 | — | Open |
+| PRA-049 | Admin / Orders | Admin can create orders that skip the order engine | `/admin/orders/create` (`CreateOrder` page) writes an `orders` row directly: no sub-orders, stock, escrow or totals logic [C route list, R] | Remove manual create, or route it through `OrderSplitterService` | Phantom orders that break reports | P2 | Remove the create page (no business need was stated) | — | Test: route returns 404 | Open |
 
 ## Prior register re-verification (R-01…R-31)
 
@@ -811,6 +817,111 @@ class SecurityProbeTest extends TestCase
         ]);
         $u = User::where('email', 's@s.test')->first();
         $this->assertTrue(! $u || ! ($u->sellerProfile?->is_approved ?? false), 'API seller auto-approved');
+    }
+}
+```
+
+</details>
+
+## Appendix D: Query-count probe
+
+D.1 `test_query_counts`. Prints query counts per page at +10 and +20 orders. Run on 2026-11-05 and then deleted. Results are in [DATABASE_AUDIT.md](DATABASE_AUDIT.md#query-performance).
+
+<details><summary>Probe source</summary>
+
+```php
+<?php
+
+namespace Tests\Feature\AuditProbe;
+
+use App\Filament\Admin\Resources\Orders\Pages\ListOrders;
+use App\Filament\Seller\Resources\SubOrders\Pages\ListSubOrders;
+use App\Models\FulfillmentStatus;
+use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\OrderStatus;
+use App\Models\PaymentMethod;
+use App\Models\PaymentStatus;
+use App\Models\Product;
+use App\Models\SubOrder;
+use App\Models\User;
+use Database\Seeders\DemoCatalogSeeder;
+use Database\Seeders\PromotionsAndStoreSettingsSeeder;
+use Database\Seeders\SystemLookupSeeder;
+use Filament\Facades\Filament;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Livewire\Livewire;
+use Tests\TestCase;
+
+/**
+ * THROWAWAY audit probe (Task 6) — prints query counts at N and 2N rows.
+ */
+class QueryCountProbeTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(SystemLookupSeeder::class);
+        $this->seed(DemoCatalogSeeder::class);
+        $this->seed(PromotionsAndStoreSettingsSeeder::class);
+    }
+
+    protected function makeOrders(int $n): void
+    {
+        $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
+        $customer = User::where('email', 'customer@retail.com')->firstOrFail();
+        $product = Product::where('seller_id', $seller->id)->firstOrFail();
+        for ($i = 0; $i < $n; $i++) {
+            $o = Order::create([
+                'order_number' => 'ORD-Q-'.uniqid(), 'customer_id' => $customer->id,
+                'order_status_id' => OrderStatus::where('slug', 'confirmed')->value('id'),
+                'payment_status_id' => PaymentStatus::where('slug', 'paid')->value('id'),
+                'payment_method_id' => PaymentMethod::where('slug', 'cod')->value('id'),
+                'shipping_address' => ['city' => 'Dhaka', 'recipient_phone' => '01711000000', 'recipient_name' => 'Q'], 'total_amount' => 100,
+            ]);
+            $s = SubOrder::create([
+                'parent_order_id' => $o->id, 'seller_id' => $seller->id, 'sub_order_number' => $o->order_number.'-A',
+                'fulfillment_status_id' => FulfillmentStatus::where('slug', 'unfulfilled')->value('id'), 'subtotal' => 100, 'commission_amount' => 10,
+            ]);
+            OrderItem::create(['sub_order_id' => $s->id, 'product_id' => $product->id, 'sales_channel_id' => $product->sales_channel_id, 'unit_price' => 100, 'quantity' => 1, 'total_price' => 100]);
+        }
+    }
+
+    protected function queries(callable $fn): int
+    {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $fn();
+        $c = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        return $c;
+    }
+
+    public function test_query_counts(): void
+    {
+        $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
+        $admin = User::where('email', 'admin@b2bhaat.com')->firstOrFail();
+        $customer = User::where('email', 'customer@retail.com')->firstOrFail();
+        $slug = Product::where('is_active', true)->value('slug');
+        $results = [];
+        foreach ([10, 20] as $n) {
+            $this->makeOrders(10);
+            $results['home'][$n] = $this->queries(fn () => $this->get('/')->assertOk());
+            $results['product'][$n] = $this->queries(fn () => $this->get('/product/'.$slug)->assertOk());
+            $results['my-orders'][$n] = $this->queries(fn () => $this->actingAs($customer)->get('/my-orders')->assertOk());
+            Filament::setCurrentPanel(Filament::getPanel('seller'));
+            $results['seller-suborders'][$n] = $this->queries(fn () => $this->actingAs($seller) && Livewire::test(ListSubOrders::class)->assertOk());
+            Filament::setCurrentPanel(Filament::getPanel('admin'));
+            $results['admin-orders'][$n] = $this->queries(fn () => $this->actingAs($admin) && Livewire::test(ListOrders::class)->assertOk());
+            $results['admin-dashboard'][$n] = $this->queries(fn () => $this->actingAs($admin)->get('/admin')->assertOk());
+            auth()->logout();
+        }
+        fwrite(STDERR, 'QUERYCOUNTS='.json_encode($results).PHP_EOL);
+        $this->assertTrue(true);
     }
 }
 ```
