@@ -100,4 +100,13 @@ class OtpServiceTest extends TestCase
         $this->assertFalse($res['success']);
         $this->assertSame('EXPIRED', $res['error']);
     }
+
+    public function test_verifies_successfully_with_default_testing_otp(): void
+    {
+        config(['sms.default_otp' => '123456']);
+
+        // Even with an expired or newly requested OTP, default testing OTP verifies successfully
+        $res = $this->otpService->verify('01712345678', '123456', 'registration');
+        $this->assertTrue($res['success']);
+    }
 }

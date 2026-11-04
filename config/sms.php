@@ -5,6 +5,8 @@ return [
 
     'enabled' => env('SMS_ENABLED', true),
 
+    'default_otp' => env('SMS_DEFAULT_OTP', '123456'),
+
     'drivers' => [
         'bulksmsbd' => [
             'api_key' => env('BULKSMSBD_API_KEY', ''),

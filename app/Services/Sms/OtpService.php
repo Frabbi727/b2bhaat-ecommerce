@@ -93,6 +93,24 @@ class OtpService
     {
         $normalized = PhoneNormalizer::normalize($phone);
 
+        // Fallback default testing OTP (e.g. 123456) for when SMS provider is offline or for production testing
+        $defaultOtp = SmsSetting::get('default_otp', config('sms.default_otp'));
+        if (! empty($defaultOtp) && trim($code) === (string) $defaultOtp) {
+            $otp = Otp::where('phone', $normalized)
+                ->where('purpose', $purpose)
+                ->whereNull('verified_at')
+                ->latest('id')
+                ->first();
+
+            $otp?->update([
+                'verified_at' => Carbon::now(),
+            ]);
+
+            return [
+                'success' => true,
+            ];
+        }
+
         $otp = Otp::where('phone', $normalized)
             ->where('purpose', $purpose)
             ->whereNull('verified_at')
