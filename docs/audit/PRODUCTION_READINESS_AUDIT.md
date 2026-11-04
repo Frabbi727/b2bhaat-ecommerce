@@ -65,6 +65,15 @@
 | PRA-032 | Checkout | Sub-Dhaka zone can't be selected | The `delivery_fee_sub_dhaka` setting exists, but checkout validates `deliveryZone in:inside_dhaka,outside_dhaka`. [R] | The zone list comes from settings | An admin-set fee never applies | P3 | Build zones from the settings | — | — | Open |
 | PRA-033 | Notifications / Admin | No alert for pending KYC or wholesale applications | Admins have to open `KycApprovals` to find pending items. [R] | A dashboard badge or notification when something is pending | Slow onboarding | P2 | Filament navigation badge with the pending count | PRA-008 | — | Open |
 | PRA-034 | Database / Migrations | Rolling back `2026_11_03_000001_create_sms_and_otp_tables` fails on SQLite | `down()` drops `orders.invoice_token`/`tracking_token`, which are unique-indexed, without `dropUnique` first; the partial rollback then leaves `users.phone_verified_at` dropped [C] | Every `down()` runs cleanly | A rollback during an incident fails | P3 | Drop the unique indexes before the columns; re-check on the production engine | — | `migrate:rollback` on a fresh DB exits 0 | Open |
+| PRA-035 | Auth / OTP | The fallback OTP `123456` logs in as any user in production | `OtpService::verify` (`app/Services/Sms/OtpService.php:97`) accepts the configured default OTP (default `123456`, also editable in `/admin/sms-settings`) in every environment, even when no OTP was requested. Confirmed: under `APP_ENV=production` the code `123456` logged the probe in as another seller [T-probe C.1] | The fallback works only in `local`/`testing`, and only for a phone that has a pending OTP. Production ignores `SMS_DEFAULT_OTP` and the admin setting | Account takeover of any customer or seller who registered by phone, including access to the seller panel and wallet payouts | P0 | Gate the fallback with `app()->environment('local','testing')`, remove the `'123456'` config default, and hide the admin field in production | — | Probe C.1. Also: non-production still works [T `tests/Feature/Sms/*`] | Open |
+| PRA-036 | Security / Rate limiting | No rate limiting on the API, tracking, invoice or webhook | Only `CustomerAuth::login` (5/min) and `OtpService` throttle anything. Confirmed: 12 bad `POST /api/v1/auth/login` calls → 422, never 429; 70 tracking lookups → never 429 [T-probe C.5, C.6] | `throttle` on `api/*` (e.g. 60/min), `auth/login` (5/min per email+IP), `track*`, `invoice/*` and the webhook | Brute-force passwords; scrape orders | P1 | Define named rate limiters in `AppServiceProvider` and apply them to the route groups | — | Probes C.5, C.6 | Open |
+| PRA-037 | Auth / Data | Phone numbers stored in two formats | Seeded and admin-created users store `+8801…`. OTP registration stores `8801…` (`PhoneNormalizer`). OTP login looks up the normalized form, so users created by an admin or seeder can't use OTP login, and uniqueness checks miss duplicates across formats [observed in T-probe C.1] | One canonical format (`8801XXXXXXXXX`) everywhere, enforced by a model mutator, plus a data migration for existing rows | Login failures; duplicate accounts | P2 | Add a `phone` mutator on `User` using `PhoneNormalizer`, and a reversible data migration | — | Test: user created with `+880…` can log in by OTP | Open |
+| PRA-038 | Error handling | Raw exception messages shown to users | 11 places set `errorMessage = $e->getMessage()` (e.g. `WholesaleUpgrade`, `CheckoutComponent`, `ProductDetail`). A database error would show SQL to the user [R] | Domain exceptions show their message; anything else logs and shows a generic message | Leaks internals and looks broken | P2 | Introduce a domain exception class for user-facing errors; catch `Throwable` separately and log it | — | Test: forced `QueryException` in checkout → generic message | Open |
+| PRA-039 | Dependencies | `symfony/mime` medium advisory CVE-2026-45070 | `composer audit`: 1 medium advisory (email header injection) [C] | No known advisories | Low in practice: no email is sent today | P2 | `composer update symfony/mime` (patch, within existing constraints) | — | `composer audit` clean, suite green | Open |
+| PRA-040 | Security headers | No HSTS or Content-Security-Policy | `SecurityHeadersMiddleware` lacks `Strict-Transport-Security` and CSP [R] | HSTS in production over HTTPS; a CSP compatible with Livewire/Alpine (start in report-only mode) | Weaker protection against downgrade and XSS | P3 | Add HSTS when `app()->isProduction()`; CSP in report-only mode first | — | Header test | Open |
+| PRA-041 | Configuration | `.env.example` ships development defaults | `APP_DEBUG=true`, `LOG_LEVEL=debug`, `DB_CONNECTION=sqlite`, `SESSION_ENCRYPT=false`, no `SMS_*` or courier secrets listed [R] | A production-ready template, plus the deploy checklist listing every variable | Misconfigured production | P2 | Phase C | PRA-022 | Phase C walkthrough | Open |
+| PRA-042 | Roles | The `admin` role can't enter the admin panel | `canAccessPanel('admin')` uses `isSuperAdmin()` = slug `super_admin` only. The docs describe `admin` as an admin persona [R] | Decide whether `admin` (staff) gets limited admin access. **Pending owner decision** (Q13, extra admin roles) | — | P3 | — | Q13 | — | Pending owner decision |
+| PRA-043 | Authorization | No Policy classes (R-25 / L-12) | `app/Policies` is empty. Isolation relies on panel gating plus `getEloquentQuery` scoping, which works for reads [T-probe C.2], but Filament grants create/edit/delete by default (which is how PRA-005 happened) [R] | A policy for every model exposed in a panel (SubOrder, Product, RfqRequest, WalletTransaction, ReturnRequest, Order, User), denying by default | The next resource added will repeat PRA-005 | P2 | Add policies alongside the PRA-005/012 fixes | PRA-005, PRA-012 | Policy tests per role | Open |
 
 ## Prior register re-verification (R-01…R-31)
 
@@ -623,6 +632,185 @@ class BusinessLogicProbeTest extends TestCase
         app(EscrowLedgerService::class)->releaseFromEscrow($sub);
 
         return $sub;
+    }
+}
+```
+
+</details>
+
+## Appendix C: Security probes
+
+Run on 2026-11-05 and then deleted. 8 probes: **4 failed (defects confirmed), 4 passed.** The first C.1 run passed only because of the phone-format mismatch (PRA-037); with the user stored in the format OTP registration uses, it fails.
+
+| Ref | Probe | Result |
+|---|---|---|
+| C.1 | `test_s1_default_otp_cannot_log_in_as_another_user_in_production` | FAIL — authenticated as user 5 |
+| C.2 | `test_s2_seller_b_cannot_open_seller_a_sub_order_product_or_rfq` | PASS |
+| C.3 | `test_s3_seller_cannot_reach_admin_panel` | PASS |
+| C.4 | `test_s4_customer_cannot_reach_seller_panel` | PASS |
+| C.5 | `test_s5_api_login_is_rate_limited` | FAIL — 422, never 429 |
+| C.6 | `test_s6_public_tracking_is_rate_limited` | FAIL — 404, never 429 |
+| C.7 | `test_s7_api_wholesale_registration_does_not_grant_wholesale_role` | FAIL — role granted |
+| C.8 | `test_s8_api_seller_registration_is_not_auto_approved` | PASS |
+
+<details><summary>Probe source (tests/Feature/AuditProbe/SecurityProbeTest.php)</summary>
+
+```php
+<?php
+
+namespace Tests\Feature\AuditProbe;
+
+use App\Filament\Seller\Resources\Products\Pages\EditProduct;
+use App\Filament\Seller\Resources\RfqRequests\Pages\EditRfqRequest;
+use App\Filament\Seller\Resources\SubOrders\Pages\EditSubOrder;
+use App\Livewire\Storefront\CustomerAuth;
+use App\Models\FulfillmentStatus;
+use App\Models\Order;
+use App\Models\OrderStatus;
+use App\Models\PaymentMethod;
+use App\Models\PaymentStatus;
+use App\Models\Product;
+use App\Models\RfqRequest;
+use App\Models\Role;
+use App\Models\SellerProfile;
+use App\Models\SubOrder;
+use App\Models\User;
+use Database\Seeders\DemoCatalogSeeder;
+use Database\Seeders\SystemLookupSeeder;
+use Filament\Facades\Filament;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
+use Livewire\Livewire;
+use Tests\TestCase;
+
+/**
+ * THROWAWAY audit probes (Task 5) — assert CORRECT behaviour; failure = defect.
+ */
+class SecurityProbeTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected User $sellerA;
+
+    protected User $sellerB;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(SystemLookupSeeder::class);
+        $this->seed(DemoCatalogSeeder::class);
+        $this->sellerA = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
+        $this->sellerB = User::create([
+            'role_id' => Role::where('slug', 'seller')->value('id'),
+            'name' => 'Seller B', 'email' => 'b@factory.test', 'phone' => '+8801799887766',
+            'password' => bcrypt(Str::random(32)), 'is_active' => true,
+        ]);
+        SellerProfile::create([
+            'user_id' => $this->sellerB->id, 'store_name' => 'B Ltd', 'store_slug' => 'b-ltd',
+            'trade_license_number' => 'T-B', 'commission_rate_percentage' => 10, 'is_approved' => true,
+        ]);
+    }
+
+    protected function subOrderOfA(): SubOrder
+    {
+        $customer = User::where('email', 'customer@retail.com')->firstOrFail();
+        $order = Order::create([
+            'order_number' => 'ORD-SEC-'.uniqid(), 'customer_id' => $customer->id,
+            'order_status_id' => OrderStatus::where('slug', 'confirmed')->value('id'),
+            'payment_status_id' => PaymentStatus::where('slug', 'paid')->value('id'),
+            'payment_method_id' => PaymentMethod::where('slug', 'cod')->value('id'),
+            'shipping_address' => ['city' => 'Dhaka'], 'total_amount' => 100,
+        ]);
+
+        return SubOrder::create([
+            'parent_order_id' => $order->id, 'seller_id' => $this->sellerA->id, 'sub_order_number' => $order->order_number.'-A',
+            'fulfillment_status_id' => FulfillmentStatus::where('slug', 'unfulfilled')->value('id'),
+            'subtotal' => 100, 'commission_amount' => 10,
+        ]);
+    }
+
+    public function test_s1_default_otp_cannot_log_in_as_another_user_in_production(): void
+    {
+        $this->sellerB->update(['phone' => '8801799887766']); // format stored by OTP registration
+        $this->app['env'] = 'production';
+        Livewire::test(CustomerAuth::class)
+            ->set('loginMethod', 'otp')
+            ->set('otpPhone', '01799887766')
+            ->set('otpCode', '123456')
+            ->call('verifyLoginOtp')
+            ->tap(fn ($c) => fwrite(STDERR, 'ERR=['.$c->get('errorMessage').'] '.json_encode($c->errors()->toArray()).' AUTH='.(auth()->id() ?? 'none').PHP_EOL));
+
+        $this->assertGuest();
+    }
+
+    public function test_s2_seller_b_cannot_open_seller_a_sub_order_product_or_rfq(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+        $this->actingAs($this->sellerB);
+        $sub = $this->subOrderOfA();
+        $product = Product::where('seller_id', $this->sellerA->id)->firstOrFail();
+
+        $this->get("/seller/sub-orders/{$sub->id}/edit")->assertNotFound();
+        $this->get("/seller/products/{$product->id}/edit")->assertNotFound();
+        $rfq = RfqRequest::where('seller_id', $this->sellerA->id)->first();
+        if ($rfq) {
+            $this->get("/seller/rfq-requests/{$rfq->id}/edit")->assertNotFound();
+        }
+        $this->get("/seller/sub-order/{$sub->sub_order_number}/shipping-label")->assertForbidden();
+        $this->get("/seller/sub-order/{$sub->sub_order_number}/challan")->assertForbidden();
+    }
+
+    public function test_s3_seller_cannot_reach_admin_panel(): void
+    {
+        $this->actingAs($this->sellerA);
+        foreach (['/admin', '/admin/orders', '/admin/users', '/admin/store-settings', '/admin/sms-settings', '/admin/wallet-transactions'] as $url) {
+            $this->get($url)->assertForbidden();
+        }
+    }
+
+    public function test_s4_customer_cannot_reach_seller_panel(): void
+    {
+        $this->actingAs(User::where('email', 'customer@retail.com')->firstOrFail());
+        $this->get('/seller')->assertForbidden();
+        $this->get('/seller/sub-orders')->assertForbidden();
+    }
+
+    public function test_s5_api_login_is_rate_limited(): void
+    {
+        $last = null;
+        for ($i = 0; $i < 12; $i++) {
+            $last = $this->postJson('/api/v1/auth/login', ['email' => 'admin@b2bhaat.com', 'password' => 'wrong-'.$i]);
+        }
+        $last->assertStatus(429);
+    }
+
+    public function test_s6_public_tracking_is_rate_limited(): void
+    {
+        $last = null;
+        for ($i = 0; $i < 70; $i++) {
+            $last = $this->getJson('/api/v1/orders/track?number=ORD-X-'.$i);
+        }
+        $last->assertStatus(429);
+    }
+
+    public function test_s7_api_wholesale_registration_does_not_grant_wholesale_role(): void
+    {
+        $this->postJson('/api/v1/auth/register/wholesale', [
+            'name' => 'X', 'email' => 'x@x.test', 'phone' => '01711223344', 'password' => 'password123',
+        ])->assertSuccessful();
+        $u = User::where('email', 'x@x.test')->firstOrFail();
+        $this->assertFalse((bool) $u->is_wholesale_approved && $u->isWholesaleBuyer());
+        $this->assertNotEquals('wholesale_buyer', $u->role->slug, 'API grants wholesale role without approval');
+    }
+
+    public function test_s8_api_seller_registration_is_not_auto_approved(): void
+    {
+        $this->postJson('/api/v1/auth/register/seller', [
+            'name' => 'S', 'email' => 's@s.test', 'phone' => '01711223355', 'password' => 'password123',
+            'store_name' => 'S Store', 'trade_license_number' => 'T-1',
+        ]);
+        $u = User::where('email', 's@s.test')->first();
+        $this->assertTrue(! $u || ! ($u->sellerProfile?->is_approved ?? false), 'API seller auto-approved');
     }
 }
 ```
