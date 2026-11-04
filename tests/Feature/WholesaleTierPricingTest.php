@@ -119,7 +119,7 @@ class WholesaleTierPricingTest extends TestCase
         }
     }
 
-    public function test_retail_user_sees_wholesale_tier_teaser_with_discount_rates(): void
+    public function test_retail_user_sees_wholesale_teaser_without_tier_prices(): void
     {
         $retailUser = User::where('email', 'customer@retail.com')->firstOrFail();
         $product = Product::where('slug', 'luxury-press-on-fake-nails-set')->firstOrFail();
@@ -128,9 +128,9 @@ class WholesaleTierPricingTest extends TestCase
 
         Livewire::test(ProductDetail::class, ['slug' => $product->slug])
             ->assertStatus(200)
-            ->assertSee('Wholesale Factory Volume Rates Available')
-            ->assertSee('৳110.00')
-            ->assertSee('৳95.00')
-            ->assertSee('৳85.00');
+            ->assertSee('Wholesale pricing available')
+            ->assertDontSee('Wholesale Factory Volume Rates Available')
+            ->assertDontSee('৳110.00')
+            ->assertDontSee('৳85.00');
     }
 }

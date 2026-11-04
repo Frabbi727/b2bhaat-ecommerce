@@ -72,22 +72,27 @@ class WholesaleUpgrade extends Component
             'password.min' => 'Password must be at least 8 characters.',
         ]);
 
-        try {
-            $wholesaleRole = Role::where('slug', 'wholesale_buyer')->firstOrFail();
+        /** @var User|null $currentUser */
+        $currentUser = Auth::user();
+        if ($currentUser && ($currentUser->isSeller() || $currentUser->isSuperAdmin())) {
+            $this->errorMessage = 'Seller and admin accounts cannot apply for wholesale buying. Please use a separate buyer account.';
 
-            if (Auth::check()) {
-                /** @var User $user */
-                $user = Auth::user();
-                $user->update([
+            return;
+        }
+
+        try {
+            // The application is stored as pending; only an admin approval in KYC Approvals grants the wholesale role (D3).
+            if ($currentUser) {
+                $currentUser->update([
                     'business_name' => $this->businessName,
                     'trade_license_number' => $this->tradeLicense,
                     'tax_id_number' => $this->tinNumber ?: null,
-                    'role_id' => $wholesaleRole->id,
-                    'is_wholesale_approved' => true,
+                    'wholesale_rejected_at' => null,
+                    'wholesale_rejection_reason' => null,
                 ]);
             } else {
                 $user = User::create([
-                    'role_id' => $wholesaleRole->id,
+                    'role_id' => Role::where('slug', 'retail_buyer')->firstOrFail()->id,
                     'name' => $this->contactPerson,
                     'business_name' => $this->businessName,
                     'email' => $this->email,
@@ -96,7 +101,7 @@ class WholesaleUpgrade extends Component
                     'trade_license_number' => $this->tradeLicense,
                     'tax_id_number' => $this->tinNumber ?: null,
                     'is_active' => true,
-                    'is_wholesale_approved' => true,
+                    'is_wholesale_approved' => false,
                 ]);
 
                 Auth::login($user);

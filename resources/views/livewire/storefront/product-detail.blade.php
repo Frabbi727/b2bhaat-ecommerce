@@ -357,6 +357,7 @@
                 @endif
             </div>
 
+            @if ($canSeeWholesalePrices)
             <!-- B2B Wholesale Bulk Matrix Accordion / Action -->
             <div class="pt-4 border-t border-slate-200 space-y-4">
                 <div class="flex items-center justify-between">
@@ -448,6 +449,16 @@
                     </div>
                 @endif
             </div>
+            @elseif ($wholesaleTiers->isNotEmpty())
+            <div class="pt-4 border-t border-slate-200">
+                <div class="p-4 rounded-xl bg-indigo-50/60 border border-indigo-100 text-xs text-slate-700 space-y-1">
+                    <div class="font-bold text-indigo-900">Wholesale pricing available</div>
+                    <p>Factory volume tier rates are shown to verified business buyers.
+                        <a href="{{ route('wholesale.upgrade') }}" class="font-bold text-indigo-600 hover:underline">Apply for a wholesale account &rarr;</a>
+                    </p>
+                </div>
+            </div>
+            @endif
         </div>
     </div>
 

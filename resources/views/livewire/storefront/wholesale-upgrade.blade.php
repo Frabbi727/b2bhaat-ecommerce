@@ -8,14 +8,14 @@
             </div>
 
             <div class="space-y-2">
-                <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900">Wholesale Partner Account Unlocked!</h2>
+                <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900">Wholesale Application Submitted</h2>
                 <p class="text-sm text-slate-600 max-w-lg mx-auto leading-relaxed">
-                    Welcome to B2B Haat's Verified Business Network, <strong class="text-slate-900">{{ $businessName }}</strong>. You now have full access to factory-direct bulk tier rates and the multi-variation order matrix.
+                    Thank you, <strong class="text-slate-900">{{ $businessName }}</strong>. Our team will verify your trade license. Factory-direct bulk tier rates and the multi-variation order matrix unlock as soon as your account is approved.
                 </p>
             </div>
 
             <div class="p-6 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-left max-w-md mx-auto space-y-2 text-slate-600">
-                <div class="font-bold text-slate-900 uppercase tracking-wider text-[11px] mb-2">Unlocked B2B Features:</div>
+                <div class="font-bold text-slate-900 uppercase tracking-wider text-[11px] mb-2">B2B Features After Approval:</div>
                 <div class="flex items-center gap-2">
                     <span class="text-emerald-600 font-bold">✓</span>
                     <span>Factory volume discounts and transparent Minimum Order Quantities.</span>

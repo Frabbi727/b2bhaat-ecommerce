@@ -45,7 +45,7 @@ class WholesaleUpgradeTest extends TestCase
         $response->assertSee('Tanvir Hasan');
     }
 
-    public function test_retail_user_can_submit_business_kyc_and_be_upgraded_to_wholesale(): void
+    public function test_retail_user_can_submit_business_kyc_and_awaits_admin_approval(): void
     {
         $user = User::where('email', 'customer@retail.com')->firstOrFail();
         $this->actingAs($user);
@@ -60,13 +60,14 @@ class WholesaleUpgradeTest extends TestCase
             ->call('applyForWholesale')
             ->assertHasNoErrors()
             ->assertSet('isSuccess', true)
-            ->assertSee('Wholesale Partner Account Unlocked!');
+            ->assertSee('Wholesale Application Submitted');
 
         $user->refresh();
-        $this->assertTrue($user->is_wholesale_approved);
+        $this->assertFalse($user->is_wholesale_approved);
+        $this->assertTrue($user->isWholesalePending());
         $this->assertEquals('Meghna Supermarket Chain Ltd.', $user->business_name);
         $this->assertEquals('TRAD/DNCC/887766', $user->trade_license_number);
-        $this->assertEquals('wholesale_buyer', $user->role->slug);
+        $this->assertEquals('retail_buyer', $user->role->slug);
     }
 
     public function test_guest_can_register_new_wholesale_account_directly(): void
@@ -86,8 +87,9 @@ class WholesaleUpgradeTest extends TestCase
             ->assertSet('isSuccess', true);
 
         $newUser = User::where('email', 'shirin@dfashion.com')->firstOrFail();
-        $this->assertTrue($newUser->is_wholesale_approved);
-        $this->assertEquals('wholesale_buyer', $newUser->role->slug);
+        $this->assertFalse($newUser->is_wholesale_approved);
+        $this->assertTrue($newUser->isWholesalePending());
+        $this->assertEquals('retail_buyer', $newUser->role->slug);
         $this->assertEquals('Dhanmondi Fashion House', $newUser->business_name);
     }
 

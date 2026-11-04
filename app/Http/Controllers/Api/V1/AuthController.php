@@ -61,26 +61,30 @@ class AuthController extends Controller
             'tax_id_number' => 'nullable|string|max:128',
         ]);
 
-        $wholesaleRole = Role::where('slug', 'wholesale_buyer')->firstOrFail();
-
+        // Registers a retail account with a pending wholesale application; an admin approval grants the wholesale role (D3).
         $user = User::create([
-            'role_id' => $wholesaleRole->id,
+            'role_id' => Role::where('slug', 'retail_buyer')->firstOrFail()->id,
             'name' => $validated['name'],
             'email' => $validated['email'],
             'phone' => $validated['phone'],
             'password' => Hash::make($validated['password']),
+            'business_name' => $validated['business_name'] ?? null,
+            'trade_license_number' => $validated['trade_license_number'] ?? null,
+            'tax_id_number' => $validated['tax_id_number'] ?? null,
             'is_active' => true,
+            'is_wholesale_approved' => false,
         ]);
 
         $token = $user->createToken('auth-token')->plainTextToken;
 
         return response()->json([
-            'message' => 'Wholesale business partner account registered successfully.',
+            'message' => 'Account registered. Your wholesale application is pending admin verification.',
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
-                'role' => 'wholesale_buyer',
+                'role' => 'retail_buyer',
+                'wholesale_status' => $user->isWholesalePending() ? 'pending' : 'not_applied',
             ],
             'token' => $token,
         ], 201);

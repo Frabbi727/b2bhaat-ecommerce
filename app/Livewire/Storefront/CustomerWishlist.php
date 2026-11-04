@@ -35,7 +35,7 @@ class CustomerWishlist extends Component
     public function quickAddToCart(int $productId, CartSessionService $cart): void
     {
         $user = Auth::user();
-        $isWholesale = $user && ($user->isWholesaleBuyer() || $user->is_wholesale_approved);
+        $isWholesale = $user && $user->canSeeWholesalePrices();
         $channel = $isWholesale ? SalesChannel::WHOLESALE : SalesChannel::RETAIL;
 
         try {

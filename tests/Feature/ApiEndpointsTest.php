@@ -50,7 +50,8 @@ class ApiEndpointsTest extends TestCase
         ]);
 
         $response->assertStatus(201)
-            ->assertJsonPath('user.role', 'wholesale_buyer')
+            ->assertJsonPath('user.role', 'retail_buyer')
+            ->assertJsonPath('user.wholesale_status', 'pending')
             ->assertJsonStructure(['token', 'user']);
     }
 

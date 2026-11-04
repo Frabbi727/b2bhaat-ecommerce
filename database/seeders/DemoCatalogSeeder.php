@@ -97,6 +97,8 @@ class DemoCatalogSeeder extends Seeder
                 'phone' => '+8801700000003',
                 'password' => Hash::make('password'),
                 'is_active' => true,
+                'is_wholesale_approved' => true,
+                'wholesale_approved_at' => now(),
             ]
         );
 

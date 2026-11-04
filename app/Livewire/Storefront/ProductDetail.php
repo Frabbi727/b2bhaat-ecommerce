@@ -236,7 +236,7 @@ class ProductDetail extends Component
         $this->resetMessages();
 
         $user = auth()->user();
-        if (! $user || (! $user->isWholesaleBuyer() && ! $user->isSuperAdmin())) {
+        if (! $user || ! $user->canSeeWholesalePrices()) {
             $this->errorMessage = 'Wholesale volume tier sourcing is reserved for verified wholesale business accounts. Please upgrade your account.';
 
             return;
@@ -464,6 +464,7 @@ class ProductDetail extends Component
     {
         $user = auth()->user();
         $isWholesaleUser = $user && $user->isWholesaleBuyer();
+        $canSeeWholesalePrices = $user?->canSeeWholesalePrices() ?? false;
 
         $retailPrice = $this->product->prices
             ->first(fn ($p) => $p->salesChannel?->slug === SalesChannel::RETAIL && is_null($p->variation_id));
@@ -550,6 +551,7 @@ class ProductDetail extends Component
 
         return view('livewire.storefront.product-detail', [
             'isWholesaleUser' => $isWholesaleUser,
+            'canSeeWholesalePrices' => $canSeeWholesalePrices,
             'retailPrice' => $retailPrice,
             'wholesalePrice' => $wholesalePrice,
             'wholesaleTiers' => $wholesaleTiers,

@@ -136,9 +136,17 @@ class User extends Authenticatable implements FilamentUser
         return $this->role?->slug === 'seller';
     }
 
+    /**
+     * A wholesale buyer is someone an admin has approved (D3); holding the role alone is not enough.
+     */
     public function isWholesaleBuyer(): bool
     {
-        return $this->role?->slug === 'wholesale_buyer';
+        return $this->role?->slug === 'wholesale_buyer' && $this->is_wholesale_approved;
+    }
+
+    public function canSeeWholesalePrices(): bool
+    {
+        return $this->isSuperAdmin() || $this->isWholesaleBuyer();
     }
 
     public function isRetailBuyer(): bool

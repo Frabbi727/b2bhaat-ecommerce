@@ -110,7 +110,7 @@
                                             <span class="text-xs text-slate-400 line-through">৳{{ number_format($product->regular_price, 2) }}</span>
                                             <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-100 text-rose-700">-{{ $product->discount_percentage }}%</span>
                                         </div>
-                                    @elseif ($product->wholesalePrice && (auth()->user()?->isWholesaleBuyer() || auth()->user()?->is_wholesale_approved))
+                                    @elseif ($product->wholesalePrice && auth()->user()?->canSeeWholesalePrices())
                                         <div class="flex items-baseline gap-1">
                                             <span class="text-base font-extrabold text-indigo-700">৳{{ number_format($product->wholesalePrice->unit_price, 2) }}</span>
                                             <span class="text-[10px] font-bold uppercase text-slate-500">/ wholesale</span>
