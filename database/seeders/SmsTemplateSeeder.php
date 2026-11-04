@@ -39,8 +39,8 @@ class SmsTemplateSeeder extends Seeder
             [
                 'key' => 'order_confirmation',
                 'name' => 'Order Confirmation',
-                'content_en' => 'Dear {customer_name}, order #{order_number} confirmed! Total: BDT {order_total}. Invoice: {invoice_url}. Thanks for shopping with B2Bhaat.',
-                'content_bn' => 'প্রিয় {customer_name}, আপনার #{order_number} অর্ডার সফলভাবে গৃহীত হয়েছে! মোট: {order_total} টাকা। ইনভয়েস: {invoice_url}। সাথে থাকার জন্য ধন্যবাদ।',
+                'content_en' => 'Dear {customer_name}, order #{order_number} confirmed! Total: BDT {order_total}. Invoice: {invoice_url}. Tracking: {tracking_url}. Thanks for shopping with B2Bhaat.',
+                'content_bn' => 'প্রিয় {customer_name}, আপনার #{order_number} অর্ডার সফলভাবে গৃহীত হয়েছে! মোট: {order_total} টাকা। ইনভয়েস: {invoice_url}। ট্র্যাকিং: {tracking_url}। সাথে থাকার জন্য ধন্যবাদ।',
                 'placeholders' => ['customer_name', 'order_number', 'order_total', 'invoice_url', 'tracking_url'],
                 'is_active' => true,
             ],
