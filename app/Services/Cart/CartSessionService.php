@@ -4,8 +4,10 @@ namespace App\Services\Cart;
 
 use App\Models\Coupon;
 use App\Models\Product;
+use App\Models\ProductPrice;
 use App\Models\SalesChannel;
 use Exception;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Session;
 
 class CartSessionService
@@ -56,19 +58,23 @@ class CartSessionService
             throw new Exception("Wholesale minimum order quantity is {$minQty}. You requested {$quantity}.");
         }
 
+        $items = $this->getItems();
+        $key = "{$productId}_".($variationId ?? 'base')."_{$channelSlug}";
+
+        $totalQuantity = $quantity;
+        if (isset($items[$key])) {
+            $totalQuantity = $items[$key]['quantity'] + $quantity;
+        }
+
         // Match progressive volume tier or apply passed override rate
         $effectivePrice = $overrideUnitPrice;
         $matchedRecord = null;
         if (! $effectivePrice) {
-            $matchedRecord = $channelPrices->filter(fn ($p) => $quantity >= $p->min_quantity)->last()
-                ?? $channelPrices->first();
-            $effectivePrice = (float) $matchedRecord->unit_price;
+            $matchedRecord = $this->resolveTierRecord($channelPrices, $totalQuantity);
+            $effectivePrice = (float) $matchedRecord?->unit_price;
         } else {
             $matchedRecord = $channelPrices->first();
         }
-
-        $items = $this->getItems();
-        $key = "{$productId}_".($variationId ?? 'base')."_{$channelSlug}";
 
         $sku = $variation ? $variation->sku : ($product->slug.'-BASE');
         $attrs = '';
@@ -79,7 +85,7 @@ class CartSessionService
         }
 
         if (isset($items[$key])) {
-            $items[$key]['quantity'] += $quantity;
+            $items[$key]['quantity'] = $totalQuantity;
             $items[$key]['unit_price'] = $effectivePrice;
         } else {
             $items[$key] = [
@@ -90,7 +96,7 @@ class CartSessionService
                 'variation_id' => $variationId,
                 'variation_sku' => $sku,
                 'attributes_summary' => $attrs,
-                'sales_channel_id' => $matchedRecord->sales_channel_id,
+                'sales_channel_id' => $matchedRecord ? $matchedRecord->sales_channel_id : $channelPrices->first()->sales_channel_id,
                 'sales_channel_slug' => $channelSlug,
                 'unit_price' => $effectivePrice,
                 'min_quantity' => $minQty,
@@ -128,8 +134,49 @@ class CartSessionService
             throw new Exception("Cannot reduce below wholesale MOQ of {$item['min_quantity']}.");
         }
 
-        $items[$key]['quantity'] = $newQuantity;
+        // Dynamically recalculate unit_price to match the updated quantity volume tier
+        $product = Product::with(['prices.salesChannel'])->find($item['product_id']);
+        if ($product) {
+            $channelPrices = $product->prices
+                ->filter(fn ($p) => $p->salesChannel?->slug === $item['sales_channel_slug'] && ($p->variation_id === $item['variation_id'] || is_null($p->variation_id)))
+                ->sortBy('min_quantity');
+
+            if ($channelPrices->isNotEmpty()) {
+                $matchedTier = $this->resolveTierRecord($channelPrices, $newQuantity);
+                if ($matchedTier) {
+                    $item['unit_price'] = (float) $matchedTier->unit_price;
+                }
+            }
+        }
+
+        $item['quantity'] = $newQuantity;
+        $items[$key] = $item;
         Session::put(self::SESSION_KEY, $items);
+    }
+
+    /**
+     * Resolve the effective product price record based on quantity and channel price tiers.
+     *
+     * @param  Collection<int, ProductPrice>  $channelPrices
+     */
+    public function resolveTierRecord($channelPrices, int $quantity): ?ProductPrice
+    {
+        // 1. Check exact min_quantity and max_quantity range
+        $matchedRange = $channelPrices->filter(function ($tier) use ($quantity) {
+            if ($tier->max_quantity !== null) {
+                return $quantity >= $tier->min_quantity && $quantity <= $tier->max_quantity;
+            }
+
+            return $quantity >= $tier->min_quantity;
+        })->last();
+
+        if ($matchedRange) {
+            return $matchedRange;
+        }
+
+        // 2. Fallback to progressive threshold: highest min_quantity that $quantity >= min_quantity
+        return $channelPrices->filter(fn ($p) => $quantity >= $p->min_quantity)->last()
+            ?? $channelPrices->first();
     }
 
     public function clear(): void
