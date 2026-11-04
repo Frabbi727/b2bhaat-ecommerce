@@ -1,3 +1,40 @@
+# 🏢 B2Bhaat E-Commerce — Platform & Business Architecture Guide for AI Agents
+
+> **Critical Context for AI Agents:**  
+> Before making architectural suggestions, modifying business logic, or writing code, read the full system specification in [docs/BUSINESS_AND_SYSTEM_ARCHITECTURE.md](file:///Users/fazlerabbi/Desktop/projects/TONMY SOFT/b2bhaat-ecommerce/docs/BUSINESS_AND_SYSTEM_ARCHITECTURE.md).
+
+## 1. What is B2Bhaat?
+**B2Bhaat** (`b2bhaat.com`) is a **hybrid B2B Wholesale + B2C Retail Multi-Vendor Marketplace** engineered for the Bangladeshi commercial ecosystem (`BDT / ৳`, local courier logistics, MFS payment gateways).
+
+- **Wholesale Channel (`wholesale`):** Connects verified factory manufacturers & importers directly with retail storekeepers and bulk buyers. Strict Minimum Order Quantities (MOQ), progressive volume discount tier brackets (e.g., 50–99 pcs @ ৳110, 100–249 pcs @ ৳95, 250+ pcs @ ৳85), and wholesale variation matrix ordering.
+- **Retail Channel (`retail`):** Standard B2C consumer shopping (`MOQ = 1`) at standard retail prices.
+- **Dual-Channel Products (`both`):** Single product selling in both channels simultaneously with distinct pricing records and MOQ rules.
+
+## 2. The 4 User Personas & Access Levels
+1. **Super Admin (`super_admin` / `admin`):** Accesses `/admin` (Filament 3). Manages platform governance, merchant KYC, trade licenses, BulkSMSBD gateway & balance, SMS templates, escrow payouts.
+2. **Factory Merchant (`seller`):** Accesses `/seller` (Filament 3) & storefront `/store/{slug}`. Manages factory inventory, wholesale tier matrices, sub-order fulfillment, packing slips, courier dispatch, seller wallet.
+3. **Wholesale Buyer (`wholesale_buyer`):** Business account verified with trade license KYC. Unlocks wholesale pricing brackets, bulk matrices, tax invoices, and RFQ negotiations.
+4. **Retail Customer (`customer`):** Regular consumer shopping at `/`, `/cart`, `/checkout`. Uses OTP authentication and parcel tracking via secure tokens.
+
+## 3. Core Technical Subsystems & Architecture Reference
+- **Progressive Volume Tier Pricing:** `App\Services\Cart\CartSessionService::resolveTierRecord()`. Unit price dynamically recalibrates when quantity changes in cart (e.g. 1 pc @ ৳100 drops to ৳80 for 100–200 pcs). Cumulative quantity is honored when adding existing items.
+- **Multi-Vendor Order Splitting:** `App\Services\Orders\OrderSplitterService`. Splits 1 Parent Order (`orders`) into N Sub-Orders (`sub_orders`) for each seller.
+- **Escrow Financial System:** `App\Services\Financial\EscrowLedgerService`. Buyer funds held in escrow; 48-hour post-delivery dispute window before releasing to seller wallet.
+- **SMS Gateway & Hardened OTP Subsystem:** `App\Services\Sms\*`. Supports BulkSMSBD (`BulkSmsBdDriver`), in-memory testing (`MockDriver`), and local logging (`LogDriver`).
+  - Hashed OTP storage (SHA-256 in `otps` table).
+  - Masked logs (`******` in `sms_logs`).
+  - Emergency fallback OTP for production testing: `SMS_DEFAULT_OTP=123456` (configurable in `.env` and `/admin` settings).
+- **Tokenized Invoicing & Tracking:**
+  - Invoice: `/invoice/{invoice_token}` (printable, mobile-responsive, no login required).
+  - Tracking: `/track/{tracking_token}` (real-time timeline, courier name, tracking code).
+
+## 4. Key Developer & Verification Commands
+- **Run Tests:** `php artisan test --compact` (266 tests passing, uses `SMS_DRIVER=mock`).
+- **Code Formatter:** `vendor/bin/pint --dirty --format agent` (PHP 8.5 with strict typing).
+- **Queue Worker:** `php artisan queue:work --once` (SMS jobs run via `App\Jobs\SendSmsJob`).
+
+---
+
 <laravel-boost-guidelines>
 === foundation rules ===
 

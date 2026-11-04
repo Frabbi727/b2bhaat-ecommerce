@@ -57,4 +57,18 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
-# b2bhaat-ecommerce
+## Production Deployment
+
+To pull the latest code, run database migrations, build frontend assets, upgrade Filament panels, and clear/rebuild Laravel optimize caches on the production server:
+
+```bash
+cd ~/b2bhaat.com && \
+git fetch origin production && \
+git reset --hard origin/production && \
+composer install --no-dev --optimize-autoloader --no-interaction && \
+npm ci && npm run build && \
+php artisan migrate --force && \
+php artisan filament:upgrade && \
+php artisan optimize:clear && \
+php artisan optimize
+```
