@@ -16,9 +16,11 @@ use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Logistics\ShippingCalculatorService;
 use App\Services\Orders\OrderSplitterService;
 use App\Services\Settings\StoreConfigurationService;
+use App\Services\Sms\OrderNotificationService;
 use Exception;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -362,6 +364,13 @@ class CheckoutComponent extends Component
                     'postal_code' => $this->postalCode,
                     'is_default' => $customer->addresses()->count() === 0,
                 ]);
+            }
+
+            // Send transactional Order Confirmation SMS with tokenized invoice & tracking
+            try {
+                app(OrderNotificationService::class)->sendOrderConfirmation($order);
+            } catch (\Throwable $e) {
+                Log::warning('Order confirmation SMS dispatch failure: '.$e->getMessage());
             }
 
             $cart->clear();

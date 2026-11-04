@@ -42,4 +42,26 @@ class InvoiceController extends Controller
             'order' => $order,
         ]);
     }
+
+    /**
+     * Show invoice securely via unique token without requiring login.
+     */
+    public function showByToken(string $token): View
+    {
+        $order = Order::with([
+            'orderStatus',
+            'paymentStatus',
+            'paymentMethod',
+            'customer',
+            'subOrders.seller.sellerProfile',
+            'subOrders.items.product',
+            'subOrders.items.variation.attributeValues.attribute',
+        ])
+            ->where('invoice_token', $token)
+            ->firstOrFail();
+
+        return view('storefront.invoice', [
+            'order' => $order,
+        ]);
+    }
 }

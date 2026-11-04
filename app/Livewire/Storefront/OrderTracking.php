@@ -19,6 +19,9 @@ class OrderTracking extends Component
     #[Url(as: 'phone')]
     public string $phone = '';
 
+    #[Url(as: 'token')]
+    public string $token = '';
+
     public ?Order $order = null;
 
     public string $searchError = '';
@@ -38,10 +41,43 @@ class OrderTracking extends Component
 
     public string $returnDescription = '';
 
-    public function mount(): void
+    public function mount(?string $token = null): void
     {
+        $tokenToUse = $token ?: $this->token;
+        if (! empty($tokenToUse)) {
+            $this->loadOrderByToken($tokenToUse);
+
+            return;
+        }
+
         if ($this->orderNumber) {
             $this->searchOrder();
+        }
+    }
+
+    public function loadOrderByToken(string $token): void
+    {
+        $this->searchError = '';
+        $this->actionFeedback = '';
+        $this->actionError = '';
+        $this->order = null;
+
+        $found = Order::with([
+            'orderStatus',
+            'paymentStatus',
+            'paymentMethod',
+            'subOrders.seller.sellerProfile',
+            'subOrders.fulfillmentStatus',
+            'subOrders.trackingLogs.fulfillmentStatus',
+            'subOrders.returnRequests',
+            'subOrders.items.product',
+        ])->where('tracking_token', trim($token))->first();
+
+        if ($found) {
+            $this->order = $found;
+            $this->orderNumber = $found->order_number;
+        } else {
+            $this->searchError = 'Invalid or expired tracking token.';
         }
     }
 
