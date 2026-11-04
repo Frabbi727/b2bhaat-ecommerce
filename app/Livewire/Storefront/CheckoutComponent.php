@@ -2,14 +2,13 @@
 
 namespace App\Livewire\Storefront;
 
+use App\Actions\Checkout\ResolveCheckoutCustomer;
 use App\Models\Coupon;
 use App\Models\CustomerAddress;
 use App\Models\OrderStatus;
 use App\Models\PaymentMethod;
 use App\Models\PaymentStatus;
-use App\Models\Role;
 use App\Models\SalesChannel;
-use App\Models\User;
 use App\Services\Cart\CartSessionService;
 use App\Services\Cart\CouponService;
 use App\Services\Escrow\EscrowLedgerService;
@@ -19,7 +18,6 @@ use App\Services\Settings\StoreConfigurationService;
 use App\Services\Sms\OrderNotificationService;
 use Exception;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -244,20 +242,7 @@ class CheckoutComponent extends Component
 
         try {
             // Determine customer
-            $customer = Auth::user();
-            if (! $customer) {
-                $retailRole = Role::where('slug', 'retail_buyer')->firstOrFail();
-                $customer = User::firstOrCreate(
-                    ['email' => 'guest_'.time().'@b2bhaat.com'],
-                    [
-                        'role_id' => $retailRole->id,
-                        'name' => $this->recipientName,
-                        'phone' => $this->recipientPhone,
-                        'password' => Hash::make('password'),
-                        'is_active' => true,
-                    ]
-                );
-            }
+            $customer = app(ResolveCheckoutCustomer::class)->handle(Auth::user(), $this->recipientName, $this->recipientPhone);
 
             $shippingFee = $this->getShippingFee();
             $appliedCoupon = $this->appliedCoupon ?? $cart->getCoupon();
