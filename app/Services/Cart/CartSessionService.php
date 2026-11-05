@@ -276,6 +276,30 @@ class CartSessionService
     }
 
     /**
+     * Titles of cart items that can no longer be bought: hidden by the seller or the admin,
+     * the seller account turned off or not approved, or the store on vacation.
+     *
+     * @return list<string>
+     */
+    public function unavailableItemTitles(): array
+    {
+        $items = collect($this->getItems());
+        $buyableProductIds = Product::query()
+            ->sellable()
+            ->whereIn('id', $items->pluck('product_id')->unique())
+            ->whereHas('seller.sellerProfile', fn ($profile) => $profile->where('is_on_vacation', false))
+            ->pluck('id')
+            ->all();
+
+        return $items
+            ->reject(fn (array $item) => in_array((int) $item['product_id'], $buyableProductIds, true))
+            ->pluck('product_title')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
      * Wholesale lots whose total quantity is below the product MOQ (quoted RFQ lines excluded).
      *
      * @return list<array{product_id: int, title: string, quantity: int, moq: int}>

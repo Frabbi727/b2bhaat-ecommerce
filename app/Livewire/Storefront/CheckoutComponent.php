@@ -249,6 +249,13 @@ class CheckoutComponent extends Component
         }
 
         // Wholesale MOQ is checked on each product lot (all variations together) — PRA-025
+        $unavailableTitles = $cart->unavailableItemTitles();
+        if ($unavailableTitles !== []) {
+            $this->errorMessage = implode(', ', $unavailableTitles).' is no longer available. Please remove it from your cart to continue.';
+
+            return;
+        }
+
         $moqViolation = $cart->wholesaleMoqViolations()[0] ?? null;
         if ($moqViolation) {
             $this->errorMessage = "Wholesale minimum order quantity for {$moqViolation['title']} is {$moqViolation['moq']} (all variations together). Your cart has {$moqViolation['quantity']}.";

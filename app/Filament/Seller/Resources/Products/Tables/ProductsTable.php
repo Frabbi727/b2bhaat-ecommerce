@@ -21,6 +21,7 @@ class ProductsTable
                 TextColumn::make('title')
                     ->label('Product Title')
                     ->weight('bold')
+                    ->description(fn ($record): ?string => $record->blocked_at ? 'Hidden by admin: '.$record->blocked_reason : null)
                     ->searchable()
                     ->sortable(),
 

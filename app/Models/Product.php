@@ -38,6 +38,8 @@ class Product extends Model
         'views_count',
         'sales_count',
         'is_active',
+        'blocked_at',
+        'blocked_reason',
     ];
 
     protected $hidden = [
@@ -105,6 +107,7 @@ class Product extends Model
             'views_count' => 'integer',
             'sales_count' => 'integer',
             'is_active' => 'boolean',
+            'blocked_at' => 'datetime',
         ];
     }
 
@@ -206,6 +209,7 @@ class Product extends Model
     public function scopeSellable(Builder $query): Builder
     {
         return $query->where($query->qualifyColumn('is_active'), true)
+            ->whereNull($query->qualifyColumn('blocked_at'))
             ->whereHas('seller', fn (Builder $seller) => $seller->where('is_active', true)
                 ->whereHas('sellerProfile', fn (Builder $profile) => $profile->where('is_approved', true)));
     }
