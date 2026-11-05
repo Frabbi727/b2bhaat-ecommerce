@@ -58,6 +58,28 @@ class CustomerAuth extends Component
 
     public string $successMessage = '';
 
+    /**
+     * Send the user back to the page that asked them to sign in (e.g. a product review), but only within this site.
+     */
+    private function rememberSafeRedirect(mixed $redirect): void
+    {
+        if (! is_string($redirect) || $redirect === '' || str_starts_with($redirect, '//')) {
+            return;
+        }
+
+        $target = parse_url($redirect);
+        $appHost = parse_url(url('/'), PHP_URL_HOST);
+
+        $isRelativePath = ! isset($target['scheme']) && ! isset($target['host']) && str_starts_with($redirect, '/');
+        $isSameHost = isset($target['host'], $target['scheme'])
+            && in_array($target['scheme'], ['http', 'https'], true)
+            && $target['host'] === $appHost;
+
+        if ($isRelativePath || $isSameHost) {
+            session()->put('url.intended', $redirect);
+        }
+    }
+
     public function mount(?string $tab = null): void
     {
         if (Auth::check()) {
@@ -65,6 +87,8 @@ class CustomerAuth extends Component
 
             return;
         }
+
+        $this->rememberSafeRedirect(request()->query('redirect'));
 
         if (request()->routeIs('register')) {
             $this->mode = 'register';
@@ -367,7 +391,7 @@ class CustomerAuth extends Component
     public function render()
     {
         return view('livewire.storefront.customer-auth', [
-            'isProduction' => app()->isProduction(),
+            'isProduction' => ! app()->environment('local', 'testing'), // demo personas only where /demo-login works
         ])->title($this->mode === 'register' ? 'Create Account - B2B Haat' : 'Sign In - B2B Haat');
     }
 }

@@ -148,4 +148,36 @@ class ProductReviewTest extends TestCase
             ->call('setFilterRating', 'all')
             ->assertSet('reviewFilterRating', 'all');
     }
+
+    public function test_guest_review_link_points_to_login(): void
+    {
+        $product = Product::where('slug', 'luxury-press-on-fake-nails-set')->firstOrFail();
+        $productUrl = route('catalog.show', $product->slug);
+
+        $html = $this->get($productUrl)->assertOk()->getContent();
+
+        // The review call-to-action must use the real login (demo links in the dev header are separate)
+        $this->assertMatchesRegularExpression('#<a href="([^"]+)"[^>]*>\s*Sign In to Review#', $html);
+        preg_match('#<a href="([^"]+)"[^>]*>\s*Sign In to Review#', $html, $match);
+        $this->assertStringNotContainsString('/demo-login', $match[1]);
+        $this->assertSame(e(route('login', ['redirect' => $productUrl])), $match[1]);
+    }
+
+    public function test_login_redirect_param_returns_to_product_after_sign_in(): void
+    {
+        $product = Product::where('slug', 'luxury-press-on-fake-nails-set')->firstOrFail();
+        $productUrl = route('catalog.show', $product->slug);
+
+        $this->get(route('login', ['redirect' => $productUrl]))->assertOk();
+        $this->assertSame($productUrl, session('url.intended'));
+    }
+
+    public function test_login_redirect_param_ignores_external_urls(): void
+    {
+        $this->get(route('login', ['redirect' => 'https://evil.example/phish']))->assertOk();
+        $this->assertNull(session('url.intended'));
+
+        $this->get(route('login', ['redirect' => '//evil.example/phish']))->assertOk();
+        $this->assertNull(session('url.intended'));
+    }
 }

@@ -773,7 +773,7 @@
                         @else
                             <div class="p-8 text-center rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                                 <p class="text-xs text-slate-600">Please sign in to write a verified customer review for this product.</p>
-                                <a href="{{ route('demo.login', 'retail') }}" class="inline-block px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition">
+                                <a href="{{ route('login', ['redirect' => url()->current()]) }}" class="inline-block px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition">
                                     Sign In to Review
                                 </a>
                             </div>

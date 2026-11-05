@@ -82,7 +82,7 @@
                         <a href="{{ route('register') }}" class="text-indigo-300 hover:text-white font-semibold transition">
                             Register
                         </a>
-                        @if (! app()->isProduction())
+                        @if (app()->environment('local', 'testing'))
                             <span class="hidden xl:inline text-slate-700">|</span>
                             <div class="hidden xl:flex items-center gap-1 text-[10px]">
                                 <span class="text-slate-500">Demo:</span>
