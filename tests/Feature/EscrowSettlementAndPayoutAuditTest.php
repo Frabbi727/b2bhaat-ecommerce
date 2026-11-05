@@ -140,7 +140,7 @@ class EscrowSettlementAndPayoutAuditTest extends TestCase
         $this->assertEquals(1, WalletTransaction::where('sub_order_id', $subOrder->id)->where('transaction_type', WalletTransaction::TYPE_ESCROW_REFUND)->count());
     }
 
-    public function test_delivered_consignment_credits_available_balance_and_is_strictly_idempotent(): void
+    public function test_delivered_consignment_is_released_once_after_holding_period(): void
     {
         $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
         $customer = User::where('email', 'customer@retail.com')->firstOrFail();
@@ -187,21 +187,28 @@ class EscrowSettlementAndPayoutAuditTest extends TestCase
         // Courier marks consignment delivered
         $this->courierStatusService->updateStatus($subOrder, 'delivered');
 
+        // Delivery keeps the funds in escrow; only the 48 h release moves them (PRA-001)
+        $wallet->refresh();
+        $this->assertEquals(2700.00, (float) $wallet->escrow_held_balance);
+        $this->assertEquals(0.00, (float) $wallet->available_balance);
+
+        // Duplicate delivery webhook arrives (must be idempotent - NO duplicate hold)
+        $this->courierStatusService->updateStatus($subOrder, 'delivered');
+        $wallet->refresh();
+        $this->assertEquals(2700.00, (float) $wallet->escrow_held_balance);
+
+        $this->travel(49)->hours();
+        $this->artisan('escrow:release-delivered')->assertSuccessful();
+        $this->artisan('escrow:release-delivered')->assertSuccessful();
+
         $wallet->refresh();
         $this->assertEquals(0.00, (float) $wallet->escrow_held_balance);
-        $this->assertEquals(2700.00, (float) $wallet->available_balance);
-
         $this->assertDatabaseHas('wallet_transactions', [
             'seller_wallet_id' => $wallet->id,
             'sub_order_id' => $subOrder->id,
             'transaction_type' => WalletTransaction::TYPE_ESCROW_RELEASE,
             'amount' => 2700.00,
         ]);
-
-        // Duplicate delivery webhook arrives (must be idempotent - NO duplicate credit)
-        $this->courierStatusService->updateStatus($subOrder, 'delivered');
-
-        $wallet->refresh();
         $this->assertEquals(2700.00, (float) $wallet->available_balance); // Not 5400.00!
         $this->assertEquals(1, WalletTransaction::where('sub_order_id', $subOrder->id)->where('transaction_type', WalletTransaction::TYPE_ESCROW_RELEASE)->count());
     }

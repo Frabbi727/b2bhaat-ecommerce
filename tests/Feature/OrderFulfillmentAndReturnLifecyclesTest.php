@@ -18,6 +18,7 @@ use App\Models\SellerWallet;
 use App\Models\SubOrder;
 use App\Models\User;
 use App\Models\WalletTransaction;
+use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Logistics\CourierBookingService;
 use App\Services\Logistics\CourierStatusService;
 use App\Services\Orders\OrderDisputeService;
@@ -213,8 +214,11 @@ class OrderFulfillmentAndReturnLifecyclesTest extends TestCase
         // 1. SubOrder is delivered
         $this->assertEquals('delivered', $subOrder->fresh()->fulfillmentStatus?->slug);
 
-        // 2. Net earnings (10,000 - 500 = 9,500) credited to wallet
+        // 2. Net earnings (10,000 - 500 = 9,500) held at delivery, credited by the release after 48 h (PRA-001)
         $expectedNet = 9500.00;
+        $this->assertEquals($initialBalance, (float) $wallet->fresh()->available_balance);
+        $this->travel(49)->hours();
+        $this->artisan('escrow:release-delivered')->assertSuccessful();
         $this->assertEquals($initialBalance + $expectedNet, (float) $wallet->fresh()->available_balance);
 
         $this->assertDatabaseHas('wallet_transactions', [
@@ -418,7 +422,9 @@ class OrderFulfillmentAndReturnLifecyclesTest extends TestCase
             ['available_balance' => 0.00, 'escrow_held_balance' => 0.00]
         );
         $initialBalance = (float) $wallet->available_balance;
-        $wallet->increment('available_balance', 7600.00); // 8,000 - 400 = 7,600
+        // Held then released through the ledger: 8,000 - 400 = 7,600
+        app(EscrowLedgerService::class)->holdInEscrow($subOrder);
+        app(EscrowLedgerService::class)->releaseFromEscrow($subOrder);
 
         // Customer submits return request
         $disputeService = app(OrderDisputeService::class);
@@ -445,7 +451,7 @@ class OrderFulfillmentAndReturnLifecyclesTest extends TestCase
         $this->assertDatabaseHas('wallet_transactions', [
             'seller_wallet_id' => $wallet->id,
             'sub_order_id' => $subOrder->id,
-            'transaction_type' => WalletTransaction::TYPE_ESCROW_REFUND,
+            'transaction_type' => WalletTransaction::TYPE_RETURN_REVERSAL,
             'amount' => 7600.00,
         ]);
 

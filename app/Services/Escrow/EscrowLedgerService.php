@@ -17,225 +17,172 @@ class EscrowLedgerService
     ) {}
 
     /**
-     * Hold sub-order net earnings in seller's escrow held balance upon customer payment.
+     * Hold what the platform owes the seller for this sub-order (net earnings, plus the delivery fee when the
+     * seller self-delivers — D6). Prepaid orders hold at payment; COD holds at delivery (D2). Calling again tops
+     * up a prepaid hold once if the seller later chose self-delivery; otherwise it is a no-op.
      */
     public function holdInEscrow(SubOrder $subOrder): WalletTransaction
     {
-        $existingHold = WalletTransaction::where('sub_order_id', $subOrder->id)
-            ->where('transaction_type', WalletTransaction::TYPE_ESCROW_HOLD)
-            ->first();
-
-        if ($existingHold) {
-            return $existingHold;
-        }
-
         return DB::transaction(function () use ($subOrder) {
-            /** @var SellerWallet $wallet */
-            $wallet = SellerWallet::firstOrCreate(
-                ['seller_id' => $subOrder->seller_id],
-                ['available_balance' => 0.00, 'escrow_held_balance' => 0.00]
-            );
+            $wallet = $this->lockWallet($subOrder->seller_id, createIfMissing: true);
 
-            // Re-lock wallet for update
-            $wallet = SellerWallet::where('id', $wallet->id)->lockForUpdate()->firstOrFail();
+            $hold = $this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_HOLD);
+            $payable = round($subOrder->sellerPayableAmount(), 2);
 
-            $netEarnings = $subOrder->net_earnings;
+            if (! $hold) {
+                $wallet->increment('escrow_held_balance', $payable);
+                $wallet->refresh();
 
-            $wallet->increment('escrow_held_balance', $netEarnings);
-
-            return WalletTransaction::create([
-                'seller_wallet_id' => $wallet->id,
-                'sub_order_id' => $subOrder->id,
-                'transaction_type' => WalletTransaction::TYPE_ESCROW_HOLD,
-                'amount' => $netEarnings,
-                'running_balance' => $wallet->available_balance,
-                'reference_note' => "Escrow hold for Sub-Order #{$subOrder->sub_order_number}",
-            ]);
-        });
-    }
-
-    /**
-     * Release held funds from escrow into available balance (e.g. 48h after delivery).
-     */
-    public function releaseFromEscrow(SubOrder $subOrder): WalletTransaction
-    {
-        $existingRelease = WalletTransaction::where('sub_order_id', $subOrder->id)
-            ->where('transaction_type', WalletTransaction::TYPE_ESCROW_RELEASE)
-            ->first();
-
-        if ($existingRelease) {
-            return $existingRelease;
-        }
-
-        return DB::transaction(function () use ($subOrder) {
-            /** @var SellerWallet $wallet */
-            $wallet = SellerWallet::where('seller_id', $subOrder->seller_id)
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            $netEarnings = $subOrder->net_earnings;
-
-            if ($wallet->escrow_held_balance < $netEarnings) {
-                // If held balance is lower, adjust to the remaining held amount
-                $netEarnings = $wallet->escrow_held_balance;
+                return $this->record($wallet, $subOrder, WalletTransaction::TYPE_ESCROW_HOLD, $payable,
+                    "Escrow hold for Sub-Order #{$subOrder->sub_order_number}");
             }
 
-            $wallet->decrement('escrow_held_balance', $netEarnings);
-            $wallet->increment('available_balance', $netEarnings);
+            $shortfall = round($payable - $this->heldAmountFor($subOrder), 2);
+            $alreadySettled = $this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_RELEASE)
+                || $this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_REFUND);
 
-            $wallet->refresh();
-
-            return WalletTransaction::create([
-                'seller_wallet_id' => $wallet->id,
-                'sub_order_id' => $subOrder->id,
-                'transaction_type' => WalletTransaction::TYPE_ESCROW_RELEASE,
-                'amount' => $netEarnings,
-                'running_balance' => $wallet->available_balance,
-                'reference_note' => "Released to available balance for delivered Sub-Order #{$subOrder->sub_order_number}",
-            ]);
-        });
-    }
-
-    /**
-     * Credit seller wallet directly for delivered COD sub-orders.
-     */
-    public function creditDeliveredSubOrder(SubOrder $subOrder): WalletTransaction
-    {
-        $existingRelease = WalletTransaction::where('sub_order_id', $subOrder->id)
-            ->where('transaction_type', WalletTransaction::TYPE_ESCROW_RELEASE)
-            ->first();
-
-        if ($existingRelease) {
-            return $existingRelease;
-        }
-
-        return DB::transaction(function () use ($subOrder) {
-            /** @var SellerWallet $wallet */
-            $wallet = SellerWallet::firstOrCreate(
-                ['seller_id' => $subOrder->seller_id],
-                ['available_balance' => 0.00, 'escrow_held_balance' => 0.00]
-            );
-
-            $wallet = SellerWallet::where('id', $wallet->id)->lockForUpdate()->firstOrFail();
-
-            $netEarnings = $subOrder->net_earnings;
-
-            if ($wallet->escrow_held_balance >= $netEarnings) {
-                $wallet->decrement('escrow_held_balance', $netEarnings);
-            } elseif ($wallet->escrow_held_balance > 0) {
-                $wallet->update(['escrow_held_balance' => 0.00]);
+            if ($shortfall > 0 && ! $alreadySettled && ! $this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_HOLD_ADJUSTMENT)) {
+                $wallet->increment('escrow_held_balance', $shortfall);
+                $wallet->refresh();
+                $this->record($wallet, $subOrder, WalletTransaction::TYPE_ESCROW_HOLD_ADJUSTMENT, $shortfall,
+                    "Self-delivery fee added to escrow for Sub-Order #{$subOrder->sub_order_number}");
             }
 
-            $wallet->increment('available_balance', $netEarnings);
-            $wallet->refresh();
-
-            return WalletTransaction::create([
-                'seller_wallet_id' => $wallet->id,
-                'sub_order_id' => $subOrder->id,
-                'transaction_type' => WalletTransaction::TYPE_ESCROW_RELEASE,
-                'amount' => $netEarnings,
-                'running_balance' => $wallet->available_balance,
-                'reference_note' => "Settled net earnings to wallet for delivered Sub-Order #{$subOrder->sub_order_number}",
-            ]);
+            return $hold;
         });
     }
 
     /**
-     * Refund held escrow funds when an unfulfilled consignment is cancelled.
+     * Total currently attributed to this sub-order's hold (hold plus any self-delivery top-up).
+     */
+    public function heldAmountFor(SubOrder $subOrder): float
+    {
+        return round((float) WalletTransaction::where('sub_order_id', $subOrder->id)
+            ->whereIn('transaction_type', [WalletTransaction::TYPE_ESCROW_HOLD, WalletTransaction::TYPE_ESCROW_HOLD_ADJUSTMENT])
+            ->sum('amount'), 2);
+    }
+
+    /**
+     * Release exactly this sub-order's own hold into available balance (only the scheduled 48 h release calls this).
+     * Returns null when there is no hold, or when the hold was already refunded.
+     */
+    public function releaseFromEscrow(SubOrder $subOrder): ?WalletTransaction
+    {
+        return DB::transaction(function () use ($subOrder) {
+            $wallet = $this->lockWallet($subOrder->seller_id);
+            if (! $wallet) {
+                return null;
+            }
+
+            if ($existing = $this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_RELEASE)) {
+                return $existing;
+            }
+
+            if ($this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_REFUND)) {
+                return null;
+            }
+
+            $amount = $this->heldAmountFor($subOrder);
+            if ($amount <= 0) {
+                return null;
+            }
+
+            $wallet->decrement('escrow_held_balance', $amount);
+            $wallet->increment('available_balance', $amount);
+            $wallet->refresh();
+
+            return $this->record($wallet, $subOrder, WalletTransaction::TYPE_ESCROW_RELEASE, $amount,
+                "Released to available balance for delivered Sub-Order #{$subOrder->sub_order_number}");
+        });
+    }
+
+    /**
+     * Return this sub-order's own hold to the buyer side when it is cancelled or returned before release.
      */
     public function refundCancelledEscrow(SubOrder $subOrder, string $reason = 'Consignment cancelled'): ?WalletTransaction
     {
-        $existingRefund = WalletTransaction::where('sub_order_id', $subOrder->id)
-            ->where('transaction_type', WalletTransaction::TYPE_ESCROW_REFUND)
-            ->first();
-
-        if ($existingRefund) {
-            return $existingRefund;
-        }
-
-        $holdTx = WalletTransaction::where('sub_order_id', $subOrder->id)
-            ->where('transaction_type', WalletTransaction::TYPE_ESCROW_HOLD)
-            ->first();
-
-        if (! $holdTx) {
-            return null;
-        }
-
-        return DB::transaction(function () use ($subOrder, $holdTx, $reason) {
-            /** @var SellerWallet|null $wallet */
-            $wallet = SellerWallet::where('seller_id', $subOrder->seller_id)
-                ->lockForUpdate()
-                ->first();
-
+        return DB::transaction(function () use ($subOrder, $reason) {
+            $wallet = $this->lockWallet($subOrder->seller_id);
             if (! $wallet) {
                 return null;
             }
 
-            $refundAmount = min((float) $holdTx->amount, (float) $wallet->escrow_held_balance);
-
-            if ($refundAmount > 0) {
-                $wallet->decrement('escrow_held_balance', $refundAmount);
-                $wallet->refresh();
+            if ($existing = $this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_REFUND)) {
+                return $existing;
             }
 
-            return WalletTransaction::create([
-                'seller_wallet_id' => $wallet->id,
-                'sub_order_id' => $subOrder->id,
-                'transaction_type' => WalletTransaction::TYPE_ESCROW_REFUND,
-                'amount' => (float) $holdTx->amount,
-                'running_balance' => $wallet->available_balance,
-                'reference_note' => "Escrow hold refunded due to cancellation of Sub-Order #{$subOrder->sub_order_number}: {$reason}",
-            ]);
+            if ($this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_RELEASE)) {
+                return null;
+            }
+
+            $amount = $this->heldAmountFor($subOrder);
+            if ($amount <= 0) {
+                return null;
+            }
+
+            $wallet->decrement('escrow_held_balance', $amount);
+            $wallet->refresh();
+
+            return $this->record($wallet, $subOrder, WalletTransaction::TYPE_ESCROW_REFUND, $amount,
+                "Escrow hold refunded for Sub-Order #{$subOrder->sub_order_number}: {$reason}");
         });
     }
 
     /**
-     * Reverse and refund settlement when an approved return request is processed.
+     * Undo the seller side of a returned sub-order. Still held → refund the hold. Already released → debit the
+     * released amount from available balance, which may go negative (the seller then owes it and cannot request a
+     * payout until it is recovered). Never touches other orders' money.
      */
-    public function refundReturnedSubOrder(SubOrder $subOrder, string $reason = 'Return approved'): ?WalletTransaction
+    public function reverseReturnedSubOrder(SubOrder $subOrder, string $reason = 'Return approved'): ?WalletTransaction
     {
-        $existingReturnRefund = WalletTransaction::where('sub_order_id', $subOrder->id)
-            ->where('transaction_type', WalletTransaction::TYPE_ESCROW_REFUND)
-            ->first();
-
-        if ($existingReturnRefund) {
-            return $existingReturnRefund;
-        }
-
         return DB::transaction(function () use ($subOrder, $reason) {
-            /** @var SellerWallet|null $wallet */
-            $wallet = SellerWallet::where('seller_id', $subOrder->seller_id)
-                ->lockForUpdate()
-                ->first();
-
+            $wallet = $this->lockWallet($subOrder->seller_id);
             if (! $wallet) {
                 return null;
             }
 
-            $netEarnings = $subOrder->net_earnings;
-
-            if ($wallet->available_balance >= $netEarnings) {
-                $wallet->decrement('available_balance', $netEarnings);
-            } elseif ($wallet->escrow_held_balance >= $netEarnings) {
-                $wallet->decrement('escrow_held_balance', $netEarnings);
-            } else {
-                $remaining = $netEarnings - (float) $wallet->available_balance;
-                $wallet->update(['available_balance' => 0.00]);
-                if ($wallet->escrow_held_balance > 0) {
-                    $wallet->decrement('escrow_held_balance', min($remaining, (float) $wallet->escrow_held_balance));
-                }
+            if ($existing = $this->findTransaction($subOrder, WalletTransaction::TYPE_RETURN_REVERSAL)) {
+                return $existing;
             }
+
+            $release = $this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_RELEASE);
+            if (! $release) {
+                return $this->refundCancelledEscrow($subOrder, $reason);
+            }
+
+            $amount = round((float) $release->amount, 2);
+            $wallet->decrement('available_balance', $amount);
             $wallet->refresh();
 
-            return WalletTransaction::create([
-                'seller_wallet_id' => $wallet->id,
-                'sub_order_id' => $subOrder->id,
-                'transaction_type' => WalletTransaction::TYPE_ESCROW_REFUND,
-                'amount' => $netEarnings,
-                'running_balance' => $wallet->available_balance,
-                'reference_note' => "Settlement reversed due to approved return of Sub-Order #{$subOrder->sub_order_number}: {$reason}",
-            ]);
+            return $this->record($wallet, $subOrder, WalletTransaction::TYPE_RETURN_REVERSAL, $amount,
+                "Settlement reversed for returned Sub-Order #{$subOrder->sub_order_number}: {$reason}");
         });
+    }
+
+    private function lockWallet(int $sellerId, bool $createIfMissing = false): ?SellerWallet
+    {
+        if ($createIfMissing) {
+            SellerWallet::firstOrCreate(['seller_id' => $sellerId], ['available_balance' => 0.00, 'escrow_held_balance' => 0.00]);
+        }
+
+        return SellerWallet::where('seller_id', $sellerId)->lockForUpdate()->first();
+    }
+
+    private function findTransaction(SubOrder $subOrder, string $type): ?WalletTransaction
+    {
+        return WalletTransaction::where('sub_order_id', $subOrder->id)->where('transaction_type', $type)->first();
+    }
+
+    private function record(SellerWallet $wallet, SubOrder $subOrder, string $type, float $amount, string $note): WalletTransaction
+    {
+        return WalletTransaction::create([
+            'seller_wallet_id' => $wallet->id,
+            'sub_order_id' => $subOrder->id,
+            'transaction_type' => $type,
+            'amount' => $amount,
+            'running_balance' => $wallet->available_balance,
+            'reference_note' => $note,
+        ]);
     }
 
     /**
@@ -257,7 +204,7 @@ class EscrowLedgerService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($wallet->available_balance < $amount) {
+            if ((float) $wallet->available_balance <= 0 || $wallet->available_balance < $amount) {
                 throw new Exception("Insufficient available balance. Requested: {$amount}, Available: {$wallet->available_balance}");
             }
 

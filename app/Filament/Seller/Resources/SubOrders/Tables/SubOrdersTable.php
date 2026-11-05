@@ -147,7 +147,7 @@ class SubOrdersTable
                             ->options([
                                 'in_transit' => '🚚 In Transit (Sorting Hub)',
                                 'out_for_delivery' => '🛵 Out for Delivery (Rider Dispatched)',
-                                'delivered' => '✅ Delivered & Cash Collected (Settles Escrow)',
+                                'delivered' => '✅ Delivered (earnings held in escrow)',
                                 'returned' => '↩️ Returned / Customer Refused (RTO)',
                             ])
                             ->default(fn (SubOrder $record) => match ($record->fulfillmentStatus?->slug) {
@@ -178,7 +178,7 @@ class SubOrdersTable
 
                         $statusName = ucfirst(str_replace('_', ' ', $data['status']));
                         $message = $data['status'] === 'delivered'
-                            ? "Sub-Order #{$record->sub_order_number} delivered! Net earnings (৳{$record->net_earnings}) settled to wallet."
+                            ? "Sub-Order #{$record->sub_order_number} delivered. ৳{$record->sellerPayableAmount()} is held in escrow and released after the holding period."
                             : "Sub-Order #{$record->sub_order_number} updated to {$statusName}.";
 
                         Notification::make()
@@ -261,7 +261,7 @@ class SubOrdersTable
 
                             Notification::make()
                                 ->title('Handover Confirmed & Package Delivered!')
-                                ->body("Handover code verified successfully. Sub-Order #{$record->sub_order_number} marked as Delivered and ৳{$record->net_earnings} settled to wallet.")
+                                ->body("Handover code verified successfully. Sub-Order #{$record->sub_order_number} marked as Delivered. ৳{$record->sellerPayableAmount()} is held in escrow and released after the holding period.")
                                 ->success()
                                 ->send();
                         } catch (\Exception $e) {

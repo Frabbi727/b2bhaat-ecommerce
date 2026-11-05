@@ -64,6 +64,15 @@ class SubOrder extends Model
         return $this->hasMany(ReturnRequest::class);
     }
 
+    /**
+     * What the platform owes the seller for this sub-order: net earnings, plus the delivery fee when the seller
+     * delivered it themselves (D6: whoever delivers keeps the fee).
+     */
+    public function sellerPayableAmount(): float
+    {
+        return round($this->net_earnings + ($this->is_self_delivered ? (float) $this->shipping_amount : 0.0), 2);
+    }
+
     public function getNetEarningsAttribute(): float
     {
         return (float) ($this->subtotal - $this->commission_amount);

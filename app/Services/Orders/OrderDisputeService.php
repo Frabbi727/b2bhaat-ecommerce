@@ -191,7 +191,7 @@ class OrderDisputeService
 
                     // 1. Reverse financial settlement if refund was requested
                     if ($returnRequest->requested_action === 'refund') {
-                        $this->escrowLedgerService->refundReturnedSubOrder(
+                        $this->escrowLedgerService->reverseReturnedSubOrder(
                             $returnRequest->subOrder,
                             $note ?? 'Customer return approved by seller'
                         );

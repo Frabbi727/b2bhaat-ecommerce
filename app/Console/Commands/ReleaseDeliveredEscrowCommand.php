@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\FulfillmentStatus;
+use App\Models\ReturnRequest;
 use App\Models\SubOrder;
 use App\Models\WalletTransaction;
 use App\Services\Escrow\EscrowLedgerService;
@@ -68,8 +69,24 @@ class ReleaseDeliveredEscrowCommand extends Command
             $deliveryLog = $subOrder->trackingLogs->first();
             $deliveredAt = $deliveryLog?->logged_at ?? $subOrder->updated_at;
 
+            $hasOpenDispute = $subOrder->returnRequests()
+                ->where('status', ReturnRequest::STATUS_PENDING)
+                ->exists();
+
+            if ($hasOpenDispute) {
+                $this->warn("Skipped Sub-Order #{$subOrder->sub_order_number}: return request pending.");
+
+                continue;
+            }
+
             if ($deliveredAt->lte($thresholdTime)) {
                 $tx = $escrowService->releaseFromEscrow($subOrder);
+                if (! $tx) {
+                    $this->warn("Skipped Sub-Order #{$subOrder->sub_order_number}: no escrow hold to release.");
+
+                    continue;
+                }
+
                 $releasedCount++;
                 $totalReleasedAmount += (float) $tx->amount;
 

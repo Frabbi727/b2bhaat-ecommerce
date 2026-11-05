@@ -9,10 +9,10 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 // Automatically check and release delivered escrow funds every hour
-Schedule::command('escrow:release-delivered')->hourly();
+Schedule::command('escrow:release-delivered')->hourly()->withoutOverlapping()->onOneServer();
 
 // Automatically cancel expired unpaid reservations and release stock every 5 minutes
-Schedule::command('inventory:release-expired-reservations')->everyFiveMinutes();
+Schedule::command('inventory:release-expired-reservations')->everyFiveMinutes()->withoutOverlapping()->onOneServer();
 
 // Automatically synchronize active flash sales, banners, and coupon promotions hourly
-Schedule::command('promotions:sync-active-campaigns')->hourly();
+Schedule::command('promotions:sync-active-campaigns')->hourly()->withoutOverlapping()->onOneServer();

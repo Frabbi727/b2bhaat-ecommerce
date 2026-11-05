@@ -185,6 +185,10 @@ class ProductionReadinessAndSecurityAuditTest extends TestCase
         $this->assertEquals('paid', $order->fresh()->paymentStatus?->slug);
 
         $netEarnings = $subOrder->net_earnings;
+        // Held at delivery; the scheduled release pays the seller after the 48 h window (PRA-001)
+        $this->assertEquals($initialBalance, (float) $wallet->fresh()->available_balance);
+        $this->travel(49)->hours();
+        $this->artisan('escrow:release-delivered')->assertSuccessful();
         $this->assertEquals($initialBalance + $netEarnings, (float) $wallet->fresh()->available_balance);
 
         $this->assertDatabaseHas('wallet_transactions', [

@@ -77,7 +77,18 @@ class CourierDeliveryLifecycleTest extends TestCase
             'fulfillment_status_id' => FulfillmentStatus::where('slug', 'delivered')->value('id'),
         ]);
 
-        // 2. Seller wallet received net earnings
+        // 2. COD share is held at delivery (D2), not paid out yet (PRA-001)
+        $wallet->refresh();
+        $this->assertEquals($initialBalance, (float) $wallet->available_balance);
+        $this->assertDatabaseHas('wallet_transactions', [
+            'sub_order_id' => $subOrder->id,
+            'transaction_type' => WalletTransaction::TYPE_ESCROW_HOLD,
+            'amount' => $expectedNet,
+        ]);
+
+        // After the holding period the scheduled release credits the seller
+        $this->travel(49)->hours();
+        $this->artisan('escrow:release-delivered')->assertSuccessful();
         $wallet->refresh();
         $this->assertEquals($initialBalance + $expectedNet, (float) $wallet->available_balance);
 

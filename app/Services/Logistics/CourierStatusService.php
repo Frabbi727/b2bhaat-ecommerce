@@ -117,8 +117,8 @@ class CourierStatusService
             $this->stockReservationService->releaseStock($stockItems);
         }
 
-        // 2. Refund escrow if held
-        $this->escrowLedgerService->refundCancelledEscrow($subOrder, 'Returned to origin (RTO) by courier service');
+        // 2. Undo the seller side: refund the hold, or reverse an already released credit
+        $this->escrowLedgerService->reverseReturnedSubOrder($subOrder, 'Returned to origin (RTO) by courier service');
 
         // 3. Reconcile parent order if all sub-orders are returned/cancelled
         $parentOrder = $subOrder->order;
@@ -146,8 +146,9 @@ class CourierStatusService
 
     protected function handleDeliveredSettlement(SubOrder $subOrder): void
     {
-        // 1. Release or credit seller wallet
-        $this->escrowLedgerService->creditDeliveredSubOrder($subOrder);
+        // 1. Hold the seller's share (prepaid: already held, COD: held now per D2).
+        //    Only the scheduled escrow:release-delivered command releases it, after the holding period.
+        $this->escrowLedgerService->holdInEscrow($subOrder);
 
         // 2. Reconcile parent order
         $parentOrder = $subOrder->order;

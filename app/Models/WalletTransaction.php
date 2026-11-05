@@ -15,6 +15,12 @@ class WalletTransaction extends Model
 
     public const TYPE_PAYOUT = 'payout';
 
+    /** Self-delivery fee added to an existing prepaid hold (D6). */
+    public const TYPE_ESCROW_HOLD_ADJUSTMENT = 'escrow_hold_adjustment';
+
+    /** Seller credit taken back after a released sub-order is returned; may leave available balance negative. */
+    public const TYPE_RETURN_REVERSAL = 'return_reversal';
+
     protected $fillable = [
         'seller_wallet_id',
         'sub_order_id',
