@@ -3,6 +3,8 @@
 namespace App\Filament\Admin\Resources\WalletTransactions\Tables;
 
 use App\Models\WalletTransaction;
+use App\Services\Escrow\EscrowLedgerService;
+use Exception;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -39,6 +41,18 @@ class WalletTransactionsTable
                         'escrow_release' => Color::Emerald,
                         'escrow_hold' => Color::Amber,
                         'escrow_refund' => Color::Indigo,
+                        'payout_reversal', 'return_reversal' => Color::Orange,
+                        default => Color::Gray,
+                    }),
+
+                TextColumn::make('status')
+                    ->label('Payout Status')
+                    ->badge()
+                    ->placeholder('—')
+                    ->color(fn (?string $state): array => match ($state) {
+                        WalletTransaction::STATUS_REQUESTED => Color::Amber,
+                        WalletTransaction::STATUS_DISBURSED => Color::Emerald,
+                        WalletTransaction::STATUS_REJECTED => Color::Rose,
                         default => Color::Gray,
                     }),
 
@@ -67,14 +81,26 @@ class WalletTransactionsTable
                         'escrow_hold' => 'Escrow Holds',
                         'escrow_release' => 'Escrow Releases',
                         'escrow_refund' => 'Escrow Refunds (Cancellations)',
+                        'escrow_hold_adjustment' => 'Escrow Hold Adjustments (Delivery Fee)',
+                        'return_reversal' => 'Return Reversals',
+                        'payout_reversal' => 'Rejected Payout Refunds',
+                    ]),
+
+                SelectFilter::make('status')
+                    ->label('Payout Status')
+                    ->options([
+                        WalletTransaction::STATUS_REQUESTED => 'Awaiting Disbursement',
+                        WalletTransaction::STATUS_DISBURSED => 'Disbursed',
+                        WalletTransaction::STATUS_REJECTED => 'Rejected',
                     ]),
             ])
             ->recordActions([
-                Action::make('markDisbursed')
+                Action::make('disburse')
                     ->label('Attach TrxID & Disburse')
                     ->icon('heroicon-o-check-badge')
                     ->color('success')
-                    ->visible(fn (WalletTransaction $record) => $record->transaction_type === 'payout' && ! str_contains($record->reference_note ?? '', 'DISBURSED'))
+                    ->requiresConfirmation()
+                    ->visible(fn (WalletTransaction $record): bool => $record->isPendingPayout())
                     ->schema([
                         TextInput::make('transaction_id')
                             ->label('MFS / Bank Transaction ID (TrxID)')
@@ -82,13 +108,46 @@ class WalletTransactionsTable
                             ->required(),
                     ])
                     ->action(function (WalletTransaction $record, array $data): void {
-                        $updatedNote = ($record->reference_note ?? '')." [DISBURSED - TrxID: {$data['transaction_id']}]";
-                        $record->update(['reference_note' => $updatedNote]);
+                        try {
+                            app(EscrowLedgerService::class)->disbursePayout($record, (string) $data['transaction_id']);
+                        } catch (Exception $exception) {
+                            Notification::make()->title('Payout not disbursed')->body($exception->getMessage())->danger()->send();
+
+                            return;
+                        }
 
                         Notification::make()
                             ->title('Payout Marked as Disbursed')
                             ->body("Disbursed ৳{$record->amount} with TrxID: {$data['transaction_id']}.")
                             ->success()
+                            ->send();
+                    }),
+
+                Action::make('reject')
+                    ->label('Reject & Refund to Wallet')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->visible(fn (WalletTransaction $record): bool => $record->isPendingPayout())
+                    ->schema([
+                        TextInput::make('reason')
+                            ->label('Reason shown to the seller')
+                            ->required()
+                            ->maxLength(255),
+                    ])
+                    ->action(function (WalletTransaction $record, array $data): void {
+                        try {
+                            app(EscrowLedgerService::class)->rejectPayout($record, (string) $data['reason']);
+                        } catch (Exception $exception) {
+                            Notification::make()->title('Payout not rejected')->body($exception->getMessage())->danger()->send();
+
+                            return;
+                        }
+
+                        Notification::make()
+                            ->title('Payout Rejected')
+                            ->body("৳{$record->amount} returned to the seller's available balance.")
+                            ->warning()
                             ->send();
                     }),
             ]);

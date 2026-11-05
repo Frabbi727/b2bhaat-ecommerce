@@ -21,10 +21,20 @@ class WalletTransaction extends Model
     /** Seller credit taken back after a released sub-order is returned; may leave available balance negative. */
     public const TYPE_RETURN_REVERSAL = 'return_reversal';
 
+    /** Rejected payout credited back to available balance (PRA-013). */
+    public const TYPE_PAYOUT_REVERSAL = 'payout_reversal';
+
+    public const STATUS_REQUESTED = 'requested';
+
+    public const STATUS_DISBURSED = 'disbursed';
+
+    public const STATUS_REJECTED = 'rejected';
+
     protected $fillable = [
         'seller_wallet_id',
         'sub_order_id',
         'transaction_type',
+        'status',
         'amount',
         'running_balance',
         'reference_note',
@@ -36,6 +46,11 @@ class WalletTransaction extends Model
             'amount' => 'decimal:2',
             'running_balance' => 'decimal:2',
         ];
+    }
+
+    public function isPendingPayout(): bool
+    {
+        return $this->transaction_type === self::TYPE_PAYOUT && $this->status === self::STATUS_REQUESTED;
     }
 
     public function wallet(): BelongsTo

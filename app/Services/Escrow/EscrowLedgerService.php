@@ -215,10 +215,84 @@ class EscrowLedgerService
                 'seller_wallet_id' => $wallet->id,
                 'sub_order_id' => null,
                 'transaction_type' => WalletTransaction::TYPE_PAYOUT,
+                'status' => WalletTransaction::STATUS_REQUESTED,
                 'amount' => $amount,
                 'running_balance' => $wallet->available_balance,
                 'reference_note' => $note ?? 'Seller payout withdrawal request',
             ]);
         });
+    }
+
+    /**
+     * Mark a requested payout as paid out by the platform, recording the MFS/bank TrxID.
+     *
+     * @throws Exception
+     */
+    public function disbursePayout(WalletTransaction $payout, string $trxId): void
+    {
+        $trxId = trim($trxId);
+        if ($trxId === '') {
+            throw new Exception('A transaction ID is required to disburse a payout.');
+        }
+
+        DB::transaction(function () use ($payout, $trxId): void {
+            $locked = $this->lockPendingPayout($payout);
+
+            $locked->update([
+                'status' => WalletTransaction::STATUS_DISBURSED,
+                'reference_note' => trim(($locked->reference_note ?? '')." [DISBURSED - TrxID: {$trxId}]"),
+            ]);
+        });
+    }
+
+    /**
+     * Refuse a requested payout and credit the amount back to the seller's available balance.
+     *
+     * @throws Exception
+     */
+    public function rejectPayout(WalletTransaction $payout, string $reason): WalletTransaction
+    {
+        $reason = trim($reason);
+        if ($reason === '') {
+            throw new Exception('A reason is required to reject a payout.');
+        }
+
+        return DB::transaction(function () use ($payout, $reason): WalletTransaction {
+            $locked = $this->lockPendingPayout($payout);
+
+            /** @var SellerWallet $wallet */
+            $wallet = SellerWallet::whereKey($locked->seller_wallet_id)->lockForUpdate()->firstOrFail();
+            $wallet->increment('available_balance', (float) $locked->amount);
+            $wallet->refresh();
+
+            $locked->update([
+                'status' => WalletTransaction::STATUS_REJECTED,
+                'reference_note' => trim(($locked->reference_note ?? '')." [REJECTED - {$reason}]"),
+            ]);
+
+            return WalletTransaction::create([
+                'seller_wallet_id' => $wallet->id,
+                'sub_order_id' => null,
+                'transaction_type' => WalletTransaction::TYPE_PAYOUT_REVERSAL,
+                'amount' => (float) $locked->amount,
+                'running_balance' => $wallet->available_balance,
+                'reference_note' => "Payout #{$locked->id} rejected: {$reason}",
+            ]);
+        });
+    }
+
+    /**
+     * @throws Exception
+     */
+    private function lockPendingPayout(WalletTransaction $payout): WalletTransaction
+    {
+        /** @var WalletTransaction $locked */
+        $locked = WalletTransaction::whereKey($payout->id)->lockForUpdate()->firstOrFail();
+
+        if (! $locked->isPendingPayout()) {
+            throw new Exception("Payout #{$locked->id} is not awaiting disbursement (status: ".($locked->status ?? 'none').').');
+        }
+
+        return $locked;
     }
 }
