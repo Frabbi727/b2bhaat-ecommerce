@@ -111,6 +111,7 @@ class OrderDisputeAndCancellationTest extends TestCase
     {
         $subOrder = SubOrder::firstOrFail();
         $customer = $subOrder->order->customer;
+        $statusBefore = $subOrder->fulfillment_status_id;
 
         $returnRequest = ReturnRequest::create([
             'sub_order_id' => $subOrder->id,
@@ -128,11 +129,12 @@ class OrderDisputeAndCancellationTest extends TestCase
         $subOrder->refresh();
 
         $this->assertEquals(ReturnRequest::STATUS_APPROVED, $returnRequest->status);
-        $this->assertEquals(FulfillmentStatus::where('slug', 'returned')->value('id'), $subOrder->fulfillment_status_id);
+        // A replacement keeps the sale as it was (final-review I1); only refund/return actions move it to returned
+        $this->assertEquals($statusBefore, $subOrder->fulfillment_status_id);
 
         $this->assertDatabaseHas('order_tracking_logs', [
             'sub_order_id' => $subOrder->id,
-            'title' => 'Return Approved by Supplier',
+            'title' => 'Replacement Approved by Supplier',
         ]);
     }
 

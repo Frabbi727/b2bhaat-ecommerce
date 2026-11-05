@@ -28,7 +28,9 @@ class CourierWebhookController extends Controller
         $validated = $request->validate([
             'tracking_number' => 'required_without:sub_order_number|nullable|string',
             'sub_order_number' => 'required_without:tracking_number|nullable|string',
-            'status' => ['required', 'string', Rule::in(array_keys(CourierStatusService::ALLOWED_TRANSITIONS))],
+            // Couriers report movement only; cancellation goes through the buyer/admin flow that releases stock,
+            // escrow and refunds (final review I2)
+            'status' => ['required', 'string', Rule::in(array_diff(array_keys(CourierStatusService::ALLOWED_TRANSITIONS), ['cancelled']))],
             'title' => 'nullable|string',
             'description' => 'nullable|string',
             'hub_location' => 'nullable|string',

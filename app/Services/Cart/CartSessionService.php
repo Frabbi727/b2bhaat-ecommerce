@@ -195,9 +195,11 @@ class CartSessionService
         $item = $items[$key];
         $isWholesale = $item['sales_channel_slug'] === SalesChannel::WHOLESALE;
 
+        // An accepted RFQ quote is priced for its negotiated quantity: it can be removed, not resized (I6)
         if ($item['is_quoted'] ?? false) {
-            $items[$key]['quantity'] = $newQuantity;
-            Session::put(self::SESSION_KEY, $items);
+            if ($newQuantity !== (int) $item['quantity']) {
+                throw new Exception('This line is a quoted price for a fixed quantity. Remove it or request a new quotation.');
+            }
 
             return;
         }

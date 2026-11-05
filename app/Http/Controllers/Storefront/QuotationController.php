@@ -77,8 +77,11 @@ class QuotationController extends Controller
             return redirect()->back()->with('error', 'This RFQ has not yet received an official quotation from the seller.');
         }
 
-        // 1. Mark RFQ status as accepted
-        $rfq->update(['status' => 'accepted']);
+        // Only an open quote can be accepted, and only once (final review I6)
+        $accepted = RfqRequest::whereKey($rfq->id)->where('status', 'quoted')->update(['status' => 'accepted']);
+        if ($accepted === 0) {
+            return redirect()->back()->with('error', 'This quotation is no longer open for acceptance.');
+        }
 
         // 2. Add item to cart with locked wholesale quotation unit price
         $cart = app(CartSessionService::class);

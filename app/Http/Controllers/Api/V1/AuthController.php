@@ -153,7 +153,7 @@ class AuthController extends Controller
 
         $user = User::with('role', 'sellerProfile')->where('email', $validated['email'])->first();
 
-        if (! $user || ! Hash::check($validated['password'], $user->password)) {
+        if (! $user || ! $user->is_active || ! Hash::check($validated['password'], $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials do not match our records.'],
             ]);

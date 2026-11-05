@@ -136,16 +136,21 @@ class WholesaleLotMoqTest extends TestCase
         $this->cart->addItem($this->product->id, $this->v1, SalesChannel::WHOLESALE, 10);
     }
 
-    public function test_quoted_rfq_line_keeps_negotiated_price_after_quantity_change(): void
+    public function test_quoted_rfq_line_quantity_is_fixed_at_negotiated_price(): void
     {
         $this->cart->addItem($this->product->id, null, SalesChannel::WHOLESALE, 40, 70.0);
 
         $key = "{$this->product->id}_base_".SalesChannel::WHOLESALE;
         $this->assertTrue($this->cart->getItems()[$key]['is_quoted']);
 
-        $this->cart->updateQuantity($key, 120);
+        try {
+            $this->cart->updateQuantity($key, 120);
+            $this->fail('A quoted line is priced for a fixed quantity (final-review I6)');
+        } catch (\Exception $exception) {
+            $this->assertStringContainsString('quoted price', $exception->getMessage());
+        }
 
-        $this->assertSame(120, $this->cart->getItems()[$key]['quantity']);
+        $this->assertSame(40, $this->cart->getItems()[$key]['quantity']);
         $this->assertEquals(70.0, $this->cart->getItems()[$key]['unit_price']);
         $this->assertSame([], $this->cart->wholesaleMoqViolations(), 'Quoted RFQ lines are not subject to catalogue MOQ');
     }

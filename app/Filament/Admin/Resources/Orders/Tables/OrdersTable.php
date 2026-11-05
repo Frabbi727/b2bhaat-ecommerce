@@ -7,6 +7,7 @@ use App\Services\Payments\PaymentVerificationService;
 use App\Services\Sms\OrderNotificationService;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -67,6 +68,28 @@ class OrdersTable
                         Notification::make()
                             ->title("Payment verified for #{$record->order_number}")
                             ->success()
+                            ->send();
+                    }),
+                Action::make('rejectPayment')
+                    ->label('Reject Payment')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->visible(fn (Order $record) => $record->paymentStatus?->slug === 'awaiting_verification')
+                    ->requiresConfirmation()
+                    ->modalDescription('Use when the TrxID cannot be found. The order is cancelled and its reserved stock released.')
+                    ->schema([
+                        TextInput::make('reason')
+                            ->label('Reason')
+                            ->required()
+                            ->maxLength(255),
+                    ])
+                    ->action(function (Order $record, array $data): void {
+                        app(PaymentVerificationService::class)->rejectPayment($record, (string) $data['reason']);
+
+                        Notification::make()
+                            ->title("Payment rejected for #{$record->order_number}")
+                            ->body('Order cancelled and stock released.')
+                            ->warning()
                             ->send();
                     }),
                 Action::make('resendInvoiceSms')

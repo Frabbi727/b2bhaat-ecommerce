@@ -7,12 +7,12 @@ use App\Models\Order;
 use App\Models\OrderStatus;
 use App\Models\OrderTrackingLog;
 use App\Models\PaymentStatus;
-use App\Models\Refund;
 use App\Models\ReturnRequest;
 use App\Models\SubOrder;
 use App\Models\User;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Inventory\StockReservationService;
+use App\Services\Logistics\CourierStatusService;
 use App\Services\Settings\StoreConfigurationService;
 use Exception;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +21,8 @@ class OrderDisputeService
 {
     public function __construct(
         protected StockReservationService $stockReservationService,
-        protected EscrowLedgerService $escrowLedgerService
+        protected EscrowLedgerService $escrowLedgerService,
+        protected RefundRecorder $refundRecorder
     ) {}
 
     /**
@@ -47,10 +48,20 @@ class OrderDisputeService
         }
 
         DB::transaction(function () use ($subOrder, $reason) {
+            // Re-read under a row lock: a concurrent cancel, delivery or return must not be cancelled again (final review I7)
+            $subOrder = SubOrder::whereKey($subOrder->id)->lockForUpdate()->with('fulfillmentStatus', 'items')->firstOrFail();
+            $currentSlug = $subOrder->fulfillmentStatus?->slug;
+            if ($currentSlug === 'cancelled') {
+                return;
+            }
+            if (! CourierStatusService::canTransition($currentSlug, 'cancelled')) {
+                throw new Exception("Consignment #{$subOrder->sub_order_number} is {$currentSlug} and can no longer be cancelled.");
+            }
+
             $cancelledFulfillment = FulfillmentStatus::where('slug', 'cancelled')->firstOrFail();
 
             // Customer already paid for this consignment → record what we owe back (PRA-027)
-            $this->recordRefundIfPaid($subOrder, "Cancelled: {$reason}");
+            $this->refundRecorder->recordIfPaid($subOrder, "Cancelled: {$reason}");
 
             // 1. Release reserved stock back to variations
             $stockItems = [];
@@ -192,6 +203,21 @@ class OrderDisputeService
                 'resolved_at' => now(),
             ]);
 
+            // Replacement: the sale stands (seller ships a replacement), so the consignment stays delivered and
+            // its escrow hold is released on schedule; no restock, no refund (final review I1)
+            if ($status === ReturnRequest::STATUS_APPROVED && $returnRequest->requested_action !== 'refund') {
+                OrderTrackingLog::create([
+                    'sub_order_id' => $returnRequest->sub_order_id,
+                    'fulfillment_status_id' => $returnRequest->subOrder->fulfillment_status_id,
+                    'title' => 'Replacement Approved by Supplier',
+                    'description' => 'Replacement approved: '.($note ?? $returnRequest->reason).'. The seller will ship a replacement item.',
+                    'hub_location' => 'Merchant Hub',
+                    'logged_at' => now(),
+                ]);
+
+                return;
+            }
+
             if ($status === ReturnRequest::STATUS_APPROVED) {
                 $returnedStatus = FulfillmentStatus::where('slug', 'returned')->first();
                 if ($returnedStatus) {
@@ -206,7 +232,7 @@ class OrderDisputeService
                             $note ?? 'Customer return approved by seller'
                         );
 
-                        $this->recordRefundIfPaid($returnRequest->subOrder, 'Return approved: '.($note ?? $returnRequest->reason));
+                        $this->refundRecorder->recordIfPaid($returnRequest->subOrder, 'Return approved: '.($note ?? $returnRequest->reason));
                     }
 
                     // 2. Restock returned goods to variation catalog inventory
@@ -259,26 +285,5 @@ class OrderDisputeService
                 }
             }
         });
-    }
-
-    /**
-     * Record the amount owed back to the customer for a consignment of a paid order (once per sub-order).
-     */
-    private function recordRefundIfPaid(SubOrder $subOrder, string $reason): ?Refund
-    {
-        $order = $subOrder->order;
-        if ($order?->paymentStatus?->slug !== 'paid') {
-            return null;
-        }
-
-        return Refund::firstOrCreate(
-            ['sub_order_id' => $subOrder->id],
-            [
-                'order_id' => $order->id,
-                'amount' => $subOrder->paidAmount(),
-                'reason' => mb_substr($reason, 0, 255),
-                'status' => Refund::STATUS_PENDING,
-            ],
-        );
     }
 }

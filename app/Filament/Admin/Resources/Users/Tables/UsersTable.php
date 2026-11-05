@@ -172,6 +172,7 @@ class UsersTable
                     ->visible(fn (User $record): bool => $record->is_active && $record->id !== auth()->id())
                     ->action(function (User $record): void {
                         $record->update(['is_active' => false]);
+                        $record->tokens()->delete();
 
                         Notification::make()->title("{$record->name} deactivated")->success()->send();
                     }),

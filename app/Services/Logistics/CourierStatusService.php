@@ -12,6 +12,7 @@ use App\Models\PaymentStatus;
 use App\Models\SubOrder;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Inventory\StockReservationService;
+use App\Services\Orders\RefundRecorder;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -44,7 +45,8 @@ class CourierStatusService
 
     public function __construct(
         protected EscrowLedgerService $escrowLedgerService,
-        protected StockReservationService $stockReservationService
+        protected StockReservationService $stockReservationService,
+        protected RefundRecorder $refundRecorder
     ) {}
 
     /**
@@ -119,6 +121,9 @@ class CourierStatusService
 
         // 2. Undo the seller side: refund the hold, or reverse an already released credit
         $this->escrowLedgerService->reverseReturnedSubOrder($subOrder, 'Returned to origin (RTO) by courier service');
+
+        // 3. A paid buyer is owed this consignment back (final review I3); before the parent flips to "refunded"
+        $this->refundRecorder->recordIfPaid($subOrder, 'Returned to origin (RTO) by courier service');
 
         // 3. Reconcile parent order if all sub-orders are returned/cancelled
         $parentOrder = $subOrder->order;

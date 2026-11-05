@@ -63,7 +63,12 @@ class CustomerAuth extends Component
      */
     private function rememberSafeRedirect(mixed $redirect): void
     {
-        if (! is_string($redirect) || $redirect === '' || str_starts_with($redirect, '//')) {
+        // Backslashes and control characters are normalised by browsers (`/\host` → `//host`): never accept them (I5)
+        if (! is_string($redirect) || $redirect === '' || preg_match('/[\\\\\x00-\x1F\x7F]/', $redirect) === 1) {
+            return;
+        }
+
+        if (str_starts_with($redirect, '//')) {
             return;
         }
 
