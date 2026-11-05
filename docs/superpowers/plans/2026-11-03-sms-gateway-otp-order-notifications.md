@@ -1,6 +1,6 @@
 # BulkSMSBD Gateway, OTP Verification & Order Notifications Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Integrate the BulkSMSBD gateway into B2Bhaat E-commerce, providing hardened OTP customer authentication (registration, login, password reset), automated order notifications (confirmation, tracking, and tokenized invoices), and a complete Filament Admin SMS management panel.
 
@@ -70,7 +70,7 @@ flowchart TD
 - Consumes: Existing `users` and `orders` tables.
 - Produces: `Otp`, `SmsLog`, `SmsTemplate`, and `SmsSetting` models with fillable and cast definitions, plus `invoice_token` and `tracking_token` attributes on `Order`.
 
-- [ ] **Step 1: Write the failing test for schema and models**
+- [x] **Step 1: Write the failing test for schema and models**
 
 ```php
 <?php
@@ -119,12 +119,12 @@ class DatabaseSchemaTest extends TestCase
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `php artisan test --filter=DatabaseSchemaTest`  
 Expected: FAIL (tables `otps`, `sms_logs`, etc. do not exist).
 
-- [ ] **Step 3: Create migration and models**
+- [x] **Step 3: Create migration and models**
 
 Write migration `database/migrations/2026_11_03_000001_create_sms_and_otp_tables.php`:
 ```php
@@ -366,12 +366,12 @@ protected static function boot(): void
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `php artisan test --filter=DatabaseSchemaTest`  
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add database/migrations/ app/Models/ tests/Unit/Sms/DatabaseSchemaTest.php
@@ -398,7 +398,7 @@ git commit -m "feat(sms): create database migrations and models for sms, otps, s
 - Consumes: `config('sms')`, `Http` client.
 - Produces: `SmsGatewayInterface` implementation bound in container, `SmsResponse` DTO, and `PhoneNormalizer::normalize($phone)`.
 
-- [ ] **Step 1: Write failing unit tests for PhoneNormalizer and BulkSmsBdDriver**
+- [x] **Step 1: Write failing unit tests for PhoneNormalizer and BulkSmsBdDriver**
 
 Write `tests/Unit/Sms/PhoneNormalizerTest.php`:
 ```php
@@ -513,12 +513,12 @@ class BulkSmsBdDriverTest extends TestCase
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `php artisan test --filter=PhoneNormalizerTest` and `php artisan test --filter=BulkSmsBdDriverTest`  
 Expected: FAIL (classes not found).
 
-- [ ] **Step 3: Implement Core SMS classes**
+- [x] **Step 3: Implement Core SMS classes**
 
 Create `app/Services/Sms/Support/PhoneNormalizer.php`:
 ```php
@@ -694,12 +694,12 @@ class BulkSmsBdDriver implements SmsGatewayInterface
 Create `app/Services/Sms/Drivers/MockDriver.php` and `LogDriver.php`.
 Create `config/sms.php` and `app/Services/Sms/SmsManager.php` using Laravel Manager pattern.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `php artisan test --filter=PhoneNormalizerTest` and `php artisan test --filter=BulkSmsBdDriverTest`  
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/Services/Sms/ config/sms.php tests/Unit/Sms/
@@ -719,7 +719,7 @@ git commit -m "feat(sms): implement SmsGatewayInterface, BulkSmsBdDriver, MockDr
 - Consumes: `SmsManager`, `SmsLog` model, Cache lock.
 - Produces: `SendSmsJob::dispatch($phone, $message, $purpose)` saving to `sms_logs`.
 
-- [ ] **Step 1: Write failing test for SendSmsJob**
+- [x] **Step 1: Write failing test for SendSmsJob**
 
 Write `tests/Feature/Sms/SendSmsJobTest.php`:
 ```php
@@ -779,12 +779,12 @@ class SendSmsJobTest extends TestCase
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `php artisan test --filter=SendSmsJobTest`  
 Expected: FAIL (`SendSmsJob` does not exist).
 
-- [ ] **Step 3: Implement SendSmsJob**
+- [x] **Step 3: Implement SendSmsJob**
 
 Create `app/Jobs/SendSmsJob.php`:
 ```php
@@ -874,12 +874,12 @@ class SendSmsJob implements ShouldQueue
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `php artisan test --filter=SendSmsJobTest`  
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/Jobs/SendSmsJob.php tests/Feature/Sms/SendSmsJobTest.php
@@ -899,7 +899,7 @@ git commit -m "feat(sms): implement queued SendSmsJob with deduplication and mas
 - Consumes: `Otp` model, `SmsTemplate` model, `SendSmsJob`.
 - Produces: `OtpService::sendOtp($phone, $purpose)`, `OtpService::verify($phone, $code, $purpose): bool`.
 
-- [ ] **Step 1: Write failing test for OtpService**
+- [x] **Step 1: Write failing test for OtpService**
 
 Write `tests/Unit/Sms/OtpServiceTest.php`:
 ```php
@@ -972,12 +972,12 @@ class OtpServiceTest extends TestCase
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `php artisan test --filter=OtpServiceTest`  
 Expected: FAIL (`OtpService` does not exist).
 
-- [ ] **Step 3: Implement OtpService and SmsTemplateSeeder**
+- [x] **Step 3: Implement OtpService and SmsTemplateSeeder**
 
 Create `app/Services/Sms/OtpService.php`:
 ```php
@@ -1088,12 +1088,12 @@ class OtpService
 
 Seed SMS templates via `database/seeders/SmsTemplateSeeder.php`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `php artisan test --filter=OtpServiceTest`  
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/Services/Sms/OtpService.php database/seeders/SmsTemplateSeeder.php tests/Unit/Sms/OtpServiceTest.php
@@ -1113,7 +1113,7 @@ git commit -m "feat(sms): implement OtpService with SHA-256 hashing, rate limiti
 - Consumes: `OtpService`, `User` model, Livewire lifecycle.
 - Produces: OTP registration gate, "Login with OTP" modal/tab, `phone_verified_at` marking.
 
-- [ ] **Step 1: Write failing feature test for CustomerAuthOtpTest**
+- [x] **Step 1: Write failing feature test for CustomerAuthOtpTest**
 
 Write `tests/Feature/Sms/CustomerAuthOtpTest.php`:
 ```php
@@ -1178,22 +1178,22 @@ class CustomerAuthOtpTest extends TestCase
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `php artisan test --filter=CustomerAuthOtpTest`  
 Expected: FAIL (`initiateRegistration` does not exist on component).
 
-- [ ] **Step 3: Modify CustomerAuth and Blade template**
+- [x] **Step 3: Modify CustomerAuth and Blade template**
 
 Add `step` ('form' | 'otp_verification'), `otpCode`, `initiateRegistration()`, `completeRegistration()`, and `loginWithOtp()` to `app/Livewire/Storefront/CustomerAuth.php`.
 Update `resources/views/livewire/storefront/customer-auth.blade.php` to render OTP input boxes, timer, and "Resend Code" button when `step === 'otp_verification'`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `php artisan test --filter=CustomerAuthOtpTest`  
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/Livewire/Storefront/CustomerAuth.php resources/views/livewire/storefront/customer-auth.blade.php tests/Feature/Sms/CustomerAuthOtpTest.php
@@ -1216,7 +1216,7 @@ git commit -m "feat(auth): integrate mandatory OTP registration and Login with O
 - Consumes: `Order` model with `invoice_token` and `tracking_token`, `SendSmsJob`.
 - Produces: `/invoice/{token}` route, `/track/{token}` route, and SMS status dispatchers.
 
-- [ ] **Step 1: Write failing test for OrderNotificationTest**
+- [x] **Step 1: Write failing test for OrderNotificationTest**
 
 Write `tests/Feature/Sms/OrderNotificationTest.php`:
 ```php
@@ -1277,12 +1277,12 @@ class OrderNotificationTest extends TestCase
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `php artisan test --filter=OrderNotificationTest`  
 Expected: FAIL (`OrderNotificationService` does not exist).
 
-- [ ] **Step 3: Implement OrderNotificationService, routes, and token controllers**
+- [x] **Step 3: Implement OrderNotificationService, routes, and token controllers**
 
 Create `app/Services/Sms/OrderNotificationService.php`.
 Add routes in `routes/web.php`:
@@ -1292,12 +1292,12 @@ Route::get('/track/{token}', [OrderTracking::class, 'showByToken'])->name('order
 ```
 Update `InvoiceController::showByToken(string $token)` and `OrderTracking::showByToken(string $token)`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `php artisan test --filter=OrderNotificationTest`  
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/Services/Sms/OrderNotificationService.php app/Http/Controllers/Storefront/InvoiceController.php routes/web.php tests/Feature/Sms/OrderNotificationTest.php
@@ -1320,7 +1320,7 @@ git commit -m "feat(sms): implement order confirmation SMS, status transitions, 
 - Consumes: Filament panel, `SmsLog`, `SmsTemplate`, `SmsSetting`, `BulkSmsBdDriver::checkBalance()`.
 - Produces: Live balance dashboard card, settings manager, template editor, log browser with retry button.
 
-- [ ] **Step 1: Write failing test for Filament SMS management**
+- [x] **Step 1: Write failing test for Filament SMS management**
 
 Write `tests/Feature/Sms/FilamentSmsManagementTest.php`:
 ```php
@@ -1369,24 +1369,24 @@ class FilamentSmsManagementTest extends TestCase
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `php artisan test --filter=FilamentSmsManagementTest`  
 Expected: FAIL (`SmsSettingsPage` not found).
 
-- [ ] **Step 3: Implement Filament SMS Pages and Resources**
+- [x] **Step 3: Implement Filament SMS Pages and Resources**
 
 Create `app/Filament/Admin/Pages/SmsSettingsPage.php` with balance check query and test SMS sender.
 Create `app/Filament/Admin/Resources/SmsLogResource.php` with Retry action.
 Create `app/Filament/Admin/Resources/SmsTemplateResource.php`.
 Add "Resend Invoice SMS" action in `OrderResource`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `php artisan test --filter=FilamentSmsManagementTest`  
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/Filament/Admin/ tests/Feature/Sms/FilamentSmsManagementTest.php
@@ -1405,7 +1405,7 @@ git commit -m "feat(filament): implement SMS settings page with live balance que
 - Consumes: Complete SMS, OTP, and Order notification workflow.
 - Produces: 100% passing tests and Pint compliance.
 
-- [ ] **Step 1: Write comprehensive End-to-End lifecycle test**
+- [x] **Step 1: Write comprehensive End-to-End lifecycle test**
 
 Write `tests/Feature/Sms/EndToEndSmsLifecycleTest.php` covering the entire journey:
 1. Customer requests OTP during registration.
@@ -1417,17 +1417,17 @@ Write `tests/Feature/Sms/EndToEndSmsLifecycleTest.php` covering the entire journ
 7. Order tracking SMS dispatched with courier tracking link.
 8. Admin views SMS logs and balance in Filament.
 
-- [ ] **Step 2: Run full SMS test suite**
+- [x] **Step 2: Run full SMS test suite**
 
 Run: `php artisan test --compact --filter=Sms`  
 Expected: All tests PASS with 0 failures.
 
-- [ ] **Step 3: Run Laravel Pint code formatter**
+- [x] **Step 3: Run Laravel Pint code formatter**
 
 Run: `vendor/bin/pint --dirty --format agent`  
 Expected: Clean formatting matching project rules.
 
-- [ ] **Step 4: Commit and finalize**
+- [x] **Step 4: Commit and finalize**
 
 ```bash
 git add tests/Feature/Sms/EndToEndSmsLifecycleTest.php

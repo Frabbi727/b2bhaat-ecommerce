@@ -1,9 +1,9 @@
 # B2Bhaat E-Commerce — Platform & Business Architecture Guide
 
 > **Audience:** Developers, Architects, and AI Assistants (Claude, GPT, Gemini, etc.)  
-> **Framework:** Laravel 12 on PHP 8.5  
+> **Framework:** Laravel 13 + Filament 5 on PHP 8.5  
 > **Market:** Bangladesh (BDT / ৳, National Logistics, Local MFS & Gateways)  
-> **Test Suite Status:** 266 Tests Passing (1,129 Assertions, 0 Failures)
+> **Test Suite Status:** 390 Tests Passing (1,555 Assertions, 0 Failures) — after Phase B production-readiness fixes
 
 ---
 
@@ -26,8 +26,8 @@
 
 | Role | Slug | Portal / Entrypoint | Key Capabilities & Business Rules |
 |---|---|---|---|
-| **Super Admin** | `super_admin` / `admin` | `/admin` (Filament 3) | Full marketplace governance: merchant KYC approval, wholesale trade license verification, escrow payout authorization, BulkSMSBD balance & credentials, SMS template manager, system delivery audit logs. |
-| **Factory Merchant** | `seller` | `/seller` (Filament 3) & `/store/{slug}` | Factory store management: stock variation matrix generator, pricing tiers, consignment fulfillment, shipping challan & packing slip generation, courier dispatch, seller wallet & payout requests. |
+| **Super Admin** | `super_admin` / `admin` | `/admin` (Filament 5) | Full marketplace governance: merchant KYC approval, wholesale trade license verification, escrow payout authorization, BulkSMSBD balance & credentials, SMS template manager, system delivery audit logs. |
+| **Factory Merchant** | `seller` | `/seller` (Filament 5) & `/store/{slug}` | Factory store management: stock variation matrix generator, pricing tiers, consignment fulfillment, shipping challan & packing slip generation, courier dispatch, seller wallet & payout requests. |
 | **Wholesale Buyer** | `wholesale_buyer` | `/wholesale/upgrade` & Storefront | Verified business accounts: uploads trade license for KYC approval; accesses wholesale price brackets, bulk ordering matrices, tax invoice credits, and Request for Quotation (RFQ) negotiation. |
 | **Retail Consumer** | `customer` | Storefront (`/`, `/cart`, `/checkout`) | Standard consumers: single-piece shopping, OTP-based registration and login, bKash/Nagad/SSLCommerz/COD payments, parcel tracking via token URLs without requiring login. |
 
@@ -90,9 +90,9 @@
   - 60-second resend cooldown timer.
   - Locks out after 5 consecutive failed attempts against brute-force attacks.
   - Plaintext OTP codes in all log files are masked to `******` in `sms_logs`.
-- **Fallback Emergency Testing OTP:**
-  - Configurable in `.env` (`SMS_DEFAULT_OTP=123456`) and Filament Admin settings.
-  - Allows instant testing on production/staging even if the SMS provider server is offline or out of balance.
+- **Fallback Testing OTP (local/testing only):**
+  - Configurable in `.env` (`SMS_DEFAULT_OTP`, no default) and Filament Admin settings; the settings field is hidden outside local/testing.
+  - Accepted only in local/testing environments and only for a phone that has a pending OTP. Production and staging ignore it (PRA-035).
   - Can be disabled anytime by clearing the setting in the admin panel.
 
 ### 4.3 Transactional SMS Triggers & Tokenized URLs

@@ -11,8 +11,8 @@
 - **Dual-Channel Products (`both`):** Single product selling in both channels simultaneously with distinct pricing records and MOQ rules.
 
 ## 2. The 4 User Personas & Access Levels
-1. **Super Admin (`super_admin` / `admin`):** Accesses `/admin` (Filament 3). Manages platform governance, merchant KYC, trade licenses, BulkSMSBD gateway & balance, SMS templates, escrow payouts.
-2. **Factory Merchant (`seller`):** Accesses `/seller` (Filament 3) & storefront `/store/{slug}`. Manages factory inventory, wholesale tier matrices, sub-order fulfillment, packing slips, courier dispatch, seller wallet.
+1. **Super Admin (`super_admin` / `admin`):** Accesses `/admin` (Filament 5). Manages platform governance, merchant KYC, trade licenses, BulkSMSBD gateway & balance, SMS templates, escrow payouts.
+2. **Factory Merchant (`seller`):** Accesses `/seller` (Filament 5) & storefront `/store/{slug}`. Manages factory inventory, wholesale tier matrices, sub-order fulfillment, packing slips, courier dispatch, seller wallet.
 3. **Wholesale Buyer (`wholesale_buyer`):** Business account verified with trade license KYC. Unlocks wholesale pricing brackets, bulk matrices, tax invoices, and RFQ negotiations.
 4. **Retail Customer (`customer`):** Regular consumer shopping at `/`, `/cart`, `/checkout`. Uses OTP authentication and parcel tracking via secure tokens.
 
@@ -23,13 +23,13 @@
 - **SMS Gateway & Hardened OTP Subsystem:** `App\Services\Sms\*`. Supports BulkSMSBD (`BulkSmsBdDriver`), in-memory testing (`MockDriver`), and local logging (`LogDriver`).
   - Hashed OTP storage (SHA-256 in `otps` table).
   - Masked logs (`******` in `sms_logs`).
-  - Emergency fallback OTP for production testing: `SMS_DEFAULT_OTP=123456` (configurable in `.env` and `/admin` settings).
+  - Fallback OTP (`SMS_DEFAULT_OTP`, no default value) works **only in local/testing** and only for a phone with a pending OTP; it is ignored in production (PRA-035).
 - **Tokenized Invoicing & Tracking:**
   - Invoice: `/invoice/{invoice_token}` (printable, mobile-responsive, no login required).
   - Tracking: `/track/{tracking_token}` (real-time timeline, courier name, tracking code).
 
 ## 4. Key Developer & Verification Commands
-- **Run Tests:** `php artisan test --compact` (266 tests passing, uses `SMS_DRIVER=mock`).
+- **Run Tests:** `php artisan test --compact` (390 tests passing after Phase B, uses `SMS_DRIVER=mock`).
 - **Code Formatter:** `vendor/bin/pint --dirty --format agent` (PHP 8.5 with strict typing).
 - **Queue Worker:** `php artisan queue:work --once` (SMS jobs run via `App\Jobs\SendSmsJob`).
 

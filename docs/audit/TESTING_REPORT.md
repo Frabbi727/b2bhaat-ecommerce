@@ -90,3 +90,33 @@ Two probes needed setup fixes before their results meant anything. Both correcti
 - Tests run on **SQLite**; the dev and production engine is **PostgreSQL** (PRA-021).
 - No tests cover the web product page's wholesale visibility (only the API), which is how PRA-050 went unnoticed.
 - `FilamentPanelsSmokeTest::test_seller_resources_tables_render` asserts that `/seller/sub-orders/create` loads, which locks in PRA-005. It has to change with the fix.
+
+## Phase B (P0 + P1 fixes)
+
+**Suite:** 266 passed / 1129 assertions before Phase B → **390 passed / 1555 assertions** after Task 20 (`php artisan test --compact`, SQLite). The full suite was run green after every task commit (`c81e161` … `db6831b`).
+
+**New test files (19 + 1 fixture):** `OtpFallbackSecurityTest`, `ProductionSeedingTest`, `GuestCheckoutIdentityTest`, `WholesaleApprovalGateTest`, `SellerSubOrderLockdownTest`, `SellerCourierActionsTest`, `CourierWebhookSecurityTest`, `EscrowIntegrityTest`, `PaymentVerificationTest`, `InactiveProductVisibilityTest`, `PublicLookupSecurityTest`, `WholesaleLotMoqTest`, `SimpleProductStockTest`, `CodCollectionAmountTest`, `PayoutLifecycleTest`, `CustomerRefundRecordTest`, `FinancialRecordRetentionTest`, `SellerRfqFormTest`, `SellerProductImageUploadTest`; fixture `Support/MixedOrderFixture` (two sellers, ৳50 coupon, self-delivery + courier).
+
+**Existing tests changed (expectations moved to the fixed behaviour, never skipped):** ApiEndpoints, CartCouponCheckoutAndPromotions, CartTierPricingRecalculation, CourierDeliveryLifecycle, CustomerStorefrontAuth, EscrowCronAndWebhook, EscrowSettlementAndPayoutAudit, FilamentPanelsSmoke, HeaderSearchAndHomepage, OrderFulfillmentAndReturnLifecycles, ProductDetailPickabooStandard, ProductReview, ProductionReadinessAndSecurityAudit, PromotionsAndBusinessLogic, SellerOnboardingAndInvoice, ValidationAndPolish, WholesaleTierPricing, WholesaleUpgrade, `TestCase` (signed courier helper), `Unit/Sms/OtpService`. Each change and its reason is recorded as a ruling in the Phase B ledger (e.g. payout now happens 48 h after delivery, guests must give the exact phone, `/admin/orders/create` is 404).
+
+**Audit probes re-run (Appendix A, B, C, E — 30 probes, temporary copies, not committed):** 30/30 confirm the defect is gone. 26 passed as written; 4 asserted a weaker block than the fix delivers and were checked by hand:
+
+| Probe | Probe expected | Now | Verdict |
+|---|---|---|---|
+| r04 seller sub-order create page | 403 | 404 (page removed) | Fixed |
+| r14 guest invoice by order number | 403 | 302 to login | Fixed |
+| r15 seller `markDelivered` hidden | action hidden | action removed | Fixed |
+| r10 guest account password | looked up old `guest_%@b2bhaat.com` email | re-run against the new `guest+…@guest.b2bhaat.invalid` format: passes | Fixed |
+
+**Migrations:** the 7 Phase B migrations were run up → rolled back → up on a throwaway SQLite file (dev database untouched). Full-history `migrate:rollback` still fails (PRA-034, open).
+
+**Defects found and fixed during Phase B:** PRA-060 (product edit nulls hidden `buy_price`), PRA-061 (return resolved twice restocks twice), PRA-062 (admin could edit order money/payment fields), PRA-063 (demo links shown on staging).
+
+**Owner questions raised by Phase B (not defects):**
+- Who keeps the cash on a self-delivered COD order, and how it is settled with the platform.
+- Keep bKash/Nagad with manual admin verification (current behaviour), or switch them off until a gateway exists.
+- A return after release can leave a seller's available balance negative; recover from future earnings or invoice the seller?
+- COD seller share is released 48 h after delivery, possibly before the courier remits cash to the platform.
+- Refund method and timing (Q8): refunds are now recorded as `pending` and marked paid by an admin with a reference.
+
+**Still not covered:** PostgreSQL-specific behaviour (PRA-021), CI (PRA-022), browser re-walkthrough of the changed screens (Phase D).
