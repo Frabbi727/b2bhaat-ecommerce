@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\ProductPrice;
 use App\Models\Role;
 use App\Models\SalesChannel;
+use App\Models\SellerProfile;
 use App\Models\StoreSetting;
 use App\Models\Unit;
 use App\Models\User;
@@ -18,6 +19,7 @@ use App\Services\Cart\CartSessionService;
 use App\Services\Cart\CouponService;
 use Database\Seeders\SystemLookupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class PromotionsAndBusinessLogicTest extends TestCase
@@ -156,6 +158,7 @@ class PromotionsAndBusinessLogicTest extends TestCase
             'email' => 'seller@test.com',
             'password' => bcrypt('password'),
         ]);
+        SellerProfile::create(['user_id' => $seller->id, 'store_name' => $seller->name, 'store_slug' => Str::slug($seller->name).'-'.$seller->id, 'is_approved' => true]);
 
         $retailChannel = SalesChannel::where('slug', SalesChannel::RETAIL)->firstOrFail();
         $pieceUnit = Unit::where('symbol', 'pc')->firstOrFail();
@@ -211,6 +214,7 @@ class PromotionsAndBusinessLogicTest extends TestCase
             'email' => 'seller-cart@test.com',
             'password' => bcrypt('password'),
         ]);
+        SellerProfile::create(['user_id' => $seller->id, 'store_name' => $seller->name, 'store_slug' => Str::slug($seller->name).'-'.$seller->id, 'is_approved' => true]);
 
         $retailChannel = SalesChannel::where('slug', SalesChannel::RETAIL)->firstOrFail();
         $pieceUnit = Unit::where('symbol', 'pc')->firstOrFail();

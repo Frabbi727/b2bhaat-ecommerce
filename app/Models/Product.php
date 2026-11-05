@@ -154,6 +154,16 @@ class Product extends Model
             ->orderBy('min_quantity');
     }
 
+    /**
+     * Products a buyer may see and order: the product is active, and its seller is active and approved (PRA-010).
+     */
+    public function scopeSellable(Builder $query): Builder
+    {
+        return $query->where('is_active', true)
+            ->whereHas('seller', fn (Builder $seller) => $seller->where('is_active', true)
+                ->whereHas('sellerProfile', fn (Builder $profile) => $profile->where('is_approved', true)));
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);

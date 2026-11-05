@@ -19,6 +19,7 @@ use App\Models\User;
 use App\Services\Cart\CartSessionService;
 use Database\Seeders\SystemLookupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -141,6 +142,7 @@ class ProductDetailPickabooStandardTest extends TestCase
             'email' => 'audio@test.com',
             'password' => bcrypt('password'),
         ]);
+        SellerProfile::create(['user_id' => $seller->id, 'store_name' => $seller->name, 'store_slug' => Str::slug($seller->name).'-'.$seller->id, 'is_approved' => true]);
 
         $channel = SalesChannel::where('slug', SalesChannel::RETAIL)->firstOrFail();
         $unit = Unit::where('symbol', 'pc')->firstOrFail();
@@ -195,6 +197,7 @@ class ProductDetailPickabooStandardTest extends TestCase
             'email' => 'bundle@test.com',
             'password' => bcrypt('password'),
         ]);
+        SellerProfile::create(['user_id' => $seller->id, 'store_name' => $seller->name, 'store_slug' => Str::slug($seller->name).'-'.$seller->id, 'is_approved' => true]);
 
         $channel = SalesChannel::where('slug', SalesChannel::RETAIL)->firstOrFail();
         $unit = Unit::where('symbol', 'pc')->firstOrFail();

@@ -86,7 +86,7 @@ class ProductDetail extends Component
             'images',
             'prices.salesChannel',
             'variations.attributeValues.attribute',
-        ])->where('slug', $slug)->firstOrFail();
+        ])->sellable()->where('slug', $slug)->firstOrFail();
 
         // Initialize default selected variation for retail
         if ($this->product->variations->isNotEmpty()) {

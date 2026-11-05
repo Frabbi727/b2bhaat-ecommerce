@@ -13,7 +13,7 @@ class CatalogController extends Controller
     public function index(Request $request): AnonymousResourceCollection
     {
         $query = Product::query()
-            ->active()
+            ->sellable()
             ->with([
                 'category',
                 'brand',
@@ -52,6 +52,7 @@ class CatalogController extends Controller
             'prices.salesChannel',
             'variations.attributeValues.attribute',
         ])
+            ->sellable()
             ->where('slug', $slug)
             ->firstOrFail();
 

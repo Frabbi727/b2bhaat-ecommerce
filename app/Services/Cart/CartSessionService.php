@@ -32,7 +32,12 @@ class CartSessionService
     public function addItem(int $productId, ?int $variationId, string $channelSlug, int $quantity, ?float $overrideUnitPrice = null): void
     {
         $product = Product::with(['prices.salesChannel', 'variations.attributeValues.attribute', 'seller.sellerProfile'])
-            ->findOrFail($productId);
+            ->sellable()
+            ->find($productId);
+
+        if (! $product) {
+            throw new Exception('This product is no longer available.');
+        }
 
         if ($product->seller?->sellerProfile?->is_on_vacation) {
             $storeName = $product->seller->sellerProfile->store_name ?? 'This merchant';

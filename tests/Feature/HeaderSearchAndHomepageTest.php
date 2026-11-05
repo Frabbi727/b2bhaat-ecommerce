@@ -12,10 +12,12 @@ use App\Models\Product;
 use App\Models\ProductPrice;
 use App\Models\Role;
 use App\Models\SalesChannel;
+use App\Models\SellerProfile;
 use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\SystemLookupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -38,6 +40,7 @@ class HeaderSearchAndHomepageTest extends TestCase
             'email' => 'tech@seller.com',
             'password' => bcrypt('password'),
         ]);
+        SellerProfile::create(['user_id' => $seller->id, 'store_name' => $seller->name, 'store_slug' => Str::slug($seller->name).'-'.$seller->id, 'is_approved' => true]);
 
         $channel = SalesChannel::where('slug', SalesChannel::RETAIL)->firstOrFail();
         $unit = Unit::where('symbol', 'pc')->firstOrFail();
@@ -95,6 +98,7 @@ class HeaderSearchAndHomepageTest extends TestCase
             'email' => 'banner@seller.com',
             'password' => bcrypt('password'),
         ]);
+        SellerProfile::create(['user_id' => $seller->id, 'store_name' => $seller->name, 'store_slug' => Str::slug($seller->name).'-'.$seller->id, 'is_approved' => true]);
 
         $channel = SalesChannel::where('slug', SalesChannel::RETAIL)->firstOrFail();
         $unit = Unit::where('symbol', 'pc')->firstOrFail();
@@ -132,6 +136,7 @@ class HeaderSearchAndHomepageTest extends TestCase
             'email' => 'sort@seller.com',
             'password' => bcrypt('password'),
         ]);
+        SellerProfile::create(['user_id' => $seller->id, 'store_name' => $seller->name, 'store_slug' => Str::slug($seller->name).'-'.$seller->id, 'is_approved' => true]);
 
         $channel = SalesChannel::where('slug', SalesChannel::RETAIL)->firstOrFail();
         $unit = Unit::where('symbol', 'pc')->firstOrFail();
@@ -191,6 +196,7 @@ class HeaderSearchAndHomepageTest extends TestCase
             'email' => 'gadget@hub.com',
             'password' => bcrypt('password'),
         ]);
+        SellerProfile::create(['user_id' => $seller->id, 'store_name' => $seller->name, 'store_slug' => Str::slug($seller->name).'-'.$seller->id, 'is_approved' => true]);
 
         $channel = SalesChannel::where('slug', SalesChannel::RETAIL)->firstOrFail();
         $unit = Unit::where('symbol', 'pc')->firstOrFail();
