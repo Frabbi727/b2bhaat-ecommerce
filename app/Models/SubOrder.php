@@ -84,6 +84,54 @@ class SubOrder extends Model
         return round($this->net_earnings + ($this->is_self_delivered ? (float) $this->shipping_amount : 0.0), 2);
     }
 
+    /**
+     * This consignment's share of the order coupon: discount × (subtotal / Σ sibling subtotals), rounded to 2 places.
+     * The rounding remainder goes to the sub-order with the largest subtotal (lowest id on a tie), so shares sum exactly.
+     */
+    public function allocatedDiscount(): float
+    {
+        $order = $this->order;
+        $discount = round((float) ($order?->discount_amount ?? 0), 2);
+        if ($order === null || $discount <= 0) {
+            return 0.0;
+        }
+
+        $siblings = $order->subOrders()->orderBy('id')->get(['id', 'subtotal']);
+        $totalSubtotal = (float) $siblings->sum('subtotal');
+        if ($totalSubtotal <= 0) {
+            return 0.0;
+        }
+
+        $remainderHolder = $siblings
+            ->sort(fn (SubOrder $x, SubOrder $y): int => [(float) $y->subtotal, $x->id] <=> [(float) $x->subtotal, $y->id])
+            ->first();
+        $share = fn (SubOrder $sibling): float => round($discount * (float) $sibling->subtotal / $totalSubtotal, 2);
+
+        if ($remainderHolder->id !== $this->id) {
+            return $share($siblings->firstWhere('id', $this->id) ?? $this);
+        }
+
+        $othersTotal = $siblings->where('id', '!=', $this->id)->sum(fn (SubOrder $sibling) => $share($sibling));
+
+        return round($discount - $othersTotal, 2);
+    }
+
+    /**
+     * What the buyer pays for this consignment: goods + delivery fee − allocated coupon share.
+     */
+    public function paidAmount(): float
+    {
+        return round((float) $this->subtotal + (float) $this->shipping_amount - $this->allocatedDiscount(), 2);
+    }
+
+    /**
+     * Cash the deliverer must collect: the paid amount for COD orders, nothing for prepaid orders.
+     */
+    public function codCollectAmount(): float
+    {
+        return $this->order?->paymentMethod?->slug === 'cod' ? $this->paidAmount() : 0.0;
+    }
+
     public function getNetEarningsAttribute(): float
     {
         return (float) ($this->subtotal - $this->commission_amount);

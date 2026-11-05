@@ -127,7 +127,7 @@
                 @if (! $isPrepaid)
                     <div class="text-xs">
                         <span class="text-slate-500">COD Collection Amount:</span>
-                        <div class="text-xl font-black text-rose-700 font-mono">৳{{ number_format($subOrder->subtotal, 2) }}</div>
+                        <div class="text-xl font-black text-rose-700 font-mono">৳{{ number_format($codAmount, 2) }}</div>
                     </div>
                 @else
                     <p class="text-[10px] text-slate-500">Pre-settled through B2B Haat escrow gateway. No cash collection required from buyer.</p>

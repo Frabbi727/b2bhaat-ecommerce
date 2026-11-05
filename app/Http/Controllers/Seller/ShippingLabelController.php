@@ -39,11 +39,9 @@ class ShippingLabelController extends Controller
         $order = $subOrder->order;
         $shippingAddress = $order->shipping_address ?? [];
 
-        // Check if COD or prepaid
-        $isPrepaid = in_array($order->paymentStatus?->slug, ['paid'])
-            && ! in_array($order->paymentMethod?->slug, ['cod']);
-
-        $codAmount = $isPrepaid ? 0.00 : (float) $subOrder->subtotal;
+        // Goods + delivery fee − this consignment's coupon share; prepaid orders collect nothing (PRA-051)
+        $isPrepaid = $order->paymentMethod?->slug !== 'cod';
+        $codAmount = $subOrder->codCollectAmount();
 
         return view('seller.shipping-label', [
             'subOrder' => $subOrder,
@@ -82,10 +80,9 @@ class ShippingLabelController extends Controller
         $order = $subOrder->order;
         $shippingAddress = $order->shipping_address ?? [];
 
-        $isPrepaid = in_array($order->paymentStatus?->slug, ['paid'])
-            && ! in_array($order->paymentMethod?->slug, ['cod']);
-
-        $codAmount = $isPrepaid ? 0.00 : (float) $subOrder->subtotal;
+        // Goods + delivery fee − this consignment's coupon share; prepaid orders collect nothing (PRA-051)
+        $isPrepaid = $order->paymentMethod?->slug !== 'cod';
+        $codAmount = $subOrder->codCollectAmount();
 
         return view('seller.delivery-challan', [
             'subOrder' => $subOrder,

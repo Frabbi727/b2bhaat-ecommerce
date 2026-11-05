@@ -373,6 +373,7 @@ class DemoCatalogSeeder extends Seeder
                     'tracking_number' => 'STDFST-DHAKA-8899',
                     'subtotal' => 500.00,
                     'commission_amount' => 50.00,
+                    'shipping_amount' => 70.00,
                 ]
             );
 
