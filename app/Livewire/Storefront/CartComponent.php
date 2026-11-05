@@ -4,6 +4,7 @@ namespace App\Livewire\Storefront;
 
 use App\Models\Wishlist;
 use App\Services\Cart\CartSessionService;
+use App\Services\Logistics\ShippingCalculatorService;
 use Exception;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
@@ -105,7 +106,18 @@ class CartComponent extends Component
         $discountAmount = $cart->getDiscountAmount();
         $subtotalAfterDiscount = $cart->getSubtotalAfterDiscount();
 
+        // Same calculation checkout charges: admin zone fees, seller overrides and each seller's free-delivery threshold
+        $calculator = app(ShippingCalculatorService::class);
+        $shippingByZone = [];
+        foreach (ShippingCalculatorService::ZONES as $zone) {
+            $shippingByZone[$zone] = $calculator->calculateShipping($items, $zone);
+        }
+        $insideDhakaShipping = $shippingByZone['inside_dhaka']['total_shipping'];
+
         return view('livewire.storefront.cart-component', [
+            'shippingByZone' => $shippingByZone,
+            'insideDhakaShipping' => $insideDhakaShipping,
+            'estimatedTotal' => round($subtotalAfterDiscount + $insideDhakaShipping, 2),
             'items' => $items,
             'subtotal' => $subtotal,
             'itemCount' => $itemCount,

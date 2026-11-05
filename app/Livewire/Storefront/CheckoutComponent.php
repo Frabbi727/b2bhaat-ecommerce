@@ -82,9 +82,8 @@ class CheckoutComponent extends Component
             }
         }
 
-        $defaultMethod = PaymentMethod::where('slug', 'cod')->first()
-            ?? PaymentMethod::where('slug', 'mock_gateway')->first()
-            ?? PaymentMethod::where('is_active', true)->first();
+        $defaultMethod = PaymentMethod::availableToBuyers()->where('slug', 'cod')->first()
+            ?? PaymentMethod::availableToBuyers()->first();
         $this->selectedPaymentMethodId = $defaultMethod?->id;
         $this->appliedCoupon = $cart->getCoupon();
     }
@@ -180,14 +179,10 @@ class CheckoutComponent extends Component
             'streetAddress' => 'required|string|min:5',
             'city' => 'required|string|max:100',
             'postalCode' => 'required|string|max:20',
-            'deliveryZone' => 'required|in:inside_dhaka,outside_dhaka',
+            'deliveryZone' => ['required', Rule::in(ShippingCalculatorService::ZONES)],
             'selectedPaymentMethodId' => ['required', Rule::exists('payment_methods', 'id')->where('is_active', true), function (string $attribute, mixed $value, \Closure $fail): void {
-                $slug = PaymentMethod::whereKey($value)->value('slug');
-                if ($slug === 'mock_gateway' && ! app()->environment('local', 'testing')) {
-                    $fail('This payment method is not available.');
-                }
-                if ($slug === 'sslcommerz') {
-                    $fail('Card payment is not available yet. Please choose Cash on Delivery, bKash or Nagad.');
+                if (! PaymentMethod::availableToBuyers()->whereKey($value)->exists()) {
+                    $fail('This payment method is not available. Please choose Cash on Delivery, bKash or Nagad.');
                 }
             }],
         ], [
@@ -402,7 +397,12 @@ class CheckoutComponent extends Component
         $shippingBreakdown = $this->getShippingBreakdown();
         $shippingFee = (float) $shippingBreakdown['total_shipping'];
         $grandTotal = max(0.00, round($subtotal + $shippingFee - $discountAmount, 2));
-        $paymentMethods = PaymentMethod::where('is_active', true)->get();
+        $paymentMethods = PaymentMethod::availableToBuyers()->get();
+        $calculator = app(ShippingCalculatorService::class);
+        $zoneQuotes = [];
+        foreach (ShippingCalculatorService::ZONES as $zone) {
+            $zoneQuotes[$zone] = (float) $calculator->calculateShipping($items, $zone)['total_shipping'];
+        }
         $selectedMethod = PaymentMethod::find($this->selectedPaymentMethodId);
         $savedAddresses = Auth::check() ? Auth::user()->addresses()->latest()->get() : collect();
 
@@ -415,6 +415,7 @@ class CheckoutComponent extends Component
             'shippingBreakdown' => $shippingBreakdown,
             'grandTotal' => $grandTotal,
             'paymentMethods' => $paymentMethods,
+            'zoneQuotes' => $zoneQuotes,
             'selectedMethod' => $selectedMethod,
             'savedAddresses' => $savedAddresses,
         ]);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Services\Settings\StoreConfigurationService;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\PromotionsAndStoreSettingsSeeder;
 use Database\Seeders\SystemLookupSeeder;
@@ -35,12 +36,15 @@ class ProductionUiUxSecurityTest extends TestCase
 
     public function test_custom_404_page_renders_with_b2bhaat_brand(): void
     {
+        // The error page shows the support email the admin configured (no invented contact details)
+        app(StoreConfigurationService::class)->set('support_email', 'help@shop.example', 'general');
+
         $response = $this->get('/non-existent-page-url-404-test');
 
         $response->assertStatus(404);
         $response->assertSee('Page Not Found');
         $response->assertSee('Browse All Categories');
-        $response->assertSee('support@b2bhaat.com');
+        $response->assertSee('help@shop.example');
     }
 
     public function test_robots_txt_disallows_private_paths_for_crawlers(): void

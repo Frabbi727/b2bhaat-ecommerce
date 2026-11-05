@@ -16,6 +16,7 @@ use App\Livewire\Storefront\OrderTracking;
 use App\Livewire\Storefront\ProductCatalog;
 use App\Livewire\Storefront\ProductDetail;
 use App\Livewire\Storefront\SellerStore;
+use App\Livewire\Storefront\StaticPage;
 use App\Livewire\Storefront\WholesaleUpgrade;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
@@ -23,6 +24,11 @@ use Illuminate\Support\Facades\Route;
 
 // Storefront & Catalog
 Route::get('/', ProductCatalog::class)->name('catalog.index');
+
+// Policy & information pages
+foreach (array_keys(StaticPage::PAGES) as $staticPage) {
+    Route::get('/'.$staticPage, StaticPage::class)->defaults('page', $staticPage)->name('pages.'.$staticPage);
+}
 Route::get('/login', CustomerAuth::class)->name('login');
 Route::get('/register', CustomerAuth::class)->name('register');
 Route::get('/store/{slug}', SellerStore::class)->name('store.show');

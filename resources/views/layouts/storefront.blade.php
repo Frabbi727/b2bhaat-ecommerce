@@ -33,6 +33,8 @@
         $storeConfig = app(\App\Services\Settings\StoreConfigurationService::class);
         $identity = $storeConfig->getStoreIdentity();
         $helpline = $identity['helpline'];
+        $buyerPaymentMethods = \App\Models\PaymentMethod::availableToBuyers()->where('slug', '!=', \App\Models\PaymentMethod::MOCK)->get();
+        $returnWindowHours = $storeConfig->getEscrowHoldingPeriodHours();
     @endphp
 
     <header class="bg-slate-950 text-slate-300 text-xs py-2 px-4 border-b border-slate-800">
@@ -54,10 +56,12 @@
             </div>
 
             <div class="flex items-center gap-4 text-[11px]">
+@if ($identity['helpline'])
                 <div class="hidden md:flex items-center gap-1 text-slate-400">
                     <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
                     <span>Helpline: <strong class="text-slate-200">{{ $identity['helpline'] }}</strong></span>
                 </div>
+                @endif
                 <span class="hidden sm:inline text-slate-700">|</span>
                 <a href="{{ route('tracking.index') }}" class="hover:text-white transition flex items-center gap-1">
                     <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -253,8 +257,8 @@
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
                     </div>
                     <div>
-                        <div class="text-white text-xs font-bold">100% Genuine Products</div>
-                        <div class="text-[11px] text-slate-400">Official Brand Authorized Warranty</div>
+                        <div class="text-white text-xs font-bold">Verified Sellers</div>
+                        <div class="text-[11px] text-slate-400">Every seller's trade licence is checked</div>
                     </div>
                 </div>
 
@@ -263,8 +267,8 @@
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                     </div>
                     <div>
-                        <div class="text-white text-xs font-bold">7-Day Easy Returns</div>
-                        <div class="text-[11px] text-slate-400">Hassle-free replacement guarantee</div>
+                        <div class="text-white text-xs font-bold">Returns Within {{ $returnWindowHours }} Hours</div>
+                        <div class="text-[11px] text-slate-400"><a href="{{ route('pages.returns') }}" class="hover:text-white underline">Read the return policy</a></div>
                     </div>
                 </div>
 
@@ -273,8 +277,8 @@
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     </div>
                     <div>
-                        <div class="text-white text-xs font-bold">Secure Digital Payments</div>
-                        <div class="text-[11px] text-slate-400">bKash, Nagad, Cards & COD</div>
+                        <div class="text-white text-xs font-bold">Pay Your Way</div>
+                        <div class="text-[11px] text-slate-400">{{ $buyerPaymentMethods->pluck('name')->implode(', ') }}</div>
                     </div>
                 </div>
 
@@ -283,8 +287,8 @@
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                     </div>
                     <div>
-                        <div class="text-white text-xs font-bold">Fast Express Delivery</div>
-                        <div class="text-[11px] text-slate-400">24-hour delivery inside Dhaka</div>
+                        <div class="text-white text-xs font-bold">Delivery All Over Bangladesh</div>
+                        <div class="text-[11px] text-slate-400">Inside Dhaka in {{ $storeConfig->getDeliverySla('inside_dhaka') }}</div>
                     </div>
                 </div>
             </div>
@@ -301,8 +305,15 @@
                     The hybrid e-commerce retail & factory-direct bulk wholesale platform connecting manufacturers, verified merchants, and shoppers across Bangladesh.
                 </p>
                 <div class="text-xs text-slate-400 pt-2">
-                    <div>Customer Service: <strong class="text-white">{{ $identity['helpline'] }}</strong></div>
-                    <div>Email: <strong class="text-white">{{ $identity['email'] }}</strong></div>
+                    @if ($identity['helpline'])
+                        <div>Customer Service: <strong class="text-white">{{ $identity['helpline'] }}</strong></div>
+                    @endif
+                    @if ($identity['email'])
+                        <div>Email: <strong class="text-white">{{ $identity['email'] }}</strong></div>
+                    @endif
+                    @if ($identity['address'])
+                        <div>{{ $identity['address'] }}</div>
+                    @endif
                 </div>
             </div>
 
@@ -328,24 +339,26 @@
             </div>
 
             <div>
-                <h4 class="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Payment & Business</h4>
-                <p class="text-xs text-slate-400 mb-3">
-                    We accept Cash on Delivery, bKash, Nagad, Visa, Mastercard, and Bank Transfers.
-                </p>
+                <h4 class="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Payment</h4>
+                <p class="text-xs text-slate-400 mb-3">We accept:</p>
                 <div class="flex items-center gap-2 flex-wrap">
-                    <span class="px-2.5 py-1 rounded bg-slate-800 text-slate-200 border border-slate-700 text-[10px] font-bold">bKash</span>
-                    <span class="px-2.5 py-1 rounded bg-slate-800 text-slate-200 border border-slate-700 text-[10px] font-bold">Nagad</span>
-                    <span class="px-2.5 py-1 rounded bg-slate-800 text-slate-200 border border-slate-700 text-[10px] font-bold">Visa / Master</span>
-                    <span class="px-2.5 py-1 rounded bg-slate-800 text-slate-200 border border-slate-700 text-[10px] font-bold">COD</span>
+                    @foreach ($buyerPaymentMethods as $buyerPaymentMethod)
+                        <span class="px-2.5 py-1 rounded bg-slate-800 text-slate-200 border border-slate-700 text-[11px] font-bold">{{ $buyerPaymentMethod->name }}</span>
+                    @endforeach
                 </div>
-                <div class="mt-4 pt-4 border-t border-slate-800 text-[11px] text-slate-500">
-                    Portals: <a href="/seller" class="text-indigo-400 hover:underline">Seller Center</a> | <a href="/admin" class="text-amber-400 hover:underline">Super Admin</a>
-                </div>
+                <h4 class="text-white font-semibold mt-6 mb-3 text-xs uppercase tracking-wider">Policies</h4>
+                <ul class="space-y-2 text-xs">
+                    <li><a href="{{ route('pages.terms') }}" class="hover:text-white transition">Terms & Conditions</a></li>
+                    <li><a href="{{ route('pages.privacy') }}" class="hover:text-white transition">Privacy Policy</a></li>
+                    <li><a href="{{ route('pages.returns') }}" class="hover:text-white transition">Returns & Refunds</a></li>
+                    <li><a href="{{ route('pages.about') }}" class="hover:text-white transition">About Us</a></li>
+                    <li><a href="{{ route('pages.contact') }}" class="hover:text-white transition">Contact Us</a></li>
+                </ul>
             </div>
         </div>
 
         <div class="border-t border-slate-800/80 py-4 text-center text-xs text-slate-500">
-            &copy; {{ date('Y') }} B2B Haat E-Commerce Platform. All rights reserved. Built with Laravel 13, Livewire 3, Tailwind CSS & PostgreSQL.
+            &copy; {{ date('Y') }} {{ $identity['name'] }}. All rights reserved.
         </div>
     </footer>
 

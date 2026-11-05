@@ -54,7 +54,7 @@
 
             <!-- Customer Care Note -->
             <div class="pt-8 border-t border-slate-200 text-xs text-slate-500">
-                Believe this is an error? Contact admin support: <strong class="text-slate-800">support@b2bhaat.com</strong>
+                @include('errors.partials.contact', ['intro' => 'Believe this is an error? Contact support.'])
             </div>
         </div>
     </main>

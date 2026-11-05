@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 class SubOrder extends Model
 {
@@ -62,6 +63,22 @@ class SubOrder extends Model
     public function trackingLogs(): HasMany
     {
         return $this->hasMany(OrderTrackingLog::class)->orderBy('logged_at', 'desc');
+    }
+
+    /**
+     * When the consignment was delivered: the latest "delivered" tracking log, falling back to the last update.
+     * The escrow release and the return window both count from this moment.
+     */
+    public function deliveredAt(): ?Carbon
+    {
+        $deliveredStatusId = FulfillmentStatus::where('slug', 'delivered')->value('id');
+
+        $loggedAt = $this->trackingLogs()
+            ->where('fulfillment_status_id', $deliveredStatusId)
+            ->reorder('logged_at', 'desc')
+            ->value('logged_at');
+
+        return $loggedAt !== null ? Carbon::parse($loggedAt) : $this->updated_at;
     }
 
     public function returnRequests(): HasMany

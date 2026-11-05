@@ -305,7 +305,7 @@
                         <div class="pt-1">
                             <label class="flex items-start gap-2 cursor-pointer text-[11px] text-slate-600">
                                 <input type="checkbox" wire:model="agreeTerms" class="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"/>
-                                <span>I agree to B2B Haat's Customer Terms, Escrow Protection Rules & Privacy Policy.</span>
+                                <span>I agree to the <a href="{{ route('pages.terms') }}" target="_blank" class="font-semibold text-indigo-600 hover:underline">Terms & Conditions</a> and <a href="{{ route('pages.privacy') }}" target="_blank" class="font-semibold text-indigo-600 hover:underline">Privacy Policy</a>.</span>
                             </label>
                             @error('agreeTerms') <span class="text-rose-600 text-[11px] block mt-1">{{ $message }}</span> @enderror
                         </div>

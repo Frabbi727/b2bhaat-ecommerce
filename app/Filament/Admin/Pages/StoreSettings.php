@@ -50,11 +50,11 @@ class StoreSettings extends Page
 
         $this->form->fill([
             'store_name' => $service->get('store_name', 'B2B Haat'),
-            'vat_bin_number' => $service->get('vat_bin_number', 'BIN-002394812-0101'),
-            'helpline_phone' => $service->get('helpline_phone', '+880 9612-445566'),
-            'support_email' => $service->get('support_email', 'support@b2bhaat.com'),
-            'store_address' => $service->get('store_address', 'Level 4, B2Bhaat Tower, 45 Motijheel C/A, Dhaka-1000'),
-            'announcement_text' => $service->get('announcement_text', 'Mega Electronics Fest: Up to 35% off on Mini LED Smart TVs & Audio!'),
+            'vat_bin_number' => $service->get('vat_bin_number', ''),
+            'helpline_phone' => $service->get('helpline_phone', ''),
+            'support_email' => $service->get('support_email', ''),
+            'store_address' => $service->get('store_address', ''),
+            'announcement_text' => $service->get('announcement_text', ''),
 
             'delivery_fee_inside_dhaka' => $service->getDeliveryFee('inside_dhaka'),
             'delivery_fee_sub_dhaka' => $service->getDeliveryFee('sub_dhaka'),
@@ -97,24 +97,24 @@ class StoreSettings extends Page
 
                                     TextInput::make('vat_bin_number')
                                         ->label('VAT / BIN Registration Number')
-                                        ->placeholder('BIN-002394812-0101')
+                                        ->placeholder('e.g. 000000000-0101')
                                         ->required(),
 
                                     TextInput::make('helpline_phone')
                                         ->label('Customer Helpline Phone')
-                                        ->placeholder('+880 9612-445566')
+                                        ->placeholder('e.g. +880 1XXX-XXXXXX')
                                         ->required(),
 
                                     TextInput::make('support_email')
                                         ->label('Support Email Address')
                                         ->email()
-                                        ->placeholder('support@b2bhaat.com')
+                                        ->placeholder('e.g. support@yourdomain.com')
                                         ->required(),
                                 ]),
 
                                 TextInput::make('store_address')
                                     ->label('Registered Corporate Address')
-                                    ->placeholder('e.g. Level 4, B2Bhaat Tower, Dhaka-1000')
+                                    ->placeholder('e.g. House 12, Road 5, Dhanmondi, Dhaka-1205')
                                     ->required(),
 
                                 TextInput::make('announcement_text')

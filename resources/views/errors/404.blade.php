@@ -54,7 +54,7 @@
 
             <!-- Customer Care Note -->
             <div class="pt-8 border-t border-slate-200 text-xs text-slate-500">
-                Need immediate assistance? Helpline: <strong class="text-slate-800">+880 9612-445566</strong> • Support: <strong class="text-slate-800">support@b2bhaat.com</strong>
+                @include('errors.partials.contact', ['intro' => 'Need help?'])
             </div>
         </div>
     </main>

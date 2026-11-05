@@ -53,7 +53,7 @@ class SellerStore extends Component
         $isWholesaleUser = $user && $user->isWholesaleBuyer();
 
         $sellerProductsQuery = $this->sellerProfile->user->products()
-            ->active()
+            ->listable()
             ->with([
                 'category',
                 'brand',
@@ -93,7 +93,7 @@ class SellerStore extends Component
             'products' => $products,
             'storeCategories' => $storeCategories,
             'isWholesaleUser' => $isWholesaleUser,
-            'totalActiveProducts' => $this->sellerProfile->user->products()->active()->count(),
+            'totalActiveProducts' => $this->sellerProfile->user->products()->listable()->count(),
         ]);
     }
 }

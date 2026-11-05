@@ -243,25 +243,22 @@
         @if ($flashSaleProducts->isNotEmpty())
             <div
                 id="flash-sales"
+                @if ($flashSaleEndsAt)
+                data-ends-at="{{ $flashSaleEndsAt->getTimestampMs() }}"
                 x-data="{
-                    hours: 14,
-                    minutes: 32,
-                    seconds: 45,
+                    endsAt: {{ $flashSaleEndsAt->getTimestampMs() }},
+                    hours: 0,
+                    minutes: 0,
+                    seconds: 0,
                     tick() {
-                        if (this.seconds > 0) {
-                            this.seconds--;
-                        } else {
-                            this.seconds = 59;
-                            if (this.minutes > 0) {
-                                this.minutes--;
-                            } else {
-                                this.minutes = 59;
-                                if (this.hours > 0) this.hours--;
-                            }
-                        }
+                        const left = Math.max(0, Math.floor((this.endsAt - Date.now()) / 1000));
+                        this.hours = Math.floor(left / 3600);
+                        this.minutes = Math.floor((left % 3600) / 60);
+                        this.seconds = left % 60;
                     }
                 }"
-                x-init="setInterval(() => tick(), 1000)"
+                x-init="tick(); setInterval(() => tick(), 1000)"
+                @endif
                 class="rounded-3xl bg-gradient-to-r from-rose-950 via-slate-900 to-indigo-950 p-6 sm:p-8 text-white shadow-xl border border-rose-900/40 space-y-6"
             >
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-rose-900/30 pb-5">
@@ -281,14 +278,16 @@
                     </div>
 
                     <!-- Countdown Clock -->
+                    @if ($flashSaleEndsAt)
                     <div class="flex items-center gap-2 self-start sm:self-auto bg-slate-950/60 px-4 py-2 rounded-2xl border border-rose-800/40">
                         <span class="text-xs text-rose-200 font-semibold mr-1">Ends in:</span>
-                        <div class="w-8 h-8 rounded-lg bg-rose-600 font-mono font-black text-xs flex items-center justify-center text-white" x-text="String(hours).padStart(2, '0')">14</div>
+                        <div class="w-8 h-8 rounded-lg bg-rose-600 font-mono font-black text-xs flex items-center justify-center text-white" x-text="String(hours).padStart(2, '0')">{{ str_pad((string) intdiv((int) max(0, now()->diffInSeconds($flashSaleEndsAt, false)), 3600), 2, '0', STR_PAD_LEFT) }}</div>
                         <span class="font-bold text-rose-400">:</span>
-                        <div class="w-8 h-8 rounded-lg bg-rose-600 font-mono font-black text-xs flex items-center justify-center text-white" x-text="String(minutes).padStart(2, '0')">32</div>
+                        <div class="w-8 h-8 rounded-lg bg-rose-600 font-mono font-black text-xs flex items-center justify-center text-white" x-text="String(minutes).padStart(2, '0')">{{ str_pad((string) intdiv((int) max(0, now()->diffInSeconds($flashSaleEndsAt, false)) % 3600, 60), 2, '0', STR_PAD_LEFT) }}</div>
                         <span class="font-bold text-rose-400">:</span>
-                        <div class="w-8 h-8 rounded-lg bg-rose-600 font-mono font-black text-xs flex items-center justify-center text-white" x-text="String(seconds).padStart(2, '0')">45</div>
+                        <div class="w-8 h-8 rounded-lg bg-rose-600 font-mono font-black text-xs flex items-center justify-center text-white" x-text="String(seconds).padStart(2, '0')">{{ str_pad((string) ((int) max(0, now()->diffInSeconds($flashSaleEndsAt, false)) % 60), 2, '0', STR_PAD_LEFT) }}</div>
                     </div>
+                    @endif
                 </div>
 
                 <!-- Flash Products Grid -->

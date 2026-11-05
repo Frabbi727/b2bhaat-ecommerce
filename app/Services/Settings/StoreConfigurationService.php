@@ -58,11 +58,11 @@ class StoreConfigurationService
     {
         return [
             'name' => (string) $this->get('store_name', 'B2B Haat'),
-            'helpline' => (string) $this->get('helpline_phone', '+880 9612-445566'),
-            'email' => (string) $this->get('support_email', 'support@b2bhaat.com'),
-            'address' => (string) $this->get('store_address', 'Level 4, B2Bhaat Tower, 45 Motijheel C/A, Dhaka-1000'),
-            'vat_bin' => (string) $this->get('vat_bin_number', 'BIN-002394812-0101'),
-            'announcement' => (string) $this->get('announcement_text', 'Mega Electronics Fest: Up to 35% off on Mini LED Smart TVs & Audio!'),
+            'helpline' => (string) $this->get('helpline_phone', ''),
+            'email' => (string) $this->get('support_email', ''),
+            'address' => (string) $this->get('store_address', ''),
+            'vat_bin' => (string) $this->get('vat_bin_number', ''),
+            'announcement' => (string) $this->get('announcement_text', ''),
         ];
     }
 

@@ -51,7 +51,7 @@
 
             <!-- Customer Care Note -->
             <div class="pt-8 border-t border-slate-200 text-xs text-slate-500">
-                If the problem persists, please call our 24/7 Helpline: <strong class="text-slate-800">+880 9612-445566</strong>
+                @include('errors.partials.contact', ['intro' => 'If the problem continues, contact us.'])
             </div>
         </div>
     </main>

@@ -48,7 +48,7 @@
 
             <!-- Customer Care Note -->
             <div class="pt-8 border-t border-slate-200 text-xs text-slate-500">
-                Urgent merchant queries? Contact our Operations Desk: <strong class="text-slate-800">+880 9612-445566</strong>
+                @include('errors.partials.contact', ['intro' => 'Urgent questions?'])
             </div>
         </div>
     </main>

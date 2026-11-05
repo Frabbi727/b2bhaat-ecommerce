@@ -126,7 +126,10 @@ class CartSessionService
         $matchedRecord = null;
         if (! $isQuoted) {
             $matchedRecord = $this->resolveTierRecord($channelPrices, $totalQuantity);
-            $effectivePrice = (float) $matchedRecord?->unit_price;
+            $effectivePrice = $this->applyFlashSale($product, $channelSlug, (float) $matchedRecord?->unit_price);
+            if ($effectivePrice <= 0) {
+                throw new Exception('This product has no valid price yet and cannot be ordered.');
+            }
         } else {
             $matchedRecord = $channelPrices->first();
         }
@@ -227,7 +230,7 @@ class CartSessionService
             if ($channelPrices->isNotEmpty()) {
                 $matchedTier = $this->resolveTierRecord($channelPrices, $newQuantity);
                 if ($matchedTier) {
-                    $item['unit_price'] = (float) $matchedTier->unit_price;
+                    $item['unit_price'] = $this->applyFlashSale($product, $item['sales_channel_slug'], (float) $matchedTier->unit_price);
                 }
             }
         }
@@ -331,6 +334,16 @@ class CartSessionService
      *
      * @param  Collection<int, ProductPrice>  $channelPrices
      */
+    /**
+     * Shop (retail) lines are charged the running flash-sale price the storefront shows, never more than the tier price.
+     */
+    private function applyFlashSale(Product $product, string $channelSlug, float $tierPrice): float
+    {
+        $flashPrice = $channelSlug === SalesChannel::RETAIL ? $product->activeFlashSalePrice() : null;
+
+        return $flashPrice !== null ? min($flashPrice, $tierPrice) : $tierPrice;
+    }
+
     public function resolveTierRecord($channelPrices, int $quantity): ?ProductPrice
     {
         // 1. Check exact min_quantity and max_quantity range

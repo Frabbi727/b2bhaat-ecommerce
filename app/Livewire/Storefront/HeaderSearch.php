@@ -70,7 +70,7 @@ class HeaderSearch extends Component
             $like = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
 
             $results = Product::query()
-                ->active()
+                ->listable()
                 ->with(['primaryImage', 'brand', 'retailPrice'])
                 ->where(function ($q) use ($like, $searchTerm) {
                     $term = "%{$searchTerm}%";

@@ -6,6 +6,7 @@ use App\Filament\Seller\Widgets\SellerRecentOrdersWidget;
 use App\Filament\Seller\Widgets\SellerRevenueChart;
 use App\Filament\Seller\Widgets\SellerStatsOverview;
 use App\Filament\Seller\Widgets\SellerStockAlertsWidget;
+use App\Services\Settings\StoreConfigurationService;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -28,6 +29,7 @@ class SellerPanelProvider extends PanelProvider
     {
         return $panel
             ->id('seller')
+            ->brandName(fn (): string => app(StoreConfigurationService::class)->getStoreIdentity()['name'].' Seller Center')
             ->path('seller')
             ->login()
             ->colors([

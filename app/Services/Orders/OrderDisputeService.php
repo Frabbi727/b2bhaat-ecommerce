@@ -161,6 +161,13 @@ class OrderDisputeService
             throw new Exception('Unauthorized. You can only request returns for orders placed under your account.');
         }
 
+        // Returns close when the seller is paid (escrow release), so a refund is never owed on money already paid out
+        $windowHours = app(StoreConfigurationService::class)->getEscrowHoldingPeriodHours();
+        $deliveredAt = $subOrder->deliveredAt();
+        if ($deliveredAt !== null && $deliveredAt->copy()->addHours($windowHours)->isPast()) {
+            throw new Exception("Returns must be requested within {$windowHours} hours of delivery. This consignment was delivered on {$deliveredAt->format('d M Y, h:i A')}.");
+        }
+
         return DB::transaction(function () use ($subOrder, $customer, $data) {
             $returnRequest = ReturnRequest::create([
                 'sub_order_id' => $subOrder->id,

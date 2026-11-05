@@ -120,8 +120,8 @@
                         </span>
                     @endif
                     @if ($product->warranty_period)
-                        <span class="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
-                            🛡️ Official Warranty
+                        <span class="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold">
+                            🛡️ {{ $product->warranty_period }}
                         </span>
                     @endif
                 </div>
@@ -240,29 +240,18 @@
                     @endif
                 </div>
 
-                <!-- EMI & Bank Payment Offer Notice -->
-                <div class="pt-3 border-t border-slate-200/60 flex items-center gap-2 text-xs text-slate-700">
-                    <span class="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold shrink-0 text-[10px]">
-                        EMI
-                    </span>
-                    <div>
-                        @php
-                            $monthlyEmi = round($product->effective_selling_price / 12);
-                        @endphp
-                        <span>Available with <strong>0% Interest EMI</strong> from <strong>৳{{ number_format($monthlyEmi, 0) }}/mo</strong> on 18 leading bank cards.</span>
-                    </div>
-                </div>
-
-                <!-- Islandwide Delivery & Warranty Guarantees -->
+                <!-- Delivery & Warranty (only what the seller entered; delivery time falls back to the admin setting) -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 text-[11px] text-slate-600">
                     <div class="flex items-center gap-1.5">
                         <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                        <span>{{ $product->delivery_info ?? 'Express 24h delivery inside Dhaka' }}</span>
+                        <span>{{ $product->delivery_info ?: 'Delivery inside Dhaka in '.app(\App\Services\Settings\StoreConfigurationService::class)->getDeliverySla('inside_dhaka') }}</span>
                     </div>
+                    @if ($product->warranty_period)
                     <div class="flex items-center gap-1.5">
                         <svg class="w-4 h-4 text-indigo-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                        <span>{{ $product->warranty_period ?? 'Official Manufacturer Warranty' }}</span>
+                        <span>{{ $product->warranty_period }}</span>
                     </div>
+                    @endif
                 </div>
             </div>
 
@@ -470,8 +459,8 @@
         @endphp
         <div class="rounded-3xl bg-slate-50 border border-slate-200 p-6 sm:p-8 space-y-6">
             <div>
-                <h2 class="text-lg font-extrabold text-slate-900">Frequently Bought Together</h2>
-                <p class="text-xs text-slate-500">Customers who bought this product also frequently bundled with:</p>
+                <h2 class="text-lg font-extrabold text-slate-900">Goes Well With</h2>
+                <p class="text-xs text-slate-500">Another product from the same category you can add in one click:</p>
             </div>
 
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -639,48 +628,53 @@
             </div>
         </div>
 
-        <!-- Tab 4: WARRANTY & SERVICE -->
+        <!-- Tab 4: WARRANTY & SERVICE (only what the seller entered) -->
         <div class="p-6 sm:p-10" x-show="$wire.activeTab === 'warranty'">
             <div class="max-w-3xl space-y-6">
                 <div>
-                    <h3 class="text-base font-extrabold text-slate-900">Official Warranty Policy</h3>
-                    <p class="text-xs text-slate-500">Authorized manufacturer coverage and terms</p>
+                    <h3 class="text-base font-extrabold text-slate-900">Warranty</h3>
+                    <p class="text-xs text-slate-500">As provided by {{ $product->seller?->sellerProfile?->store_name ?? 'the seller' }}</p>
                 </div>
 
                 <div class="p-5 rounded-2xl bg-indigo-50/50 border border-indigo-100 space-y-3 text-xs">
-                    <div class="font-bold text-indigo-900 text-sm">
-                        🛡️ {{ $product->warranty_period ?? '1 Year Standard Warranty' }}
-                    </div>
-                    <p class="text-slate-700 leading-relaxed">
-                        {{ $product->warranty_policy ?? 'All products are covered by manufacturer warranty against defects in materials and workmanship. Warranty claims are serviced nationwide at authorized service centers.' }}
-                    </p>
-                    <div class="text-[11px] text-slate-500 pt-2 border-t border-indigo-100">
-                        Please retain your order invoice and warranty card delivered with the consignment.
-                    </div>
+                    @if ($product->warranty_period || $product->warranty_policy)
+                        @if ($product->warranty_period)
+                            <div class="font-bold text-indigo-900 text-sm">🛡️ {{ $product->warranty_period }}</div>
+                        @endif
+                        @if ($product->warranty_policy)
+                            <p class="text-slate-700 leading-relaxed">{{ $product->warranty_policy }}</p>
+                        @endif
+                        <div class="text-[11px] text-slate-500 pt-2 border-t border-indigo-100">
+                            Keep your invoice: you will need it for any warranty claim.
+                        </div>
+                    @else
+                        <p class="text-slate-700">The seller has not listed a warranty for this product. Ask the seller before you buy if a warranty matters to you.</p>
+                    @endif
                 </div>
             </div>
         </div>
 
-        <!-- Tab 5: DELIVERY & RETURNS -->
+        <!-- Tab 5: DELIVERY & RETURNS (from admin delivery settings and the return policy) -->
+        @php
+            $tabStoreConfig = app(\App\Services\Settings\StoreConfigurationService::class);
+        @endphp
         <div class="p-6 sm:p-10" x-show="$wire.activeTab === 'delivery'">
             <div class="max-w-3xl space-y-6">
                 <div>
-                    <h3 class="text-base font-extrabold text-slate-900">Shipping & Delivery Information</h3>
-                    <p class="text-xs text-slate-500">Logistics dispatch timelines and return window</p>
+                    <h3 class="text-base font-extrabold text-slate-900">Delivery & Returns</h3>
+                    <p class="text-xs text-slate-500">Delivery times by area and how returns work</p>
                 </div>
 
                 <div class="space-y-4 text-xs text-slate-700">
+                    @foreach (\App\Services\Logistics\ShippingCalculatorService::ZONE_LABELS as $zone => $zoneLabel)
+                        <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                            <div class="font-bold text-slate-900">{{ $zoneLabel }}</div>
+                            <p>Usually delivered in {{ $tabStoreConfig->getDeliverySla($zone) }}. The delivery fee is shown in your cart and at checkout.</p>
+                        </div>
+                    @endforeach
                     <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                        <div class="font-bold text-slate-900">Inside Dhaka Metropolitan</div>
-                        <p>Standard delivery within 24 hours. Express same-day delivery available for orders confirmed before 12 PM.</p>
-                    </div>
-                    <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                        <div class="font-bold text-slate-900">Nationwide (All 64 Districts)</div>
-                        <p>Shipped via Steadfast, eCourier, and SA Paribahan. Delivery timeline: 2 to 3 business days.</p>
-                    </div>
-                    <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                        <div class="font-bold text-slate-900">7-Day Replacement Policy</div>
-                        <p>Returns accepted if product is defective, damaged in transit, or incorrect. Seals and packaging must remain intact.</p>
+                        <div class="font-bold text-slate-900">Returns</div>
+                        <p>Report a damaged, wrong or faulty item within {{ $tabStoreConfig->getEscrowHoldingPeriodHours() }} hours of delivery from "My Orders". <a href="{{ route('pages.returns') }}" class="font-semibold text-indigo-600 hover:underline">Read the return policy</a>.</p>
                     </div>
                 </div>
             </div>

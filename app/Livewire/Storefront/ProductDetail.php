@@ -506,7 +506,7 @@ class ProductDetail extends Component
 
         // Recommendations & Discovery (Pickaboo reference standard)
         $relatedProducts = Product::query()
-            ->active()
+            ->listable()
             ->where('id', '!=', $this->product->id)
             ->where(function (Builder $q) {
                 $q->where('category_id', $this->product->category_id)
@@ -517,15 +517,16 @@ class ProductDetail extends Component
             ->get();
 
         $frequentlyBoughtTogether = Product::query()
-            ->active()
+            ->listable()
             ->where('id', '!=', $this->product->id)
+            ->where('category_id', $this->product->category_id)
             ->with(['primaryImage', 'brand', 'retailPrice'])
             ->take(2)
             ->get();
 
         $recentIds = array_diff(session()->get('recently_viewed_products', []), [$this->product->id]);
         $recentlyViewed = ! empty($recentIds)
-            ? Product::query()->active()->whereIn('id', $recentIds)->with(['primaryImage', 'brand', 'retailPrice'])->take(4)->get()
+            ? Product::query()->listable()->whereIn('id', $recentIds)->with(['primaryImage', 'brand', 'retailPrice'])->take(4)->get()
             : collect();
 
         return view('livewire.storefront.product-detail', [

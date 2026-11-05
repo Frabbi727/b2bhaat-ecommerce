@@ -15,6 +15,16 @@ class ShippingCalculatorService
 
     public const DEFAULT_FREE_SHIPPING_THRESHOLD = 10000.00;
 
+    /** Delivery zones a buyer can choose, in display order. */
+    public const ZONES = ['inside_dhaka', 'sub_dhaka', 'outside_dhaka'];
+
+    /** Buyer-facing zone names. */
+    public const ZONE_LABELS = [
+        'inside_dhaka' => 'Inside Dhaka',
+        'sub_dhaka' => 'Sub-Dhaka (Savar, Gazipur, Narayanganj, Keraniganj)',
+        'outside_dhaka' => 'Outside Dhaka (all other districts)',
+    ];
+
     public function __construct(
         protected ?StoreConfigurationService $config = null
     ) {

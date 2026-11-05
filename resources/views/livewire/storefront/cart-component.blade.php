@@ -148,29 +148,28 @@
 
             <!-- Right: Order Summary & Checkout -->
             <div class="lg:col-span-4 space-y-4">
-                <!-- Free Shipping Progress -->
-                @php
-                    $storeConfig = app(\App\Services\Settings\StoreConfigurationService::class);
-                    $freeShippingThreshold = $storeConfig->getFreeShippingThreshold();
-                    $progressPercentage = min(100, round(($subtotal / $freeShippingThreshold) * 100));
-                @endphp
-                <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-2">
-                    <div class="flex items-center justify-between text-xs font-bold">
-                        @if ($subtotal >= $freeShippingThreshold)
-                            <span class="text-emerald-700 flex items-center gap-1.5">
-                                <svg class="w-4 h-4 text-emerald-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                                Free Nationwide Delivery Unlocked!
-                            </span>
-                            <span class="text-emerald-600 font-mono">100%</span>
-                        @else
-                            <span class="text-slate-700">Add ৳{{ number_format($freeShippingThreshold - $subtotal, 2) }} more for Free Shipping</span>
-                            <span class="text-indigo-600 font-mono">{{ $progressPercentage }}%</span>
-                        @endif
-                    </div>
-                    <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                        <div class="h-2 rounded-full transition-all duration-500 {{ $subtotal >= $freeShippingThreshold ? 'bg-emerald-500' : 'bg-indigo-600' }}" style="width: {{ $progressPercentage }}%"></div>
-                    </div>
-                    <p class="text-[10px] text-slate-400">All wholesale & retail orders above ৳{{ number_format($freeShippingThreshold, 0) }} qualify for free courier shipping across all 64 districts.</p>
+                <!-- Free Delivery Progress (per seller: each seller ships and prices their own parcel) -->
+                <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
+                    @foreach ($shippingByZone['inside_dhaka']['vendors'] as $vendor)
+                        @php
+                            $progressPercentage = $vendor['threshold'] > 0 ? min(100, (int) round(($vendor['subtotal'] / $vendor['threshold']) * 100)) : 100;
+                        @endphp
+                        <div class="space-y-1.5">
+                            <div class="flex items-center justify-between gap-2 text-xs font-bold">
+                                @if ($vendor['is_free'])
+                                    <span class="text-emerald-700">Free delivery from {{ $vendor['store_name'] }}</span>
+                                    <span class="text-emerald-600 font-mono">100%</span>
+                                @else
+                                    <span class="text-slate-700">Add ৳{{ number_format($vendor['remaining_for_free'], 0) }} more from {{ $vendor['store_name'] }} for free delivery</span>
+                                    <span class="text-indigo-600 font-mono">{{ $progressPercentage }}%</span>
+                                @endif
+                            </div>
+                            <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                                <div class="h-2 rounded-full transition-all duration-500 {{ $vendor['is_free'] ? 'bg-emerald-500' : 'bg-indigo-600' }}" style="width: {{ $progressPercentage }}%"></div>
+                            </div>
+                        </div>
+                    @endforeach
+                    <p class="text-[11px] text-slate-500">Each seller sends their own parcel. Delivery is free when your order from that seller reaches their free-delivery amount.</p>
                 </div>
 
                 <!-- Coupon Code Box -->
@@ -229,21 +228,29 @@
                                 <span class="font-bold font-mono">-৳{{ number_format($discountAmount, 2) }}</span>
                             </div>
                         @endif
-                        <div class="flex justify-between text-slate-600">
-                            <span>Shipping / Freight:</span>
-                            <span class="text-slate-500">
-                                @if ($subtotal >= $freeShippingThreshold)
-                                    <strong class="text-emerald-600">FREE</strong>
-                                @else
-                                    ৳70 (Dhaka) / ৳130 (Outside)
-                                @endif
-                            </span>
+                        <div class="text-slate-600 space-y-1">
+                            <span>Delivery:</span>
+                            @foreach ($shippingByZone as $zone => $quote)
+                                <div class="flex justify-between pl-2">
+                                    <span class="text-slate-500">{{ \App\Services\Logistics\ShippingCalculatorService::ZONE_LABELS[$zone] }}</span>
+                                    <span class="font-semibold text-slate-800">
+                                        @if ($quote['total_shipping'] <= 0)
+                                            <strong class="text-emerald-600">Free</strong>
+                                        @else
+                                            ৳{{ number_format($quote['total_shipping'], 0) }}
+                                        @endif
+                                    </span>
+                                </div>
+                            @endforeach
                         </div>
                     </div>
 
-                    <div class="border-t border-slate-100 pt-3 flex justify-between items-baseline">
-                        <span class="text-sm font-bold text-slate-900">Estimated Total:</span>
-                        <span class="text-xl font-black text-indigo-600">৳{{ number_format($subtotalAfterDiscount, 2) }}</span>
+                    <div class="border-t border-slate-100 pt-3 space-y-1">
+                        <div class="flex justify-between items-baseline">
+                            <span class="text-sm font-bold text-slate-900">Estimated Total:</span>
+                            <span class="text-xl font-black text-indigo-600">৳{{ number_format($estimatedTotal, 2) }}</span>
+                        </div>
+                        <p class="text-[11px] text-slate-500">Includes Inside Dhaka delivery. The exact delivery fee for your area is shown at checkout.</p>
                     </div>
 
                     <div class="space-y-2 pt-2">

@@ -205,9 +205,19 @@ class Product extends Model
      */
     public function scopeSellable(Builder $query): Builder
     {
-        return $query->where('is_active', true)
+        return $query->where($query->qualifyColumn('is_active'), true)
             ->whereHas('seller', fn (Builder $seller) => $seller->where('is_active', true)
                 ->whereHas('sellerProfile', fn (Builder $profile) => $profile->where('is_approved', true)));
+    }
+
+    /**
+     * Products the storefront may show: sellable, with a shop (retail) price above zero, so no card ever reads ৳0.
+     */
+    public function scopeListable(Builder $query): Builder
+    {
+        return $query->sellable()
+            ->whereHas('prices', fn (Builder $price) => $price->where('unit_price', '>', 0)
+                ->whereHas('salesChannel', fn (Builder $channel) => $channel->where('slug', SalesChannel::RETAIL)));
     }
 
     public function scopeActive(Builder $query): Builder
@@ -237,10 +247,22 @@ class Product extends Model
         });
     }
 
+    /**
+     * The flash-sale price while the sale is running, otherwise null. The cart charges it for shop (retail) lines.
+     */
+    public function activeFlashSalePrice(): ?float
+    {
+        if ($this->is_flash_sale && (float) $this->flash_sale_price > 0 && (! $this->flash_sale_end || $this->flash_sale_end->isFuture())) {
+            return (float) $this->flash_sale_price;
+        }
+
+        return null;
+    }
+
     public function getEffectiveSellingPriceAttribute(): float
     {
-        if ($this->is_flash_sale && $this->flash_sale_price && (! $this->flash_sale_end || $this->flash_sale_end->isFuture())) {
-            return (float) $this->flash_sale_price;
+        if (($flashPrice = $this->activeFlashSalePrice()) !== null) {
+            return $flashPrice;
         }
 
         if ($this->relationLoaded('retailPrice') && $this->retailPrice) {

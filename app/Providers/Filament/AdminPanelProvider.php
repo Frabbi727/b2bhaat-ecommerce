@@ -6,6 +6,7 @@ use App\Filament\Admin\Widgets\AdminFulfillmentDistributionChart;
 use App\Filament\Admin\Widgets\AdminOrdersRevenueChart;
 use App\Filament\Admin\Widgets\AdminStatsOverview;
 use App\Filament\Admin\Widgets\LatestOrdersWidget;
+use App\Services\Settings\StoreConfigurationService;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -28,6 +29,7 @@ class AdminPanelProvider extends PanelProvider
         return $panel
             ->default()
             ->id('admin')
+            ->brandName(fn (): string => app(StoreConfigurationService::class)->getStoreIdentity()['name'].' Admin')
             ->path('admin')
             ->login()
             ->colors([

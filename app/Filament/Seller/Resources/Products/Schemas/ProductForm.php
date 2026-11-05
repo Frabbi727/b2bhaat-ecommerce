@@ -6,6 +6,7 @@ use App\Models\Brand;
 use App\Models\Category;
 use App\Models\SalesChannel;
 use App\Models\Unit;
+use Closure;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
@@ -160,10 +161,12 @@ class ProductForm
                     ->schema([
                         Repeater::make('prices')
                             ->relationship('prices')
+                            ->rule(fn (Get $get): Closure => self::pricesMatchChannelRule($get('sales_channel_id')))
                             ->schema([
                                 Select::make('sales_channel_id')
                                     ->label('Channel')
-                                    ->options(SalesChannel::where('is_active', true)->pluck('name', 'id'))
+                                    // A price is either a shop (retail) price or a wholesale tier; "both" only describes the product
+                                    ->options(SalesChannel::where('is_active', true)->whereIn('slug', [SalesChannel::RETAIL, SalesChannel::WHOLESALE])->pluck('name', 'id'))
                                     ->required(),
 
                                 TextInput::make('unit_price')
@@ -267,5 +270,28 @@ class ProductForm
                             ->defaultItems(1),
                     ]),
             ]);
+    }
+
+    /**
+     * A shop product needs a retail price and a wholesale product needs at least one wholesale tier, otherwise the
+     * storefront would show ৳0 or the product could never be ordered.
+     */
+    public static function pricesMatchChannelRule(mixed $productChannelId): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) use ($productChannelId): void {
+            $slugs = SalesChannel::pluck('slug', 'id');
+            $productChannel = $slugs[(int) $productChannelId] ?? null;
+            $priceChannels = collect(is_array($value) ? $value : [])
+                ->map(fn (mixed $row): ?string => is_array($row) ? ($slugs[(int) ($row['sales_channel_id'] ?? 0)] ?? null) : null)
+                ->filter();
+
+            if (in_array($productChannel, [SalesChannel::RETAIL, SalesChannel::BOTH], true) && ! $priceChannels->contains(SalesChannel::RETAIL)) {
+                $fail('Add a Retail price: shoppers need a price to buy this product.');
+            }
+
+            if (in_array($productChannel, [SalesChannel::WHOLESALE, SalesChannel::BOTH], true) && ! $priceChannels->contains(SalesChannel::WHOLESALE)) {
+                $fail('Add at least one Wholesale price tier for business buyers.');
+            }
+        };
     }
 }

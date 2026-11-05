@@ -42,9 +42,15 @@
                         <h1 class="text-2xl font-black text-slate-900 tracking-tight">{{ $identity['name'] }}</h1>
                     </div>
                     <p class="text-xs text-slate-500 mt-1">Hybrid Wholesale & Retail Marketplace Platform</p>
-                    <p class="text-[11px] text-slate-500 font-mono mt-0.5">{{ $identity['address'] }}</p>
-                    <p class="text-[11px] text-slate-400">Helpline: {{ $identity['helpline'] }} • {{ $identity['email'] }}</p>
-                    <p class="text-[11px] font-bold text-indigo-700 font-mono mt-1">VAT / BIN: {{ $identity['vat_bin'] }}</p>
+                    @if ($identity['address'])
+                        <p class="text-[11px] text-slate-500 font-mono mt-0.5">{{ $identity['address'] }}</p>
+                    @endif
+                    @if ($identity['helpline'] || $identity['email'])
+                        <p class="text-[11px] text-slate-400">{{ collect([$identity['helpline'] ? 'Helpline: '.$identity['helpline'] : null, $identity['email']])->filter()->implode(' • ') }}</p>
+                    @endif
+                    @if ($identity['vat_bin'])
+                        <p class="text-[11px] font-bold text-indigo-700 font-mono mt-1">VAT / BIN: {{ $identity['vat_bin'] }}</p>
+                    @endif
                 </div>
 
                 <div class="text-right space-y-1">

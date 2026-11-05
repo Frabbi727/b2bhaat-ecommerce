@@ -9,6 +9,7 @@ use App\Livewire\Storefront\ProductCatalog;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductPrice;
 use App\Models\ProductVariation;
 use App\Models\SalesChannel;
 use App\Models\SellerProfile;
@@ -52,7 +53,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
         $unit = Unit::firstOrFail();
         $channel = SalesChannel::firstOrFail();
 
-        $product = Product::create([
+        $product = $this->withRetailPrice(Product::create([
             'seller_id' => $seller->id,
             'category_id' => $category->id,
             'brand_id' => $brand->id,
@@ -66,7 +67,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'regular_price' => 12500.00,
             'is_active' => true,
             'status' => 'published',
-        ]);
+        ]));
 
         ProductVariation::create([
             'product_id' => $product->id,
@@ -109,7 +110,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
         $channel = SalesChannel::firstOrFail();
 
         // Product A: In stock
-        $inStockProduct = Product::create([
+        $inStockProduct = $this->withRetailPrice(Product::create([
             'seller_id' => $seller->id,
             'category_id' => $category->id,
             'brand_id' => $brand->id,
@@ -121,7 +122,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'regular_price' => 3000.00,
             'is_active' => true,
             'status' => 'published',
-        ]);
+        ]));
 
         ProductVariation::create([
             'product_id' => $inStockProduct->id,
@@ -131,7 +132,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
         ]);
 
         // Product B: Zero stock
-        $outOfStockProduct = Product::create([
+        $outOfStockProduct = $this->withRetailPrice(Product::create([
             'seller_id' => $seller->id,
             'category_id' => $category->id,
             'brand_id' => $brand->id,
@@ -143,7 +144,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'regular_price' => 4000.00,
             'is_active' => true,
             'status' => 'published',
-        ]);
+        ]));
 
         ProductVariation::create([
             'product_id' => $outOfStockProduct->id,
@@ -186,7 +187,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'is_approved' => true,
         ]);
 
-        $approvedProduct = Product::create([
+        $approvedProduct = $this->withRetailPrice(Product::create([
             'seller_id' => $approvedSeller->id,
             'category_id' => $category->id,
             'brand_id' => $brand->id,
@@ -198,7 +199,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'regular_price' => 5000.00,
             'is_active' => true,
             'status' => 'published',
-        ]);
+        ]));
 
         // Unapproved seller
         $unapprovedSeller = User::create([
@@ -213,7 +214,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'is_approved' => false,
         ]);
 
-        $unapprovedProduct = Product::create([
+        $unapprovedProduct = $this->withRetailPrice(Product::create([
             'seller_id' => $unapprovedSeller->id,
             'category_id' => $category->id,
             'brand_id' => $brand->id,
@@ -225,7 +226,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'regular_price' => 5000.00,
             'is_active' => true,
             'status' => 'published',
-        ]);
+        ]));
 
         Livewire::test(ProductCatalog::class)
             ->set('search', 'Supplier')
@@ -258,7 +259,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
         ]);
 
         // Product assigned directly to child subcategory
-        $product = Product::create([
+        $product = $this->withRetailPrice(Product::create([
             'seller_id' => $seller->id,
             'category_id' => $childCat->id,
             'brand_id' => $brand->id,
@@ -270,7 +271,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'regular_price' => 24000.00,
             'is_active' => true,
             'status' => 'published',
-        ]);
+        ]));
 
         // Filtering by parent category ID MUST retrieve the child category's product
         Livewire::test(ProductCatalog::class)
@@ -292,7 +293,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
         $unit = Unit::firstOrFail();
         $channel = SalesChannel::firstOrFail();
 
-        $budgetProduct = Product::create([
+        $budgetProduct = $this->withRetailPrice(Product::create([
             'seller_id' => $seller->id,
             'category_id' => $category->id,
             'brand_id' => $brand->id,
@@ -304,9 +305,9 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'regular_price' => 450.00,
             'is_active' => true,
             'status' => 'published',
-        ]);
+        ]));
 
-        $midProduct = Product::create([
+        $midProduct = $this->withRetailPrice(Product::create([
             'seller_id' => $seller->id,
             'category_id' => $category->id,
             'brand_id' => $brand->id,
@@ -318,9 +319,9 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'regular_price' => 3500.00,
             'is_active' => true,
             'status' => 'published',
-        ]);
+        ]));
 
-        $premiumProduct = Product::create([
+        $premiumProduct = $this->withRetailPrice(Product::create([
             'seller_id' => $seller->id,
             'category_id' => $category->id,
             'brand_id' => $brand->id,
@@ -332,7 +333,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'regular_price' => 85000.00,
             'is_active' => true,
             'status' => 'published',
-        ]);
+        ]));
 
         // Filter min = 1000, max = 5000
         Livewire::test(ProductCatalog::class)
@@ -367,5 +368,18 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             ->assertSet('onlyFlashSale', false)
             ->assertSet('inStockOnly', false)
             ->assertSet('verifiedSupplierOnly', false);
+    }
+
+    /** A shop product as the seller form creates it: with a retail price row (the storefront lists only these). */
+    private function withRetailPrice(Product $product): Product
+    {
+        ProductPrice::create([
+            'product_id' => $product->id,
+            'sales_channel_id' => SalesChannel::where('slug', SalesChannel::RETAIL)->value('id'),
+            'unit_price' => $product->regular_price,
+            'min_quantity' => 1,
+        ]);
+
+        return $product;
     }
 }

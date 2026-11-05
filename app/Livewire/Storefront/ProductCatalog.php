@@ -345,13 +345,13 @@ class ProductCatalog extends Component
     {
         $categories = Category::where('is_active', true)->whereNull('parent_id')->with('children')->orderBy('sort_order')->get();
         $brands = Brand::where('is_active', true)->orderBy('name')->get();
-        $featuredSellers = SellerProfile::where('is_approved', true)->with('user')->withCount('products')->take(4)->get();
+        $featuredSellers = SellerProfile::where('is_approved', true)->with('user')->withCount(['products' => fn ($products) => $products->listable()])->take(4)->get();
         $heroBanners = Banner::active()->forPosition('hero_slider')->get();
         $promoStripBanners = Banner::active()->forPosition('promo_strip')->get();
 
         // Flash Sales Section Products
         $flashSaleProducts = Product::query()
-            ->active()
+            ->listable()
             ->flashSale()
             ->with(['seller.sellerProfile', 'category', 'brand', 'primaryImage', 'retailPrice'])
             ->take(6)
@@ -359,7 +359,7 @@ class ProductCatalog extends Component
 
         // Featured Products Section
         $featuredProducts = Product::query()
-            ->active()
+            ->listable()
             ->featured()
             ->with(['seller.sellerProfile', 'category', 'brand', 'primaryImage', 'retailPrice'])
             ->take(8)
@@ -371,7 +371,7 @@ class ProductCatalog extends Component
 
         // Main Query with filters & sorting
         $query = Product::query()
-            ->active()
+            ->listable()
             ->with([
                 'seller.sellerProfile',
                 'category',
@@ -490,6 +490,8 @@ class ProductCatalog extends Component
             'heroBanners' => $heroBanners,
             'promoStripBanners' => $promoStripBanners,
             'flashSaleProducts' => $flashSaleProducts,
+            // The countdown runs to the soonest real end time; no end time means no countdown
+            'flashSaleEndsAt' => $flashSaleProducts->pluck('flash_sale_end')->filter()->min(),
             'featuredProducts' => $featuredProducts,
             'userWishlistIds' => $userWishlistIds,
             'isFiltering' => $isFiltering,

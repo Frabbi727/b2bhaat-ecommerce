@@ -104,7 +104,7 @@ class HeaderSearchAndHomepageTest extends TestCase
         $unit = Unit::where('symbol', 'pc')->firstOrFail();
         $cat = Category::create(['name' => 'Phones', 'slug' => 'phones', 'is_active' => true]);
 
-        Product::create([
+        $this->withRetailPrice(Product::create([
             'seller_id' => $seller->id,
             'category_id' => $cat->id,
             'sales_channel_id' => $channel->id,
@@ -117,7 +117,7 @@ class HeaderSearchAndHomepageTest extends TestCase
             'flash_sale_price' => 39999.00,
             'flash_sale_end' => now()->addDays(2),
             'is_active' => true,
-        ]);
+        ]));
 
         $response = $this->get('/');
         $response->assertStatus(200);
@@ -142,7 +142,7 @@ class HeaderSearchAndHomepageTest extends TestCase
         $unit = Unit::where('symbol', 'pc')->firstOrFail();
         $cat = Category::create(['name' => 'Accessories', 'slug' => 'accessories', 'is_active' => true]);
 
-        $itemA = Product::create([
+        $itemA = $this->withRetailPrice(Product::create([
             'seller_id' => $seller->id,
             'category_id' => $cat->id,
             'sales_channel_id' => $channel->id,
@@ -152,7 +152,7 @@ class HeaderSearchAndHomepageTest extends TestCase
             'regular_price' => 200.00,
             'buy_price' => 50.00,
             'is_active' => true,
-        ]);
+        ]));
         ProductPrice::create([
             'product_id' => $itemA->id,
             'sales_channel_id' => $channel->id,
@@ -160,7 +160,7 @@ class HeaderSearchAndHomepageTest extends TestCase
             'unit_price' => 150.00,
         ]);
 
-        $itemB = Product::create([
+        $itemB = $this->withRetailPrice(Product::create([
             'seller_id' => $seller->id,
             'category_id' => $cat->id,
             'sales_channel_id' => $channel->id,
@@ -170,7 +170,7 @@ class HeaderSearchAndHomepageTest extends TestCase
             'regular_price' => 1500.00,
             'buy_price' => 500.00,
             'is_active' => true,
-        ]);
+        ]));
         ProductPrice::create([
             'product_id' => $itemB->id,
             'sales_channel_id' => $channel->id,
@@ -243,5 +243,18 @@ class HeaderSearchAndHomepageTest extends TestCase
             ->assertDispatched('cartUpdated')
             ->assertSet('showQuickView', false)
             ->assertSee('Added 2x');
+    }
+
+    /** A shop product as the seller form creates it: with a retail price row (the storefront lists only these). */
+    private function withRetailPrice(Product $product): Product
+    {
+        ProductPrice::create([
+            'product_id' => $product->id,
+            'sales_channel_id' => SalesChannel::where('slug', SalesChannel::RETAIL)->value('id'),
+            'unit_price' => $product->regular_price,
+            'min_quantity' => 1,
+        ]);
+
+        return $product;
     }
 }
