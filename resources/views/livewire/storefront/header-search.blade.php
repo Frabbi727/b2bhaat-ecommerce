@@ -19,7 +19,8 @@
                 type="text"
                 wire:model.live.debounce.250ms="query"
                 @focus="focused = true"
-                placeholder="Search by product, brand, model, or SKU (e.g. Mini LED, S24, Sony)..."
+                placeholder="Search products or brands"
+                aria-label="Search products"
                 class="w-full h-11 pl-4 pr-10 text-sm text-slate-900 placeholder:text-slate-400 bg-white border border-slate-200 sm:border-l-0 rounded-l-xl sm:rounded-l-none focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition"
                 autocomplete="off"
             />

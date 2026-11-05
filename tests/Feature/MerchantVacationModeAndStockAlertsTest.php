@@ -174,7 +174,7 @@ class MerchantVacationModeAndStockAlertsTest extends TestCase
 
         Livewire::test(SellerStore::class, ['slug' => $profile->store_slug])
             ->assertStatus(200)
-            ->assertSee('Factory Currently on Vacation Mode')
+            ->assertSee('This store is taking a break')
             ->assertSee('Our factory is undergoing scheduled maintenance until Nov 15.')
             ->assertSee('Nov 15, 2026');
     }

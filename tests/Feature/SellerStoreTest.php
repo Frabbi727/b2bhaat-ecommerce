@@ -30,7 +30,7 @@ class SellerStoreTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('NailsFactory Ltd.');
         $response->assertSee('TRAD/DNCC/2026/09912');
-        $response->assertSee('Govt. Trade Verified Supplier');
+        $response->assertSee('Trade licence checked');
         $response->assertSee('Luxury Press-on Fake Nails Set');
     }
 

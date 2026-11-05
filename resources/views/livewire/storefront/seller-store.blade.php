@@ -1,9 +1,9 @@
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
     <!-- Breadcrumb -->
     <nav class="flex items-center gap-2 text-xs text-slate-500">
-        <a href="{{ route('catalog.index') }}" class="hover:underline">Marketplace Catalog</a>
+        <a href="{{ route('catalog.index') }}" class="hover:underline">Shop</a>
         <span>/</span>
-        <span class="text-slate-400">Verified Factories & Suppliers</span>
+        <span class="text-slate-400">Sellers</span>
         <span>/</span>
         <span class="text-slate-800 font-semibold">{{ $sellerProfile->store_name }}</span>
     </nav>
@@ -15,10 +15,7 @@
                 <div class="flex flex-wrap items-center gap-2">
                     <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                         <svg class="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                        Govt. Trade Verified Supplier
-                    </span>
-                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                        Direct Factory Hub
+                        Trade licence checked
                     </span>
                 </div>
 
@@ -27,7 +24,7 @@
                 </h1>
 
                 <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                    Verified supplier and manufacturer operating in Bangladesh. Directly fulfilling factory wholesale bulk orders and consumer retail packages under the B2B Haat escrow protocol.
+                    We checked this seller's trade licence before they could sell here. When you pay online, we hold the money until you receive your order.
                 </p>
 
                 <!-- Credentials Badges -->
@@ -45,7 +42,7 @@
                         </div>
                     @endif
                     <div class="flex items-center gap-1.5">
-                        <span class="text-slate-400">Authorized:</span>
+                        <span class="text-slate-400">Owner:</span>
                         <span class="text-slate-200">{{ $sellerProfile->user?->name }}</span>
                     </div>
                 </div>
@@ -55,11 +52,11 @@
             <div class="grid grid-cols-2 gap-3 sm:gap-4 shrink-0 bg-white/5 p-4 rounded-2xl border border-white/10 text-center">
                 <div class="p-3">
                     <div class="text-2xl sm:text-3xl font-black text-emerald-400 font-mono">{{ $totalActiveProducts }}</div>
-                    <div class="text-[11px] text-slate-400 mt-1 uppercase font-semibold">Active Catalog Items</div>
+                    <div class="text-[11px] text-slate-400 mt-1 uppercase font-semibold">Products</div>
                 </div>
                 <div class="p-3 border-l border-white/10">
-                    <div class="text-2xl sm:text-3xl font-black text-indigo-400 font-mono">100%</div>
-                    <div class="text-[11px] text-slate-400 mt-1 uppercase font-semibold">Verified Escrow</div>
+                    <div class="text-2xl sm:text-3xl font-black text-indigo-400 font-mono">{{ $sellerProfile->created_at?->format('Y') }}</div>
+                    <div class="text-[11px] text-slate-400 mt-1 uppercase font-semibold">Selling since</div>
                 </div>
             </div>
         </div>
@@ -70,16 +67,15 @@
     <!-- Vacation Notice Banner -->
     @if ($sellerProfile->is_on_vacation)
         <div class="rounded-2xl bg-amber-50 border border-amber-300 p-5 text-amber-950 shadow-sm flex items-start gap-4">
-            <span class="text-3xl p-2 bg-amber-100 rounded-xl shrink-0">🏖️</span>
             <div class="space-y-1">
                 <div class="flex items-center gap-2">
-                    <h3 class="font-bold text-sm text-amber-950">Factory Currently on Vacation Mode</h3>
+                    <h3 class="font-bold text-sm text-amber-950">This store is taking a break</h3>
                     <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-200 text-amber-800 uppercase tracking-wider">
-                        Dispatches Paused
+                        Orders paused
                     </span>
                 </div>
                 <p class="text-xs text-amber-800/90 leading-relaxed">
-                    {{ $sellerProfile->vacation_message ?: 'This store has temporarily paused factory dispatches and order processing.' }}
+                    {{ $sellerProfile->vacation_message ?: 'This store is not taking new orders right now.' }}
                 </p>
                 @if ($sellerProfile->vacation_ends_at)
                     <div class="text-xs font-semibold text-amber-900 pt-0.5 flex items-center gap-1.5">
@@ -88,7 +84,7 @@
                     </div>
                 @endif
                 <div class="pt-1 text-[11px] text-amber-700 font-medium">
-                    Catalog items are available for browsing; new purchases and dispatches will resume upon store reopening.
+                    You can still look around. Ordering opens again when the store is back.
                 </div>
             </div>
         </div>
@@ -99,10 +95,10 @@
         <div class="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
             <div class="flex items-center gap-2">
                 <svg class="w-5 h-5 text-indigo-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                <span>Sourcing in bulk for your salon or boutique from <strong>{{ $sellerProfile->store_name }}</strong>? Apply for B2B wholesale access to unlock tier volume pricing and matrix ordering.</span>
+                <span>Buying in bulk from <strong>{{ $sellerProfile->store_name }}</strong> for your shop or salon? Business buyers get lower prices.</span>
             </div>
             <a href="{{ route('wholesale.upgrade') }}" class="font-bold underline text-indigo-950 shrink-0 hover:text-indigo-700">
-                Apply for Wholesale Verification &rarr;
+                Apply for wholesale prices &rarr;
             </a>
         </div>
     @endif
@@ -196,7 +192,7 @@
                         <div class="absolute top-3 left-3 flex flex-col gap-1">
                             @if ($product->salesChannel?->slug === 'both')
                                 <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-indigo-600 text-white shadow-xs">
-                                    Dual Channel (B2B + B2C)
+                                    Shop &amp; wholesale
                                 </span>
                             @elseif ($product->salesChannel?->slug === 'wholesale')
                                 <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-emerald-600 text-white shadow-xs">
@@ -214,7 +210,7 @@
                     <div class="p-4 space-y-2">
                         <div class="flex items-center justify-between text-xs text-slate-500">
                             <span>{{ $product->category?->name }}</span>
-                            <span class="font-mono text-[10px] text-slate-400">{{ $product->brand?->name ?? 'Factory Direct' }}</span>
+                            <span class="font-mono text-[10px] text-slate-400">{{ $product->brand?->name ?? '' }}</span>
                         </div>
 
                         <h3 class="font-bold text-slate-900 group-hover:text-indigo-600 transition line-clamp-1">
@@ -277,7 +273,7 @@
                         href="{{ route('catalog.show', $product->slug) }}" 
                         class="block w-full text-center py-2 px-3 rounded-xl text-xs font-bold transition shadow-xs {{ $isWholesaleUser ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-indigo-600 hover:bg-indigo-700 text-white' }}"
                     >
-                        {{ $isWholesaleUser ? 'Open B2B Bulk Order Matrix' : 'View Product & Buy' }}
+                        {{ $isWholesaleUser ? 'Order in bulk' : 'View product' }}
                     </a>
                 </div>
             </div>

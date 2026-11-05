@@ -39,6 +39,7 @@
             <div
                 x-data="{
                     active: 0,
+                    touchX: 0,
                     total: {{ $heroBanners->count() }},
                     timer: null,
                     start() {
@@ -57,7 +58,9 @@
                 x-init="start()"
                 @mouseenter="stop()"
                 @mouseleave="start()"
-                class="relative rounded-3xl overflow-hidden shadow-xl border border-slate-200/80 bg-slate-900 aspect-16/9 sm:aspect-21/9"
+                @touchstart.passive="touchX = $event.touches[0].clientX; stop()"
+                @touchend="const dx = $event.changedTouches[0].clientX - touchX; if (Math.abs(dx) > 40) { dx < 0 ? next() : prev() } start()"
+                class="relative rounded-3xl overflow-hidden shadow-xl border border-slate-200/80 bg-slate-900 aspect-4/3 sm:aspect-21/9"
             >
                 @foreach ($heroBanners as $index => $banner)
                     <div
@@ -79,14 +82,14 @@
                         />
 
                         <!-- Gradient Overlay with Content -->
-                        <div class="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-slate-900/60 to-transparent flex items-center">
-                            <div class="max-w-2xl px-6 sm:px-12 py-8 text-white space-y-3">
+                        <div class="absolute inset-0 bg-gradient-to-t sm:bg-gradient-to-r from-slate-950/90 via-slate-900/60 to-transparent flex items-end sm:items-center">
+                            <div class="max-w-2xl px-5 sm:px-12 pt-8 pb-10 sm:py-8 text-white space-y-2 sm:space-y-3">
                                 @if ($banner->badge_text)
                                     <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-400 text-slate-950 shadow-sm">
-                                        ⚡ {{ $banner->badge_text }}
+                                        {{ $banner->badge_text }}
                                     </span>
                                 @endif
-                                <h2 class="text-2xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-tight">
+                                <h2 class="text-xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-tight line-clamp-2">
                                     {{ $banner->title }}
                                 </h2>
                                 @if ($banner->subtitle)
@@ -112,7 +115,7 @@
                 <button
                     @click="prev()"
                     type="button"
-                    class="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/60 hover:bg-slate-900 text-white flex items-center justify-center backdrop-blur-sm transition z-20"
+                    class="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/60 hover:bg-slate-900 text-white hidden sm:flex items-center justify-center backdrop-blur-sm transition z-20"
                     aria-label="Previous Slide"
                 >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
@@ -120,14 +123,14 @@
                 <button
                     @click="next()"
                     type="button"
-                    class="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/60 hover:bg-slate-900 text-white flex items-center justify-center backdrop-blur-sm transition z-20"
+                    class="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/60 hover:bg-slate-900 text-white hidden sm:flex items-center justify-center backdrop-blur-sm transition z-20"
                     aria-label="Next Slide"
                 >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
                 </button>
 
                 <!-- Carousel Navigation Dots -->
-                <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
+                <div class="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
                     @foreach ($heroBanners as $index => $banner)
                         <button
                             @click="active = {{ $index }}"
@@ -519,7 +522,7 @@
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
             <div>
                 <h2 class="text-xl font-extrabold text-slate-900">
-                    {{ $isFiltering ? 'Search & Filter Results' : 'Complete Marketplace Catalog' }}
+                    {{ $isFiltering ? 'Search results' : 'All products' }}
                 </h2>
                 <p class="text-xs text-slate-500">
                     Showing <strong class="text-slate-800">{{ $products->total() }}</strong> available products

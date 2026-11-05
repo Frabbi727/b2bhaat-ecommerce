@@ -40,11 +40,6 @@
     <header class="bg-slate-950 text-slate-300 text-xs py-2 px-4 border-b border-slate-800">
         <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-2">
             <div class="flex items-center gap-3">
-                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-medium text-[11px]">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    Verified Factory Direct
-                </span>
-                <span class="hidden sm:inline text-slate-700">|</span>
                 @if ($topStrip)
                     <a href="{{ $topStrip->link_url }}" class="hover:text-white transition flex items-center gap-1 text-amber-300 font-medium">
                         <span>{{ $topStrip->title }}</span>
@@ -104,7 +99,7 @@
 
     <!-- Main Header with Live Search, Logo & Action Icons -->
     <div class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-3.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-4 gap-y-2.5">
             <!-- Brand Logo -->
             <a href="{{ route('catalog.index') }}" class="flex items-center gap-2.5 text-xl font-black tracking-tight text-slate-900 shrink-0">
                 <span class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-700 to-indigo-500 text-white flex items-center justify-center font-black text-base shadow-sm">
@@ -113,8 +108,8 @@
                 <span class="hidden sm:inline">{{ $identity['name'] }}</span>
             </a>
 
-            <!-- Central Autocomplete Live Search -->
-            <div class="flex-1 max-w-2xl mx-2">
+            <!-- Live search: its own full-width row on phones -->
+            <div class="order-last sm:order-none w-full sm:w-auto sm:flex-1 max-w-2xl sm:mx-2">
                 <livewire:storefront.header-search />
             </div>
 
