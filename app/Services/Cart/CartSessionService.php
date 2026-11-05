@@ -83,6 +83,14 @@ class CartSessionService
             throw new Exception("{$storeName} is currently on vacation mode. {$vacationNotice}");
         }
 
+        // Simple products are sold through their default variation so stock is reserved (PRA-011)
+        if ($variationId === null && ! $product->has_variations) {
+            $variationId = $product->variations->sortBy('id')->first()?->id;
+            if ($variationId === null) {
+                throw new Exception('This product is out of stock.');
+            }
+        }
+
         $variation = $variationId ? $product->variations->firstWhere('id', $variationId) : null;
 
         // Fetch channel-specific price tiers

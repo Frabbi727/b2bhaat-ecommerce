@@ -213,6 +213,7 @@ class ProductDetailPickabooStandardTest extends TestCase
             'regular_price' => 50000.00,
             'buy_price' => 30000.00,
             'is_active' => true,
+            'has_variations' => true, // has an explicit variation below
         ]);
         ProductPrice::create([
             'product_id' => $main->id,

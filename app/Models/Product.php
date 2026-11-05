@@ -44,6 +44,52 @@ class Product extends Model
         'buy_price',
     ];
 
+    public const DEFAULT_VARIATION_SUFFIX = '-DEFAULT';
+
+    /**
+     * Simple products (no variations) get one default variation so stock is reserved like any SKU (PRA-011).
+     */
+    protected static function booted(): void
+    {
+        static::created(function (Product $product): void {
+            if (! $product->has_variations) {
+                $product->ensureDefaultVariation();
+            }
+        });
+    }
+
+    /**
+     * The product's stock-carrying variation; creates the default one (stock 0) when none exists.
+     */
+    public function ensureDefaultVariation(): ProductVariation
+    {
+        $existing = $this->variations()->orderBy('id')->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        return $this->variations()->create([
+            'sku' => static::defaultVariationSku($this->id, $this->sku, $this->slug),
+            'stock_quantity' => 0,
+            'buy_price' => $this->buy_price ?? 0,
+            'is_active' => true,
+        ]);
+    }
+
+    /**
+     * `{product sku or slug}-DEFAULT`, suffixed with the product id if that SKU is already taken.
+     */
+    public static function defaultVariationSku(int $productId, ?string $sku, string $slug): string
+    {
+        $candidate = ($sku ?: $slug).self::DEFAULT_VARIATION_SUFFIX;
+
+        if (ProductVariation::where('sku', $candidate)->exists()) {
+            $candidate = ($sku ?: $slug)."-{$productId}".self::DEFAULT_VARIATION_SUFFIX;
+        }
+
+        return $candidate;
+    }
+
     protected function casts(): array
     {
         return [

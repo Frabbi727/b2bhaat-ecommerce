@@ -14,7 +14,9 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 class ProductForm
@@ -80,6 +82,8 @@ class ProductForm
                                 ->numeric()
                                 ->minValue(0)
                                 ->default(0)
+                                // buy_price is $hidden on the model, so load it from the record explicitly
+                                ->afterStateHydrated(fn (TextInput $component, ?Model $record) => $record ? $component->state($record->buy_price ?? 0) : null)
                                 ->helperText('Private to your vendor analytics. Never disclosed to buyers.'),
                         ]),
 
@@ -191,10 +195,24 @@ class ProductForm
                     ->schema([
                         Toggle::make('has_variations')
                             ->label('Has Multiple Variations (Color, Size, etc.)')
-                            ->default(true),
+                            ->default(true)
+                            ->live(),
+
+                        // Simple products keep stock on their default variation (PRA-011)
+                        TextInput::make('simple_stock_quantity')
+                            ->label('Stock Quantity')
+                            ->numeric()
+                            ->integer()
+                            ->minValue(0)
+                            ->default(0)
+                            ->required()
+                            ->dehydrated(false)
+                            ->visible(fn (Get $get): bool => ! $get('has_variations'))
+                            ->helperText('Units available to sell. Orders are refused once this reaches 0.'),
 
                         Repeater::make('variations')
                             ->relationship('variations')
+                            ->visible(fn (Get $get): bool => (bool) $get('has_variations'))
                             ->schema([
                                 TextInput::make('sku')
                                     ->label('SKU')
@@ -213,7 +231,8 @@ class ProductForm
                                     ->prefix('৳')
                                     ->numeric()
                                     ->minValue(0)
-                                    ->default(0),
+                                    ->default(0)
+                                    ->afterStateHydrated(fn (TextInput $component, ?Model $record) => $record ? $component->state($record->buy_price ?? 0) : null),
 
                                 Toggle::make('is_active')
                                     ->label('In Stock & Active')

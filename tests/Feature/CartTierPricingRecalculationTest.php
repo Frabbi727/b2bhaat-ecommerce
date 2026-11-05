@@ -100,7 +100,8 @@ class CartTierPricingRecalculationTest extends TestCase
             quantity: 1
         );
 
-        $key = "{$this->product->id}_base_retail";
+        // Simple products are sold through their default variation (PRA-011)
+        $key = "{$this->product->id}_{$this->product->variations()->value('id')}_retail";
         $items = $cart->getItems();
         $this->assertEquals(100.00, $items[$key]['unit_price']);
         $this->assertEquals(100.00, $cart->getSubtotal());
@@ -146,7 +147,8 @@ class CartTierPricingRecalculationTest extends TestCase
             quantity: 50
         );
 
-        $key = "{$this->product->id}_base_retail";
+        // Simple products are sold through their default variation (PRA-011)
+        $key = "{$this->product->id}_{$this->product->variations()->value('id')}_retail";
         $this->assertEquals(100.00, $cart->getItems()[$key]['unit_price']);
 
         // Add 60 more pcs of the same product -> Total becomes 110 pcs (Qualifies for Tier 2 @ 80 Tk)
