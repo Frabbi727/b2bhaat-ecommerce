@@ -6,14 +6,22 @@ namespace App\Filament\Admin\Pages;
 
 use App\Services\Settings\StoreConfigurationService;
 use BackedEnum;
+use Filament\Actions\Action;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Actions;
+use Filament\Schemas\Components\Callout;
+use Filament\Schemas\Components\EmbeddedSchema;
+use Filament\Schemas\Components\Form;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use UnitEnum;
 
 class StoreSettings extends Page
@@ -26,11 +34,14 @@ class StoreSettings extends Page
 
     protected static ?string $navigationLabel = 'Store settings';
 
-    protected static ?string $title = 'Store Configuration & Policies';
+    protected static ?string $title = 'Store settings';
 
     protected static ?string $slug = 'store-settings';
 
-    protected string $view = 'filament.admin.pages.store-settings';
+    public function getSubheading(): ?string
+    {
+        return 'Rules and details the whole shop uses. Changes apply as soon as you save.';
+    }
 
     /**
      * @var array<string, mixed>|null
@@ -82,294 +93,320 @@ class StoreSettings extends Page
         ]);
     }
 
+    public function content(Schema $schema): Schema
+    {
+        return $schema->components([
+            Form::make([EmbeddedSchema::make('form')])
+                ->id('form')
+                ->livewireSubmitHandler('save')
+                ->footer([
+                    Actions::make([
+                        Action::make('save')
+                            ->label('Save settings')
+                            ->submit('save')
+                            ->keyBindings(['mod+s']),
+                    ]),
+                ]),
+        ]);
+    }
+
     public function form(Schema $schema): Schema
     {
         return $schema
             ->statePath('data')
             ->schema([
-                Tabs::make('Store Configuration Tabs')
+                Tabs::make('Settings')
+                    ->vertical()
+                    ->persistTabInQueryString('section')
                     ->tabs([
-                        Tab::make('Store Identity & Contacts')
-                            ->icon('heroicon-o-building-storefront')
-                            ->schema([
-                                Grid::make(2)->schema([
-                                    TextInput::make('store_name')
-                                        ->label('Store Name')
-                                        ->placeholder('e.g. B2B Haat')
-                                        ->required(),
+                        $this->shopDetailsTab(),
+                        $this->deliveryTab(),
+                        $this->checkoutTab(),
+                        $this->mobilePaymentsTab(),
+                        $this->stockTab(),
+                        $this->sellerPayoutsTab(),
+                    ]),
+            ]);
+    }
 
-                                    TextInput::make('vat_bin_number')
-                                        ->label('VAT / BIN Registration Number')
-                                        ->placeholder('e.g. 000000000-0101')
-                                        ->required(),
+    private function shopDetailsTab(): Tab
+    {
+        return Tab::make('Shop details')
+            ->icon(Heroicon::OutlinedBuildingStorefront)
+            ->schema([
+                Section::make('How shoppers reach you')
+                    ->description('Shown in the shop header and footer, the Contact page and on every invoice.')
+                    ->schema([
+                        Grid::make(['default' => 1, 'md' => 2])->schema([
+                            TextInput::make('store_name')
+                                ->label('Shop name')
+                                ->helperText('Also the name at the top of the admin and seller panels.')
+                                ->maxLength(100)
+                                ->required(),
 
-                                    TextInput::make('helpline_phone')
-                                        ->label('Customer Helpline Phone')
-                                        ->placeholder('e.g. +880 1XXX-XXXXXX')
-                                        ->required(),
+                            TextInput::make('helpline_phone')
+                                ->label('Helpline number')
+                                ->tel()
+                                ->placeholder('+880 1XXX-XXXXXX')
+                                ->maxLength(30),
 
-                                    TextInput::make('support_email')
-                                        ->label('Support Email Address')
-                                        ->email()
-                                        ->placeholder('e.g. support@yourdomain.com')
-                                        ->required(),
-                                ]),
+                            TextInput::make('support_email')
+                                ->label('Support email')
+                                ->email()
+                                ->placeholder('support@yourdomain.com')
+                                ->maxLength(255),
 
-                                TextInput::make('store_address')
-                                    ->label('Registered Corporate Address')
-                                    ->placeholder('e.g. House 12, Road 5, Dhanmondi, Dhaka-1205')
-                                    ->required(),
+                            TextInput::make('vat_bin_number')
+                                ->label('VAT / BIN number')
+                                ->helperText('Printed on invoices.')
+                                ->placeholder('000000000-0101')
+                                ->maxLength(50),
+                        ]),
 
-                                TextInput::make('announcement_text')
-                                    ->label('Header Promo Marquee / Announcement Text')
-                                    ->placeholder('Special discount announcement...'),
-                            ]),
+                        Textarea::make('store_address')
+                            ->label('Office address')
+                            ->helperText('Printed on invoices and the Contact page.')
+                            ->rows(2)
+                            ->maxLength(500),
+                    ]),
 
-                        Tab::make('Delivery & Freight Zones')
-                            ->icon('heroicon-o-truck')
-                            ->schema([
-                                Grid::make(3)->schema([
-                                    TextInput::make('delivery_fee_inside_dhaka')
-                                        ->label('Inside Dhaka Fee')
-                                        ->numeric()
-                                        ->prefix('৳')
-                                        ->required(),
+                Section::make('Announcement')
+                    ->schema([
+                        TextInput::make('announcement_text')
+                            ->label('Message in the top bar')
+                            ->placeholder('e.g. Eid sale: up to 35% off TVs and audio')
+                            ->helperText('One short line at the top of every shop page. Leave empty to show nothing.')
+                            ->maxLength(150),
+                    ]),
+            ]);
+    }
 
-                                    TextInput::make('delivery_fee_sub_dhaka')
-                                        ->label('Sub-Dhaka / Adjacent Zone Fee')
-                                        ->numeric()
-                                        ->prefix('৳')
-                                        ->required(),
+    private function deliveryTab(): Tab
+    {
+        $zone = fn (string $key, string $label, string $area): Section => Section::make($label)
+            ->description($area)
+            ->compact()
+            ->columns(['default' => 1, 'sm' => 2])
+            ->schema([
+                TextInput::make("delivery_fee_{$key}")
+                    ->label('Delivery fee')
+                    ->numeric()
+                    ->minValue(0)
+                    ->prefix('৳')
+                    ->required(),
 
-                                    TextInput::make('delivery_fee_outside_dhaka')
-                                        ->label('Outside Dhaka / Nationwide Fee')
-                                        ->numeric()
-                                        ->prefix('৳')
-                                        ->required(),
-                                ]),
+                TextInput::make("delivery_sla_{$key}")
+                    ->label('Delivery time shown to shoppers')
+                    ->placeholder('e.g. 1-2 days')
+                    ->maxLength(50)
+                    ->required(),
+            ]);
 
-                                Grid::make(2)->schema([
-                                    TextInput::make('free_shipping_threshold')
-                                        ->label('Free Shipping Order Threshold')
-                                        ->numeric()
-                                        ->prefix('৳')
-                                        ->required(),
+        return Tab::make('Delivery')
+            ->icon(Heroicon::OutlinedTruck)
+            ->schema([
+                Callout::make('Charged once for each seller in the order')
+                    ->description('A basket from two sellers arrives as two parcels and pays two delivery fees. These are the default prices; a seller can set their own on their store settings.')
+                    ->info(),
 
-                                    TextInput::make('delivery_sla_inside_dhaka')
-                                        ->label('Inside Dhaka Delivery SLA')
-                                        ->required(),
-                                ]),
+                $zone('inside_dhaka', 'Inside Dhaka', 'Dhaka city.'),
+                $zone('sub_dhaka', 'Around Dhaka', 'Savar, Gazipur, Narayanganj and Keraniganj.'),
+                $zone('outside_dhaka', 'Outside Dhaka', 'All other districts.'),
 
-                                Grid::make(2)->schema([
-                                    TextInput::make('delivery_sla_sub_dhaka')
-                                        ->label('Sub-Dhaka Delivery SLA')
-                                        ->required(),
+                Section::make('Free delivery')
+                    ->compact()
+                    ->schema([
+                        TextInput::make('free_shipping_threshold')
+                            ->label('Free when a seller\'s items cost at least')
+                            ->numeric()
+                            ->minValue(0)
+                            ->prefix('৳')
+                            ->helperText('Counted per seller, not for the whole basket. Sellers can set their own amount.')
+                            ->required(),
+                    ]),
+            ]);
+    }
 
-                                    TextInput::make('delivery_sla_outside_dhaka')
-                                        ->label('Outside Dhaka Delivery SLA')
-                                        ->required(),
-                                ]),
-                            ]),
+    private function checkoutTab(): Tab
+    {
+        return Tab::make('Checkout')
+            ->icon(Heroicon::OutlinedShoppingBag)
+            ->schema([
+                Section::make('Who can order')
+                    ->schema([
+                        Toggle::make('guest_checkout_enabled')
+                            ->label('Let shoppers order without an account')
+                            ->helperText('When off, shoppers sign in with their phone number before paying.'),
+                    ]),
 
-                        Tab::make('Inventory & Stock Controls')
-                            ->icon('heroicon-o-cube')
-                            ->schema([
-                                Grid::make(2)->schema([
-                                    TextInput::make('low_stock_threshold')
-                                        ->label('Low Stock Warning Threshold')
-                                        ->numeric()
-                                        ->required(),
+                Section::make('Order limits')
+                    ->columns(['default' => 1, 'md' => 2])
+                    ->schema([
+                        TextInput::make('min_order_amount_retail')
+                            ->label('Smallest retail order')
+                            ->numeric()
+                            ->minValue(0)
+                            ->prefix('৳')
+                            ->helperText('Item total before delivery. 0 means no minimum.')
+                            ->required(),
 
-                                    TextInput::make('stock_reservation_ttl')
-                                        ->label('Stock Cart Reservation TTL')
-                                        ->suffix('minutes')
-                                        ->numeric()
-                                        ->required(),
-                                ]),
+                        TextInput::make('min_order_amount_wholesale')
+                            ->label('Smallest wholesale order')
+                            ->numeric()
+                            ->minValue(0)
+                            ->prefix('৳')
+                            ->helperText('For approved wholesale buyers.')
+                            ->required(),
 
-                                Toggle::make('allow_backorders')
-                                    ->label('Allow Backorders When Inventory is Zero'),
-                            ]),
+                        TextInput::make('cod_max_order_limit')
+                            ->label('Largest cash on delivery order')
+                            ->numeric()
+                            ->minValue(0)
+                            ->prefix('৳')
+                            ->helperText('Bigger orders must be paid online first.')
+                            ->required(),
 
-                        Tab::make('Checkout & Order Policies')
-                            ->icon('heroicon-o-shopping-bag')
-                            ->schema([
-                                Toggle::make('guest_checkout_enabled')
-                                    ->label('Enable Guest Checkout Without Registration'),
+                        TextInput::make('cancellation_window_hours')
+                            ->label('Shoppers can cancel for')
+                            ->numeric()
+                            ->integer()
+                            ->minValue(0)
+                            ->suffix('hours')
+                            ->helperText('After ordering. Later, they must contact support.')
+                            ->required(),
+                    ]),
+            ]);
+    }
 
-                                Grid::make(2)->schema([
-                                    TextInput::make('cancellation_window_hours')
-                                        ->label('Buyer Self-Service Cancellation Window')
-                                        ->suffix('hours')
-                                        ->numeric()
-                                        ->required(),
+    private function mobilePaymentsTab(): Tab
+    {
+        return Tab::make('bKash & Nagad')
+            ->icon(Heroicon::OutlinedDevicePhoneMobile)
+            ->schema([
+                Section::make('Numbers that receive payments')
+                    ->description('Shoppers send money to these numbers and enter the TrxID. Leave a number empty to hide that option at checkout.')
+                    ->columns(['default' => 1, 'md' => 2])
+                    ->schema([
+                        TextInput::make('bkash_merchant_number')
+                            ->label('bKash number')
+                            ->tel()
+                            ->maxLength(20)
+                            ->placeholder('01XXX-XXXXXX'),
 
-                                    TextInput::make('cod_max_order_limit')
-                                        ->label('Cash on Delivery (COD) Maximum Order Ceilings')
-                                        ->numeric()
-                                        ->prefix('৳')
-                                        ->required(),
-                                ]),
+                        TextInput::make('nagad_merchant_number')
+                            ->label('Nagad number')
+                            ->tel()
+                            ->maxLength(20)
+                            ->placeholder('01XXX-XXXXXX'),
+                    ]),
+            ]);
+    }
 
-                                Grid::make(2)->schema([
-                                    TextInput::make('min_order_amount_retail')
-                                        ->label('Minimum Retail Order Amount')
-                                        ->numeric()
-                                        ->prefix('৳')
-                                        ->required(),
+    private function stockTab(): Tab
+    {
+        return Tab::make('Stock')
+            ->icon(Heroicon::OutlinedCube)
+            ->schema([
+                Section::make('Stock rules')
+                    ->columns(['default' => 1, 'md' => 2])
+                    ->schema([
+                        TextInput::make('low_stock_threshold')
+                            ->label('Warn sellers when stock falls to')
+                            ->numeric()
+                            ->integer()
+                            ->minValue(0)
+                            ->suffix('pieces')
+                            ->helperText('Shown as a low stock alert in the seller panel.')
+                            ->required(),
 
-                                    TextInput::make('min_order_amount_wholesale')
-                                        ->label('Minimum Wholesale Order Amount')
-                                        ->numeric()
-                                        ->prefix('৳')
-                                        ->required(),
-                                ]),
-                            ]),
+                        TextInput::make('stock_reservation_ttl')
+                            ->label('Cancel unpaid online orders after')
+                            ->numeric()
+                            ->integer()
+                            ->minValue(1)
+                            ->suffix('minutes')
+                            ->helperText('Their stock goes back on sale. Cash on delivery orders and payments waiting for your check are not affected.')
+                            ->required(),
 
-                        Tab::make('Mobile Payments')
-                            ->icon('heroicon-o-device-phone-mobile')
-                            ->schema([
-                                Grid::make(2)->schema([
-                                    TextInput::make('bkash_merchant_number')
-                                        ->label('bKash number that receives payments')
-                                        ->tel()
-                                        ->maxLength(20)
-                                        ->placeholder('e.g. 01XXX-XXXXXX')
-                                        ->helperText('Shown to buyers at checkout. Leave empty to hide bKash.'),
+                        Toggle::make('allow_backorders')
+                            ->label('Allow orders when stock is 0')
+                            ->helperText('When off, shoppers cannot add more than the seller has in stock.')
+                            ->columnSpanFull(),
+                    ]),
+            ]);
+    }
 
-                                    TextInput::make('nagad_merchant_number')
-                                        ->label('Nagad number that receives payments')
-                                        ->tel()
-                                        ->maxLength(20)
-                                        ->placeholder('e.g. 01XXX-XXXXXX')
-                                        ->helperText('Shown to buyers at checkout. Leave empty to hide Nagad.'),
-                                ]),
-                            ]),
+    private function sellerPayoutsTab(): Tab
+    {
+        return Tab::make('Seller payouts')
+            ->icon(Heroicon::OutlinedBanknotes)
+            ->schema([
+                Section::make('When sellers get paid')
+                    ->columns(['default' => 1, 'md' => 2])
+                    ->schema([
+                        TextInput::make('escrow_holding_period_hours')
+                            ->label('Hold money after delivery for')
+                            ->numeric()
+                            ->integer()
+                            ->minValue(1)
+                            ->suffix('hours')
+                            ->helperText('The shopper can report a problem in this time. Then the money moves to the seller\'s balance.')
+                            ->required(),
 
-                        Tab::make('Escrow & Financial Settlement')
-                            ->icon('heroicon-o-banknotes')
-                            ->schema([
-                                Grid::make(2)->schema([
-                                    TextInput::make('min_payout_amount')
-                                        ->label('Minimum Seller Payout Request Amount')
-                                        ->numeric()
-                                        ->prefix('৳')
-                                        ->helperText('Sellers cannot request withdrawals below this limit.')
-                                        ->required(),
-
-                                    TextInput::make('escrow_holding_period_hours')
-                                        ->label('Delivered Escrow Maturity Period')
-                                        ->suffix('hours')
-                                        ->numeric()
-                                        ->helperText('Hours after delivery before funds automatically mature into available balance.')
-                                        ->required(),
-                                ]),
-                            ]),
+                        TextInput::make('min_payout_amount')
+                            ->label('Smallest payout request')
+                            ->numeric()
+                            ->minValue(0)
+                            ->prefix('৳')
+                            ->helperText('Sellers cannot withdraw less than this.')
+                            ->required(),
                     ]),
             ]);
     }
 
     public function save(): void
     {
-        $state = $this->data ?? $this->form->getState();
-
+        $state = $this->form->getState();
         $service = app(StoreConfigurationService::class);
 
-        // General
-        if (isset($state['store_name'])) {
-            $service->set('store_name', $state['store_name'], 'general', 'string');
-        }
-        if (isset($state['vat_bin_number'])) {
-            $service->set('vat_bin_number', $state['vat_bin_number'], 'general', 'string');
-        }
-        if (isset($state['helpline_phone'])) {
-            $service->set('helpline_phone', $state['helpline_phone'], 'general', 'string');
-        }
-        if (isset($state['support_email'])) {
-            $service->set('support_email', $state['support_email'], 'general', 'string');
-        }
-        if (isset($state['store_address'])) {
-            $service->set('store_address', $state['store_address'], 'general', 'string');
-        }
-        if (isset($state['announcement_text'])) {
-            $service->set('announcement_text', $state['announcement_text'], 'general', 'string');
+        // Optional text fields come back as null when cleared; save them as empty so clearing actually works.
+        $text = fn (string $key): string => trim((string) ($state[$key] ?? ''));
+
+        foreach (['store_name', 'vat_bin_number', 'helpline_phone', 'support_email', 'store_address', 'announcement_text'] as $key) {
+            $service->set($key, $text($key), 'general', 'string');
         }
 
-        // Delivery
-        if (isset($state['delivery_fee_inside_dhaka'])) {
-            $fee = (float) $state['delivery_fee_inside_dhaka'];
-            $service->set('delivery_fee_inside_dhaka', $fee, 'delivery', 'float');
-            $service->set('delivery_charge_inside_dhaka', $fee, 'delivery', 'float');
+        foreach (['inside_dhaka', 'sub_dhaka', 'outside_dhaka'] as $zone) {
+            $service->set("delivery_fee_{$zone}", (float) $state["delivery_fee_{$zone}"], 'delivery', 'float');
+            $service->set("delivery_sla_{$zone}", $text("delivery_sla_{$zone}"), 'delivery', 'string');
         }
-        if (isset($state['delivery_fee_sub_dhaka'])) {
-            $service->set('delivery_fee_sub_dhaka', (float) $state['delivery_fee_sub_dhaka'], 'delivery', 'float');
-        }
-        if (isset($state['delivery_fee_outside_dhaka'])) {
-            $fee = (float) $state['delivery_fee_outside_dhaka'];
-            $service->set('delivery_fee_outside_dhaka', $fee, 'delivery', 'float');
-            $service->set('delivery_charge_outside_dhaka', $fee, 'delivery', 'float');
-        }
-        if (isset($state['free_shipping_threshold'])) {
-            $threshold = (float) $state['free_shipping_threshold'];
-            $service->set('free_shipping_threshold', $threshold, 'delivery', 'float');
-            $service->set('free_delivery_threshold', $threshold, 'delivery', 'float');
-        }
-        if (isset($state['delivery_sla_inside_dhaka'])) {
-            $service->set('delivery_sla_inside_dhaka', $state['delivery_sla_inside_dhaka'], 'delivery', 'string');
-        }
-        if (isset($state['delivery_sla_sub_dhaka'])) {
-            $service->set('delivery_sla_sub_dhaka', $state['delivery_sla_sub_dhaka'], 'delivery', 'string');
-        }
-        if (isset($state['delivery_sla_outside_dhaka'])) {
-            $service->set('delivery_sla_outside_dhaka', $state['delivery_sla_outside_dhaka'], 'delivery', 'string');
-        }
+        // Older key names, still read as fallbacks
+        $service->set('delivery_charge_inside_dhaka', (float) $state['delivery_fee_inside_dhaka'], 'delivery', 'float');
+        $service->set('delivery_charge_outside_dhaka', (float) $state['delivery_fee_outside_dhaka'], 'delivery', 'float');
+        $service->set('free_shipping_threshold', (float) $state['free_shipping_threshold'], 'delivery', 'float');
+        $service->set('free_delivery_threshold', (float) $state['free_shipping_threshold'], 'delivery', 'float');
 
-        // Inventory
-        if (isset($state['low_stock_threshold'])) {
-            $service->set('low_stock_threshold', (int) $state['low_stock_threshold'], 'inventory', 'integer');
-        }
-        if (isset($state['stock_reservation_ttl'])) {
-            $service->set('stock_reservation_ttl', (int) $state['stock_reservation_ttl'], 'inventory', 'integer');
-        }
-        if (isset($state['allow_backorders'])) {
-            $service->set('allow_backorders', (bool) $state['allow_backorders'], 'inventory', 'boolean');
-        }
+        $service->set('low_stock_threshold', (int) $state['low_stock_threshold'], 'inventory', 'integer');
+        $service->set('stock_reservation_ttl', (int) $state['stock_reservation_ttl'], 'inventory', 'integer');
+        $service->set('allow_backorders', (bool) $state['allow_backorders'], 'inventory', 'boolean');
 
-        // Checkout
-        if (isset($state['guest_checkout_enabled'])) {
-            $service->set('guest_checkout_enabled', (bool) $state['guest_checkout_enabled'], 'checkout', 'boolean');
-        }
-        if (isset($state['cancellation_window_hours'])) {
-            $service->set('cancellation_window_hours', (int) $state['cancellation_window_hours'], 'checkout', 'integer');
-        }
-        if (isset($state['min_order_amount_retail'])) {
-            $service->set('min_order_amount_retail', (float) $state['min_order_amount_retail'], 'checkout', 'float');
-        }
-        if (isset($state['min_order_amount_wholesale'])) {
-            $service->set('min_order_amount_wholesale', (float) $state['min_order_amount_wholesale'], 'checkout', 'float');
-        }
-        if (isset($state['cod_max_order_limit'])) {
-            $service->set('cod_max_order_limit', (float) $state['cod_max_order_limit'], 'checkout', 'float');
-        }
+        $service->set('guest_checkout_enabled', (bool) $state['guest_checkout_enabled'], 'checkout', 'boolean');
+        $service->set('cancellation_window_hours', (int) $state['cancellation_window_hours'], 'checkout', 'integer');
+        $service->set('min_order_amount_retail', (float) $state['min_order_amount_retail'], 'checkout', 'float');
+        $service->set('min_order_amount_wholesale', (float) $state['min_order_amount_wholesale'], 'checkout', 'float');
+        $service->set('cod_max_order_limit', (float) $state['cod_max_order_limit'], 'checkout', 'float');
 
-        // Financial & Settlement
-        if (isset($state['min_payout_amount'])) {
-            $service->set('min_payout_amount', (float) $state['min_payout_amount'], 'financial', 'float');
-        }
-        if (isset($state['escrow_holding_period_hours'])) {
-            $service->set('escrow_holding_period_hours', (int) $state['escrow_holding_period_hours'], 'financial', 'integer');
-        }
+        $service->set('min_payout_amount', (float) $state['min_payout_amount'], 'financial', 'float');
+        $service->set('escrow_holding_period_hours', (int) $state['escrow_holding_period_hours'], 'financial', 'integer');
 
-        // Mobile payments: an empty number hides that method at checkout
-        foreach (['bkash_merchant_number', 'nagad_merchant_number'] as $numberKey) {
-            if (array_key_exists($numberKey, $state)) {
-                $service->set($numberKey, trim((string) $state[$numberKey]), 'payments', 'string');
-            }
+        // An empty number hides that payment method at checkout
+        foreach (['bkash_merchant_number', 'nagad_merchant_number'] as $key) {
+            $service->set($key, $text($key), 'payments', 'string');
         }
 
         Notification::make()
-            ->title('Store settings saved successfully')
-            ->body('Dynamic store configuration and business policies have been updated.')
+            ->title('Settings saved')
+            ->body('The shop uses the new settings straight away.')
             ->success()
             ->send();
     }
