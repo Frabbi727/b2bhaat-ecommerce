@@ -101,7 +101,7 @@ class FilamentPanelsSmokeTest extends TestCase
         Livewire::test(StoreSettings::class)->assertSuccessful();
 
         $this->get('/seller/products/create')->assertSuccessful();
-        $this->get('/seller/rfq-requests/create')->assertSuccessful();
+        $this->get('/seller/rfq-requests/create')->assertNotFound(); // RFQs come from buyers (PRA-012)
         $this->get('/seller/sub-orders/create')->assertNotFound(); // sub-orders are read-only for sellers (PRA-005)
     }
 }

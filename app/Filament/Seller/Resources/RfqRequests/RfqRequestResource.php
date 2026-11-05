@@ -2,7 +2,6 @@
 
 namespace App\Filament\Seller\Resources\RfqRequests;
 
-use App\Filament\Seller\Resources\RfqRequests\Pages\CreateRfqRequest;
 use App\Filament\Seller\Resources\RfqRequests\Pages\EditRfqRequest;
 use App\Filament\Seller\Resources\RfqRequests\Pages\ListRfqRequests;
 use App\Filament\Seller\Resources\RfqRequests\Schemas\RfqRequestForm;
@@ -56,7 +55,6 @@ class RfqRequestResource extends Resource
     {
         return [
             'index' => ListRfqRequests::route('/'),
-            'create' => CreateRfqRequest::route('/create'),
             'edit' => EditRfqRequest::route('/{record}/edit'),
         ];
     }

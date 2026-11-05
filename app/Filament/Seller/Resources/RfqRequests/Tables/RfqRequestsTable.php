@@ -4,8 +4,6 @@ namespace App\Filament\Seller\Resources\RfqRequests\Tables;
 
 use App\Models\RfqRequest;
 use Filament\Actions\Action;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -76,6 +74,7 @@ class RfqRequestsTable
                     ->label('Send Quote')
                     ->icon('heroicon-o-paper-airplane')
                     ->color('primary')
+                    ->visible(fn (RfqRequest $record): bool => auth()->user()?->can('update', $record) ?? false)
                     ->form([
                         TextInput::make('seller_quoted_price')
                             ->label('Quoted Price per Unit (Tk ৳)')
@@ -112,11 +111,7 @@ class RfqRequestsTable
                     ->visible(fn (RfqRequest $record): bool => in_array($record->status, ['quoted', 'accepted'])),
 
                 EditAction::make(),
-            ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
             ]);
+        // No delete: RFQs belong to the buyer (PRA-012)
     }
 }
