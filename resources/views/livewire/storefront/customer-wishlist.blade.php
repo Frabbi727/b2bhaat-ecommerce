@@ -60,7 +60,7 @@
                 @foreach ($wishlists as $wishlist)
                     @php
                         $product = $wishlist->product;
-                        $imgUrl = $product->primaryImage?->image_url ?? 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800';
+                        $imgUrl = $product->primaryImage?->public_url ?? 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800';
                         $hasVariations = $product->has_variations && $product->variations->isNotEmpty();
                     @endphp
                     <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition flex flex-col justify-between group">

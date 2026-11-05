@@ -81,7 +81,7 @@
                         <div class="flex items-center gap-3 min-w-0">
                             <div class="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0 aspect-square">
                                 @php
-                                    $img = $item->primaryImage?->image_url ?? 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=100';
+                                    $img = $item->primaryImage?->public_url ?? 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=100';
                                 @endphp
                                 <img src="{{ $img }}" alt="{{ $item->title }}" class="w-full h-full object-cover group-hover:scale-105 transition" loading="lazy"/>
                             </div>

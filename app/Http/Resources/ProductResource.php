@@ -68,7 +68,7 @@ class ProductResource extends JsonResource
             'pricing' => $pricing,
             'wholesale_teaser' => $wholesaleTeaser,
             'images' => $this->images->map(fn ($img) => [
-                'url' => $img->image_url,
+                'url' => $img->public_url,
                 'is_primary' => $img->is_primary,
             ]),
             'variations' => $this->variations->map(fn ($variation) => [

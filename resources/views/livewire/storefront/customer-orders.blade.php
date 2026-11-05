@@ -178,7 +178,7 @@
                                             <div class="py-2 flex items-center justify-between text-xs">
                                                 <div class="flex items-center gap-3">
                                                     @if ($item->product?->primaryImage)
-                                                        <img src="{{ $item->product->primaryImage->image_url }}" class="w-10 h-10 object-cover rounded-lg border border-slate-200 shrink-0"/>
+                                                        <img src="{{ $item->product->primaryImage->public_url }}" class="w-10 h-10 object-cover rounded-lg border border-slate-200 shrink-0"/>
                                                     @endif
                                                     <div>
                                                         <div class="font-bold text-slate-800 line-clamp-1">{{ $item->product?->title }}</div>

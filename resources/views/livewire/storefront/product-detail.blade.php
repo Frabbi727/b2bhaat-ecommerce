@@ -4,7 +4,7 @@
   "@@context": "https://schema.org/",
   "@@type": "Product",
   "name": {{ json_encode($product->title) }},
-  "image": [{{ json_encode($product->primaryImage?->image_url ?? 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=1000') }}],
+  "image": [{{ json_encode($product->primaryImage?->public_url ?? 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=1000') }}],
   "description": {{ json_encode($product->short_description ?? $product->title) }},
   "sku": {{ json_encode($product->sku ?? $product->slug) }},
   "mpn": {{ json_encode($product->model_number ?? $product->sku ?? $product->slug) }},
@@ -82,8 +82,8 @@
         <div class="lg:col-span-6 space-y-4">
             @php
                 $galleryImages = $product->images->isNotEmpty()
-                    ? $product->images->pluck('image_url')->toArray()
-                    : [$product->primaryImage?->image_url ?? 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=1000'];
+                    ? $product->images->pluck('public_url')->toArray()
+                    : [$product->primaryImage?->public_url ?? 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=1000'];
                 $currentMainImage = $galleryImages[$activeImageIndex] ?? $galleryImages[0];
             @endphp
 
@@ -480,7 +480,7 @@
                     <!-- Main Product -->
                     <div class="flex items-center gap-3">
                         <div class="w-16 h-16 rounded-xl bg-white border border-slate-200 p-1 aspect-square shrink-0">
-                            <img src="{{ $product->primaryImage?->image_url ?? $currentMainImage }}" alt="{{ $product->title }}" class="w-full h-full object-contain"/>
+                            <img src="{{ $product->primaryImage?->public_url ?? $currentMainImage }}" alt="{{ $product->title }}" class="w-full h-full object-contain"/>
                         </div>
                         <div class="max-w-[180px]">
                             <div class="text-xs font-bold text-slate-900 truncate">{{ $product->title }}</div>
@@ -493,7 +493,7 @@
                     <!-- Secondary Bundle Item -->
                     <div class="flex items-center gap-3">
                         <div class="w-16 h-16 rounded-xl bg-white border border-slate-200 p-1 aspect-square shrink-0">
-                            <img src="{{ $bundleItem->primaryImage?->image_url ?? 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200' }}" alt="{{ $bundleItem->title }}" class="w-full h-full object-contain"/>
+                            <img src="{{ $bundleItem->primaryImage?->public_url ?? 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200' }}" alt="{{ $bundleItem->title }}" class="w-full h-full object-contain"/>
                         </div>
                         <div class="max-w-[180px]">
                             <div class="text-xs font-bold text-slate-900 truncate">{{ $bundleItem->title }}</div>
@@ -831,7 +831,7 @@
                         <div>
                             <div class="rounded-xl overflow-hidden bg-slate-100 aspect-square mb-2.5">
                                 <a href="{{ route('catalog.show', $rel->slug) }}">
-                                    <img src="{{ $rel->primaryImage?->image_url ?? 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=400' }}" alt="{{ $rel->title }}" class="w-full h-full object-cover group-hover:scale-105 transition" loading="lazy"/>
+                                    <img src="{{ $rel->primaryImage?->public_url ?? 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=400' }}" alt="{{ $rel->title }}" class="w-full h-full object-cover group-hover:scale-105 transition" loading="lazy"/>
                                 </a>
                             </div>
                             <div class="text-[10px] font-bold text-indigo-600 uppercase">{{ $rel->brand?->name ?? 'Direct' }}</div>

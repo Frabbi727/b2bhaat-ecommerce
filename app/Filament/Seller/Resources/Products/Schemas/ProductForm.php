@@ -6,6 +6,7 @@ use App\Models\Brand;
 use App\Models\Category;
 use App\Models\SalesChannel;
 use App\Models\Unit;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -188,6 +189,30 @@ class ProductForm
                             ])
                             ->columns(4)
                             ->defaultItems(2),
+                    ]),
+
+                Section::make('Product Photos')
+                    ->description('JPG, PNG or WebP up to 2 MB each. Mark one photo as the primary image.')
+                    ->schema([
+                        Repeater::make('images')
+                            ->relationship('images')
+                            ->schema([
+                                FileUpload::make('image_url')
+                                    ->label('Photo')
+                                    ->image()
+                                    ->disk('public')
+                                    ->directory('products')
+                                    ->visibility('public')
+                                    ->maxSize(2048)
+                                    ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                                    ->required(),
+                                Toggle::make('is_primary')
+                                    ->label('Primary photo')
+                                    ->default(false),
+                            ])
+                            ->orderColumn('sort_order')
+                            ->columns(2)
+                            ->defaultItems(0),
                     ]),
 
                 Section::make('Product Variations & Stock Inventory')

@@ -299,7 +299,7 @@
                                 <!-- Image with discount pill & wishlist button -->
                                 <div class="relative rounded-xl overflow-hidden bg-slate-100 aspect-square mb-3">
                                     @php
-                                        $pImg = $product->primaryImage?->image_url ?? 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=600';
+                                        $pImg = $product->primaryImage?->public_url ?? 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=600';
                                     @endphp
                                     <a href="{{ route('catalog.show', $product->slug) }}">
                                         <img src="{{ $pImg }}" alt="{{ $product->title }}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy"/>
@@ -437,7 +437,7 @@
                                 <!-- Image wrapper with aspect-square -->
                                 <div class="relative rounded-xl overflow-hidden bg-slate-100 aspect-square mb-3">
                                     @php
-                                        $itemImg = $item->primaryImage?->image_url ?? 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=500';
+                                        $itemImg = $item->primaryImage?->public_url ?? 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=500';
                                     @endphp
                                     <a href="{{ route('catalog.show', $item->slug) }}">
                                         <img src="{{ $itemImg }}" alt="{{ $item->title }}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy"/>
@@ -812,7 +812,7 @@
                                 <div>
                                     <div class="relative rounded-xl overflow-hidden bg-slate-100 aspect-square mb-3">
                                         @php
-                                            $catImg = $item->primaryImage?->image_url ?? 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=500';
+                                            $catImg = $item->primaryImage?->public_url ?? 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=500';
                                         @endphp
                                         <a href="{{ route('catalog.show', $item->slug) }}">
                                             <img src="{{ $catImg }}" alt="{{ $item->title }}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy"/>
@@ -955,10 +955,10 @@
                                 @foreach ($quickViewProduct->images as $img)
                                     <button
                                         type="button"
-                                        wire:click="selectQuickViewImage('{{ $img->image_url }}')"
-                                        class="shrink-0 w-16 h-16 rounded-xl border-2 overflow-hidden transition cursor-pointer {{ $quickViewActiveImageUrl === $img->image_url ? 'border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs' : 'border-slate-200 hover:border-slate-300 opacity-70 hover:opacity-100' }}"
+                                        wire:click="selectQuickViewImage('{{ $img->public_url }}')"
+                                        class="shrink-0 w-16 h-16 rounded-xl border-2 overflow-hidden transition cursor-pointer {{ $quickViewActiveImageUrl === $img->public_url ? 'border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs' : 'border-slate-200 hover:border-slate-300 opacity-70 hover:opacity-100' }}"
                                     >
-                                        <img src="{{ $img->image_url }}" alt="Thumbnail" class="w-full h-full object-cover"/>
+                                        <img src="{{ $img->public_url }}" alt="Thumbnail" class="w-full h-full object-cover"/>
                                     </button>
                                 @endforeach
                             </div>

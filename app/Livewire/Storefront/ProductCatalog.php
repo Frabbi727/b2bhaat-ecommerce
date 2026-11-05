@@ -99,8 +99,8 @@ class ProductCatalog extends Component
             return;
         }
 
-        $this->quickViewActiveImageUrl = $this->quickViewProduct->primaryImage?->image_url
-            ?? $this->quickViewProduct->images->first()?->image_url
+        $this->quickViewActiveImageUrl = $this->quickViewProduct->primaryImage?->public_url
+            ?? $this->quickViewProduct->images->first()?->public_url
             ?? 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=800';
 
         $firstVariation = $this->quickViewProduct->variations->where('is_active', true)->first()

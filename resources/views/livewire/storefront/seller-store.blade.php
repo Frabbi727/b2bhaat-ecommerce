@@ -180,7 +180,7 @@
             @php
                 $retailPrice = $product->prices->first(fn($p) => $p->salesChannel?->slug === 'retail' && is_null($p->variation_id));
                 $wholesalePrice = $product->prices->first(fn($p) => $p->salesChannel?->slug === 'wholesale' && is_null($p->variation_id));
-                $primaryImg = $product->primaryImage?->image_url ?? 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=500';
+                $primaryImg = $product->primaryImage?->public_url ?? 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=500';
             @endphp
             <div class="group bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-lg transition-all flex flex-col justify-between">
                 <div>
