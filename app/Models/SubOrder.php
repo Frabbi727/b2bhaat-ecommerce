@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Services\Sms\OrderNotificationService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class SubOrder extends Model
 {
@@ -28,6 +31,24 @@ class SubOrder extends Model
         'handover_code',
         'handover_confirmed_at',
     ];
+
+    protected static function booted(): void
+    {
+        static::updated(function (SubOrder $subOrder): void {
+            if (! $subOrder->wasChanged('fulfillment_status_id')) {
+                return;
+            }
+
+            DB::afterCommit(function () use ($subOrder): void {
+                try {
+                    $slug = FulfillmentStatus::whereKey($subOrder->fulfillment_status_id)->value('slug');
+                    app(OrderNotificationService::class)->sendParcelStatusUpdate($subOrder, (string) $slug);
+                } catch (\Throwable $exception) {
+                    Log::warning('Parcel status SMS not sent: '.$exception->getMessage(), ['sub_order_id' => $subOrder->id]);
+                }
+            });
+        });
+    }
 
     protected function casts(): array
     {

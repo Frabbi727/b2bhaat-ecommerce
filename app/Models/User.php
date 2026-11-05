@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Sms\OrderNotificationService;
 use App\Services\Sms\Support\PhoneNormalizer;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -13,6 +14,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable implements FilamentUser
@@ -52,6 +55,25 @@ class User extends Authenticatable implements FilamentUser
             'wholesale_approved_at' => 'datetime',
             'wholesale_rejected_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::updated(function (User $user): void {
+            $approved = $user->wasChanged('is_wholesale_approved') && $user->is_wholesale_approved;
+            $rejected = $user->wasChanged('wholesale_rejected_at') && $user->wholesale_rejected_at !== null;
+            if (! $approved && ! $rejected) {
+                return;
+            }
+
+            DB::afterCommit(function () use ($user): void {
+                try {
+                    app(OrderNotificationService::class)->sendWholesaleDecision($user);
+                } catch (\Throwable $exception) {
+                    Log::warning('Wholesale decision SMS not sent: '.$exception->getMessage(), ['user_id' => $user->id]);
+                }
+            });
+        });
     }
 
     public function isWholesalePending(): bool

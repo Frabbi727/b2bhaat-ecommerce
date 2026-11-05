@@ -12,8 +12,10 @@ use App\Models\PaymentStatus;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Logistics\CourierStatusService;
+use App\Services\Sms\OrderNotificationService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Marks a manually paid (bKash/Nagad) order as paid once an admin has checked the TrxID, and holds seller escrow.
@@ -94,6 +96,14 @@ class PaymentVerificationService
             foreach ($order->subOrders as $subOrder) {
                 $this->escrowLedgerService->holdInEscrow($subOrder);
             }
+
+            DB::afterCommit(function () use ($order): void {
+                try {
+                    app(OrderNotificationService::class)->notifySellersOfNewOrder($order);
+                } catch (\Throwable $exception) {
+                    Log::warning('Seller new-order SMS not sent: '.$exception->getMessage(), ['order_id' => $order->id]);
+                }
+            });
 
             return $order->fresh();
         });

@@ -4,13 +4,29 @@ declare(strict_types=1);
 
 namespace App\Services\Sms;
 
+use App\Filament\Seller\Resources\SubOrders\SubOrderResource;
 use App\Jobs\SendSmsJob;
 use App\Models\Order;
 use App\Models\SmsTemplate;
+use App\Models\SubOrder;
+use App\Models\User;
+use App\Services\Settings\StoreConfigurationService;
 use App\Services\Sms\Support\PhoneNormalizer;
 
 class OrderNotificationService
 {
+    /**
+     * Parcel steps a buyer is told about, as plain words. Internal steps (processing, in transit) send nothing.
+     *
+     * @var array<string, string>
+     */
+    public const PARCEL_STATUS_WORDS = [
+        'shipped' => 'handed to the courier',
+        'out_for_delivery' => 'out for delivery',
+        'delivered' => 'delivered',
+        'cancelled' => 'cancelled',
+    ];
+
     /**
      * Send order confirmation SMS upon checkout completion.
      */
@@ -112,12 +128,99 @@ class OrderNotificationService
                 $template->content_en
             );
         } else {
-            $message = "Your order #{$order->order_number} status is now: {$newStatus}. Track parcel: {$trackingUrl}";
+            $message = "Order #{$order->order_number}: {$newStatus}. Track it here: {$trackingUrl}";
         }
 
         SendSmsJob::dispatch($normalized, $message, 'order_status_update', bypassDeduplication: true);
 
         return true;
+    }
+
+    /**
+     * Tell the buyer that one parcel of their order reached a step they care about.
+     */
+    public function sendParcelStatusUpdate(SubOrder $subOrder, string $statusSlug): bool
+    {
+        $statusWords = self::PARCEL_STATUS_WORDS[$statusSlug] ?? null;
+        $order = $subOrder->order;
+        if ($statusWords === null || $order === null) {
+            return false;
+        }
+
+        $storeName = $subOrder->seller?->sellerProfile?->store_name ?? 'the seller';
+        $courierNote = $statusSlug === 'shipped' && filled($subOrder->courier_name)
+            ? " ({$subOrder->courier_name}".(filled($subOrder->tracking_number) ? ", tracking {$subOrder->tracking_number}" : '').')'
+            : '';
+
+        return $this->sendOrderStatusUpdate($order, "your parcel from {$storeName} is {$statusWords}{$courierNote}", $subOrder->courier_name, $subOrder->tracking_number);
+    }
+
+    /**
+     * Tell each seller in the order that they have a parcel to prepare.
+     * Called once the order can be fulfilled: at checkout for cash on delivery, after the payment check for mobile wallets.
+     */
+    public function notifySellersOfNewOrder(Order $order): void
+    {
+        $sellerOrdersUrl = SubOrderResource::getUrl('index', panel: 'seller');
+
+        foreach ($order->subOrders()->with('seller', 'items')->get() as $subOrder) {
+            $phone = $subOrder->seller?->phone;
+            if (! $phone || ! PhoneNormalizer::isValid($phone)) {
+                continue;
+            }
+
+            $message = $this->render('seller_new_order', [
+                'order_number' => $subOrder->sub_order_number,
+                'item_count' => (string) $subOrder->items->sum('quantity'),
+                'order_total' => number_format((float) $subOrder->subtotal, 2),
+                'seller_orders_url' => $sellerOrdersUrl,
+                'store_name' => $this->storeName(),
+            ], 'New order #{order_number} on {store_name}: {item_count} item(s), BDT {order_total}. Please prepare it: {seller_orders_url}');
+
+            SendSmsJob::dispatch(PhoneNormalizer::normalize($phone), $message, 'seller_new_order', bypassDeduplication: true);
+        }
+    }
+
+    /**
+     * Tell a wholesale applicant whether their business account was approved.
+     */
+    public function sendWholesaleDecision(User $user): bool
+    {
+        if (! $user->phone || ! PhoneNormalizer::isValid($user->phone)) {
+            return false;
+        }
+
+        $message = $user->is_wholesale_approved
+            ? $this->render('wholesale_approved', ['customer_name' => $user->name, 'store_name' => $this->storeName(), 'shop_url' => route('catalog.index')],
+                'Dear {customer_name}, your wholesale account on {store_name} is approved. Sign in to see bulk prices: {shop_url}')
+            : $this->render('wholesale_rejected', ['customer_name' => $user->name, 'store_name' => $this->storeName(), 'reason' => (string) $user->wholesale_rejection_reason, 'apply_url' => route('wholesale.upgrade')],
+                'Dear {customer_name}, your wholesale application on {store_name} was not approved: {reason}. You can apply again: {apply_url}');
+
+        SendSmsJob::dispatch(PhoneNormalizer::normalize($user->phone), $message, 'wholesale_decision', bypassDeduplication: true);
+
+        return true;
+    }
+
+    /**
+     * Use the admin's active template for this key when there is one, otherwise the fallback text.
+     *
+     * @param  array<string, string>  $values  placeholder => value
+     */
+    private function render(string $templateKey, array $values, string $fallback): string
+    {
+        $template = SmsTemplate::where('key', $templateKey)->where('is_active', true)->value('content_en');
+        $text = filled($template) ? $template : $fallback;
+
+        foreach ($values as $placeholder => $value) {
+            $text = str_replace('{'.$placeholder.'}', $value, $text);
+        }
+
+        return $text;
+    }
+
+    private function storeName(): string
+    {
+        return app(StoreConfigurationService::class)->getStoreIdentity()['name'];
     }
 
     protected function extractCustomerPhone(Order $order): ?string

@@ -399,8 +399,12 @@ class CheckoutComponent extends Component
             // Send transactional Order Confirmation SMS with tokenized invoice & tracking
             try {
                 app(OrderNotificationService::class)->sendOrderConfirmation($order);
+                // Mobile-wallet orders reach the seller only after the payment check (PaymentVerificationService::markVerified)
+                if ($order->paymentStatus?->slug !== 'awaiting_verification') {
+                    app(OrderNotificationService::class)->notifySellersOfNewOrder($order);
+                }
             } catch (\Throwable $e) {
-                Log::warning('Order confirmation SMS dispatch failure: '.$e->getMessage());
+                Log::warning('Order SMS dispatch failure: '.$e->getMessage());
             }
 
             $cart->clear();
