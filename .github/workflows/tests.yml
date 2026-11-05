@@ -1,0 +1,64 @@
+name: tests
+
+on:
+  push:
+    branches: [main, production]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    # The live site runs on PostgreSQL, so the suite runs against it here (SQLite hides some type errors).
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: b2bhaat_test
+          POSTGRES_USER: b2bhaat
+          POSTGRES_PASSWORD: b2bhaat
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U b2bhaat"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: mbstring, intl, bcmath, gd, zip, pdo_pgsql, pdo_sqlite
+          coverage: none
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install PHP packages
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Build front-end assets
+        run: npm ci && npm run build
+
+      - name: Code style
+        run: vendor/bin/pint --test
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Tests (PostgreSQL)
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: b2bhaat_test
+          DB_USERNAME: b2bhaat
+          DB_PASSWORD: b2bhaat
+        run: php -d memory_limit=512M vendor/bin/phpunit
