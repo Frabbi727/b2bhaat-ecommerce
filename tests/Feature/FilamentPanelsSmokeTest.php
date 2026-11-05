@@ -72,7 +72,7 @@ class FilamentPanelsSmokeTest extends TestCase
         Livewire::test(ListWalletTransactions::class)->assertSuccessful();
 
         $this->get('/admin/categories/create')->assertSuccessful();
-        $this->get('/admin/orders/create')->assertSuccessful();
+        $this->get('/admin/orders/create')->assertNotFound(); // orders come only from checkout (PRA-049)
         $this->get('/admin/seller-profiles/create')->assertSuccessful();
         $this->get('/admin/users/create')->assertSuccessful();
     }

@@ -6,8 +6,6 @@ use App\Models\Order;
 use App\Services\Payments\PaymentVerificationService;
 use App\Services\Sms\OrderNotificationService;
 use Filament\Actions\Action;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
@@ -90,11 +88,7 @@ class OrdersTable
                                 ->send();
                         }
                     }),
-            ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
             ]);
+        // No delete actions: orders are financial records (PRA-044)
     }
 }

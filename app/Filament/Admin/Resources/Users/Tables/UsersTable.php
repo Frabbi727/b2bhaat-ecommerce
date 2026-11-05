@@ -5,8 +5,6 @@ namespace App\Filament\Admin\Resources\Users\Tables;
 use App\Models\Role;
 use App\Models\User;
 use Filament\Actions\Action;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -165,12 +163,33 @@ class UsersTable
                             ->send();
                     }),
 
+                Action::make('deactivate')
+                    ->label('Deactivate')
+                    ->icon('heroicon-o-no-symbol')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->modalDescription('The account can no longer sign in or reach any panel. Orders, payouts and ledger history are kept.')
+                    ->visible(fn (User $record): bool => $record->is_active && $record->id !== auth()->id())
+                    ->action(function (User $record): void {
+                        $record->update(['is_active' => false]);
+
+                        Notification::make()->title("{$record->name} deactivated")->success()->send();
+                    }),
+
+                Action::make('reactivate')
+                    ->label('Reactivate')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->visible(fn (User $record): bool => ! $record->is_active)
+                    ->action(function (User $record): void {
+                        $record->update(['is_active' => true]);
+
+                        Notification::make()->title("{$record->name} reactivated")->success()->send();
+                    }),
+
                 EditAction::make(),
-            ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
             ]);
+        // No delete: users own orders and ledgers; deactivate instead (PRA-044)
     }
 }
