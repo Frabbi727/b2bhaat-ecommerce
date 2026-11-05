@@ -82,7 +82,8 @@ class SellerOnboardingAndInvoiceTest extends TestCase
             'commission_amount' => 50.00,
         ]);
 
-        $response = $this->get('/order/ORD-INV-2026/invoice');
+        // Invoice by order number is owner-only (PRA-009)
+        $response = $this->actingAs($customer)->get('/order/ORD-INV-2026/invoice');
 
         $response->assertStatus(200)
             ->assertSee('TAX INVOICE / CHALLAN')

@@ -95,6 +95,7 @@ class ValidationAndPolishTest extends TestCase
         // Search by Courier Tracking Number directly
         Livewire::test(OrderTracking::class)
             ->set('orderNumber', 'STDFST-CONSIGNMENT-777')
+            ->set('phone', '01700000004') // exact phone required for guests (PRA-036)
             ->call('searchOrder')
             ->assertSet('searchError', '')
             ->assertSee('ORD-TRACK-TEST-001')

@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Services\Sms\Support\PhoneNormalizer;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -26,6 +28,29 @@ class Order extends Model
         'tracking_token',
         'sms_confirmation_sent_at',
     ];
+
+    /**
+     * Orders whose recipient or customer phone is exactly this number, in any stored Bangladeshi format.
+     * An invalid or partial number matches nothing.
+     *
+     * @param  Builder<Order>  $query
+     */
+    public function scopeMatchingPhone(Builder $query, string $phone): void
+    {
+        if (! PhoneNormalizer::isValid($phone)) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $normalized = PhoneNormalizer::normalize($phone);
+        $formats = [$normalized, '+'.$normalized, substr($normalized, 2)];
+
+        $query->where(function (Builder $inner) use ($formats, $normalized) {
+            $inner->whereIn('shipping_address->recipient_phone', $formats)
+                ->orWhereHas('customer', fn (Builder $customer) => $customer->wherePhone($normalized));
+        });
+    }
 
     protected function casts(): array
     {

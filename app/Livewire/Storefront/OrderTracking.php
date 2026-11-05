@@ -7,6 +7,7 @@ use App\Models\SubOrder;
 use App\Services\Orders\OrderDisputeService;
 use Exception;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
@@ -23,6 +24,10 @@ class OrderTracking extends Component
     public string $token = '';
 
     public ?Order $order = null;
+
+    /** Set only by a lookup that proved knowledge of the order (exact phone or secret tracking token). */
+    #[Locked]
+    public bool $verifiedAccess = false;
 
     public string $searchError = '';
 
@@ -76,6 +81,7 @@ class OrderTracking extends Component
         if ($found) {
             $this->order = $found;
             $this->orderNumber = $found->order_number;
+            $this->verifiedAccess = true;
         } else {
             $this->searchError = 'Invalid or expired tracking token.';
         }
@@ -87,6 +93,7 @@ class OrderTracking extends Component
         $this->actionFeedback = '';
         $this->actionError = '';
         $this->order = null;
+        $this->verifiedAccess = false;
 
         $trimmedOrderNumber = trim($this->orderNumber);
         if (! $trimmedOrderNumber) {
@@ -112,12 +119,15 @@ class OrderTracking extends Component
                 });
         });
 
-        if ($this->phone) {
-            $cleanedPhone = trim($this->phone);
-            $query->where(function ($q) use ($cleanedPhone) {
-                $q->where('shipping_address->recipient_phone', 'like', "%{$cleanedPhone}%")
-                    ->orWhereHas('customer', fn ($c) => $c->where('phone', 'like', "%{$cleanedPhone}%"));
-            });
+        // Guests must prove the exact phone; a signed-in customer may look up their own orders by number.
+        if (trim($this->phone) !== '') {
+            $query->matchingPhone(trim($this->phone));
+        } elseif (auth()->check()) {
+            $query->where('customer_id', auth()->id());
+        } else {
+            $this->searchError = 'Please enter the mobile number used for this order.';
+
+            return;
         }
 
         $found = $query->first();
@@ -129,11 +139,30 @@ class OrderTracking extends Component
         }
 
         $this->order = $found;
+        $this->verifiedAccess = true;
+    }
+
+    /**
+     * Cancel and return actions need the signed-in owner, or a lookup verified by exact phone or tracking token.
+     */
+    private function canModifyOrder(): bool
+    {
+        if (! $this->order) {
+            return false;
+        }
+
+        if (auth()->check()) {
+            return auth()->id() === $this->order->customer_id;
+        }
+
+        return $this->verifiedAccess;
     }
 
     public function cancelEntireOrder(OrderDisputeService $disputeService): void
     {
-        if (! $this->order) {
+        if (! $this->canModifyOrder()) {
+            $this->actionError = 'Please sign in or verify the order with its mobile number first.';
+
             return;
         }
 
@@ -148,6 +177,12 @@ class OrderTracking extends Component
 
     public function cancelSubOrderConsignment(int $subOrderId, OrderDisputeService $disputeService): void
     {
+        if (! $this->canModifyOrder()) {
+            $this->actionError = 'Please sign in or verify the order with its mobile number first.';
+
+            return;
+        }
+
         $subOrder = SubOrder::where('id', $subOrderId)->where('parent_order_id', $this->order?->id)->first();
         if (! $subOrder) {
             $this->actionError = 'Consignment not found.';
@@ -188,14 +223,22 @@ class OrderTracking extends Component
             'returnDescription.min' => 'Please provide at least 10 characters explaining the issue.',
         ]);
 
-        $subOrder = SubOrder::with('order.customer')->find($this->selectedSubOrderId);
+        if (! $this->canModifyOrder()) {
+            $this->actionError = 'Please sign in or verify the order with its mobile number first.';
+
+            return;
+        }
+
+        $subOrder = SubOrder::with('order.customer')
+            ->where('parent_order_id', $this->order->id)
+            ->find($this->selectedSubOrderId);
         if (! $subOrder) {
             $this->actionError = 'Invalid consignment package.';
 
             return;
         }
 
-        $user = auth()->user() ?? $subOrder->order?->customer;
+        $user = auth()->user() ?? $this->order->customer;
         if (! $user) {
             $this->actionError = 'Please sign in or provide verified customer details to submit a return.';
 

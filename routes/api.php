@@ -7,13 +7,13 @@ use App\Http\Controllers\Api\V1\TrackingController;
 use App\Http\Middleware\VerifyCourierSignature;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('v1')->group(function () {
+Route::prefix('v1')->middleware('throttle:api')->group(function () {
     // 1. Authentication
     Route::prefix('auth')->group(function () {
         Route::post('register/retail', [AuthController::class, 'registerRetail']);
         Route::post('register/wholesale', [AuthController::class, 'registerWholesale']);
         Route::post('register/seller', [AuthController::class, 'registerSeller']);
-        Route::post('login', [AuthController::class, 'login']);
+        Route::post('login', [AuthController::class, 'login'])->middleware('throttle:login');
     });
 
     // 2. Product Catalog (with server-side channel price masking)
@@ -24,7 +24,7 @@ Route::prefix('v1')->group(function () {
 
     // 3. Public Order Tracking
     Route::prefix('orders')->group(function () {
-        Route::get('track', [TrackingController::class, 'track']);
+        Route::get('track', [TrackingController::class, 'track'])->middleware('throttle:public-lookup');
     });
 
     // 4. Logistics & Courier Webhooks

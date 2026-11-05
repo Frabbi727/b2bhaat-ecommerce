@@ -15,7 +15,7 @@ class TrackingController extends Controller
     {
         $request->validate([
             'number' => 'required|string',
-            'phone' => 'nullable|string',
+            'phone' => 'required|string',
         ]);
 
         $orderNumber = trim($request->input('number'));
@@ -29,13 +29,7 @@ class TrackingController extends Controller
             'subOrders.trackingLogs.fulfillmentStatus',
         ])->where('order_number', $orderNumber);
 
-        if ($phone) {
-            $cleaned = trim($phone);
-            $query->where(function ($q) use ($cleaned) {
-                $q->where('shipping_address->recipient_phone', 'like', "%{$cleaned}%")
-                    ->orWhereHas('customer', fn ($c) => $c->where('phone', 'like', "%{$cleaned}%"));
-            });
-        }
+        $query->matchingPhone((string) $phone);
 
         $order = $query->first();
 
