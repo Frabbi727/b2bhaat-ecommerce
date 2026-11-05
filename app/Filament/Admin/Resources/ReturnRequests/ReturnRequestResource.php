@@ -34,6 +34,10 @@ class ReturnRequestResource extends Resource
 
     protected static ?string $navigationLabel = 'Returns & disputes';
 
+    protected static ?string $modelLabel = 'return request';
+
+    protected static ?string $pluralModelLabel = 'returns & disputes';
+
     public static function canAccess(): bool
     {
         $user = auth()->user();

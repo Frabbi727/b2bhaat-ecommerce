@@ -9,9 +9,18 @@ class EditOrder extends EditRecord
 {
     protected static string $resource = OrderResource::class;
 
+    public function getTitle(): string
+    {
+        return 'Change status of '.$this->getRecord()->order_number;
+    }
+
     protected function getHeaderActions(): array
     {
-        return [
-        ];
+        return [];
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('view', ['record' => $this->getRecord()]);
     }
 }

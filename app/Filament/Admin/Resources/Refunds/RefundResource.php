@@ -33,6 +33,10 @@ class RefundResource extends Resource
 
     protected static ?string $navigationLabel = 'Customer refunds';
 
+    protected static ?string $modelLabel = 'refund';
+
+    protected static ?string $pluralModelLabel = 'customer refunds';
+
     public static function canAccess(): bool
     {
         $user = auth()->user();

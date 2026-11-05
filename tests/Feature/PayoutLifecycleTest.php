@@ -129,6 +129,9 @@ class PayoutLifecycleTest extends TestCase
             ->assertHasNoActionErrors()
             ->callAction(TestAction::make('reject')->table($toReject), ['reason' => 'Wrong account'])
             ->assertHasNoActionErrors()
+            // Decided requests leave "Waiting to be paid"; their buttons are gone on "All payouts"
+            ->assertCanNotSeeTableRecords([$toDisburse, $toReject])
+            ->set('activeTab', 'payouts')
             ->assertActionHidden(TestAction::make('disburse')->table($toDisburse->fresh()))
             ->assertActionHidden(TestAction::make('reject')->table($toReject->fresh()));
 

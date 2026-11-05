@@ -26,6 +26,10 @@ class SmsTemplateResource extends Resource
 
     protected static ?string $navigationLabel = 'SMS templates';
 
+    protected static ?string $modelLabel = 'SMS template';
+
+    protected static ?string $pluralModelLabel = 'SMS templates';
+
     public static function canAccess(): bool
     {
         $user = auth()->user();

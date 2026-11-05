@@ -25,6 +25,12 @@ class BannerResource extends Resource
 
     protected static ?int $navigationSort = 1;
 
+    protected static ?string $modelLabel = 'banner';
+
+    protected static ?string $pluralModelLabel = 'banners';
+
+    protected static ?string $recordTitleAttribute = 'title';
+
     public static function form(Schema $schema): Schema
     {
         return BannerForm::configure($schema);

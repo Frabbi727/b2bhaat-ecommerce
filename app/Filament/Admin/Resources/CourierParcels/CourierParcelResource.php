@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\CourierParcels;
 
 use App\Exceptions\InvalidStatusTransitionException;
 use App\Filament\Admin\Resources\CourierParcels\Pages\ListCourierParcels;
+use App\Filament\Admin\Support\StatusColors;
 use App\Models\SubOrder;
 use App\Services\Logistics\CourierStatusService;
 use BackedEnum;
@@ -14,6 +15,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -38,6 +40,10 @@ class CourierParcelResource extends Resource
     protected static ?int $navigationSort = 2;
 
     protected static ?string $navigationLabel = 'Courier parcels';
+
+    protected static ?string $modelLabel = 'courier parcel';
+
+    protected static ?string $pluralModelLabel = 'courier parcels';
 
     /** @var array<string, string> */
     private const UPDATES = [
@@ -67,13 +73,16 @@ class CourierParcelResource extends Resource
                 TextColumn::make('seller.sellerProfile.store_name')->label('Seller'),
                 TextColumn::make('courier_name')->label('Courier')->placeholder('—'),
                 TextColumn::make('tracking_number')->label('Tracking number')->searchable()->copyable()->placeholder('—'),
-                TextColumn::make('fulfillmentStatus.name')->label('Status')->badge(),
+                TextColumn::make('fulfillmentStatus.name')->label('Status')->badge()
+                    ->color(fn (SubOrder $record): string => StatusColors::fulfillment($record->fulfillmentStatus?->slug)),
                 TextColumn::make('order.shipping_address.city')->label('District'),
                 TextColumn::make('updated_at')->label('Last update')->since()->sortable(),
             ])
             ->recordActions([
                 Action::make('recordCourierUpdate')
-                    ->label('Record courier update')
+                    ->label('Record update')
+                    ->button()
+                    ->color('gray')
                     ->icon('heroicon-o-clipboard-document-check')
                     ->modalDescription('Check this tracking number in the courier\'s merchant panel first, then record exactly what it shows.')
                     ->schema([
@@ -108,7 +117,10 @@ class CourierParcelResource extends Resource
 
                         Notification::make()->title('Courier update recorded')->success()->send();
                     }),
-            ]);
+            ])
+            ->emptyStateIcon(Heroicon::OutlinedTruck)
+            ->emptyStateHeading('No parcels with a courier right now')
+            ->emptyStateDescription('Parcels appear here once a seller hands them to Steadfast, Pathao or RedX, and leave once they are delivered or returned.');
     }
 
     public static function getPages(): array

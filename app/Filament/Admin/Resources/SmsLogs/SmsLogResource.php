@@ -28,6 +28,10 @@ class SmsLogResource extends Resource
 
     protected static ?string $navigationLabel = 'SMS delivery log';
 
+    protected static ?string $modelLabel = 'SMS';
+
+    protected static ?string $pluralModelLabel = 'SMS delivery log';
+
     public static function canAccess(): bool
     {
         $user = auth()->user();

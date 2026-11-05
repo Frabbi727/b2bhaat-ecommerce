@@ -37,6 +37,10 @@ class ProductModerationResource extends Resource
 
     protected static ?string $navigationLabel = 'Products';
 
+    protected static ?string $modelLabel = 'product';
+
+    protected static ?string $pluralModelLabel = 'products';
+
     public static function canAccess(): bool
     {
         $user = auth()->user();

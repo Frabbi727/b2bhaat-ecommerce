@@ -29,6 +29,10 @@ class RfqRequestResource extends Resource
 
     protected static ?string $navigationLabel = 'Quote requests';
 
+    protected static ?string $modelLabel = 'quote request';
+
+    protected static ?string $pluralModelLabel = 'quote requests';
+
     public static function canAccess(): bool
     {
         $user = auth()->user();

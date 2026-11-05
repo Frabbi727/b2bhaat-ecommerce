@@ -120,6 +120,28 @@ class AdminModerationTest extends TestCase
         Livewire::test(ProductDetail::class, ['slug' => $this->nails->slug])->assertDontSee($review->title);
     }
 
+    public function test_admin_reads_a_full_review_and_finds_hidden_ones_on_their_tab(): void
+    {
+        $review = ProductReview::where('product_id', $this->nails->id)->firstOrFail();
+        $review->update(['seller_reply' => 'Thank you for ordering again!', 'seller_replied_at' => now()]);
+        $this->actAsAdmin();
+
+        Livewire::test(ListProductReviews::class)
+            ->mountTableAction('read', $review)
+            ->assertMountedActionModalSee([$review->comment, 'Thank you for ordering again!']);
+
+        Livewire::test(ListProductReviews::class)
+            ->set('activeTab', 'hidden')
+            ->assertCanNotSeeTableRecords([$review])
+            ->set('activeTab', 'shown')
+            ->callTableAction('hide', $review)
+            ->set('activeTab', 'hidden')
+            ->assertCanSeeTableRecords([$review])
+            ->callTableAction('show', $review);
+
+        $this->assertTrue($review->fresh()->is_approved);
+    }
+
     // Returns
     public function test_admin_can_decide_a_return_the_seller_has_not_answered(): void
     {

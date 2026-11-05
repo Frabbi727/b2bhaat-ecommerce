@@ -74,12 +74,17 @@
                         class="absolute inset-0 w-full h-full"
                     >
                         <!-- Banner Image -->
+                        <picture class="block w-full h-full">
+                        @if ($banner->mobile_image_src)
+                            <source media="(max-width: 639px)" srcset="{{ $banner->mobile_image_src }}">
+                        @endif
                         <img
-                            src="{{ $banner->desktop_image_url }}"
+                            src="{{ $banner->desktop_image_src }}"
                             alt="{{ $banner->title }}"
                             class="w-full h-full object-cover object-center brightness-90"
                             loading="{{ $index === 0 ? 'eager' : 'lazy' }}"
                         />
+                        </picture>
 
                         <!-- Gradient Overlay with Content -->
                         <div class="absolute inset-0 bg-gradient-to-t sm:bg-gradient-to-r from-slate-950/90 via-slate-900/60 to-transparent flex items-end sm:items-center">
@@ -391,7 +396,7 @@
             <div class="grid grid-cols-1 md:grid-cols-{{ min(2, $promoStripBanners->count()) }} gap-4">
                 @foreach ($promoStripBanners as $banner)
                     <a href="{{ $banner->link_url }}" class="group relative rounded-2xl overflow-hidden block border border-slate-200 shadow-xs hover:shadow-md transition">
-                        <img src="{{ $banner->desktop_image_url }}" alt="{{ $banner->title }}" class="w-full h-36 sm:h-44 object-cover group-hover:scale-102 transition duration-500">
+                        <img src="{{ $banner->desktop_image_src }}" alt="{{ $banner->title }}" class="w-full h-36 sm:h-44 object-cover group-hover:scale-102 transition duration-500">
                         <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent flex flex-col justify-end p-4 text-white">
                             @if ($banner->badge_text)
                                 <span class="inline-block text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-rose-600 text-white w-max mb-1">

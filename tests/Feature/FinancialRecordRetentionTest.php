@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Filament\Admin\Resources\Orders\Pages\EditOrder;
 use App\Filament\Admin\Resources\Orders\Pages\ListOrders;
+use App\Filament\Admin\Resources\Orders\Pages\ViewOrder;
 use App\Filament\Admin\Resources\Users\Pages\EditUser;
 use App\Filament\Admin\Resources\Users\Pages\ListUsers;
 use App\Models\Order;
@@ -56,6 +57,21 @@ class FinancialRecordRetentionTest extends TestCase
 
         $this->assertFalse($this->admin->can('delete', $order));
         $this->assertFalse($this->admin->can('forceDelete', $order));
+    }
+
+    public function test_admin_order_page_shows_items_customer_and_payment_without_delete(): void
+    {
+        $order = Order::with('subOrders.seller.sellerProfile')->firstOrFail();
+
+        Livewire::test(ViewOrder::class, ['record' => $order->getRouteKey()])
+            ->assertSuccessful()
+            ->assertSee($order->order_number)
+            ->assertSee('Items by seller')
+            ->assertSee('Customer & delivery')
+            ->assertSee($order->subOrders->first()->seller->sellerProfile->store_name)
+            ->assertActionDoesNotExist('delete');
+
+        $this->get("/admin/orders/{$order->getRouteKey()}")->assertOk();
     }
 
     public function test_admin_order_create_route_absent(): void

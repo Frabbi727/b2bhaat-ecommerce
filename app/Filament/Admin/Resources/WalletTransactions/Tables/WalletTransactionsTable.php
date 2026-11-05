@@ -8,7 +8,7 @@ use Exception;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
-use Filament\Support\Colors\Color;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -18,92 +18,83 @@ class WalletTransactionsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('wallet.seller.sellerProfile.store_name')
-                    ->label('Store / Factory')
-                    ->weight('bold')
-                    ->searchable(),
-
-                TextColumn::make('wallet.seller.name')
-                    ->label('Merchant Owner')
-                    ->searchable(),
-
-                TextColumn::make('wallet.seller.phone')
-                    ->label('Phone Number')
-                    ->fontFamily('mono')
+                    ->label('Seller')
+                    ->description(fn (WalletTransaction $record): ?string => $record->wallet?->seller?->phone)
+                    ->weight('medium')
                     ->searchable(),
 
                 TextColumn::make('transaction_type')
-                    ->label('Type')
+                    ->label('Entry')
                     ->badge()
-                    ->color(fn (string $state): array => match ($state) {
-                        'payout' => Color::Rose,
-                        'escrow_release' => Color::Emerald,
-                        'escrow_hold' => Color::Amber,
-                        'escrow_refund' => Color::Indigo,
-                        'payout_reversal', 'return_reversal' => Color::Orange,
-                        default => Color::Gray,
-                    }),
-
-                TextColumn::make('status')
-                    ->label('Payout Status')
-                    ->badge()
-                    ->placeholder('—')
-                    ->color(fn (?string $state): array => match ($state) {
-                        WalletTransaction::STATUS_REQUESTED => Color::Amber,
-                        WalletTransaction::STATUS_DISBURSED => Color::Emerald,
-                        WalletTransaction::STATUS_REJECTED => Color::Rose,
-                        default => Color::Gray,
+                    ->formatStateUsing(fn (string $state): string => self::typeLabels()[$state] ?? str($state)->headline()->toString())
+                    ->color(fn (string $state): string => match ($state) {
+                        'payout' => 'info',
+                        'escrow_release' => 'success',
+                        'escrow_hold', 'escrow_hold_adjustment' => 'warning',
+                        'payout_reversal', 'return_reversal', 'escrow_refund' => 'danger',
+                        default => 'gray',
                     }),
 
                 TextColumn::make('amount')
-                    ->label('Amount (Tk)')
                     ->money('BDT')
-                    ->weight('black')
-                    ->size('lg')
+                    ->weight('semibold')
                     ->sortable(),
 
+                TextColumn::make('status')
+                    ->label('Payout status')
+                    ->badge()
+                    ->placeholder('—')
+                    ->formatStateUsing(fn (?string $state): ?string => match ($state) {
+                        WalletTransaction::STATUS_REQUESTED => 'Waiting to be paid',
+                        WalletTransaction::STATUS_DISBURSED => 'Paid',
+                        WalletTransaction::STATUS_REJECTED => 'Rejected',
+                        default => $state,
+                    })
+                    ->color(fn (?string $state): string => match ($state) {
+                        WalletTransaction::STATUS_REQUESTED => 'warning',
+                        WalletTransaction::STATUS_DISBURSED => 'success',
+                        WalletTransaction::STATUS_REJECTED => 'danger',
+                        default => 'gray',
+                    }),
+
                 TextColumn::make('reference_note')
-                    ->label('Disbursement Details / Bank A/C')
+                    ->label('Details')
+                    ->limit(70)
+                    ->tooltip(fn (WalletTransaction $record): ?string => $record->reference_note)
                     ->wrap()
-                    ->searchable(),
+                    ->searchable()
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('created_at')
-                    ->label('Date & Time')
-                    ->dateTime('M d, Y h:i A')
+                    ->label('Date')
+                    ->dateTime('d M Y, g:i A')
                     ->sortable(),
             ])
             ->filters([
                 SelectFilter::make('transaction_type')
-                    ->label('Transaction Type')
-                    ->options([
-                        'payout' => 'Payout Requests (Withdrawals)',
-                        'escrow_hold' => 'Escrow Holds',
-                        'escrow_release' => 'Escrow Releases',
-                        'escrow_refund' => 'Escrow Refunds (Cancellations)',
-                        'escrow_hold_adjustment' => 'Escrow Hold Adjustments (Delivery Fee)',
-                        'return_reversal' => 'Return Reversals',
-                        'payout_reversal' => 'Rejected Payout Refunds',
-                    ]),
-
-                SelectFilter::make('status')
-                    ->label('Payout Status')
-                    ->options([
-                        WalletTransaction::STATUS_REQUESTED => 'Awaiting Disbursement',
-                        WalletTransaction::STATUS_DISBURSED => 'Disbursed',
-                        WalletTransaction::STATUS_REJECTED => 'Rejected',
-                    ]),
+                    ->label('Entry')
+                    ->options(self::typeLabels()),
             ])
+            ->emptyStateIcon(Heroicon::OutlinedBanknotes)
+            ->emptyStateHeading('Nothing here')
+            ->emptyStateDescription('Payout requests from sellers appear in “Waiting to be paid”.')
             ->recordActions([
                 Action::make('disburse')
-                    ->label('Attach TrxID & Disburse')
+                    ->label('Mark as paid')
+                    ->button()
                     ->icon('heroicon-o-check-badge')
                     ->color('success')
-                    ->requiresConfirmation()
+                    ->modalHeading(fn (WalletTransaction $record): string => 'Mark ৳'.number_format((float) $record->amount, 2).' as paid')
+                    ->modalDescription(fn (WalletTransaction $record): ?string => $record->reference_note)
+                    ->modalSubmitActionLabel('Mark as paid')
                     ->visible(fn (WalletTransaction $record): bool => $record->isPendingPayout())
                     ->schema([
                         TextInput::make('transaction_id')
-                            ->label('MFS / Bank Transaction ID (TrxID)')
+                            ->label('Transaction ID (TrxID)')
+                            ->helperText('From the bKash, Nagad or bank transfer you just made. The seller sees it.')
                             ->placeholder('e.g. 9K28X912 or BEFTN-0012')
                             ->required(),
                     ])
@@ -117,17 +108,19 @@ class WalletTransactionsTable
                         }
 
                         Notification::make()
-                            ->title('Payout Marked as Disbursed')
+                            ->title('Payout marked as paid')
                             ->body("Disbursed ৳{$record->amount} with TrxID: {$data['transaction_id']}.")
                             ->success()
                             ->send();
                     }),
 
                 Action::make('reject')
-                    ->label('Reject & Refund to Wallet')
+                    ->label('Reject')
                     ->icon('heroicon-o-x-circle')
                     ->color('danger')
-                    ->requiresConfirmation()
+                    ->modalHeading('Reject this payout request?')
+                    ->modalDescription('The money goes back to the seller’s available balance.')
+                    ->modalSubmitActionLabel('Reject request')
                     ->visible(fn (WalletTransaction $record): bool => $record->isPendingPayout())
                     ->schema([
                         TextInput::make('reason')
@@ -145,11 +138,27 @@ class WalletTransactionsTable
                         }
 
                         Notification::make()
-                            ->title('Payout Rejected')
+                            ->title('Payout rejected')
                             ->body("৳{$record->amount} returned to the seller's available balance.")
                             ->warning()
                             ->send();
                     }),
             ]);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function typeLabels(): array
+    {
+        return [
+            'payout' => 'Payout request',
+            'escrow_hold' => 'Held in escrow',
+            'escrow_release' => 'Released to seller',
+            'escrow_refund' => 'Escrow refunded',
+            'escrow_hold_adjustment' => 'Escrow adjustment',
+            'return_reversal' => 'Return reversal',
+            'payout_reversal' => 'Rejected payout returned',
+        ];
     }
 }

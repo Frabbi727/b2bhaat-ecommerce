@@ -27,6 +27,10 @@ class SellerProfileResource extends Resource
 
     protected static ?string $navigationLabel = 'Sellers';
 
+    protected static ?string $modelLabel = 'seller';
+
+    protected static ?string $pluralModelLabel = 'sellers';
+
     public static function getNavigationBadge(): ?string
     {
         $count = SellerProfile::where('is_approved', false)->whereNull('rejected_at')->count();

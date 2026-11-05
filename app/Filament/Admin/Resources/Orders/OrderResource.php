@@ -4,7 +4,9 @@ namespace App\Filament\Admin\Resources\Orders;
 
 use App\Filament\Admin\Resources\Orders\Pages\EditOrder;
 use App\Filament\Admin\Resources\Orders\Pages\ListOrders;
+use App\Filament\Admin\Resources\Orders\Pages\ViewOrder;
 use App\Filament\Admin\Resources\Orders\Schemas\OrderForm;
+use App\Filament\Admin\Resources\Orders\Schemas\OrderInfolist;
 use App\Filament\Admin\Resources\Orders\Tables\OrdersTable;
 use App\Models\Order;
 use BackedEnum;
@@ -24,9 +26,16 @@ class OrderResource extends Resource
 
     protected static ?int $navigationSort = 1;
 
+    protected static ?string $recordTitleAttribute = 'order_number';
+
     public static function form(Schema $schema): Schema
     {
         return OrderForm::configure($schema);
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return OrderInfolist::configure($schema);
     }
 
     public static function table(Table $table): Table
@@ -45,6 +54,7 @@ class OrderResource extends Resource
     {
         return [
             'index' => ListOrders::route('/'),
+            'view' => ViewOrder::route('/{record}'),
             'edit' => EditOrder::route('/{record}/edit'),
         ];
     }

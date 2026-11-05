@@ -3,7 +3,7 @@
 namespace App\Filament\Admin\Resources\Categories\Pages;
 
 use App\Filament\Admin\Resources\Categories\CategoryResource;
-use Filament\Actions\DeleteAction;
+use App\Filament\Admin\Resources\Categories\Tables\CategoriesTable;
 use Filament\Resources\Pages\EditRecord;
 
 class EditCategory extends EditRecord
@@ -13,7 +13,7 @@ class EditCategory extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            DeleteAction::make(),
+            CategoriesTable::deleteAction(),
         ];
     }
 }
