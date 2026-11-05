@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources\Orders\Tables;
 
 use App\Models\Order;
+use App\Services\Payments\PaymentVerificationService;
 use App\Services\Sms\OrderNotificationService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -51,6 +52,25 @@ class OrdersTable
             ])
             ->recordActions([
                 EditAction::make(),
+                Action::make('verifyPayment')
+                    ->label('Verify Payment')
+                    ->icon('heroicon-o-shield-check')
+                    ->color('success')
+                    ->visible(fn (Order $record) => $record->paymentStatus?->slug === 'awaiting_verification')
+                    ->requiresConfirmation()
+                    ->modalHeading('Verify manual MFS payment')
+                    ->modalDescription(fn (Order $record) => 'Confirm the '.($record->shipping_address['mfs_gateway'] ?? 'MFS')
+                        .' TrxID '.($record->shipping_address['mfs_transaction_id'] ?? '—')
+                        .' from '.($record->shipping_address['mfs_sender_number'] ?? '—')
+                        .' was received for ৳'.number_format((float) $record->total_amount, 2).'. This marks the order paid and holds seller escrow.')
+                    ->action(function (Order $record): void {
+                        app(PaymentVerificationService::class)->markVerified($record);
+
+                        Notification::make()
+                            ->title("Payment verified for #{$record->order_number}")
+                            ->success()
+                            ->send();
+                    }),
                 Action::make('resendInvoiceSms')
                     ->label('Resend Invoice SMS')
                     ->icon('heroicon-o-chat-bubble-left-ellipsis')

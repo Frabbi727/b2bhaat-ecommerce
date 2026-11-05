@@ -111,7 +111,7 @@ class CartCouponCheckoutAndPromotionsTest extends TestCase
         $discount = $cart->getDiscountAmount();
         $this->assertGreaterThan(0, $discount);
 
-        $paymentMethod = PaymentMethod::where('slug', 'sslcommerz')->firstOrFail();
+        $paymentMethod = PaymentMethod::where('slug', 'mock_gateway')->firstOrFail();
 
         $comp = Livewire::test(CheckoutComponent::class)
             ->set('recipientName', 'Tanvir Ahmed')
@@ -177,7 +177,7 @@ class CartCouponCheckoutAndPromotionsTest extends TestCase
             ->assertHasNoErrors();
 
         $order = Order::latest('id')->firstOrFail();
-        $this->assertEquals('paid', $order->paymentStatus->slug);
+        $this->assertEquals('awaiting_verification', $order->paymentStatus->slug); // admin verifies the TrxID (PRA-006)
         $this->assertEquals('9J82KD8X', $order->shipping_address['mfs_transaction_id']);
     }
 

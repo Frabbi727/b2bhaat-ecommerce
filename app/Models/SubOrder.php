@@ -65,6 +65,17 @@ class SubOrder extends Model
     }
 
     /**
+     * Goods may leave the warehouse only for COD orders or orders whose payment has been verified (PRA-006).
+     */
+    public function isClearedForDispatch(): bool
+    {
+        $order = $this->order;
+
+        return $order !== null
+            && ($order->paymentMethod?->slug === 'cod' || $order->paymentStatus?->slug === 'paid');
+    }
+
+    /**
      * What the platform owes the seller for this sub-order: net earnings, plus the delivery fee when the seller
      * delivered it themselves (D6: whoever delivers keeps the fee).
      */

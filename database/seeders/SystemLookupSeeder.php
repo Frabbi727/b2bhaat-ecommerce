@@ -42,6 +42,7 @@ class SystemLookupSeeder extends Seeder
         // 3. Payment Statuses
         $paymentStatuses = [
             ['name' => 'Unpaid', 'slug' => 'unpaid', 'badge_color' => '#F59E0B', 'is_terminal' => false],
+            ['name' => 'Awaiting Verification', 'slug' => 'awaiting_verification', 'badge_color' => '#F59E0B', 'is_terminal' => false],
             ['name' => 'Paid', 'slug' => 'paid', 'badge_color' => '#10B981', 'is_terminal' => true],
             ['name' => 'Failed', 'slug' => 'failed', 'badge_color' => '#EF4444', 'is_terminal' => true],
             ['name' => 'Refunded', 'slug' => 'refunded', 'badge_color' => '#6B7280', 'is_terminal' => true],

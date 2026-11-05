@@ -82,7 +82,7 @@ class SubOrdersTable
                     ->label('Dispatch Courier')
                     ->icon('heroicon-o-truck')
                     ->color('primary')
-                    ->visible(fn (SubOrder $record) => in_array($record->fulfillmentStatus?->slug, ['unfulfilled', 'processing']))
+                    ->visible(fn (SubOrder $record) => $record->isClearedForDispatch() && in_array($record->fulfillmentStatus?->slug, ['unfulfilled', 'processing']))
                     ->schema([
                         Select::make('courier_name')
                             ->label('Select Courier Service')
@@ -190,6 +190,7 @@ class SubOrdersTable
 
                 // 4. Print 4x6 Thermal Shipping Label
                 Action::make('printShippingLabel')
+                    ->visible(fn (SubOrder $record) => $record->isClearedForDispatch())
                     ->label('Shipping Label')
                     ->icon('heroicon-o-printer')
                     ->color('gray')
@@ -198,6 +199,7 @@ class SubOrdersTable
 
                 // 5. Print Commercial Delivery Challan (A4)
                 Action::make('printDeliveryChallan')
+                    ->visible(fn (SubOrder $record) => $record->isClearedForDispatch())
                     ->label('Delivery Challan')
                     ->icon('heroicon-o-clipboard-document-check')
                     ->color('gray')
@@ -209,7 +211,7 @@ class SubOrdersTable
                     ->label('Dispatch Factory Fleet')
                     ->icon('heroicon-o-truck')
                     ->color('warning')
-                    ->visible(fn (SubOrder $record) => ! $record->is_self_delivered && in_array($record->fulfillmentStatus?->slug, ['unfulfilled', 'processing']))
+                    ->visible(fn (SubOrder $record) => $record->isClearedForDispatch() && ! $record->is_self_delivered && in_array($record->fulfillmentStatus?->slug, ['unfulfilled', 'processing']))
                     ->schema([
                         TextInput::make('hub_location')
                             ->label('Factory Dispatch Bay / Hub Location')
@@ -278,7 +280,7 @@ class SubOrdersTable
                     ->label('Book Courier Pickup')
                     ->icon('heroicon-o-calendar-days')
                     ->color('indigo')
-                    ->visible(fn (SubOrder $record) => in_array($record->fulfillmentStatus?->slug, ['unfulfilled', 'processing']))
+                    ->visible(fn (SubOrder $record) => $record->isClearedForDispatch() && in_array($record->fulfillmentStatus?->slug, ['unfulfilled', 'processing']))
                     ->schema([
                         Select::make('courier_name')
                             ->label('Courier Provider')

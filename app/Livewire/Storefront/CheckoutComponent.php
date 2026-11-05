@@ -19,6 +19,7 @@ use App\Services\Sms\OrderNotificationService;
 use Exception;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -180,7 +181,15 @@ class CheckoutComponent extends Component
             'city' => 'required|string|max:100',
             'postalCode' => 'required|string|max:20',
             'deliveryZone' => 'required|in:inside_dhaka,outside_dhaka',
-            'selectedPaymentMethodId' => 'required|exists:payment_methods,id',
+            'selectedPaymentMethodId' => ['required', Rule::exists('payment_methods', 'id')->where('is_active', true), function (string $attribute, mixed $value, \Closure $fail): void {
+                $slug = PaymentMethod::whereKey($value)->value('slug');
+                if ($slug === 'mock_gateway' && ! app()->environment('local', 'testing')) {
+                    $fail('This payment method is not available.');
+                }
+                if ($slug === 'sslcommerz') {
+                    $fail('Card payment is not available yet. Please choose Cash on Delivery, bKash or Nagad.');
+                }
+            }],
         ], [
             'recipientPhone.regex' => 'Please enter a valid Bangladeshi phone number (e.g., 017XXXXXXXX or +88017XXXXXXXX).',
             'recipientName.min' => 'Please enter a valid full recipient or business name.',
@@ -305,7 +314,13 @@ class CheckoutComponent extends Component
 
             $escrowService = app(EscrowLedgerService::class);
 
-            if ($paymentMethod && in_array($paymentMethod->slug, ['mock_gateway', 'bkash', 'nagad', 'sslcommerz'])) {
+            if ($paymentMethod && in_array($paymentMethod->slug, ['bkash', 'nagad'], true)) {
+                // Manual MFS: the TrxID is checked by an admin before anything is paid, held or shipped (PRA-006).
+                $order->update([
+                    'payment_status_id' => PaymentStatus::where('slug', 'awaiting_verification')->firstOrFail()->id,
+                    'order_status_id' => OrderStatus::where('slug', 'confirmed')->firstOrFail()->id,
+                ]);
+            } elseif ($paymentMethod && $paymentMethod->slug === 'mock_gateway') {
                 $paidStatus = PaymentStatus::where('slug', 'paid')->firstOrFail();
                 $confirmedStatus = OrderStatus::where('slug', 'confirmed')->firstOrFail();
 
