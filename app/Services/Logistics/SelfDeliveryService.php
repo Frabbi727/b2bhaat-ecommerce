@@ -6,10 +6,13 @@ use App\Models\FulfillmentStatus;
 use App\Models\OrderTrackingLog;
 use App\Models\SubOrder;
 use Exception;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 
 class SelfDeliveryService
 {
+    public const MAX_HANDOVER_ATTEMPTS = 5;
+
     public function __construct(
         protected CourierStatusService $courierStatusService
     ) {}
@@ -65,9 +68,19 @@ class SelfDeliveryService
             throw new Exception('This package is not marked for Factory Direct self-delivery.');
         }
 
-        if (trim($inputCode) !== (string) $subOrder->handover_code) {
+        // Brute-force guard: 5 wrong codes lock this consignment for an hour (final review C1)
+        $limiterKey = 'handover-code:'.$subOrder->id;
+        if (RateLimiter::tooManyAttempts($limiterKey, self::MAX_HANDOVER_ATTEMPTS)) {
+            throw new Exception('Too many wrong handover codes for this consignment. Try again later or contact support.');
+        }
+
+        if (! is_string($subOrder->handover_code) || ! hash_equals($subOrder->handover_code, trim($inputCode))) {
+            RateLimiter::hit($limiterKey, 3600);
+
             throw new Exception('Invalid Handover Code. Please ask the recipient for the 6-digit verification code shown on their tracking page.');
         }
+
+        RateLimiter::clear($limiterKey);
 
         $subOrder->update([
             'handover_confirmed_at' => now(),

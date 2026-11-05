@@ -29,6 +29,10 @@ class OrderTracking extends Component
     #[Locked]
     public bool $verifiedAccess = false;
 
+    /** The self-delivery handover code is shown only to the signed-in owner or the tracking-token holder (C1). */
+    #[Locked]
+    public bool $canSeeHandoverCode = false;
+
     public string $searchError = '';
 
     public string $actionFeedback = '';
@@ -82,6 +86,7 @@ class OrderTracking extends Component
             $this->order = $found;
             $this->orderNumber = $found->order_number;
             $this->verifiedAccess = true;
+            $this->canSeeHandoverCode = true;
         } else {
             $this->searchError = 'Invalid or expired tracking token.';
         }
@@ -94,6 +99,7 @@ class OrderTracking extends Component
         $this->actionError = '';
         $this->order = null;
         $this->verifiedAccess = false;
+        $this->canSeeHandoverCode = false;
 
         $trimmedOrderNumber = trim($this->orderNumber);
         if (! $trimmedOrderNumber) {
@@ -140,6 +146,7 @@ class OrderTracking extends Component
 
         $this->order = $found;
         $this->verifiedAccess = true;
+        $this->canSeeHandoverCode = auth()->check() && auth()->id() === $found->customer_id;
     }
 
     /**

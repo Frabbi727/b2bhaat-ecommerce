@@ -53,6 +53,31 @@ class EscrowLedgerService
     }
 
     /**
+     * Self-delivered COD: the seller collected the buyer's cash at the door, so the platform holds nothing.
+     * Instead the seller is charged what they owe the platform: cash collected (goods + fee − coupon share) minus
+     * their own share (net earnings + fee). A negative difference (coupon larger than commission) is a credit.
+     * Idempotent per sub-order.
+     */
+    public function settleSelfCollectedCod(SubOrder $subOrder): WalletTransaction
+    {
+        return DB::transaction(function () use ($subOrder) {
+            $wallet = $this->lockWallet($subOrder->seller_id, createIfMissing: true);
+
+            if ($existing = $this->findTransaction($subOrder, WalletTransaction::TYPE_COD_SELF_COLLECTED)) {
+                return $existing;
+            }
+
+            $owedToPlatform = round($subOrder->codCollectAmount() - $subOrder->sellerPayableAmount(), 2);
+
+            $wallet->decrement('available_balance', $owedToPlatform);
+            $wallet->refresh();
+
+            return $this->record($wallet, $subOrder, WalletTransaction::TYPE_COD_SELF_COLLECTED, $owedToPlatform,
+                "Seller collected COD cash for Sub-Order #{$subOrder->sub_order_number}; platform commission due");
+        });
+    }
+
+    /**
      * Total currently attributed to this sub-order's hold (hold plus any self-delivery top-up).
      */
     public function heldAmountFor(SubOrder $subOrder): float
@@ -143,6 +168,20 @@ class EscrowLedgerService
 
             if ($existing = $this->findTransaction($subOrder, WalletTransaction::TYPE_RETURN_REVERSAL)) {
                 return $existing;
+            }
+
+            // Self-collected COD: nothing was held; give back the commission charge (once)
+            if ($selfCollected = $this->findTransaction($subOrder, WalletTransaction::TYPE_COD_SELF_COLLECTED)) {
+                if ($existing = $this->findTransaction($subOrder, WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL)) {
+                    return $existing;
+                }
+
+                $amount = round((float) $selfCollected->amount, 2);
+                $wallet->increment('available_balance', $amount);
+                $wallet->refresh();
+
+                return $this->record($wallet, $subOrder, WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL, $amount,
+                    "Commission charge reversed for returned Sub-Order #{$subOrder->sub_order_number}: {$reason}");
             }
 
             $release = $this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_RELEASE);

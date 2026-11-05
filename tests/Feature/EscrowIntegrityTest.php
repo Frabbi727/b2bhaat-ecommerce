@@ -287,7 +287,8 @@ class EscrowIntegrityTest extends TestCase
         $this->travel(49)->hours();
         $this->artisan('escrow:release-delivered')->assertSuccessful();
 
-        $this->assertEqualsWithDelta($startA + 970.00, (float) $walletA->fresh()->available_balance, 0.001);
+        // A self-delivered COD: seller kept ৳1,036.67 cash, so they are charged commission − coupon share = ৳66.67 (C2)
+        $this->assertEqualsWithDelta($startA - 66.67, (float) $walletA->fresh()->available_balance, 0.001);
         $this->assertEqualsWithDelta($startB + 450.00, (float) $walletB->fresh()->available_balance, 0.001);
         $this->assertWalletMatchesLedger($walletB->fresh());
     }

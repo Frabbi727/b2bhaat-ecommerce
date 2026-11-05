@@ -227,7 +227,7 @@ class SubOrdersTable
                             ->required(),
                     ])
                     ->action(function (SubOrder $record, array $data): void {
-                        $code = app(SelfDeliveryService::class)->dispatchSelfDelivery(
+                        app(SelfDeliveryService::class)->dispatchSelfDelivery(
                             subOrder: $record,
                             hubLocation: $data['hub_location'],
                             driverContact: $data['driver_contact'],
@@ -236,7 +236,8 @@ class SubOrdersTable
 
                         Notification::make()
                             ->title('Dispatched via Factory Direct Fleet!')
-                            ->body("Handover verification code {$code} generated for the recipient.")
+                            // Never show the code to the seller: only the buyer can release it (D5, final review C1)
+                            ->body('A 6-digit handover code is on the buyer\'s tracking page. Ask the recipient for it at delivery.')
                             ->success()
                             ->send();
                     }),

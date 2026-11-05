@@ -21,6 +21,15 @@ class WalletTransaction extends Model
     /** Seller credit taken back after a released sub-order is returned; may leave available balance negative. */
     public const TYPE_RETURN_REVERSAL = 'return_reversal';
 
+    /**
+     * Self-delivered COD: the seller kept the buyer's cash. Amount = what the seller owes the platform
+     * (cash collected − seller's share), debited from available balance (final review C2).
+     */
+    public const TYPE_COD_SELF_COLLECTED = 'cod_self_collected';
+
+    /** Undo of a self-collected COD charge when that consignment is returned. */
+    public const TYPE_COD_SELF_COLLECTED_REVERSAL = 'cod_self_collected_reversal';
+
     /** Rejected payout credited back to available balance (PRA-013). */
     public const TYPE_PAYOUT_REVERSAL = 'payout_reversal';
 

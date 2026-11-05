@@ -146,9 +146,15 @@ class CourierStatusService
 
     protected function handleDeliveredSettlement(SubOrder $subOrder): void
     {
-        // 1. Hold the seller's share (prepaid: already held, COD: held now per D2).
-        //    Only the scheduled escrow:release-delivered command releases it, after the holding period.
-        $this->escrowLedgerService->holdInEscrow($subOrder);
+        // 1. Courier COD / prepaid: hold the seller's share (prepaid already held, COD held now per D2); only the
+        //    scheduled escrow:release-delivered command releases it, after the holding period.
+        //    Self-delivered COD: the seller already has the cash, so charge the commission instead (C2).
+        $isCod = $subOrder->order?->paymentMethod?->slug === 'cod';
+        if ($isCod && $subOrder->is_self_delivered) {
+            $this->escrowLedgerService->settleSelfCollectedCod($subOrder);
+        } else {
+            $this->escrowLedgerService->holdInEscrow($subOrder);
+        }
 
         // 2. Reconcile parent order
         $parentOrder = $subOrder->order;

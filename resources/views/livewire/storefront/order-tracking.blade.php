@@ -187,7 +187,7 @@
                                             @endif
                                         </p>
                                     </div>
-                                    @if ($subOrder->handover_code && $subOrder->fulfillmentStatus?->slug !== 'delivered')
+                                    @if ($canSeeHandoverCode && $subOrder->handover_code && $subOrder->fulfillmentStatus?->slug !== 'delivered')
                                         <div class="text-center sm:text-right shrink-0">
                                             <span class="text-[10px] uppercase font-bold text-slate-500 block">Buyer Handover Code:</span>
                                             <div class="inline-block px-4 py-1.5 rounded-lg bg-amber-200/80 border border-amber-400 font-mono font-black text-xl text-amber-950 tracking-widest shadow-inner">

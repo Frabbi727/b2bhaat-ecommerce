@@ -72,12 +72,16 @@ class FactorySelfDeliveryAndHandoverCodeTest extends TestCase
 
         $order = $this->subOrder->order;
 
-        // 1. Order Tracking view
+        // 1. Order Tracking view: shown via the buyer's secret tracking link, never after a phone lookup (C1)
         Livewire::test(OrderTracking::class)
             ->set('orderNumber', $order->order_number)
             ->set('phone', $order->shipping_address['recipient_phone'])
             ->call('searchOrder')
             ->assertSee('Direct Factory Fleet Self-Delivery')
+            ->assertDontSee($code);
+
+        $order->update(['tracking_token' => $order->tracking_token ?: 'tok-'.str_repeat('b', 30)]);
+        Livewire::test(OrderTracking::class, ['token' => $order->fresh()->tracking_token])
             ->assertSee($code);
 
         // 2. Customer Orders list

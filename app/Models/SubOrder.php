@@ -8,6 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SubOrder extends Model
 {
+    /** The buyer's secret; never serialised (final review C1). */
+    protected $hidden = [
+        'handover_code',
+    ];
+
     protected $fillable = [
         'parent_order_id',
         'seller_id',
