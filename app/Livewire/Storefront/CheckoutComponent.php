@@ -226,6 +226,14 @@ class CheckoutComponent extends Component
             return;
         }
 
+        // Wholesale MOQ is checked on each product lot (all variations together) — PRA-025
+        $moqViolation = $cart->wholesaleMoqViolations()[0] ?? null;
+        if ($moqViolation) {
+            $this->errorMessage = "Wholesale minimum order quantity for {$moqViolation['title']} is {$moqViolation['moq']} (all variations together). Your cart has {$moqViolation['quantity']}.";
+
+            return;
+        }
+
         // 2. Minimum order amount safeguards
         $subtotal = $cart->getSubtotal();
         $isWholesale = collect($items)->contains(fn ($i) => ($i['sales_channel_id'] ?? null) === SalesChannel::where('slug', SalesChannel::WHOLESALE)->value('id'));

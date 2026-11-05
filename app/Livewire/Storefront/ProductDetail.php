@@ -288,31 +288,10 @@ class ProductDetail extends Component
             }
         }
 
-        // Resolve progressive volume tier price based on total lot quantity
-        $wholesaleTiers = $this->product->prices
-            ->filter(fn ($p) => $p->salesChannel?->slug === SalesChannel::WHOLESALE && is_null($p->variation_id))
-            ->sortBy('min_quantity');
-
-        $matchedTier = $wholesaleTiers->filter(fn ($p) => $totalUnits >= $p->min_quantity)->last()
-            ?? $wholesaleTiers->first();
-
-        $tierUnitPrice = $matchedTier ? (float) $matchedTier->unit_price : null;
-
         try {
-            $addedCount = 0;
-            foreach ($this->matrixQuantities as $variationId => $qty) {
-                $qty = (int) $qty;
-                if ($qty > 0) {
-                    $cart->addItem(
-                        productId: $this->product->id,
-                        variationId: (int) $variationId,
-                        channelSlug: SalesChannel::WHOLESALE,
-                        quantity: $qty,
-                        overrideUnitPrice: $tierUnitPrice
-                    );
-                    $addedCount += $qty;
-                }
-            }
+            // MOQ and tier price are resolved on the whole lot by the cart (D7, PRA-025)
+            $cart->addWholesaleLot($this->product->id, $this->matrixQuantities);
+            $addedCount = $totalUnits;
 
             // Reset matrix inputs
             foreach ($this->product->variations as $var) {

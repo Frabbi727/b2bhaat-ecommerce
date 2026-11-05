@@ -26,10 +26,48 @@ class CartSessionService
 
     /**
      * Add item with role, MOQ, and progressive volume discount tier validation.
+     * Wholesale MOQ and tier pricing apply to the product lot (all its non-quoted wholesale lines) — D7.
+     * A line added with an override price is an accepted RFQ quotation: it is flagged `is_quoted` and never re-priced.
      *
      * @throws Exception
      */
     public function addItem(int $productId, ?int $variationId, string $channelSlug, int $quantity, ?float $overrideUnitPrice = null): void
+    {
+        $this->putItem($productId, $variationId, $channelSlug, $quantity, $overrideUnitPrice, enforceLotMoq: true);
+
+        if ($channelSlug === SalesChannel::WHOLESALE) {
+            $this->repriceWholesaleGroup($productId);
+        }
+    }
+
+    /**
+     * Add a wholesale matrix lot (variation id => quantity) in one step; the MOQ applies to the lot total.
+     *
+     * @param  array<int, int>  $variationQuantities
+     *
+     * @throws Exception
+     */
+    public function addWholesaleLot(int $productId, array $variationQuantities): void
+    {
+        $variationQuantities = array_filter(array_map('intval', $variationQuantities), fn (int $qty) => $qty > 0);
+        $lotTotal = $this->lotQuantity($productId) + array_sum($variationQuantities);
+        $moq = $this->wholesaleMoqFor($productId);
+
+        if ($moq !== null && $lotTotal < $moq) {
+            throw new Exception("Wholesale minimum order quantity is {$moq}. You requested {$lotTotal}.");
+        }
+
+        foreach ($variationQuantities as $variationId => $qty) {
+            $this->putItem($productId, (int) $variationId, SalesChannel::WHOLESALE, $qty, null, enforceLotMoq: false);
+        }
+
+        $this->repriceWholesaleGroup($productId);
+    }
+
+    /**
+     * @throws Exception
+     */
+    private function putItem(int $productId, ?int $variationId, string $channelSlug, int $quantity, ?float $overrideUnitPrice, bool $enforceLotMoq): void
     {
         $product = Product::with(['prices.salesChannel', 'variations.attributeValues.attribute', 'seller.sellerProfile'])
             ->sellable()
@@ -59,12 +97,16 @@ class CartSessionService
         // Base MOQ is the lowest tier threshold
         $minQty = (int) $channelPrices->first()->min_quantity;
 
-        if ($channelSlug === SalesChannel::WHOLESALE && $quantity < $minQty && is_null($overrideUnitPrice)) {
-            throw new Exception("Wholesale minimum order quantity is {$minQty}. You requested {$quantity}.");
-        }
-
         $items = $this->getItems();
         $key = "{$productId}_".($variationId ?? 'base')."_{$channelSlug}";
+        $isQuoted = ! is_null($overrideUnitPrice) || (bool) ($items[$key]['is_quoted'] ?? false);
+
+        if ($channelSlug === SalesChannel::WHOLESALE && $enforceLotMoq && ! $isQuoted) {
+            $lotTotal = $this->lotQuantity($productId) + $quantity;
+            if ($lotTotal < $minQty) {
+                throw new Exception("Wholesale minimum order quantity is {$minQty}. You requested {$lotTotal}.");
+            }
+        }
 
         $totalQuantity = $quantity;
         if (isset($items[$key])) {
@@ -72,9 +114,9 @@ class CartSessionService
         }
 
         // Match progressive volume tier or apply passed override rate
-        $effectivePrice = $overrideUnitPrice;
+        $effectivePrice = $overrideUnitPrice ?? ($isQuoted ? (float) $items[$key]['unit_price'] : null);
         $matchedRecord = null;
-        if (! $effectivePrice) {
+        if (! $isQuoted) {
             $matchedRecord = $this->resolveTierRecord($channelPrices, $totalQuantity);
             $effectivePrice = (float) $matchedRecord?->unit_price;
         } else {
@@ -92,6 +134,7 @@ class CartSessionService
         if (isset($items[$key])) {
             $items[$key]['quantity'] = $totalQuantity;
             $items[$key]['unit_price'] = $effectivePrice;
+            $items[$key]['is_quoted'] = $isQuoted;
         } else {
             $items[$key] = [
                 'key' => $key,
@@ -106,6 +149,7 @@ class CartSessionService
                 'unit_price' => $effectivePrice,
                 'min_quantity' => $minQty,
                 'quantity' => $quantity,
+                'is_quoted' => $isQuoted,
                 'seller_id' => $product->seller_id,
                 'seller_name' => $product->seller?->sellerProfile?->store_name ?? $product->seller?->name,
             ];
@@ -117,8 +161,14 @@ class CartSessionService
     public function removeItem(string $key): void
     {
         $items = $this->getItems();
+        $removed = $items[$key] ?? null;
         unset($items[$key]);
         Session::put(self::SESSION_KEY, $items);
+
+        // The remaining lot may drop a tier (or below MOQ — checkout then refuses it).
+        if ($removed && $removed['sales_channel_slug'] === SalesChannel::WHOLESALE) {
+            $this->repriceWholesaleGroup((int) $removed['product_id']);
+        }
     }
 
     public function updateQuantity(string $key, int $newQuantity): void
@@ -135,8 +185,26 @@ class CartSessionService
         }
 
         $item = $items[$key];
-        if ($item['sales_channel_slug'] === SalesChannel::WHOLESALE && $newQuantity < $item['min_quantity']) {
-            throw new Exception("Cannot reduce below wholesale MOQ of {$item['min_quantity']}.");
+        $isWholesale = $item['sales_channel_slug'] === SalesChannel::WHOLESALE;
+
+        if ($item['is_quoted'] ?? false) {
+            $items[$key]['quantity'] = $newQuantity;
+            Session::put(self::SESSION_KEY, $items);
+
+            return;
+        }
+
+        if ($isWholesale) {
+            $lotTotal = $this->lotQuantity((int) $item['product_id']) - (int) $item['quantity'] + $newQuantity;
+            if ($lotTotal < (int) $item['min_quantity']) {
+                throw new Exception("Wholesale minimum order quantity is {$item['min_quantity']} for this product (all variations together). This change would leave {$lotTotal}.");
+            }
+
+            $items[$key]['quantity'] = $newQuantity;
+            Session::put(self::SESSION_KEY, $items);
+            $this->repriceWholesaleGroup((int) $item['product_id']);
+
+            return;
         }
 
         // Dynamically recalculate unit_price to match the updated quantity volume tier
@@ -157,6 +225,95 @@ class CartSessionService
         $item['quantity'] = $newQuantity;
         $items[$key] = $item;
         Session::put(self::SESSION_KEY, $items);
+    }
+
+    /**
+     * Re-price every non-quoted wholesale line of a product on the lot total (all variations together).
+     */
+    public function repriceWholesaleGroup(int $productId): void
+    {
+        $items = $this->getItems();
+        $lotTotal = $this->lotQuantity($productId);
+        if ($lotTotal === 0) {
+            return;
+        }
+
+        $product = Product::with('prices.salesChannel')->find($productId);
+        if (! $product) {
+            return;
+        }
+
+        foreach ($items as $key => $item) {
+            if (! $this->isLotLine($item, $productId)) {
+                continue;
+            }
+
+            $channelPrices = $product->prices
+                ->filter(fn ($p) => $p->salesChannel?->slug === SalesChannel::WHOLESALE && ($p->variation_id === $item['variation_id'] || is_null($p->variation_id)))
+                ->sortBy('min_quantity');
+
+            $tier = $channelPrices->isNotEmpty() ? $this->resolveTierRecord($channelPrices, $lotTotal) : null;
+            if ($tier) {
+                $items[$key]['unit_price'] = (float) $tier->unit_price;
+            }
+            $items[$key]['lot_quantity'] = $lotTotal;
+        }
+
+        Session::put(self::SESSION_KEY, $items);
+    }
+
+    /**
+     * Wholesale lots whose total quantity is below the product MOQ (quoted RFQ lines excluded).
+     *
+     * @return list<array{product_id: int, title: string, quantity: int, moq: int}>
+     */
+    public function wholesaleMoqViolations(): array
+    {
+        $violations = [];
+
+        foreach (collect($this->getItems())->filter(fn (array $item) => $this->isLotLine($item))->groupBy('product_id') as $productId => $lines) {
+            $quantity = (int) $lines->sum('quantity');
+            $moq = (int) $lines->max('min_quantity');
+            if ($quantity < $moq) {
+                $violations[] = [
+                    'product_id' => (int) $productId,
+                    'title' => (string) $lines->first()['product_title'],
+                    'quantity' => $quantity,
+                    'moq' => $moq,
+                ];
+            }
+        }
+
+        return $violations;
+    }
+
+    /**
+     * Total quantity of a product's non-quoted wholesale lines.
+     */
+    private function lotQuantity(int $productId): int
+    {
+        return (int) collect($this->getItems())
+            ->filter(fn (array $item) => $this->isLotLine($item, $productId))
+            ->sum('quantity');
+    }
+
+    /**
+     * @param  array<string, mixed>  $item
+     */
+    private function isLotLine(array $item, ?int $productId = null): bool
+    {
+        return $item['sales_channel_slug'] === SalesChannel::WHOLESALE
+            && ! ($item['is_quoted'] ?? false)
+            && ($productId === null || (int) $item['product_id'] === $productId);
+    }
+
+    private function wholesaleMoqFor(int $productId): ?int
+    {
+        $moq = ProductPrice::where('product_id', $productId)
+            ->whereHas('salesChannel', fn ($q) => $q->where('slug', SalesChannel::WHOLESALE))
+            ->min('min_quantity');
+
+        return $moq === null ? null : (int) $moq;
     }
 
     /**
