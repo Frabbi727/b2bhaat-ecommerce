@@ -41,7 +41,7 @@ class OrderNotificationTest extends TestCase
     public function test_dispatches_order_confirmation_sms_with_invoice_and_tracking_tokens(): void
     {
         $customer = User::create([
-            'role_id' => 1,
+            'role_id' => Role::where('slug', 'retail_buyer')->value('id'),
             'name' => 'Tanvir Khan',
             'email' => 'tanvir@example.com',
             'phone' => '8801712345678',
@@ -52,9 +52,9 @@ class OrderNotificationTest extends TestCase
             'order_number' => 'ORD-10025',
             'customer_id' => $customer->id,
             'total_amount' => 2500,
-            'order_status_id' => 1,
-            'payment_status_id' => 1,
-            'payment_method_id' => 1,
+            'order_status_id' => OrderStatus::where('slug', 'confirmed')->value('id'),
+            'payment_status_id' => PaymentStatus::where('slug', 'paid')->value('id'),
+            'payment_method_id' => PaymentMethod::where('slug', 'cod')->value('id'),
             'shipping_address' => [
                 'recipient_name' => 'Tanvir Khan',
                 'recipient_phone' => '01712345678',
@@ -82,7 +82,7 @@ class OrderNotificationTest extends TestCase
     public function test_dispatches_order_status_update_sms(): void
     {
         $customer = User::create([
-            'role_id' => 1,
+            'role_id' => Role::where('slug', 'retail_buyer')->value('id'),
             'name' => 'Status Update User',
             'email' => 'status@example.com',
             'phone' => '8801711223344',
@@ -93,9 +93,9 @@ class OrderNotificationTest extends TestCase
             'order_number' => 'ORD-55555',
             'customer_id' => $customer->id,
             'total_amount' => 3000,
-            'order_status_id' => 1,
-            'payment_status_id' => 1,
-            'payment_method_id' => 1,
+            'order_status_id' => OrderStatus::where('slug', 'confirmed')->value('id'),
+            'payment_status_id' => PaymentStatus::where('slug', 'paid')->value('id'),
+            'payment_method_id' => PaymentMethod::where('slug', 'cod')->value('id'),
             'shipping_address' => [
                 'recipient_name' => 'Status Update User',
                 'recipient_phone' => '01711223344',
@@ -116,7 +116,7 @@ class OrderNotificationTest extends TestCase
     public function test_dispatches_resend_invoice_sms(): void
     {
         $customer = User::create([
-            'role_id' => 1,
+            'role_id' => Role::where('slug', 'retail_buyer')->value('id'),
             'name' => 'Invoice Resend User',
             'email' => 'invoice@example.com',
             'phone' => '8801755667788',
@@ -127,9 +127,9 @@ class OrderNotificationTest extends TestCase
             'order_number' => 'ORD-77777',
             'customer_id' => $customer->id,
             'total_amount' => 1500,
-            'order_status_id' => 1,
-            'payment_status_id' => 1,
-            'payment_method_id' => 1,
+            'order_status_id' => OrderStatus::where('slug', 'confirmed')->value('id'),
+            'payment_status_id' => PaymentStatus::where('slug', 'paid')->value('id'),
+            'payment_method_id' => PaymentMethod::where('slug', 'cod')->value('id'),
             'shipping_address' => [
                 'recipient_name' => 'Invoice Resend User',
                 'recipient_phone' => '01755667788',
@@ -149,7 +149,7 @@ class OrderNotificationTest extends TestCase
     public function test_can_view_invoice_via_secure_token_route(): void
     {
         $customer = User::create([
-            'role_id' => 1,
+            'role_id' => Role::where('slug', 'retail_buyer')->value('id'),
             'name' => 'Customer Token Test',
             'email' => 'tokentest@example.com',
             'phone' => '8801799999999',
@@ -160,9 +160,9 @@ class OrderNotificationTest extends TestCase
             'order_number' => 'ORD-99999',
             'customer_id' => $customer->id,
             'total_amount' => 1000,
-            'order_status_id' => 1,
-            'payment_status_id' => 1,
-            'payment_method_id' => 1,
+            'order_status_id' => OrderStatus::where('slug', 'confirmed')->value('id'),
+            'payment_status_id' => PaymentStatus::where('slug', 'paid')->value('id'),
+            'payment_method_id' => PaymentMethod::where('slug', 'cod')->value('id'),
             'shipping_address' => [
                 'recipient_name' => 'Customer Token Test',
                 'recipient_phone' => '01799999999',
@@ -177,7 +177,7 @@ class OrderNotificationTest extends TestCase
     public function test_can_view_order_tracking_via_secure_token_route(): void
     {
         $customer = User::create([
-            'role_id' => 1,
+            'role_id' => Role::where('slug', 'retail_buyer')->value('id'),
             'name' => 'Track Token Test',
             'email' => 'tracktest@example.com',
             'phone' => '8801788888888',
@@ -188,9 +188,9 @@ class OrderNotificationTest extends TestCase
             'order_number' => 'ORD-88888',
             'customer_id' => $customer->id,
             'total_amount' => 1200,
-            'order_status_id' => 1,
-            'payment_status_id' => 1,
-            'payment_method_id' => 1,
+            'order_status_id' => OrderStatus::where('slug', 'confirmed')->value('id'),
+            'payment_status_id' => PaymentStatus::where('slug', 'paid')->value('id'),
+            'payment_method_id' => PaymentMethod::where('slug', 'cod')->value('id'),
             'shipping_address' => [
                 'recipient_name' => 'Track Token Test',
                 'recipient_phone' => '01788888888',

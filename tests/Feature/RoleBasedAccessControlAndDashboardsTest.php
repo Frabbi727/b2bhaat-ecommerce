@@ -75,7 +75,7 @@ class RoleBasedAccessControlAndDashboardsTest extends TestCase
         $order = Order::firstOrFail();
 
         // Make sure only seller A is in sub-orders of this order
-        SubOrder::where('order_id', $order->id)->update(['seller_id' => $sellerA->id]);
+        SubOrder::where('parent_order_id', $order->id)->update(['seller_id' => $sellerA->id]);
 
         // Seller A (assigned) can view
         $this->actingAs($sellerA);

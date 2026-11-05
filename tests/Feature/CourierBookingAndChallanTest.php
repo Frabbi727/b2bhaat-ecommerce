@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\FulfillmentStatus;
+use App\Models\Role;
 use App\Models\SubOrder;
 use App\Models\User;
 use App\Services\Logistics\CourierBookingService;
@@ -86,7 +87,7 @@ class CourierBookingAndChallanTest extends TestCase
     public function test_seller_cannot_view_another_sellers_delivery_challan(): void
     {
         $otherSeller = User::create([
-            'role_id' => 2,
+            'role_id' => Role::where('slug', 'seller')->value('id'),
             'name' => 'Foreign Merchant',
             'email' => 'foreign@merchant.com',
             'password' => bcrypt('password'),

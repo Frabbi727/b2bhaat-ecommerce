@@ -5,7 +5,11 @@ namespace Tests\Feature;
 use App\Livewire\Storefront\CheckoutComponent;
 use App\Livewire\Storefront\OrderTracking;
 use App\Livewire\Storefront\ProductDetail;
+use App\Models\FulfillmentStatus;
 use App\Models\Order;
+use App\Models\OrderStatus;
+use App\Models\PaymentMethod;
+use App\Models\PaymentStatus;
 use App\Models\Product;
 use App\Models\SubOrder;
 use App\Models\User;
@@ -73,9 +77,9 @@ class ValidationAndPolishTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-TRACK-TEST-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
-            'payment_status_id' => 1,
-            'payment_method_id' => 1,
+            'order_status_id' => OrderStatus::where('slug', 'pending')->value('id'),
+            'payment_status_id' => PaymentStatus::where('slug', 'unpaid')->value('id'),
+            'payment_method_id' => PaymentMethod::where('slug', 'cod')->value('id'),
             'total_amount' => 500,
             'shipping_amount' => 70,
             'shipping_address' => ['recipient_phone' => '+8801700000004'],
@@ -85,7 +89,7 @@ class ValidationAndPolishTest extends TestCase
             'parent_order_id' => $order->id,
             'seller_id' => $seller->id,
             'sub_order_number' => 'PKG-SUB-9988',
-            'fulfillment_status_id' => 1,
+            'fulfillment_status_id' => FulfillmentStatus::where('slug', 'unfulfilled')->value('id'),
             'courier_name' => 'Steadfast',
             'tracking_number' => 'STDFST-CONSIGNMENT-777',
             'subtotal' => 500,

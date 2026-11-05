@@ -118,9 +118,10 @@ class WholesaleQuotationProFormaTest extends TestCase
 
     public function test_guest_is_redirected_from_quotation(): void
     {
+        $product = Product::firstOrFail();
         $rfq = RfqRequest::create([
-            'product_id' => 1,
-            'seller_id' => 2,
+            'product_id' => $product->id,
+            'seller_id' => $product->seller_id,
             'buyer_name' => 'Guest Buyer',
             'buyer_email' => 'guest@example.com',
             'buyer_phone' => '+8801700000000',

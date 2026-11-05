@@ -87,9 +87,9 @@ class EndToEndSmsLifecycleTest extends TestCase
             'order_number' => 'ORD-2026-E2E',
             'customer_id' => $user->id,
             'total_amount' => 4500.00,
-            'order_status_id' => 1,
-            'payment_status_id' => 1,
-            'payment_method_id' => 1,
+            'order_status_id' => OrderStatus::where('slug', 'confirmed')->value('id'),
+            'payment_status_id' => PaymentStatus::where('slug', 'paid')->value('id'),
+            'payment_method_id' => PaymentMethod::where('slug', 'cod')->value('id'),
             'shipping_address' => [
                 'recipient_name' => 'Sultana Begum',
                 'recipient_phone' => '01719876543',

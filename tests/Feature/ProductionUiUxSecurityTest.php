@@ -34,6 +34,12 @@ class ProductionUiUxSecurityTest extends TestCase
         $this->assertNotNull($response->headers->get('Permissions-Policy'));
     }
 
+    public function test_https_responses_tell_browsers_to_stay_on_https_and_plain_http_does_not(): void
+    {
+        $this->get('https://localhost/')->assertHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+        $this->get('http://localhost/')->assertHeaderMissing('Strict-Transport-Security');
+    }
+
     public function test_custom_404_page_renders_with_b2bhaat_brand(): void
     {
         // The error page shows the support email the admin configured (no invented contact details)

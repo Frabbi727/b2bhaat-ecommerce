@@ -7,6 +7,7 @@ use App\Services\Sms\SmsManager;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -16,6 +17,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        // Every panel record has a numeric id. Anything else (e.g. /seller/sub-orders/create, which has no page)
+        // is a plain 404 instead of PostgreSQL rejecting the text as a bigint and showing a 500.
+        // Set in register() because the panel routes are created before boot() runs.
+        Route::pattern('record', '[0-9]+');
+
         $this->app->singleton('sms', function ($app) {
             return new SmsManager($app);
         });
