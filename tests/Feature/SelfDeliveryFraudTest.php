@@ -91,13 +91,13 @@ class SelfDeliveryFraudTest extends TestCase
             ->call('searchOrder')
             ->assertSet('searchError', '')
             ->assertSee($this->order->order_number)
-            ->assertDontSee('Buyer Handover Code');
+            ->assertDontSee('Your delivery code');
     }
 
     public function test_tracking_token_holder_sees_handover_code(): void
     {
         Livewire::test(OrderTracking::class, ['token' => $this->order->tracking_token])
-            ->assertSee('Buyer Handover Code')
+            ->assertSee('Your delivery code')
             ->assertSee('4321');
     }
 
@@ -108,7 +108,7 @@ class SelfDeliveryFraudTest extends TestCase
         Livewire::test(OrderTracking::class)
             ->set('orderNumber', $this->order->order_number)
             ->call('searchOrder')
-            ->assertSee('Buyer Handover Code');
+            ->assertSee('Your delivery code');
     }
 
     public function test_handover_code_is_locked_after_five_wrong_attempts(): void

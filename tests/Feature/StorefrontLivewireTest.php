@@ -33,7 +33,7 @@ class StorefrontLivewireTest extends TestCase
         Livewire::test(ProductCatalog::class)
             ->assertStatus(200)
             ->assertSee('Luxury Press-on Fake Nails Set')
-            ->assertSee('Consumer Market Mode');
+            ->assertSee('Buying for a business?');
     }
 
     public function test_retail_user_can_add_single_unit_to_cart(): void

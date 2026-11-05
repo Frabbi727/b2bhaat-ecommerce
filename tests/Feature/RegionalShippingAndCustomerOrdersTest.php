@@ -91,6 +91,6 @@ class RegionalShippingAndCustomerOrdersTest extends TestCase
 
         Livewire::test(CustomerOrders::class)
             ->assertStatus(200)
-            ->assertSee('My Order History');
+            ->assertSee('My orders');
     }
 }

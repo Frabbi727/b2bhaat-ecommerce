@@ -5,6 +5,7 @@ namespace App\Livewire\Storefront;
 use App\Models\Order;
 use App\Models\SubOrder;
 use App\Services\Orders\OrderDisputeService;
+use App\Services\Settings\StoreConfigurationService;
 use Exception;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
@@ -271,6 +272,7 @@ class OrderTracking extends Component
     {
         return view('livewire.storefront.order-tracking', [
             'order' => $this->order,
+            'returnWindowHours' => app(StoreConfigurationService::class)->getEscrowHoldingPeriodHours(),
         ]);
     }
 }

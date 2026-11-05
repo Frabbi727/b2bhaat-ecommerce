@@ -176,7 +176,7 @@ class OrderDisputeAndCancellationTest extends TestCase
             ->set('returnDescription', 'The gel polish had hardened upon receipt.')
             ->call('submitReturnRequest')
             ->assertSet('showReturnModal', false)
-            ->assertSee('Return Dispute Pending Review');
+            ->assertSee('Return request under review');
 
         $this->assertDatabaseHas('return_requests', [
             'sub_order_id' => $subOrder->id,

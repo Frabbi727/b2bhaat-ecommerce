@@ -1,21 +1,21 @@
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
     <!-- Breadcrumb -->
     <nav class="flex items-center gap-2 text-xs text-slate-500">
-        <a href="{{ route('catalog.index') }}" class="hover:underline">Marketplace Catalog</a>
+        <a href="{{ route('catalog.index') }}" class="hover:underline">Shop</a>
         <span>/</span>
-        <a href="{{ route('customer.orders') }}" class="hover:underline">Buyer Account</a>
+        <a href="{{ route('customer.orders') }}" class="hover:underline">My account</a>
         <span>/</span>
-        <span class="text-slate-800 font-semibold">Address Book</span>
+        <span class="text-slate-800 font-semibold">Addresses</span>
     </nav>
 
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
             <h1 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                My Delivery Address Book
+                My addresses
             </h1>
             <p class="text-xs text-slate-500 mt-1">
-                Manage factory warehouses, branch showrooms, and residential delivery addresses for 1-click checkout.
+                Save the places you get deliveries, so checkout is faster. Couriers use these to find you.
             </p>
         </div>
         <div>
@@ -25,7 +25,7 @@
                 class="px-4 py-2.5 rounded-xl font-bold text-xs bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer"
             >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                <span>Add New Address</span>
+                <span>Add address</span>
             </button>
         </div>
     </div>
@@ -47,9 +47,9 @@
             <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3 text-xl">
                 📍
             </div>
-            <h3 class="font-bold text-slate-800 text-sm">No Saved Delivery Addresses</h3>
+            <h3 class="font-bold text-slate-800 text-sm">No saved addresses yet</h3>
             <p class="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
-                Add your branch showrooms, factory warehouses, or retail outlets to unlock fast 1-click checkout dispatch.
+                Add your home, shop or office address to check out faster next time.
             </p>
             <button 
                 type="button" 
@@ -83,7 +83,7 @@
                             <div class="text-slate-500 font-mono">{{ $addr->recipient_phone }}</div>
                             <p class="text-slate-600 leading-relaxed pt-1">
                                 {{ $addr->street_address }}<br>
-                                <span class="font-semibold">{{ $addr->city }} - {{ $addr->postal_code }}</span>
+                                <span class="font-semibold">{{ $addr->city }}{{ filled($addr->postal_code) ? ' - '.$addr->postal_code : '' }}</span>
                             </p>
                         </div>
                     </div>
@@ -97,7 +97,7 @@
                                     wire:click="setDefault({{ $addr->id }})"
                                     class="text-slate-500 hover:text-indigo-600 font-medium hover:underline text-[11px]"
                                 >
-                                    Set as Default
+                                    Make default
                                 </button>
                             @else
                                 <span class="text-indigo-600 font-bold text-[11px] flex items-center gap-1">
@@ -140,7 +140,7 @@
                             {{ $editingAddressId ? 'Edit Delivery Address' : 'Add New Delivery Address' }}
                         </h3>
                         <p class="text-xs text-slate-500 mt-0.5">
-                            Enter accurate destination logistics coordinates.
+                            Couriers use this to find you.
                         </p>
                     </div>
                     <button 
@@ -154,11 +154,11 @@
 
                 <form wire:submit="saveAddress" class="space-y-4 text-xs">
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">Address Label / Title *</label>
+                        <label class="block font-semibold text-slate-700 mb-1">Name for this address *</label>
                         <input 
                             type="text" 
                             wire:model="address_title" 
-                            placeholder="e.g. Main Warehouse, Dhanmondi Showroom, Residence" 
+                            placeholder="e.g. Home, Shop, Office" 
                             class="w-full py-2 px-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
                         />
                         @error('address_title') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
@@ -166,7 +166,7 @@
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                            <label class="block font-semibold text-slate-700 mb-1">Recipient Name *</label>
+                            <label class="block font-semibold text-slate-700 mb-1">Full name *</label>
                             <input 
                                 type="text" 
                                 wire:model="recipient_name" 
@@ -176,11 +176,11 @@
                         </div>
 
                         <div>
-                            <label class="block font-semibold text-slate-700 mb-1">Contact Phone *</label>
+                            <label class="block font-semibold text-slate-700 mb-1">Mobile number *</label>
                             <input 
                                 type="text" 
                                 wire:model="recipient_phone" 
-                                placeholder="017XXXXXXXX"
+                                placeholder="e.g. 01712345678"
                                 class="w-full py-2 px-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
                             />
                             @error('recipient_phone') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
@@ -188,11 +188,11 @@
                     </div>
 
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">Detailed Street Address *</label>
+                        <label class="block font-semibold text-slate-700 mb-1">Address (house, road, area) *</label>
                         <textarea 
                             rows="2" 
                             wire:model="street_address" 
-                            placeholder="House / Holding, Road / Sector, Area, Landmark" 
+                            placeholder="House, road, area and a nearby landmark" 
                             class="w-full py-2 px-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
                         ></textarea>
                         @error('street_address') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
@@ -200,18 +200,25 @@
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                            <label class="block font-semibold text-slate-700 mb-1">District / City *</label>
-                            <input 
-                                type="text" 
+                            <label for="address-district" class="block font-semibold text-slate-700 mb-1">District *</label>
+                            <select 
+                                id="address-district"
                                 wire:model="city" 
-                                placeholder="e.g. Dhaka, Chittagong, Sylhet"
-                                class="w-full py-2 px-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
-                            />
+                                class="w-full py-2 px-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500"
+                            >
+                                <option value="">Choose your district</option>
+                                @if ($city !== '' && ! in_array($city, $districts, true))
+                                    <option value="{{ $city }}">{{ $city }}</option>
+                                @endif
+                                @foreach ($districts as $district)
+                                    <option value="{{ $district }}">{{ $district }}</option>
+                                @endforeach
+                            </select>
                             @error('city') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
                         </div>
 
                         <div>
-                            <label class="block font-semibold text-slate-700 mb-1">Postal Code *</label>
+                            <label class="block font-semibold text-slate-700 mb-1">Postal code (optional)</label>
                             <input 
                                 type="text" 
                                 wire:model="postal_code" 
@@ -229,7 +236,7 @@
                                 wire:model="is_default" 
                                 class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                             />
-                            <span class="font-bold text-slate-800">Set as primary default delivery address</span>
+                            <span class="font-bold text-slate-800">Use this as my default address</span>
                         </label>
                     </div>
 
@@ -246,8 +253,8 @@
                             wire:loading.attr="disabled"
                             class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm transition disabled:opacity-50"
                         >
-                            <span wire:loading.remove>Save Address</span>
-                            <span wire:loading>Saving...</span>
+                            <span wire:loading.remove>Save address</span>
+                            <span wire:loading>Saving…</span>
                         </button>
                     </div>
                 </form>

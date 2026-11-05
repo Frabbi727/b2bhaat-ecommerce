@@ -487,6 +487,7 @@ class ProductCatalog extends Component
             'brands' => $brands,
             'featuredSellers' => $featuredSellers,
             'isWholesaleUser' => $isWholesaleUser,
+            'isWholesalePending' => (bool) $user?->isWholesalePending(),
             'heroBanners' => $heroBanners,
             'promoStripBanners' => $promoStripBanners,
             'flashSaleProducts' => $flashSaleProducts,

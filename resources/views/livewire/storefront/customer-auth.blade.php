@@ -380,16 +380,14 @@
             <div class="pt-4 border-t border-slate-100 space-y-2 text-xs">
                 <a href="{{ route('wholesale.upgrade') }}" class="flex items-center justify-between p-3 rounded-xl bg-indigo-50/70 hover:bg-indigo-50 text-indigo-900 font-semibold transition border border-indigo-100">
                     <span class="flex items-center gap-2">
-                        <span class="px-1.5 py-0.5 rounded bg-indigo-200 text-indigo-800 text-[10px] font-bold">B2B</span>
-                        <span>Register for Wholesale Bulk Sourcing</span>
+                        <span>Buying for a business? Apply for wholesale prices</span>
                     </span>
                     <span class="text-indigo-600">&rarr;</span>
                 </a>
 
                 <a href="{{ route('seller.register') }}" class="flex items-center justify-between p-3 rounded-xl bg-emerald-50/70 hover:bg-emerald-50 text-emerald-900 font-semibold transition border border-emerald-100">
                     <span class="flex items-center gap-2">
-                        <span class="px-1.5 py-0.5 rounded bg-emerald-200 text-emerald-800 text-[10px] font-bold">Seller</span>
-                        <span>Open Factory / Vendor Store</span>
+                        <span>Sell on {{ app(\App\Services\Settings\StoreConfigurationService::class)->getStoreIdentity()['name'] }}</span>
                     </span>
                     <span class="text-emerald-600">&rarr;</span>
                 </a>

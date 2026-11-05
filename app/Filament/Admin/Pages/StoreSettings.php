@@ -76,6 +76,9 @@ class StoreSettings extends Page
 
             'min_payout_amount' => $service->getMinPayoutAmount(),
             'escrow_holding_period_hours' => $service->getEscrowHoldingPeriodHours(),
+
+            'bkash_merchant_number' => (string) $service->get('bkash_merchant_number', ''),
+            'nagad_merchant_number' => (string) $service->get('nagad_merchant_number', ''),
         ]);
     }
 
@@ -223,6 +226,26 @@ class StoreSettings extends Page
                                 ]),
                             ]),
 
+                        Tab::make('Mobile Payments')
+                            ->icon('heroicon-o-device-phone-mobile')
+                            ->schema([
+                                Grid::make(2)->schema([
+                                    TextInput::make('bkash_merchant_number')
+                                        ->label('bKash number that receives payments')
+                                        ->tel()
+                                        ->maxLength(20)
+                                        ->placeholder('e.g. 01XXX-XXXXXX')
+                                        ->helperText('Shown to buyers at checkout. Leave empty to hide bKash.'),
+
+                                    TextInput::make('nagad_merchant_number')
+                                        ->label('Nagad number that receives payments')
+                                        ->tel()
+                                        ->maxLength(20)
+                                        ->placeholder('e.g. 01XXX-XXXXXX')
+                                        ->helperText('Shown to buyers at checkout. Leave empty to hide Nagad.'),
+                                ]),
+                            ]),
+
                         Tab::make('Escrow & Financial Settlement')
                             ->icon('heroicon-o-banknotes')
                             ->schema([
@@ -335,6 +358,13 @@ class StoreSettings extends Page
         }
         if (isset($state['escrow_holding_period_hours'])) {
             $service->set('escrow_holding_period_hours', (int) $state['escrow_holding_period_hours'], 'financial', 'integer');
+        }
+
+        // Mobile payments: an empty number hides that method at checkout
+        foreach (['bkash_merchant_number', 'nagad_merchant_number'] as $numberKey) {
+            if (array_key_exists($numberKey, $state)) {
+                $service->set($numberKey, trim((string) $state[$numberKey]), 'payments', 'string');
+            }
         }
 
         Notification::make()

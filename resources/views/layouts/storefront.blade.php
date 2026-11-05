@@ -65,7 +65,7 @@
                 <span class="hidden sm:inline text-slate-700">|</span>
                 <a href="{{ route('tracking.index') }}" class="hover:text-white transition flex items-center gap-1">
                     <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                    Track Package
+                    Track order
                 </a>
                 <span class="hidden sm:inline text-slate-700">|</span>
                 @auth
@@ -330,7 +330,7 @@
             <div>
                 <h4 class="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Customer Care</h4>
                 <ul class="space-y-2 text-xs">
-                    <li><a href="{{ route('tracking.index') }}" class="hover:text-white transition">Track Your Courier Consignment</a></li>
+                    <li><a href="{{ route('tracking.index') }}" class="hover:text-white transition">Track your order</a></li>
                     <li><a href="{{ route('customer.orders') }}" class="hover:text-white transition">Order History & Invoices</a></li>
                     <li><a href="{{ route('customer.wishlist') }}" class="hover:text-white transition">My Wishlist</a></li>
                     <li><a href="{{ route('seller.register') }}" class="hover:text-white transition">Merchant / Factory Onboarding</a></li>

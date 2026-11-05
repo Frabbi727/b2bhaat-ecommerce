@@ -12,6 +12,7 @@ use App\Models\SalesChannel;
 use App\Services\Cart\CartSessionService;
 use App\Services\Cart\CouponService;
 use App\Services\Escrow\EscrowLedgerService;
+use App\Services\Logistics\BangladeshDistricts;
 use App\Services\Logistics\ShippingCalculatorService;
 use App\Services\Orders\OrderSplitterService;
 use App\Services\Settings\StoreConfigurationService;
@@ -40,9 +41,9 @@ class CheckoutComponent extends Component
 
     public string $city = 'Dhaka';
 
-    public string $postalCode = '1205';
+    public string $postalCode = '';
 
-    public string $deliveryZone = 'inside_dhaka'; // 'inside_dhaka' (70 Tk) or 'outside_dhaka' (130 Tk)
+    public string $deliveryZone = 'inside_dhaka'; // one of ShippingCalculatorService::ZONES
 
     public ?int $selectedPaymentMethodId = null;
 
@@ -137,9 +138,9 @@ class CheckoutComponent extends Component
                 $this->recipientName = $addr->recipient_name;
                 $this->recipientPhone = $addr->recipient_phone;
                 $this->streetAddress = $addr->street_address;
-                $this->city = $addr->city;
-                $this->postalCode = $addr->postal_code;
-                $this->deliveryZone = strtolower($addr->city) === 'dhaka' ? 'inside_dhaka' : 'outside_dhaka';
+                $this->city = BangladeshDistricts::normalize($addr->city) ?? $addr->city;
+                $this->postalCode = (string) $addr->postal_code;
+                $this->deliveryZone = BangladeshDistricts::defaultZoneFor($this->city);
             }
         }
     }
@@ -169,6 +170,20 @@ class CheckoutComponent extends Component
         }
     }
 
+    /**
+     * Choosing a district pre-selects the delivery area it belongs to, so nobody outside Dhaka keeps the Dhaka rate.
+     */
+    public function updatedCity(): void
+    {
+        $district = BangladeshDistricts::normalize($this->city);
+        if ($district === null) {
+            return;
+        }
+
+        $this->city = $district;
+        $this->deliveryZone = BangladeshDistricts::defaultZoneFor($district);
+    }
+
     public function placeOrder(): void
     {
         $this->errorMessage = '';
@@ -177,19 +192,30 @@ class CheckoutComponent extends Component
             'recipientName' => 'required|string|min:3|max:255',
             'recipientPhone' => ['required', 'string', 'regex:/^(\+?8801|01)\d{7,9}$/'],
             'streetAddress' => 'required|string|min:5',
-            'city' => 'required|string|max:100',
-            'postalCode' => 'required|string|max:20',
-            'deliveryZone' => ['required', Rule::in(ShippingCalculatorService::ZONES)],
+            'city' => ['required', 'string', function (string $attribute, mixed $value, \Closure $fail): void {
+                if (BangladeshDistricts::normalize((string) $value) === null) {
+                    $fail('Please choose your district from the list.');
+                }
+            }],
+            'postalCode' => 'nullable|string|max:20',
+            'deliveryZone' => ['required', Rule::in(ShippingCalculatorService::ZONES), function (string $attribute, mixed $value, \Closure $fail): void {
+                $district = BangladeshDistricts::normalize($this->city);
+                if ($district !== null && ! BangladeshDistricts::allowsZone($district, (string) $value)) {
+                    $fail("This delivery area is not available for {$district}. Please choose \"Outside Dhaka\".");
+                }
+            }],
             'selectedPaymentMethodId' => ['required', Rule::exists('payment_methods', 'id')->where('is_active', true), function (string $attribute, mixed $value, \Closure $fail): void {
                 if (! PaymentMethod::availableToBuyers()->whereKey($value)->exists()) {
-                    $fail('This payment method is not available. Please choose Cash on Delivery, bKash or Nagad.');
+                    $fail('This payment method is not available right now. Please choose another one.');
                 }
             }],
         ], [
-            'recipientPhone.regex' => 'Please enter a valid Bangladeshi phone number (e.g., 017XXXXXXXX or +88017XXXXXXXX).',
-            'recipientName.min' => 'Please enter a valid full recipient or business name.',
-            'streetAddress.min' => 'Please provide a detailed street, road, or warehouse address.',
+            'recipientPhone.regex' => 'Enter an 11-digit Bangladeshi mobile number, for example 01712345678.',
+            'recipientName.min' => 'Enter the full name of the person receiving the parcel.',
+            'streetAddress.min' => 'Add your house, road and area so the courier can find you.',
         ]);
+
+        $this->city = (string) BangladeshDistricts::normalize($this->city);
 
         $paymentMethod = PaymentMethod::find($this->selectedPaymentMethodId);
 
@@ -198,8 +224,9 @@ class CheckoutComponent extends Component
                 'mfsSenderNumber' => ['required', 'string', 'regex:/^(\+?8801|01)\d{7,9}$/'],
                 'mfsTransactionId' => 'required|string|min:6|max:40',
             ], [
-                'mfsSenderNumber.required' => "Please enter your {$paymentMethod->name} sender mobile number.",
-                'mfsTransactionId.required' => "Please provide the transaction ID (TrxID) from your {$paymentMethod->name} payment.",
+                'mfsSenderNumber.required' => "Enter the {$paymentMethod->name} number you paid from.",
+                'mfsSenderNumber.regex' => 'Enter an 11-digit mobile number, for example 01712345678.',
+                'mfsTransactionId.required' => "Enter the transaction ID from your {$paymentMethod->name} confirmation SMS.",
             ]);
         }
 
@@ -417,6 +444,8 @@ class CheckoutComponent extends Component
             'paymentMethods' => $paymentMethods,
             'zoneQuotes' => $zoneQuotes,
             'selectedMethod' => $selectedMethod,
+            'receivingNumber' => $selectedMethod ? PaymentMethod::receivingNumberFor($selectedMethod->slug) : null,
+            'districts' => BangladeshDistricts::ALL,
             'savedAddresses' => $savedAddresses,
         ]);
     }

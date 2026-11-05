@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Models\WalletTransaction;
 use App\Services\Cart\CartSessionService;
 use App\Services\Logistics\CourierStatusService;
+use App\Services\Settings\StoreConfigurationService;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use Filament\Actions\Testing\TestAction;
@@ -36,6 +37,9 @@ class PaymentVerificationTest extends TestCase
         parent::setUp();
         $this->seed(SystemLookupSeeder::class);
         $this->seed(DemoCatalogSeeder::class);
+        // bKash and Nagad are only offered once the admin has entered the receiving numbers
+        app(StoreConfigurationService::class)->set('bkash_merchant_number', '01811-223344', 'payments');
+        app(StoreConfigurationService::class)->set('nagad_merchant_number', '01911-223344', 'payments');
         $this->customer = User::where('email', 'customer@retail.com')->firstOrFail();
     }
 

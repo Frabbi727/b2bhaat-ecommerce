@@ -1,16 +1,16 @@
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
     <div class="flex items-center justify-between mb-8 pb-4 border-b border-slate-200">
         <div>
-            <h1 class="text-2xl font-black text-slate-900 tracking-tight">Shopping Cart</h1>
-            <p class="text-xs text-slate-500 mt-1">Review items, adjust quantities, and verify Minimum Order Quantities before checkout.</p>
+            <h1 class="text-2xl font-black text-slate-900 tracking-tight">Your cart</h1>
+            <p class="text-xs text-slate-500 mt-1">Check your items and quantities, then go to checkout.</p>
         </div>
 
         @if (! empty($items))
             <button 
-                wire:click="clearCart" 
+                wire:click="clearCart" wire:confirm="Remove all items from your cart?" 
                 class="text-xs text-rose-600 hover:text-rose-700 font-semibold underline"
             >
-                Empty Cart
+                Remove all items
             </button>
         @endif
     </div>
@@ -52,10 +52,10 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
                 </svg>
             </div>
-            <h3 class="text-base font-bold text-slate-800">Your cart is currently empty</h3>
-            <p class="text-xs text-slate-500 max-w-sm mx-auto">Browse our dual-channel catalog for factory-direct wholesale lots or retail single items.</p>
+            <h3 class="text-base font-bold text-slate-800">Your cart is empty</h3>
+            <p class="text-xs text-slate-500 max-w-sm mx-auto">Find something you like and add it to your cart.</p>
             <a href="{{ route('catalog.index') }}" class="inline-block mt-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 transition shadow-xs">
-                Browse Marketplace
+                Start shopping
             </a>
         </div>
     @else
@@ -71,9 +71,8 @@
                         <div class="space-y-1">
                             <div class="flex items-center gap-2">
                                 <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider {{ $isWholesale ? 'bg-emerald-100 text-emerald-800' : 'bg-indigo-100 text-indigo-800' }}">
-                                    {{ $isWholesale ? 'Wholesale B2B' : 'Retail B2C' }}
+                                    {{ $isWholesale ? 'Wholesale' : 'Retail' }}
                                 </span>
-                                <span class="text-xs text-slate-400 font-mono">{{ $item['variation_sku'] }}</span>
                             </div>
 
                             <h4 class="font-bold text-slate-900 text-sm">
@@ -87,14 +86,14 @@
                             @endif
 
                             <div class="text-xs text-slate-500">
-                                Seller: <strong class="text-slate-700">{{ $item['seller_name'] }}</strong>
+                                Sold by <strong class="text-slate-700">{{ $item['seller_name'] }}</strong>
                             </div>
                         </div>
 
                         <!-- Quantity and Line Pricing -->
                         <div class="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto">
                             <div>
-                                <span class="text-xs text-slate-400 block sm:text-right">Unit Price</span>
+                                <span class="text-xs text-slate-400 block sm:text-right">Price each</span>
                                 <span class="text-xs font-bold text-slate-700">৳{{ number_format($item['unit_price'], 2) }}</span>
                             </div>
 
@@ -102,6 +101,7 @@
                             <div class="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
                                 <button 
                                     wire:click="updateQuantity('{{ $item['key'] }}', {{ $item['quantity'] - 1 }})" 
+                                    aria-label="Decrease quantity"
                                     class="px-2.5 py-1 text-slate-600 hover:bg-slate-200 font-bold text-xs"
                                 >
                                     -
@@ -111,6 +111,7 @@
                                 </span>
                                 <button 
                                     wire:click="updateQuantity('{{ $item['key'] }}', {{ $item['quantity'] + 1 }})" 
+                                    aria-label="Increase quantity"
                                     class="px-2.5 py-1 text-slate-600 hover:bg-slate-200 font-bold text-xs"
                                 >
                                     +
@@ -126,7 +127,7 @@
                                 <button
                                     wire:click="moveToWishlist('{{ $item['key'] }}', {{ $item['product_id'] }})"
                                     class="p-1 text-slate-400 hover:text-indigo-600 transition"
-                                    title="Move to Wishlist"
+                                    title="Save for later" aria-label="Save for later"
                                 >
                                     <svg class="w-4 h-4 fill-none stroke-current" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
                                 </button>
@@ -134,7 +135,7 @@
                                 <button 
                                     wire:click="removeItem('{{ $item['key'] }}')" 
                                     class="p-1 text-slate-400 hover:text-rose-500 transition" 
-                                    title="Remove Item"
+                                    title="Remove" aria-label="Remove"
                                 >
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
@@ -176,7 +177,7 @@
                 <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
                     <h4 class="font-bold text-slate-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
                         <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
-                        Apply Promotional Coupon
+                        Coupon
                     </h4>
 
                     @if ($appliedCoupon)
@@ -197,7 +198,7 @@
                             <input 
                                 type="text" 
                                 wire:model="couponCode" 
-                                placeholder="Coupon code (e.g. WELCOME10)" 
+                                placeholder="Coupon code" 
                                 class="flex-1 uppercase text-xs py-2 px-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 font-mono"
                             />
                             <button 
@@ -211,25 +212,25 @@
                 </div>
 
                 <div class="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
-                    <h3 class="font-bold text-slate-900 text-sm border-b border-slate-100 pb-3">Order Summary</h3>
+                    <h3 class="font-bold text-slate-900 text-sm border-b border-slate-100 pb-3">Summary</h3>
 
                     <div class="space-y-2 text-xs">
                         <div class="flex justify-between text-slate-600">
-                            <span>Total Items:</span>
+                            <span>Items</span>
                             <span class="font-bold text-slate-900">{{ $itemCount }}</span>
                         </div>
                         <div class="flex justify-between text-slate-600">
-                            <span>Subtotal:</span>
+                            <span>Subtotal</span>
                             <span class="font-bold text-slate-900">৳{{ number_format($subtotal, 2) }}</span>
                         </div>
                         @if ($discountAmount > 0)
                             <div class="flex justify-between text-emerald-700 font-semibold">
-                                <span>Coupon Discount ({{ $appliedCoupon['code'] ?? '' }}):</span>
+                                <span>Coupon ({{ $appliedCoupon['code'] ?? '' }})</span>
                                 <span class="font-bold font-mono">-৳{{ number_format($discountAmount, 2) }}</span>
                             </div>
                         @endif
                         <div class="text-slate-600 space-y-1">
-                            <span>Delivery:</span>
+                            <span>Delivery</span>
                             @foreach ($shippingByZone as $zone => $quote)
                                 <div class="flex justify-between pl-2">
                                     <span class="text-slate-500">{{ \App\Services\Logistics\ShippingCalculatorService::ZONE_LABELS[$zone] }}</span>
@@ -247,10 +248,10 @@
 
                     <div class="border-t border-slate-100 pt-3 space-y-1">
                         <div class="flex justify-between items-baseline">
-                            <span class="text-sm font-bold text-slate-900">Estimated Total:</span>
+                            <span class="text-sm font-bold text-slate-900">Estimated total</span>
                             <span class="text-xl font-black text-indigo-600">৳{{ number_format($estimatedTotal, 2) }}</span>
                         </div>
-                        <p class="text-[11px] text-slate-500">Includes Inside Dhaka delivery. The exact delivery fee for your area is shown at checkout.</p>
+                        <p class="text-[11px] text-slate-500">Includes Inside Dhaka delivery. You will see the exact fee for your area at checkout.</p>
                     </div>
 
                     <div class="space-y-2 pt-2">
@@ -258,23 +259,17 @@
                             href="{{ route('checkout.index') }}" 
                             class="block w-full py-3.5 px-4 rounded-xl text-center font-bold text-sm bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-sm"
                         >
-                            Proceed to Secure Checkout &rarr;
+                            Go to checkout &rarr;
                         </a>
                         <a 
                             href="{{ route('catalog.index') }}" 
                             class="block w-full py-2.5 px-4 rounded-xl text-center font-bold text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
                         >
-                            Continue Shopping / Sourcing
+                            Continue shopping
                         </a>
                     </div>
                 </div>
 
-                <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500 space-y-2">
-                    <div class="font-semibold text-slate-700">Concurrency-Safe Ordering:</div>
-                    <p class="leading-relaxed">
-                        Inventory is locked with pessimistic row locking (`SELECT FOR UPDATE`) during checkout to prevent duplicate sales across retail & wholesale buyers.
-                    </p>
-                </div>
             </div>
         </div>
     @endif

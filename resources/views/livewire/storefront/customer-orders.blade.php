@@ -1,14 +1,14 @@
 <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
     <div class="flex flex-wrap items-baseline justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
-            <h1 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">My Order History & Receipts</h1>
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">My orders</h1>
             <p class="text-xs text-slate-500 mt-1">
-                Account: <strong class="text-slate-800">{{ $user->name }}</strong> ({{ $user->email }}) • Role: <span class="capitalize font-semibold text-indigo-600">{{ str_replace('_', ' ', $user->role?->name ?? 'Buyer') }}</span>
+                Signed in as <strong class="text-slate-800">{{ $user->name }}</strong>
             </p>
         </div>
 
         <a href="{{ route('catalog.index') }}" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition shadow-xs">
-            Continue Sourcing & Shopping &rarr;
+            Continue shopping &rarr;
         </a>
     </div>
 
@@ -20,7 +20,7 @@
             </div>
             <div>
                 <div class="text-2xl font-black text-slate-900">{{ $totalOrdersCount }}</div>
-                <div class="text-xs text-slate-500 font-medium">Total Orders Placed</div>
+                <div class="text-xs text-slate-500 font-medium">Orders placed</div>
             </div>
         </div>
 
@@ -30,7 +30,7 @@
             </div>
             <div>
                 <div class="text-2xl font-black text-slate-900">৳{{ number_format($totalSpentAmount, 2) }}</div>
-                <div class="text-xs text-slate-500 font-medium">Settled Purchases (Paid)</div>
+                <div class="text-xs text-slate-500 font-medium">Paid</div>
             </div>
         </div>
 
@@ -40,7 +40,7 @@
             </div>
             <div>
                 <div class="text-2xl font-black text-slate-900">{{ $inTransitCount }}</div>
-                <div class="text-xs text-slate-500 font-medium">Active In-Transit Consignments</div>
+                <div class="text-xs text-slate-500 font-medium">Parcels on the way</div>
             </div>
         </div>
     </div>
@@ -54,7 +54,7 @@
                 wire:click="$set('statusFilter', 'all')"
                 class="px-3 py-1.5 rounded-xl transition cursor-pointer {{ $statusFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100' }}"
             >
-                All Orders
+                All orders
             </button>
             <button 
                 type="button" 
@@ -98,9 +98,9 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
                 </svg>
             </div>
-            <h3 class="text-base font-bold text-slate-800">No orders match your criteria</h3>
+            <h3 class="text-base font-bold text-slate-800">No orders found</h3>
             <p class="text-xs text-slate-500 max-w-sm mx-auto">
-                Try adjusting your search terms or status filters.
+                Try a different search or filter.
             </p>
         </div>
     @else
@@ -110,7 +110,7 @@
                     <!-- Top Summary -->
                     <div class="flex flex-wrap items-baseline justify-between gap-4 border-b border-slate-100 pb-4">
                         <div>
-                            <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider">Master Order</span>
+                            <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider">Order</span>
                             <div class="text-lg font-black text-slate-900 font-mono">{{ $order->order_number }}</div>
                             <div class="text-xs text-slate-500 mt-0.5">Placed on {{ $order->created_at->format('M d, Y h:i A') }}</div>
                         </div>
@@ -132,22 +132,22 @@
                                 <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
                                 </svg>
-                                Tax Invoice & Challan
+                                Invoice
                             </a>
 
                             <a 
                                 href="{{ route('tracking.show', ['order' => $order->order_number]) }}" 
                                 class="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1 transition shadow-2xs"
                             >
-                                Track Delivery &rarr;
+                                Track order &rarr;
                             </a>
                         </div>
                     </div>
 
-                    <!-- Split Vendor Shipments -->
+                    <!-- Parcels, one per seller -->
                     <div class="space-y-4">
                         <div class="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                            Consignment Packages ({{ $order->subOrders->count() }})
+                            {{ $order->subOrders->count() === 1 ? '1 parcel' : $order->subOrders->count().' parcels' }}
                         </div>
 
                         <div class="grid grid-cols-1 gap-4">
@@ -156,7 +156,7 @@
                                     <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 pb-2 text-xs">
                                         <div class="flex items-center gap-2">
                                             <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
-                                            <span class="font-bold text-slate-800">{{ $sub->seller?->sellerProfile?->store_name ?? 'Factory Merchant' }}</span>
+                                            <span class="font-bold text-slate-800">{{ $sub->seller?->sellerProfile?->store_name ?? 'Seller' }}</span>
                                             <span class="font-mono text-slate-400 text-[11px]">({{ $sub->sub_order_number }})</span>
                                         </div>
 
@@ -194,7 +194,7 @@
 
                                     @if ($sub->is_self_delivered && $sub->handover_code && $sub->fulfillmentStatus?->slug !== 'delivered')
                                         <div class="mt-2 p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 flex items-center justify-between text-xs">
-                                            <span class="text-[11px] font-semibold">Handover Code (Give to Driver):</span>
+                                            <span class="text-[11px] font-semibold">Your delivery code (give it to the delivery person after you check the parcel):</span>
                                             <span class="font-mono font-black text-xs px-2 py-0.5 rounded bg-amber-200/90 text-amber-950 tracking-wider">
                                                 {{ $sub->handover_code }}
                                             </span>
@@ -208,10 +208,10 @@
                     <!-- Financial Breakdown Footer -->
                     <div class="border-t border-slate-100 pt-4 flex flex-wrap justify-between items-center text-xs">
                         <div class="text-slate-500 text-[11px]">
-                            Delivery Address: <strong class="text-slate-700">{{ $order->shipping_address['street_address'] ?? '' }}, {{ $order->shipping_address['city'] ?? '' }}</strong>
+                            Delivery address: <strong class="text-slate-700">{{ $order->shipping_address['street_address'] ?? '' }}, {{ $order->shipping_address['city'] ?? '' }}</strong>
                         </div>
                         <div class="text-right">
-                            <span class="text-slate-500">Order Grand Total:</span>
+                            <span class="text-slate-500">Total</span>
                             <span class="text-base font-black text-indigo-600 font-mono ml-1">৳{{ number_format($order->total_amount, 2) }}</span>
                         </div>
                     </div>

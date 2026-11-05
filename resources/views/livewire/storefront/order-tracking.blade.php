@@ -1,8 +1,8 @@
 <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
     <div class="text-center space-y-2 max-w-xl mx-auto">
-        <h1 class="text-3xl font-black text-slate-900 tracking-tight">Public Courier & Logistics Tracking</h1>
+        <h1 class="text-3xl font-black text-slate-900 tracking-tight">Track your order</h1>
         <p class="text-xs text-slate-500 leading-relaxed">
-            Track multi-vendor shipments, courier assignments (Steadfast, Pathao, RedX), and package milestones in real time.
+            Enter your order number to see where each parcel is.
         </p>
     </div>
 
@@ -10,21 +10,21 @@
     <div class="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs max-w-2xl mx-auto">
         <form wire:submit="searchOrder" class="grid grid-cols-1 sm:grid-cols-12 gap-3">
             <div class="sm:col-span-6">
-                <label class="block text-xs font-semibold text-slate-700 mb-1">Order # or Courier Tracking # *</label>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Order number or courier tracking number *</label>
                 <input 
                     type="text" 
                     wire:model="orderNumber" 
-                    placeholder="e.g. ORD-XXXXXX or Courier Tracking #" 
+                    placeholder="e.g. ORD-XXXXXX" 
                     class="w-full py-2 px-3 border border-slate-300 rounded-xl text-xs font-mono uppercase focus:ring-2 focus:ring-indigo-500"
                 />
             </div>
 
             <div class="sm:col-span-4">
-                <label class="block text-xs font-semibold text-slate-700 mb-1">Phone Number</label>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Mobile number used for the order</label>
                 <input 
                     type="text" 
                     wire:model="phone" 
-                    placeholder="e.g. +88017..." 
+                    placeholder="e.g. 01712345678" 
                     class="w-full py-2 px-3 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500"
                 />
             </div>
@@ -67,7 +67,7 @@
             <div class="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
                 <div class="flex flex-wrap items-baseline justify-between gap-4 border-b border-slate-100 pb-4">
                     <div>
-                        <span class="text-xs text-slate-400 font-mono">Master Order</span>
+                        <span class="text-xs text-slate-400 font-mono">Order</span>
                         <div class="text-xl font-black text-slate-900 font-mono">{{ $order->order_number }}</div>
                     </div>
 
@@ -80,7 +80,7 @@
                             <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
                             </svg>
-                            Print Tax Invoice & Challan
+                            Print invoice
                         </a>
 
                         @php
@@ -92,10 +92,10 @@
                             <button 
                                 type="button" 
                                 wire:click="cancelEntireOrder"
-                                wire:confirm="Are you sure you want to cancel this entire order? All reserved items will be released back to inventory."
+                                wire:confirm="Cancel this whole order? This can't be undone."
                                 class="px-3 py-1 rounded-lg border border-rose-200 hover:border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition cursor-pointer"
                             >
-                                Cancel Order
+                                Cancel order
                             </button>
                         @endif
 
@@ -110,19 +110,19 @@
 
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs text-slate-600">
                     <div>
-                        <span class="text-slate-400 block">Placed On:</span>
+                        <span class="text-slate-400 block">Placed on</span>
                         <strong class="text-slate-800">{{ $order->created_at->format('M d, Y h:i A') }}</strong>
                     </div>
                     <div>
-                        <span class="text-slate-400 block">Payment Method:</span>
+                        <span class="text-slate-400 block">Payment</span>
                         <strong class="text-slate-800">{{ $order->paymentMethod?->name }}</strong>
                     </div>
                     <div>
-                        <span class="text-slate-400 block">Courier / Freight:</span>
-                        <strong class="text-slate-800">{{ $order->shipping_amount == 0 ? 'Free Delivery' : '৳' . number_format($order->shipping_amount, 2) }}</strong>
+                        <span class="text-slate-400 block">Delivery</span>
+                        <strong class="text-slate-800">{{ $order->shipping_amount == 0 ? 'Free' : '৳' . number_format($order->shipping_amount, 2) }}</strong>
                     </div>
                     <div>
-                        <span class="text-slate-400 block">Total Amount:</span>
+                        <span class="text-slate-400 block">Total</span>
                         <strong class="text-slate-900 text-sm">৳{{ number_format($order->total_amount, 2) }}</strong>
                         @if ($order->discount_amount > 0)
                             <span class="block text-[11px] text-emerald-600 font-semibold font-mono">(Saved ৳{{ number_format($order->discount_amount, 2) }})</span>
@@ -134,17 +134,17 @@
             <!-- Sub-Orders / Packages Breakdown -->
             <div class="space-y-4">
                 <h3 class="text-sm font-bold uppercase tracking-wider text-slate-500">
-                    Vendor Consignment Packages ({{ $order->subOrders->count() }})
+                    {{ $order->subOrders->count() === 1 ? '1 parcel' : $order->subOrders->count().' parcels' }}
                 </h3>
 
                 @foreach ($order->subOrders as $subOrder)
                     <div class="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-5">
                         <div class="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 pb-3">
                             <div>
-                                <span class="text-[10px] font-mono text-slate-400">Package Consignment #</span>
+                                <span class="text-[10px] font-mono text-slate-400">Parcel</span>
                                 <h4 class="text-base font-black text-slate-900 font-mono">{{ $subOrder->sub_order_number }}</h4>
                                 <div class="text-xs text-slate-600 mt-0.5">
-                                    Dispatched by: <strong class="text-indigo-600">{{ $subOrder->seller?->sellerProfile?->store_name }}</strong>
+                                    Sent by <strong class="text-indigo-600">{{ $subOrder->seller?->sellerProfile?->store_name }}</strong>
                                 </div>
                             </div>
 
@@ -174,22 +174,21 @@
                                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                     <div class="space-y-0.5">
                                         <div class="flex items-center gap-2">
-                                            <span class="text-xl">🚛</span>
                                             <h5 class="font-bold text-sm">
-                                                {{ $subOrder->fulfillmentStatus?->slug === 'delivered' ? 'Factory Fleet Handover Verified' : 'Direct Factory Fleet Self-Delivery' }}
+                                                {{ $subOrder->fulfillmentStatus?->slug === 'delivered' ? 'Delivered by the seller' : 'The seller delivers this parcel' }}
                                             </h5>
                                         </div>
                                         <p class="text-xs text-slate-600">
                                             @if ($subOrder->fulfillmentStatus?->slug === 'delivered')
-                                                Handover confirmed on {{ $subOrder->handover_confirmed_at?->format('M d, Y h:i A') ?? 'delivery' }}.
+                                                Received on {{ $subOrder->handover_confirmed_at?->format('M d, Y h:i A') ?? 'delivery' }}.
                                             @else
-                                                Provide this 6-digit handover code to the factory delivery agent upon physical receipt and inspection.
+                                                Check your parcel first, then give this 6-digit code to the delivery person. Don't share it before you have the parcel.
                                             @endif
                                         </p>
                                     </div>
                                     @if ($canSeeHandoverCode && $subOrder->handover_code && $subOrder->fulfillmentStatus?->slug !== 'delivered')
                                         <div class="text-center sm:text-right shrink-0">
-                                            <span class="text-[10px] uppercase font-bold text-slate-500 block">Buyer Handover Code:</span>
+                                            <span class="text-[10px] uppercase font-bold text-slate-500 block">Your delivery code</span>
                                             <div class="inline-block px-4 py-1.5 rounded-lg bg-amber-200/80 border border-amber-400 font-mono font-black text-xl text-amber-950 tracking-widest shadow-inner">
                                                 {{ $subOrder->handover_code }}
                                             </div>
@@ -201,7 +200,7 @@
 
                         <!-- Items in Package -->
                         <div class="space-y-1.5 text-xs">
-                            <span class="text-slate-400 font-semibold uppercase text-[10px]">Package Contents:</span>
+                            <span class="text-slate-400 font-semibold uppercase text-[10px]">Items</span>
                             <div class="divide-y divide-slate-100 bg-slate-50 rounded-xl p-3 border border-slate-100">
                                 @foreach ($subOrder->items as $item)
                                     <div class="py-1.5 flex justify-between items-center">
@@ -224,7 +223,7 @@
                                     @endphp
                                     @if ($pendingReturn)
                                         <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold">
-                                            ⏳ Return Dispute Pending Review ({{ ucfirst($pendingReturn->requested_action) }})
+                                            Return request under review ({{ ucfirst($pendingReturn->requested_action) }})
                                         </span>
                                     @else
                                         <button 
@@ -233,17 +232,17 @@
                                             class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold text-xs transition cursor-pointer"
                                         >
                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z"/></svg>
-                                            Request Return / Dispute
+                                            Report a problem
                                         </button>
                                     @endif
                                 @elseif ($subOrder->fulfillmentStatus?->slug === 'unfulfilled')
                                     <button 
                                         type="button" 
                                         wire:click="cancelSubOrderConsignment({{ $subOrder->id }})"
-                                        wire:confirm="Cancel this package consignment? Reserved items will be released."
+                                        wire:confirm="Cancel this parcel? This can't be undone."
                                         class="px-2.5 py-1 rounded-lg border border-rose-200 hover:border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[11px] transition cursor-pointer"
                                     >
-                                        Cancel Package
+                                        Cancel parcel
                                     </button>
                                 @endif
                             </div>
@@ -251,7 +250,7 @@
 
                         <!-- Courier Milestone Timeline -->
                         <div class="space-y-3 pt-2">
-                            <h5 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Milestone Timeline</h5>
+                            <h5 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Progress</h5>
 
                             @if ($subOrder->trackingLogs->isNotEmpty())
                                 <ol class="relative border-l border-slate-200 ml-3 space-y-4">
@@ -271,7 +270,7 @@
                                 </ol>
                             @else
                                 <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs text-slate-500 italic">
-                                    Package is queued at vendor fulfillment hub. Courier tracking milestones will populate upon consignment handover.
+                                    The seller is preparing this parcel. Updates appear here once it is handed to the courier.
                                 </div>
                             @endif
                         </div>
@@ -294,37 +293,37 @@
 
                 <div>
                     <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-rose-100 text-rose-800">
-                        Escrow Dispute Resolution
+                        Report a problem
                     </span>
-                    <h2 class="text-xl font-black text-slate-900 mt-1">Initiate Return or Replacement</h2>
+                    <h2 class="text-xl font-black text-slate-900 mt-1">Return or replace an item</h2>
                     <p class="text-xs text-slate-500 mt-0.5">
-                        Delivered packages are covered under the B2B Haat 48-Hour Inspection Guarantee.
+                        You can report a problem within {{ $returnWindowHours }} hours of delivery.
                     </p>
                 </div>
 
                 <form wire:submit="submitReturnRequest" class="space-y-4 text-xs">
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">Reason for Return *</label>
+                        <label class="block font-semibold text-slate-700 mb-1">What went wrong? *</label>
                         <select 
                             wire:model="returnReason" 
                             class="w-full py-2.5 px-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
                         >
-                            <option value="defective_item">Defective or Malfunctioning Item</option>
-                            <option value="damaged_goods">Damaged during Courier Transit</option>
-                            <option value="incorrect_variation">Wrong Item / Color / Variation Sent</option>
-                            <option value="not_as_described">Specification or Quality Mismatch</option>
-                            <option value="other">Other Issue</option>
+                            <option value="defective_item">The item doesn't work</option>
+                            <option value="damaged_goods">It arrived damaged</option>
+                            <option value="incorrect_variation">Wrong item, colour or size</option>
+                            <option value="not_as_described">Not as described</option>
+                            <option value="other">Something else</option>
                         </select>
                     </div>
 
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">Preferred Resolution *</label>
+                        <label class="block font-semibold text-slate-700 mb-1">What would you like? *</label>
                         <div class="grid grid-cols-2 gap-3">
                             <label class="flex items-center gap-2 p-3 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50 {{ $returnRequestedAction === 'refund' ? 'border-indigo-600 bg-indigo-50/50' : '' }}">
                                 <input type="radio" value="refund" wire:model.live="returnRequestedAction" class="text-indigo-600 focus:ring-indigo-500"/>
                                 <div>
-                                    <strong class="block text-slate-900">Full Refund</strong>
-                                    <span class="text-[10px] text-slate-500">Credited back</span>
+                                    <strong class="block text-slate-900">Refund</strong>
+                                    <span class="text-[10px] text-slate-500">Get your money back</span>
                                 </div>
                             </label>
 
@@ -332,18 +331,18 @@
                                 <input type="radio" value="replacement" wire:model.live="returnRequestedAction" class="text-indigo-600 focus:ring-indigo-500"/>
                                 <div>
                                     <strong class="block text-slate-900">Replacement</strong>
-                                    <span class="text-[10px] text-slate-500">Free exchange</span>
+                                    <span class="text-[10px] text-slate-500">Get a new one</span>
                                 </div>
                             </label>
                         </div>
                     </div>
 
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">Detailed Explanation *</label>
+                        <label class="block font-semibold text-slate-700 mb-1">Tell us more *</label>
                         <textarea 
                             rows="3" 
                             wire:model="returnDescription" 
-                            placeholder="Please describe the defect, damage, or discrepancy in detail..."
+                            placeholder="What is wrong with the item?"
                             class="w-full py-2 px-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
                         ></textarea>
                         @error('returnDescription') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
@@ -363,7 +362,7 @@
                             class="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
                         >
                             <svg wire:loading class="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
-                            <span>Submit Return Request</span>
+                            <span>Send request</span>
                         </button>
                     </div>
                 </form>

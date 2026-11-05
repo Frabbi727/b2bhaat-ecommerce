@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Storefront;
 
+use App\Services\Logistics\BangladeshDistricts;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -23,7 +24,7 @@ class CustomerAddresses extends Component
 
     public string $city = 'Dhaka';
 
-    public string $postal_code = '1205';
+    public string $postal_code = '';
 
     public bool $is_default = false;
 
@@ -45,7 +46,7 @@ class CustomerAddresses extends Component
         $this->recipient_phone = Auth::user()?->phone ?? '';
         $this->street_address = '';
         $this->city = 'Dhaka';
-        $this->postal_code = '1205';
+        $this->postal_code = '';
         $this->is_default = Auth::user()?->addresses()->count() === 0;
         $this->showModal = true;
     }
@@ -60,7 +61,7 @@ class CustomerAddresses extends Component
         $this->recipient_name = $address->recipient_name;
         $this->recipient_phone = $address->recipient_phone;
         $this->street_address = $address->street_address;
-        $this->city = $address->city;
+        $this->city = BangladeshDistricts::normalize($address->city) ?? $address->city;
         $this->postal_code = $address->postal_code;
         $this->is_default = (bool) $address->is_default;
         $this->showModal = true;
@@ -79,12 +80,19 @@ class CustomerAddresses extends Component
             'recipient_name' => 'required|string|min:3|max:255',
             'recipient_phone' => ['required', 'string', 'regex:/^(\+?8801|01)\d{7,9}$/'],
             'street_address' => 'required|string|min:5|max:500',
-            'city' => 'required|string|max:100',
-            'postal_code' => 'required|string|max:20',
+            'city' => ['required', 'string', function (string $attribute, mixed $value, \Closure $fail): void {
+                if (BangladeshDistricts::normalize((string) $value) === null) {
+                    $fail('Please choose your district from the list.');
+                }
+            }],
+            'postal_code' => 'nullable|string|max:20',
             'is_default' => 'boolean',
         ], [
-            'recipient_phone.regex' => 'Please enter a valid Bangladeshi phone number.',
+            'recipient_phone.regex' => 'Enter an 11-digit Bangladeshi mobile number, for example 01712345678.',
         ]);
+
+        $this->city = (string) BangladeshDistricts::normalize($this->city);
+        $this->postal_code = trim($this->postal_code);
 
         $user = Auth::user();
 
@@ -150,6 +158,7 @@ class CustomerAddresses extends Component
             : collect();
 
         return view('livewire.storefront.customer-addresses', [
+            'districts' => BangladeshDistricts::ALL,
             'addresses' => $addresses,
         ]);
     }

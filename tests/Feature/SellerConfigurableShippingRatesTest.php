@@ -157,7 +157,7 @@ class SellerConfigurableShippingRatesTest extends TestCase
 
         Livewire::test(CheckoutComponent::class)
             ->set('deliveryZone', 'inside_dhaka')
-            ->assertSee('Courier & Delivery Freight:', false)
+            ->assertSee('<span>Delivery</span>', false)
             ->assertSee('৳65.00')
             ->set('deliveryZone', 'outside_dhaka')
             ->assertSee('৳135.00');

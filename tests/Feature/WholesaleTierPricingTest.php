@@ -128,7 +128,7 @@ class WholesaleTierPricingTest extends TestCase
 
         Livewire::test(ProductDetail::class, ['slug' => $product->slug])
             ->assertStatus(200)
-            ->assertSee('Wholesale pricing available')
+            ->assertSee('Lower prices for bulk orders')
             ->assertDontSee('Wholesale Factory Volume Rates Available')
             ->assertDontSee('৳110.00')
             ->assertDontSee('৳85.00');

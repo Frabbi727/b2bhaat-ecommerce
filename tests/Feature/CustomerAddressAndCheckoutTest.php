@@ -38,7 +38,7 @@ class CustomerAddressAndCheckoutTest extends TestCase
 
         Livewire::test(CustomerAddresses::class)
             ->assertStatus(200)
-            ->assertSee('My Delivery Address Book')
+            ->assertSee('My addresses')
             ->assertSee('Home')
             ->assertSee('Uttara Branch Outlet')
             ->assertSee('House 14, Road 5, Dhanmondi');
@@ -141,11 +141,11 @@ class CustomerAddressAndCheckoutTest extends TestCase
 
         Livewire::test(CheckoutComponent::class)
             ->assertStatus(200)
-            ->assertSee('Select Saved Address (1-Click)')
+            ->assertSee('Deliver to a saved address')
             ->assertSee('Boutique Salon HQ')
             ->assertSee('Chittagong Distribution Hub')
             ->call('selectSavedAddress', $chittagongAddr->id)
-            ->assertSet('city', 'Chittagong')
+            ->assertSet('city', 'Chattogram')
             ->assertSet('recipientName', 'Karim Ullah')
             ->assertSet('deliveryZone', 'outside_dhaka')
             ->assertSet('postalCode', '4000');
@@ -184,7 +184,7 @@ class CustomerAddressAndCheckoutTest extends TestCase
         $this->assertDatabaseHas('customer_addresses', [
             'user_id' => $retailUser->id,
             'address_title' => 'Port Warehouse Chittagong',
-            'city' => 'Chittagong',
+            'city' => 'Chattogram',
             'postal_code' => '4100',
         ]);
     }

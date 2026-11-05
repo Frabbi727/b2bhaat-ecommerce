@@ -6,7 +6,7 @@
                 <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
                 <span>{{ $feedbackMessage }}</span>
             </div>
-            <a href="{{ route('cart.index') }}" class="font-bold underline text-emerald-900">View Cart & Checkout &rarr;</a>
+            <a href="{{ route('cart.index') }}" class="font-bold underline text-emerald-900">View cart &rarr;</a>
         </div>
     @endif
 
@@ -18,26 +18,18 @@
     @endif
 
     @if (!$isFiltering)
-        <!-- Channel Mode Indicator -->
-        <div class="flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-indigo-50/70 border border-indigo-100 text-xs">
-            <div class="flex items-center gap-2">
-                @if ($isWholesaleUser)
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        Wholesale Business Account Active
-                    </span>
-                    <span class="text-slate-600 hidden sm:inline">Bulk procurement unlocked: Tiered MOQ pricing in effect.</span>
-                @else
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-800">
-                        <span class="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
-                        Consumer Market Mode
-                    </span>
-                    <span class="text-slate-600 hidden sm:inline">Single-unit retail purchasing with express islandwide delivery.</span>
-                @endif
-            </div>
-            @if (!$isWholesaleUser)
-                <a href="{{ route('wholesale.upgrade') }}" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:underline shrink-0">
-                    Upgrade to B2B Wholesale &rarr;
+        {{-- Wholesale status strip --}}
+        <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-2.5 rounded-2xl bg-indigo-50/70 border border-indigo-100 text-xs">
+            @if ($isWholesaleUser)
+                <span class="font-bold text-emerald-800">Wholesale prices are on for your account.</span>
+                <span class="text-slate-600">Buy more to pay less per piece.</span>
+            @elseif ($isWholesalePending)
+                <span class="font-bold text-slate-800">Your wholesale application is under review.</span>
+                <span class="text-slate-600">Until it is approved you see shop prices. Wholesale prices appear here as soon as it is.</span>
+            @else
+                <span class="text-slate-700"><strong class="text-slate-900">Buying for a business?</strong> Get lower prices when you buy in bulk.</span>
+                <a href="{{ route('wholesale.upgrade') }}" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline shrink-0">
+                    Apply for wholesale prices &rarr;
                 </a>
             @endif
         </div>

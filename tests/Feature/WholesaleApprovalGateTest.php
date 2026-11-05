@@ -77,7 +77,7 @@ class WholesaleApprovalGateTest extends TestCase
         $this->get(self::PRODUCT_URL)->assertOk()
             ->assertDontSee('Factory Volume Tier Brackets')
             ->assertDontSee('৳110.00')
-            ->assertSee('Wholesale pricing available');
+            ->assertSee('Lower prices for bulk orders');
 
         $this->actingAs(User::where('email', 'customer@retail.com')->firstOrFail())
             ->get(self::PRODUCT_URL)->assertOk()

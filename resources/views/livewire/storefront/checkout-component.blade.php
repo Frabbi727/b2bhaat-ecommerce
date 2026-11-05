@@ -1,7 +1,7 @@
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
     <div class="mb-8 pb-4 border-b border-slate-200">
-        <h1 class="text-2xl font-black text-slate-900 tracking-tight">Checkout & Logistics Manifest</h1>
-        <p class="text-xs text-slate-500 mt-1">Multi-vendor partition engine will automatically manifest individual courier packages per supplier.</p>
+        <h1 class="text-2xl font-black text-slate-900 tracking-tight">Checkout</h1>
+        <p class="text-xs text-slate-500 mt-1">Items from different sellers arrive in separate parcels.</p>
     </div>
 
     @if ($errorMessage)
@@ -21,18 +21,18 @@
                 <h3 class="font-bold text-slate-900 text-sm border-b border-slate-100 pb-3 flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <span class="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs">1</span>
-                        Delivery & Consignment Address
+                        Delivery address
                     </div>
                     @auth
                         <a href="{{ route('customer.addresses') }}" class="text-xs font-semibold text-indigo-600 hover:underline">
-                            Manage Address Book &rarr;
+                            Manage addresses &rarr;
                         </a>
                     @endauth
                 </h3>
 
                 @if ($savedAddresses->isNotEmpty())
                     <div class="space-y-2 pb-2">
-                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Select Saved Address (1-Click)</label>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Deliver to a saved address</label>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             @foreach ($savedAddresses as $addr)
                                 <div 
@@ -55,7 +55,7 @@
                                 class="p-3.5 rounded-xl border border-dashed text-xs cursor-pointer transition flex items-center justify-center gap-2 {{ is_null($selectedAddressId) ? 'border-indigo-600 bg-indigo-50/40 text-indigo-700 font-bold' : 'border-slate-300 text-slate-600 hover:bg-slate-50' }}"
                             >
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                                <span>Enter New / Custom Address</span>
+                                <span>Use a new address</span>
                             </div>
                         </div>
                     </div>
@@ -63,7 +63,7 @@
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">Recipient / Business Name *</label>
+                        <label class="block font-semibold text-slate-700 mb-1">Full name *</label>
                         <input 
                             type="text" 
                             wire:model="recipientName" 
@@ -73,9 +73,12 @@
                     </div>
 
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">Contact Phone Number *</label>
+                        <label class="block font-semibold text-slate-700 mb-1">Mobile number *</label>
                         <input 
-                            type="text" 
+                            type="tel" 
+                            inputmode="numeric"
+                            autocomplete="tel"
+                            placeholder="e.g. 01712345678"
                             wire:model="recipientPhone" 
                             class="w-full py-2 px-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
                         />
@@ -83,7 +86,7 @@
                     </div>
 
                     <div class="sm:col-span-2">
-                        <label class="block font-semibold text-slate-700 mb-1">Street / Warehouse Address *</label>
+                        <label class="block font-semibold text-slate-700 mb-1">Address (house, road, area) *</label>
                         <textarea 
                             rows="2" 
                             wire:model="streetAddress" 
@@ -92,11 +95,29 @@
                         @error('streetAddress') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
                     </div>
 
+                    <div>
+                        <label for="checkout-district" class="block font-semibold text-slate-700 mb-1">District *</label>
+                        <select 
+                            id="checkout-district"
+                            wire:model.live="city" 
+                            class="w-full py-2 px-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500"
+                        >
+                            <option value="">Choose your district</option>
+                            @if ($city !== '' && ! in_array($city, $districts, true))
+                                <option value="{{ $city }}">{{ $city }}</option>
+                            @endif
+                            @foreach ($districts as $district)
+                                <option value="{{ $district }}">{{ $district }}</option>
+                            @endforeach
+                        </select>
+                        @error('city') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
+                    </div>
+
                     <div class="sm:col-span-2 space-y-1.5 pt-1">
                         @php
                             $storeConfig = app(\App\Services\Settings\StoreConfigurationService::class);
                         @endphp
-                        <label class="block font-semibold text-slate-700">Delivery Area *</label>
+                        <label class="block font-semibold text-slate-700">Delivery area *</label>
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             @foreach ($zoneQuotes as $zone => $zoneShipping)
                                 <label class="flex items-center justify-between gap-2 p-3 rounded-xl border cursor-pointer transition {{ $deliveryZone === $zone ? 'border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-500/20' : 'border-slate-200 hover:bg-slate-50' }}">
@@ -113,22 +134,15 @@
                                 </label>
                             @endforeach
                         </div>
+                        @error('deliveryZone') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
                     </div>
 
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">District / City *</label>
+                        <label for="checkout-postal-code" class="block font-semibold text-slate-700 mb-1">Postal code (optional)</label>
                         <input 
+                            id="checkout-postal-code"
                             type="text" 
-                            wire:model="city" 
-                            class="w-full py-2 px-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
-                        />
-                        @error('city') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
-                    </div>
-
-                    <div>
-                        <label class="block font-semibold text-slate-700 mb-1">Postal Code *</label>
-                        <input 
-                            type="text" 
+                            inputmode="numeric"
                             wire:model="postalCode" 
                             class="w-full py-2 px-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
                         />
@@ -139,14 +153,14 @@
                         <div class="sm:col-span-2 pt-3 border-t border-slate-100 space-y-2">
                             <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800">
                                 <input type="checkbox" wire:model.live="saveToAddressBook" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
-                                <span>Save this address to my Address Book for future one-click orders</span>
+                                <span>Save this address for next time</span>
                             </label>
                             @if ($saveToAddressBook)
                                 <div class="pl-6">
                                     <input 
                                         type="text" 
                                         wire:model="newAddressTitle" 
-                                        placeholder="e.g. Uttara Distribution Center / Home / Dhanmondi Salon" 
+                                        placeholder="Name this address, e.g. Home or Shop" 
                                         class="w-full text-xs py-1.5 px-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                                     />
                                 </div>
@@ -160,7 +174,7 @@
             <div class="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
                 <h3 class="font-bold text-slate-900 text-sm border-b border-slate-100 pb-3 flex items-center gap-2">
                     <span class="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs">2</span>
-                    Payment Method
+                    Payment
                 </h3>
 
                 <div class="space-y-3">
@@ -175,53 +189,37 @@
                                     class="text-indigo-600 focus:ring-indigo-500"
                                 />
                                 <div>
-                                    <div class="text-xs font-bold text-slate-900 flex items-center gap-2">
-                                        <span>{{ $pm->name }}</span>
-                                        @if ($pm->slug === 'bkash')
-                                            <span class="px-1.5 py-0.2 bg-[#E2136E]/10 text-[#E2136E] text-[10px] font-bold rounded">bKash</span>
-                                        @elseif ($pm->slug === 'nagad')
-                                            <span class="px-1.5 py-0.2 bg-[#F7941D]/10 text-[#F7941D] text-[10px] font-bold rounded">Nagad</span>
-                                        @elseif ($pm->slug === 'sslcommerz')
-                                            <span class="px-1.5 py-0.2 bg-blue-50 text-blue-700 text-[10px] font-bold rounded">Visa/Mastercard/NetBanking</span>
-                                        @elseif ($pm->slug === 'cod')
-                                            <span class="px-1.5 py-0.2 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded">Cash on Delivery</span>
-                                        @endif
+                                    <div class="text-xs font-bold text-slate-900">
+                                        {{ ['cod' => 'Cash on Delivery', 'bkash' => 'bKash', 'nagad' => 'Nagad'][$pm->slug] ?? $pm->name }}
                                     </div>
                                     <div class="text-[11px] text-slate-500 mt-0.5">
                                         @if ($pm->slug === 'cod')
-                                            Pay in cash upon physical package delivery to your doorstep
-                                        @elseif ($pm->slug === 'bkash')
-                                            Direct bKash payment with instant TrxID confirmation
-                                        @elseif ($pm->slug === 'nagad')
-                                            Direct Nagad payment with instant TrxID confirmation
-                                        @elseif ($pm->slug === 'sslcommerz')
-                                            Cards (Visa, Mastercard, Amex) & Internet Banking
+                                            Pay the delivery person in cash when your parcel arrives.
+                                        @elseif (in_array($pm->slug, ['bkash', 'nagad'], true))
+                                            Send money first, then enter the transaction ID.
                                         @else
-                                            Automated sandbox testing & escrow hold
+                                            Test payment (only on the development site).
                                         @endif
                                     </div>
                                 </div>
                             </div>
-                            <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                                {{ $pm->slug }}
-                            </span>
                         </label>
                     @endforeach
                 </div>
 
-                <!-- MFS Detail Inputs for bKash & Nagad -->
+                {{-- Mobile wallet payment details --}}
                 @if ($selectedMethod && in_array($selectedMethod->slug, ['bkash', 'nagad']))
                     <div class="mt-4 p-4 rounded-xl border border-indigo-200 bg-indigo-50/40 space-y-3 text-xs">
-                        <div class="flex items-center gap-2 font-bold text-slate-900">
-                            <span class="w-2 h-2 rounded-full {{ $selectedMethod->slug === 'bkash' ? 'bg-[#E2136E]' : 'bg-[#F7941D]' }}"></span>
-                            <span>{{ $selectedMethod->name }} Instructions:</span>
-                        </div>
-                        <p class="text-slate-600 text-[11px] leading-relaxed">
-                            Please make payment of <strong class="text-indigo-700">৳{{ number_format($grandTotal, 2) }}</strong> to our Merchant Account: <span class="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">01700-000004</span>. Then enter your sender mobile number and the Transaction ID (TrxID) below:
-                        </p>
+                        @php $walletName = $selectedMethod->slug === 'bkash' ? 'bKash' : 'Nagad'; @endphp
+                        <div class="font-bold text-slate-900">How to pay with {{ $walletName }}</div>
+                        <ol class="list-decimal pl-4 space-y-1 text-slate-600 text-[11px] leading-relaxed">
+                            <li>Send <strong class="text-slate-900">৳{{ number_format($grandTotal, 2) }}</strong> to our {{ $walletName }} number <span class="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">{{ $receivingNumber }}</span> using "Send Money".</li>
+                            <li>Enter the number you paid from and the transaction ID from your {{ $walletName }} message.</li>
+                        </ol>
+                        <p class="text-slate-500 text-[11px]">We check your payment before the seller sends your order.</p>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                             <div>
-                                <label class="block font-semibold text-slate-700 mb-1">Your Sender Mobile Number *</label>
+                                <label class="block font-semibold text-slate-700 mb-1">Number you paid from *</label>
                                 <input 
                                     type="text" 
                                     wire:model="mfsSenderNumber" 
@@ -231,7 +229,7 @@
                                 @error('mfsSenderNumber') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
                             </div>
                             <div>
-                                <label class="block font-semibold text-slate-700 mb-1">Transaction ID (TrxID) *</label>
+                                <label class="block font-semibold text-slate-700 mb-1">Transaction ID *</label>
                                 <input 
                                     type="text" 
                                     wire:model="mfsTransactionId" 
@@ -246,18 +244,18 @@
             </div>
         </div>
 
-        <!-- Right: Order Manifest & Confirmation -->
+        <!-- Right: order summary -->
         <div class="lg:col-span-5 space-y-4">
             <div class="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
-                <h3 class="font-bold text-slate-900 text-sm border-b border-slate-100 pb-3">Package Items Overview</h3>
+                <h3 class="font-bold text-slate-900 text-sm border-b border-slate-100 pb-3">Your order</h3>
 
                 <div class="divide-y divide-slate-100 max-h-80 overflow-y-auto space-y-2 pr-1">
                     @foreach ($items as $item)
                         <div class="py-2 flex items-center justify-between text-xs gap-3">
                             <div>
                                 <div class="font-semibold text-slate-800">{{ $item['product_title'] }}</div>
-                                <div class="text-[11px] text-slate-500 font-mono">{{ $item['variation_sku'] }} (Qty: {{ $item['quantity'] }})</div>
-                                <div class="text-[10px] text-indigo-600">Vendor: {{ $item['seller_name'] }}</div>
+                                <div class="text-[11px] text-slate-500">Qty {{ $item['quantity'] }} × ৳{{ number_format($item['unit_price'], 2) }}</div>
+                                <div class="text-[10px] text-slate-500">Sold by {{ $item['seller_name'] }}</div>
                             </div>
                             <div class="font-extrabold text-slate-900">
                                 ৳{{ number_format($item['unit_price'] * $item['quantity'], 2) }}
@@ -271,7 +269,7 @@
                     <div class="flex items-center justify-between text-xs font-bold text-slate-800">
                         <span class="flex items-center gap-1.5">
                             <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
-                            Promotional Coupon
+                            Coupon
                         </span>
                         @if ($appliedCoupon)
                             <button type="button" wire:click="removeCheckoutCoupon" class="text-rose-600 underline text-[11px] font-semibold hover:text-rose-800">Remove</button>
@@ -311,20 +309,20 @@
 
                 <div class="border-t border-slate-100 pt-3 space-y-1.5 text-xs">
                     <div class="flex justify-between text-slate-600">
-                        <span>Items Subtotal:</span>
+                        <span>Items</span>
                         <span class="font-bold text-slate-900">৳{{ number_format($subtotal, 2) }}</span>
                     </div>
                     @if ($discountAmount > 0)
                         <div class="flex justify-between text-emerald-700 font-semibold">
-                            <span>Promotional Discount:</span>
+                            <span>Discount</span>
                             <span class="font-bold font-mono">-৳{{ number_format($discountAmount, 2) }}</span>
                         </div>
                     @endif
                     <div class="space-y-1">
                         <div class="flex justify-between text-slate-600">
-                            <span>Courier & Delivery Freight:</span>
+                            <span>Delivery</span>
                             @if ($shippingFee == 0)
-                                <span class="text-emerald-600 font-bold">Free Delivery</span>
+                                <span class="text-emerald-600 font-bold">Free</span>
                             @else
                                 <span class="font-bold text-slate-800 font-mono">৳{{ number_format($shippingFee, 2) }}</span>
                             @endif
@@ -343,7 +341,7 @@
                         @endif
                     </div>
                     <div class="border-t border-slate-200 pt-2 flex justify-between items-baseline">
-                        <span class="text-sm font-bold text-slate-900">Grand Total:</span>
+                        <span class="text-sm font-bold text-slate-900">Total</span>
                         <span class="text-2xl font-black text-indigo-600">৳{{ number_format($grandTotal, 2) }}</span>
                     </div>
                 </div>
@@ -360,8 +358,8 @@
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <span wire:loading.remove>Confirm Order & Lock Stock</span>
-                    <span wire:loading>Reserving Stock & Partitioning Orders...</span>
+                    <span wire:loading.remove>Place order</span>
+                    <span wire:loading>Placing your order…</span>
                 </button>
             </div>
         </div>

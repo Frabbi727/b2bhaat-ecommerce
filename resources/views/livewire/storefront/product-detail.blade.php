@@ -441,10 +441,15 @@
             @elseif ($wholesaleTiers->isNotEmpty())
             <div class="pt-4 border-t border-slate-200">
                 <div class="p-4 rounded-xl bg-indigo-50/60 border border-indigo-100 text-xs text-slate-700 space-y-1">
-                    <div class="font-bold text-indigo-900">Wholesale pricing available</div>
-                    <p>Factory volume tier rates are shown to verified business buyers.
-                        <a href="{{ route('wholesale.upgrade') }}" class="font-bold text-indigo-600 hover:underline">Apply for a wholesale account &rarr;</a>
-                    </p>
+                    @if ($isWholesalePending)
+                        <div class="font-bold text-indigo-900">Your wholesale application is under review</div>
+                        <p>You will see bulk prices for this product once your business account is approved.</p>
+                    @else
+                        <div class="font-bold text-indigo-900">Lower prices for bulk orders</div>
+                        <p>Business buyers get lower prices when they buy in bulk.
+                            <a href="{{ route('wholesale.upgrade') }}" class="font-bold text-indigo-600 hover:underline">Apply for wholesale prices &rarr;</a>
+                        </p>
+                    @endif
                 </div>
             </div>
             @endif

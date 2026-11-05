@@ -531,6 +531,7 @@ class ProductDetail extends Component
 
         return view('livewire.storefront.product-detail', [
             'isWholesaleUser' => $isWholesaleUser,
+            'isWholesalePending' => (bool) $user?->isWholesalePending(),
             'canSeeWholesalePrices' => $canSeeWholesalePrices,
             'retailPrice' => $retailPrice,
             'wholesalePrice' => $wholesalePrice,

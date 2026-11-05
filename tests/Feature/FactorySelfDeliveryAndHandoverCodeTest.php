@@ -77,7 +77,7 @@ class FactorySelfDeliveryAndHandoverCodeTest extends TestCase
             ->set('orderNumber', $order->order_number)
             ->set('phone', $order->shipping_address['recipient_phone'])
             ->call('searchOrder')
-            ->assertSee('Direct Factory Fleet Self-Delivery')
+            ->assertSee('The seller delivers this parcel')
             ->assertDontSee($code);
 
         $order->update(['tracking_token' => $order->tracking_token ?: 'tok-'.str_repeat('b', 30)]);
@@ -87,7 +87,7 @@ class FactorySelfDeliveryAndHandoverCodeTest extends TestCase
         // 2. Customer Orders list
         $this->actingAs($this->customer);
         Livewire::test(CustomerOrders::class)
-            ->assertSee('Handover Code (Give to Driver):')
+            ->assertSee('Your delivery code')
             ->assertSee($code);
     }
 

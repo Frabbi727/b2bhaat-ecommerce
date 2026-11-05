@@ -13,6 +13,7 @@ use App\Models\Product;
 use App\Models\SalesChannel;
 use App\Models\User;
 use App\Services\Cart\CartSessionService;
+use App\Services\Settings\StoreConfigurationService;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\PromotionsAndStoreSettingsSeeder;
 use Database\Seeders\SystemLookupSeeder;
@@ -37,6 +38,9 @@ class CartCouponCheckoutAndPromotionsTest extends TestCase
         $this->seed(SystemLookupSeeder::class);
         $this->seed(DemoCatalogSeeder::class);
         $this->seed(PromotionsAndStoreSettingsSeeder::class);
+        // bKash and Nagad are only offered once the admin has entered the receiving numbers
+        app(StoreConfigurationService::class)->set('bkash_merchant_number', '01811-223344', 'payments');
+        app(StoreConfigurationService::class)->set('nagad_merchant_number', '01911-223344', 'payments');
 
         $this->adminUser = User::where('email', 'admin@b2bhaat.com')->firstOrFail();
         $this->buyerUser = User::where('email', 'customer@retail.com')->firstOrFail();
