@@ -130,4 +130,71 @@ class Coupon extends Model
         // Fixed discount
         return min((float) $this->discount_value, $subtotal);
     }
+
+    /**
+     * Plain-language description of what a shopper gets, e.g. "10% off orders of ৳1,000 or more, up to ৳500 off".
+     */
+    public static function describeOffer(?string $type, mixed $value, mixed $minimumOrder, mixed $maximumDiscount): ?string
+    {
+        if (! is_numeric($value) || (float) $value <= 0) {
+            return null;
+        }
+
+        $offer = $type === self::TYPE_FIXED
+            ? '৳'.self::money($value).' off'
+            : self::number($value).'% off';
+
+        $offer .= is_numeric($minimumOrder) && (float) $minimumOrder > 0
+            ? ' orders of ৳'.self::money($minimumOrder).' or more'
+            : ' any order';
+
+        if ($type !== self::TYPE_FIXED && is_numeric($maximumDiscount) && (float) $maximumDiscount > 0) {
+            $offer .= ', up to ৳'.self::money($maximumDiscount).' off';
+        }
+
+        return $offer;
+    }
+
+    public function offerSummary(): string
+    {
+        return (string) self::describeOffer($this->discount_type, $this->discount_value, $this->min_order_amount, $this->max_discount_amount);
+    }
+
+    public function statusLabel(): string
+    {
+        return match (true) {
+            ! $this->is_active => 'Turned off',
+            $this->expires_at?->isPast() ?? false => 'Expired',
+            $this->usage_limit_total !== null && $this->used_count >= $this->usage_limit_total => 'Used up',
+            $this->start_at?->isFuture() ?? false => 'Starts '.$this->start_at->format('d M'),
+            default => 'Working',
+        };
+    }
+
+    public function statusColor(): string
+    {
+        return match ($this->statusLabel()) {
+            'Working' => 'success',
+            'Turned off', 'Expired', 'Used up' => 'gray',
+            default => 'info',
+        };
+    }
+
+    /**
+     * A coupon that has been redeemed is part of order history; turn it off instead of deleting it.
+     */
+    public function hasBeenUsed(): bool
+    {
+        return $this->used_count > 0 || $this->usages()->exists();
+    }
+
+    private static function money(mixed $amount): string
+    {
+        return number_format((float) $amount, fmod((float) $amount, 1.0) == 0.0 ? 0 : 2);
+    }
+
+    private static function number(mixed $amount): string
+    {
+        return rtrim(rtrim(number_format((float) $amount, 2, '.', ''), '0'), '.');
+    }
 }

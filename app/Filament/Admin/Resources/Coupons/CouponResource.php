@@ -25,6 +25,12 @@ class CouponResource extends Resource
 
     protected static ?int $navigationSort = 2;
 
+    protected static ?string $modelLabel = 'coupon';
+
+    protected static ?string $pluralModelLabel = 'coupons';
+
+    protected static ?string $recordTitleAttribute = 'code';
+
     public static function form(Schema $schema): Schema
     {
         return CouponForm::configure($schema);
