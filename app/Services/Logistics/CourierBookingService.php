@@ -7,6 +7,7 @@ namespace App\Services\Logistics;
 use App\Models\FulfillmentStatus;
 use App\Models\OrderTrackingLog;
 use App\Models\SubOrder;
+use DomainException;
 use Exception;
 
 class CourierBookingService
@@ -26,6 +27,12 @@ class CourierBookingService
      */
     public function schedulePickup(SubOrder $subOrder, array $data): SubOrder
     {
+        // shortcut: no courier API is connected yet, so the tracking number below is made up; replace with the
+        // chosen courier's real booking API before allowing this outside local/testing (owner decision 2026-11-05).
+        if (! app()->environment('local', 'testing')) {
+            throw new DomainException('Courier booking is not connected yet. Book the pickup in your courier\'s own app, then use "Dispatch Courier" with the real tracking number.');
+        }
+
         $currentSlug = $subOrder->fulfillmentStatus?->slug;
 
         if (in_array($currentSlug, ['delivered', 'returned', 'cancelled'])) {

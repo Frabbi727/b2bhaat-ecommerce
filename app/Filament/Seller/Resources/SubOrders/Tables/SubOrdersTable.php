@@ -278,10 +278,11 @@ class SubOrdersTable
 
                 // 6. Automated Courier Pickup Booking
                 Action::make('bookCourierPickup')
-                    ->label('Book Courier Pickup')
+                    ->label('Book Courier Pickup (test only)')
                     ->icon('heroicon-o-calendar-days')
                     ->color('indigo')
-                    ->visible(fn (SubOrder $record) => $record->isClearedForDispatch() && in_array($record->fulfillmentStatus?->slug, ['unfulfilled', 'processing']))
+                    // Makes up a tracking number until a courier API is connected, so never offered on a live site
+                    ->visible(fn (SubOrder $record) => app()->environment('local', 'testing') && $record->isClearedForDispatch() && in_array($record->fulfillmentStatus?->slug, ['unfulfilled', 'processing']))
                     ->schema([
                         Select::make('courier_name')
                             ->label('Courier Provider')
