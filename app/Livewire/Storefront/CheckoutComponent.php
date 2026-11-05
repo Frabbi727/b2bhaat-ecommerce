@@ -73,7 +73,7 @@ class CheckoutComponent extends Component
         $user = Auth::user();
         if ($user) {
             $this->recipientName = $user->name;
-            $this->recipientPhone = $user->phone ?? '+8801700000004';
+            $this->recipientPhone = $user->phone ?? '';
             $this->mfsSenderNumber = $user->phone ?? '';
             $defaultAddress = $user->addresses()->where('is_default', true)->first()
                 ?? $user->addresses()->first();
@@ -243,7 +243,7 @@ class CheckoutComponent extends Component
 
         // 1. Guest checkout policy safeguard
         if (! Auth::check() && ! $config->isGuestCheckoutAllowed()) {
-            $this->errorMessage = 'Guest checkout is disabled. Please sign in to complete your purchase.';
+            $this->errorMessage = 'Please sign in or create an account to place your order.';
 
             return;
         }
@@ -446,6 +446,7 @@ class CheckoutComponent extends Component
             'selectedMethod' => $selectedMethod,
             'receivingNumber' => $selectedMethod ? PaymentMethod::receivingNumberFor($selectedMethod->slug) : null,
             'districts' => BangladeshDistricts::ALL,
+            'guestCheckoutBlocked' => ! Auth::check() && ! app(StoreConfigurationService::class)->isGuestCheckoutAllowed(),
             'savedAddresses' => $savedAddresses,
         ]);
     }

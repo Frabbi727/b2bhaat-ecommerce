@@ -13,6 +13,22 @@
         </div>
     @endif
 
+    @if ($guestCheckoutBlocked)
+        <div class="max-w-md mx-auto p-6 rounded-2xl bg-white border border-slate-200 shadow-xs text-center space-y-4">
+            <p class="text-sm font-semibold text-slate-900">Please sign in or create an account to place your order.</p>
+            <p class="text-xs text-slate-500">Your cart is saved. You will come back here after signing in.</p>
+            <div class="flex flex-col sm:flex-row gap-2 justify-center">
+                <a href="{{ route('login', ['redirect' => '/checkout']) }}" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs">Sign in</a>
+                <a href="{{ route('register', ['redirect' => '/checkout']) }}" class="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs">Create account</a>
+            </div>
+        </div>
+    @else
+    @guest
+        <p class="mb-6 text-xs text-slate-600">
+            Have an account? <a href="{{ route('login', ['redirect' => '/checkout']) }}" class="font-bold text-indigo-600 hover:underline">Sign in</a> to use your saved addresses. Or just fill in the form below, no account needed.
+        </p>
+    @endguest
+
     <form wire:submit="placeOrder" class="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <!-- Left: Delivery Address & Payment Method Selection -->
         <div class="lg:col-span-7 space-y-6">
@@ -364,4 +380,5 @@
             </div>
         </div>
     </form>
+    @endif
 </div>

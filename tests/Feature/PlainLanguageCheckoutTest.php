@@ -188,4 +188,33 @@ class PlainLanguageCheckoutTest extends TestCase
             ->assertDontSee('islandwide')
             ->assertDontSee('Upgrade to B2B Wholesale');
     }
+
+    // Guests and sign-in
+    public function test_guest_can_order_and_is_offered_sign_in_without_being_forced(): void
+    {
+        Livewire::test(CheckoutComponent::class)
+            ->assertSee('Have an account?')
+            ->assertSee(route('login', ['redirect' => '/checkout']), false);
+    }
+
+    public function test_when_guest_checkout_is_off_the_guest_is_told_before_filling_the_form(): void
+    {
+        app(StoreConfigurationService::class)->set('guest_checkout_enabled', false, 'checkout', 'boolean');
+
+        Livewire::test(CheckoutComponent::class)
+            ->assertSee('Please sign in or create an account to place your order.')
+            ->assertDontSee('Place order');
+    }
+
+    public function test_signed_in_user_without_a_phone_gets_an_empty_phone_field_not_a_made_up_number(): void
+    {
+        $user = User::where('email', 'customer@retail.com')->firstOrFail();
+        $user->forceFill(['phone' => null])->save();
+        $user->addresses()->delete();
+        $this->actingAs($user);
+
+        Livewire::test(CheckoutComponent::class)
+            ->assertSet('recipientPhone', '')
+            ->assertDontSee('01700000004');
+    }
 }
