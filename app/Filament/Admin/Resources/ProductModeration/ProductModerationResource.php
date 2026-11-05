@@ -31,9 +31,11 @@ class ProductModerationResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-cube';
 
-    protected static ?string $navigationLabel = 'Products';
+    protected static UnitEnum|string|null $navigationGroup = 'Catalog';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Moderation';
+    protected static ?int $navigationSort = 2;
+
+    protected static ?string $navigationLabel = 'Products';
 
     public static function canAccess(): bool
     {

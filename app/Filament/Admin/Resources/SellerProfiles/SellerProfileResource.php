@@ -13,6 +13,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class SellerProfileResource extends Resource
 {
@@ -20,7 +21,11 @@ class SellerProfileResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingStorefront;
 
-    protected static ?string $navigationLabel = 'Seller Profiles';
+    protected static UnitEnum|string|null $navigationGroup = 'Sellers & Customers';
+
+    protected static ?int $navigationSort = 2;
+
+    protected static ?string $navigationLabel = 'Sellers';
 
     public static function getNavigationBadge(): ?string
     {

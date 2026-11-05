@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Seller\ProductBulkImportController;
 use App\Http\Controllers\Seller\ProductStockBulkController;
 use App\Http\Controllers\Seller\ShippingLabelController;
 use App\Http\Controllers\Seller\WalletStatementController;
@@ -55,6 +56,7 @@ Route::get('/seller/wallet/statement', [WalletStatementController::class, 'showS
 Route::get('/seller/wallet/statement/export', [WalletStatementController::class, 'exportCsv'])->name('seller.wallet.statement.csv')->middleware(['web', 'auth']);
 Route::get('/seller/products/stock/export', [ProductStockBulkController::class, 'exportCsv'])->name('seller.products.stock.export')->middleware(['web', 'auth']);
 Route::post('/seller/products/stock/import', [ProductStockBulkController::class, 'importCsv'])->name('seller.products.stock.import')->middleware(['web', 'auth']);
+Route::get('/seller/products/import/template', [ProductBulkImportController::class, 'template'])->name('seller.products.import.template')->middleware(['web', 'auth']);
 
 // Quick Demo Persona Switcher (Convenient for Pair-Programming & Verification)
 Route::get('/demo-login/{role}', function (string $role) {

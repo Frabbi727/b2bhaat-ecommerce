@@ -11,6 +11,7 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationGroup;
 use Filament\Navigation\NavigationItem;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
@@ -25,20 +26,28 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class SellerPanelProvider extends PanelProvider
 {
+    use ConfiguresPanelDesign;
+
     public function panel(Panel $panel): Panel
     {
+        $panel = $this->applyPanelDesign($panel, Color::Emerald);
+
         return $panel
             ->id('seller')
             ->brandName(fn (): string => app(StoreConfigurationService::class)->getStoreIdentity()['name'].' Seller Center')
             ->path('seller')
             ->login()
-            ->colors([
-                'primary' => Color::Emerald,
+            ->navigationGroups([
+                NavigationGroup::make('Sales'),
+                NavigationGroup::make('Catalog'),
+                NavigationGroup::make('Finance'),
+                NavigationGroup::make('Store'),
             ])
             ->navigationItems([
-                NavigationItem::make('Public Storefront')
+                NavigationItem::make('View my storefront')
                     ->url(fn (): string => auth()->user()?->sellerProfile?->store_slug ? route('store.show', auth()->user()->sellerProfile->store_slug) : '/', shouldOpenInNewTab: true)
-                    ->icon('heroicon-o-building-storefront')
+                    ->icon('heroicon-o-arrow-top-right-on-square')
+                    ->group('Store')
                     ->sort(99),
             ])
             ->discoverResources(in: app_path('Filament/Seller/Resources'), for: 'App\Filament\Seller\Resources')

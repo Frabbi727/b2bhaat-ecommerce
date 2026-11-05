@@ -15,15 +15,15 @@ class KycApprovals extends Page
 {
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-shield-check';
 
-    protected static ?string $navigationLabel = 'KYC Approval Inbox';
+    protected static UnitEnum|string|null $navigationGroup = 'Sellers & Customers';
+
+    protected static ?int $navigationSort = 1;
+
+    protected static ?string $navigationLabel = 'KYC approvals';
 
     protected static ?string $title = 'KYC Verification & Compliance Inbox';
 
     protected static ?string $slug = 'kyc-approvals';
-
-    protected static UnitEnum|string|null $navigationGroup = 'User & Sourcing Management';
-
-    protected static ?int $navigationSort = 0;
 
     protected string $view = 'filament.admin.pages.kyc-approvals';
 

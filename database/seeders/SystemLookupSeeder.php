@@ -83,6 +83,12 @@ class SystemLookupSeeder extends Seeder
             ['name' => 'Carton', 'symbol' => 'ctn'],
             ['name' => 'Box', 'symbol' => 'box'],
             ['name' => 'Kilogram', 'symbol' => 'kg'],
+            ['name' => 'Set', 'symbol' => 'set'],
+            ['name' => 'Pack', 'symbol' => 'pack'],
+            ['name' => 'Bottle', 'symbol' => 'bottle'],
+            ['name' => 'Jar', 'symbol' => 'jar'],
+            ['name' => 'Tube', 'symbol' => 'tube'],
+            ['name' => 'Roll', 'symbol' => 'roll'],
         ];
         foreach ($units as $unit) {
             Unit::firstOrCreate(['symbol' => $unit['symbol']], $unit);

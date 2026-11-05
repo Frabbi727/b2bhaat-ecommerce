@@ -45,9 +45,9 @@ class SellerConfigurableShippingRatesTest extends TestCase
         $this->actingAs($this->seller);
 
         Livewire::test(StoreSettings::class)
-            ->set('inside_dhaka_rate', 55.00)
-            ->set('outside_dhaka_rate', 140.00)
-            ->set('free_shipping_threshold', 3000.00)
+            ->set('data.inside_dhaka_rate', 55.00)
+            ->set('data.outside_dhaka_rate', 140.00)
+            ->set('data.free_shipping_threshold', 3000.00)
             ->call('save')
             ->assertHasNoErrors();
 

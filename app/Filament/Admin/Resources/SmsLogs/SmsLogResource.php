@@ -22,11 +22,11 @@ class SmsLogResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-chat-bubble-bottom-center-text';
 
-    protected static ?string $navigationLabel = 'SMS Delivery Logs';
+    protected static UnitEnum|string|null $navigationGroup = 'Settings';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Settings & Management';
+    protected static ?int $navigationSort = 4;
 
-    protected static ?int $navigationSort = 12;
+    protected static ?string $navigationLabel = 'SMS delivery log';
 
     public static function canAccess(): bool
     {

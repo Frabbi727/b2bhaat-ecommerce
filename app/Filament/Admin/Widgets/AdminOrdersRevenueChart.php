@@ -12,9 +12,9 @@ class AdminOrdersRevenueChart extends ChartWidget
 {
     protected static ?int $sort = 2;
 
-    protected ?string $heading = 'Marketplace Revenue & GMV Trajectory';
+    protected ?string $heading = 'Paid order value, last 14 days';
 
-    protected ?string $description = 'Daily paid transaction volume over the last 14 days.';
+    protected ?string $description = 'Daily value of paid orders (৳).';
 
     protected int|string|array $columnSpan = [
         'md' => 2,

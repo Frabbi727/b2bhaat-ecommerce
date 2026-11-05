@@ -11,6 +11,7 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationGroup;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -24,16 +25,25 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
 {
+    use ConfiguresPanelDesign;
+
     public function panel(Panel $panel): Panel
     {
+        $panel = $this->applyPanelDesign($panel, Color::Indigo);
+
         return $panel
             ->default()
             ->id('admin')
             ->brandName(fn (): string => app(StoreConfigurationService::class)->getStoreIdentity()['name'].' Admin')
             ->path('admin')
             ->login()
-            ->colors([
-                'primary' => Color::Indigo,
+            ->navigationGroups([
+                NavigationGroup::make('Orders & Fulfilment'),
+                NavigationGroup::make('Sellers & Customers'),
+                NavigationGroup::make('Catalog'),
+                NavigationGroup::make('Finance'),
+                NavigationGroup::make('Marketing'),
+                NavigationGroup::make('Settings')->collapsed(),
             ])
             ->discoverResources(in: app_path('Filament/Admin/Resources'), for: 'App\Filament\Admin\Resources')
             ->discoverPages(in: app_path('Filament/Admin/Pages'), for: 'App\Filament\Admin\Pages')

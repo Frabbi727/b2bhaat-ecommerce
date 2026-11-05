@@ -2,122 +2,316 @@
 
 namespace App\Filament\Seller\Resources\Products\Tables;
 
+use App\Filament\Seller\Resources\Products\ProductResource;
+use App\Models\Category;
 use App\Models\Product;
+use App\Models\SalesChannel;
+use App\Services\Inventory\ProductDuplicationService;
+use App\Services\Settings\StoreConfigurationService;
+use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Notifications\Notification;
 use Filament\Support\Colors\Color;
+use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ToggleColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 
 class ProductsTable
 {
     public static function configure(Table $table): Table
     {
+        $lowStock = app(StoreConfigurationService::class)->getLowStockThreshold();
+
         return $table
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['primaryImage', 'unit', 'salesChannel', 'retailPrice', 'wholesalePrice']))
             ->columns([
+                ImageColumn::make('cover')
+                    ->label('')
+                    ->state(fn (Product $record): ?string => $record->primaryImage?->public_url)
+                    ->defaultImageUrl(fn (): string => 'data:image/svg+xml;utf8,'.rawurlencode('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="8" fill="#a1a1aa" fill-opacity=".18"/><path d="M13 26l5-6 4 4 3-3 3 5z" fill="#a1a1aa"/></svg>'))
+                    ->imageSize(44)
+                    ->extraImgAttributes(['class' => 'rounded-lg object-cover', 'alt' => '']),
+
                 TextColumn::make('title')
-                    ->label('Product Title')
-                    ->weight('bold')
-                    ->description(fn ($record): ?string => $record->blocked_at ? 'Hidden by admin: '.$record->blocked_reason : null)
-                    ->searchable()
+                    ->label('Product')
+                    ->weight('medium')
+                    ->wrap()
+                    ->lineClamp(2)
+                    ->description(fn (Product $record): ?string => $record->blocked_at
+                        ? 'Hidden by admin: '.$record->blocked_reason
+                        : ($record->sku ? 'SKU '.$record->sku : null))
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->where(fn (Builder $q) => $q
+                        ->where('title', 'like', "%{$search}%")
+                        ->orWhere('sku', 'like', "%{$search}%")
+                        ->orWhere('barcode', 'like', "%{$search}%")
+                        ->orWhereHas('variations', fn (Builder $v) => $v->where('sku', 'like', "%{$search}%"))))
                     ->sortable(),
 
                 TextColumn::make('category.name')
                     ->label('Category')
-                    ->badge()
-                    ->color(Color::Slate)
-                    ->searchable(),
+                    ->color('gray')
+                    ->visibleFrom('lg')
+                    ->toggleable(),
 
                 TextColumn::make('salesChannel.name')
-                    ->label('Channel')
+                    ->label('Sold to')
+                    ->visibleFrom('md')
                     ->badge()
+                    ->formatStateUsing(fn (Product $record): string => match ($record->salesChannel?->slug) {
+                        SalesChannel::BOTH => 'Retail + Wholesale',
+                        SalesChannel::WHOLESALE => 'Wholesale',
+                        default => 'Retail',
+                    })
                     ->color(fn (Product $record) => match ($record->salesChannel?->slug) {
-                        'both' => Color::Indigo,
-                        'wholesale' => Color::Emerald,
-                        default => Color::Amber,
-                    }),
+                        SalesChannel::BOTH => Color::Indigo,
+                        SalesChannel::WHOLESALE => Color::Teal,
+                        default => Color::Zinc,
+                    })
+                    ->toggleable(),
 
                 TextColumn::make('retailPrice.unit_price')
-                    ->label('Retail Rate')
-                    ->money('BDT')
-                    ->placeholder('N/A')
-                    ->sortable(),
+                    ->label('Retail price')
+                    ->formatStateUsing(fn ($state): string => '৳'.number_format((float) $state, 2))
+                    ->placeholder('—')
+                    ->alignEnd(),
 
                 TextColumn::make('wholesalePrice.unit_price')
-                    ->label('Wholesale Rate (MOQ)')
-                    ->formatStateUsing(function ($state, Product $record) {
-                        if (! $state) {
-                            return 'N/A';
-                        }
-                        $moq = $record->wholesalePrice?->min_quantity ?? 1;
+                    ->label('Wholesale from')
+                    ->visibleFrom('md')
+                    ->formatStateUsing(fn ($state): string => '৳'.number_format((float) $state, 2))
+                    ->description(fn (Product $record): ?string => $record->wholesalePrice ? 'MOQ '.$record->wholesalePrice->min_quantity : null)
+                    ->placeholder('—')
+                    ->alignEnd()
+                    ->toggleable(),
 
-                        return '৳'.number_format($state, 2)." (MOQ: {$moq})";
+                TextColumn::make('variations_sum_stock_quantity')
+                    ->sum('variations', 'stock_quantity')
+                    ->label('Stock')
+                    ->alignEnd()
+                    ->sortable()
+                    ->formatStateUsing(fn ($state, Product $record): string => number_format((int) $state).' '.($record->unit?->symbol ?? 'pcs'))
+                    ->description(fn ($state): ?string => match (true) {
+                        (int) $state <= 0 => 'Out of stock',
+                        (int) $state <= $lowStock => 'Low stock',
+                        default => null,
                     })
-                    ->badge()
-                    ->color(Color::Emerald),
+                    ->color(fn ($state): string => match (true) {
+                        (int) $state <= 0 => 'danger',
+                        (int) $state <= $lowStock => 'warning',
+                        default => 'gray',
+                    }),
 
                 TextColumn::make('variations_count')
                     ->counts('variations')
                     ->label('Variations')
-                    ->sortable(),
+                    ->alignEnd()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
-                TextColumn::make('variations_sum_stock_quantity')
-                    ->sum('variations', 'stock_quantity')
-                    ->label('Total Stock')
-                    ->badge()
-                    ->color(fn ($state) => match (true) {
-                        $state <= 0 => Color::Red,
-                        $state <= 10 => Color::Amber,
-                        $state <= 50 => Color::Yellow,
-                        default => Color::Green,
-                    })
-                    ->formatStateUsing(fn ($state) => match (true) {
-                        $state <= 0 => '0 (Out of Stock)',
-                        $state <= 10 => "{$state} (Low Stock)",
-                        default => (string) $state,
-                    })
-                    ->suffix(fn (Product $record) => ' '.($record->unit?->symbol ?? 'pcs')),
-
-                // 1-Click Instant Active/Deactivate Toggle
                 ToggleColumn::make('is_active')
-                    ->label('Active on Store')
-                    ->onColor('success')
-                    ->offColor('danger'),
+                    ->label('Visible')
+                    ->tooltip(fn (Product $record): string => $record->is_active ? 'Shown on your storefront' : 'Hidden from buyers'),
+
+                TextColumn::make('updated_at')
+                    ->label('Updated')
+                    ->visibleFrom('lg')
+                    ->since()
+                    ->dateTimeTooltip('M d, Y H:i')
+                    ->sortable()
+                    ->toggleable(),
 
                 TextColumn::make('created_at')
-                    ->label('Added On')
+                    ->label('Added')
                     ->date('M d, Y')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('updated_at', 'desc')
+            ->searchPlaceholder('Name, SKU or barcode')
             ->filters([
+                SelectFilter::make('category_id')
+                    ->label('Category')
+                    ->options(fn () => Category::whereIn('id', ProductResource::getEloquentQuery()->select('category_id'))->orderBy('name')->pluck('name', 'id'))
+                    ->searchable(),
+
+                SelectFilter::make('sales_channel_id')
+                    ->label('Sold to')
+                    ->options(fn () => SalesChannel::where('is_active', true)->pluck('name', 'id')),
+
+                TernaryFilter::make('is_active')
+                    ->label('Visibility')
+                    ->trueLabel('Visible')
+                    ->falseLabel('Hidden')
+                    ->placeholder('All'),
+
                 SelectFilter::make('stock_status')
-                    ->label('Stock Status')
+                    ->label('Stock')
                     ->options([
-                        'out_of_stock' => 'Out of Stock (0)',
-                        'low_stock' => 'Low Stock (≤ 10)',
-                        'in_stock' => 'In Stock (> 10)',
+                        'out_of_stock' => 'Out of stock',
+                        'low_stock' => "Low stock (≤ {$lowStock})",
+                        'in_stock' => 'In stock',
                     ])
-                    ->query(function ($query, array $data) {
-                        if (($data['value'] ?? null) === 'out_of_stock') {
-                            $query->whereDoesntHave('variations', fn ($q) => $q->where('stock_quantity', '>', 0));
-                        } elseif (($data['value'] ?? null) === 'low_stock') {
-                            $query->whereHas('variations', fn ($q) => $q->where('stock_quantity', '<=', 10));
-                        } elseif (($data['value'] ?? null) === 'in_stock') {
-                            $query->whereHas('variations', fn ($q) => $q->where('stock_quantity', '>', 10));
-                        }
+                    ->query(function (Builder $query, array $data) use ($lowStock) {
+                        match ($data['value'] ?? null) {
+                            'out_of_stock' => $query->whereDoesntHave('variations', fn ($q) => $q->where('stock_quantity', '>', 0)),
+                            'low_stock' => $query->whereHas('variations', fn ($q) => $q->where('stock_quantity', '<=', $lowStock)),
+                            'in_stock' => $query->whereHas('variations', fn ($q) => $q->where('stock_quantity', '>', $lowStock)),
+                            default => $query,
+                        };
                     }),
+
+                Filter::make('blocked')
+                    ->label('Hidden by admin')
+                    ->toggle()
+                    ->query(fn (Builder $query) => $query->whereNotNull('blocked_at')),
             ])
+            ->filtersFormColumns(2)
+            ->recordUrl(fn (Product $record): string => ProductResource::getUrl('edit', ['record' => $record]))
             ->recordActions([
-                EditAction::make(),
+                ActionGroup::make([
+                    EditAction::make(),
+                    self::viewOnStorefrontAction(),
+                    self::duplicateAction(),
+                    self::deleteAction(),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    BulkAction::make('show')
+                        ->label('Show on storefront')
+                        ->icon(Heroicon::OutlinedEye)
+                        ->action(fn (Collection $records) => self::setVisibility($records, true))
+                        ->deselectRecordsAfterCompletion(),
+
+                    BulkAction::make('hide')
+                        ->label('Hide from storefront')
+                        ->icon(Heroicon::OutlinedEyeSlash)
+                        ->action(fn (Collection $records) => self::setVisibility($records, false))
+                        ->deselectRecordsAfterCompletion(),
+
+                    BulkAction::make('delete')
+                        ->label('Delete selected')
+                        ->icon(Heroicon::OutlinedTrash)
+                        ->color('danger')
+                        ->requiresConfirmation()
+                        ->modalHeading('Delete selected products?')
+                        ->modalDescription('This cannot be undone. Products that already appear on an order are kept and hidden instead, so invoices stay correct.')
+                        ->action(fn (Collection $records) => self::deleteOrHide($records))
+                        ->deselectRecordsAfterCompletion(),
                 ]),
+            ])
+            ->emptyStateIcon(Heroicon::OutlinedCube)
+            ->emptyStateHeading('No products yet')
+            ->emptyStateDescription('Add your first product to start selling to retail shoppers and wholesale buyers.')
+            ->emptyStateActions([
+                Action::make('create')
+                    ->label('Add product')
+                    ->icon(Heroicon::OutlinedPlus)
+                    ->url(ProductResource::getUrl('create')),
             ]);
+    }
+
+    public static function viewOnStorefrontAction(): Action
+    {
+        return Action::make('viewOnStorefront')
+            ->label('View on storefront')
+            ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
+            ->url(fn (Product $record): string => route('catalog.show', $record->slug), shouldOpenInNewTab: true)
+            ->visible(fn (Product $record): bool => $record->is_active && ! $record->blocked_at);
+    }
+
+    public static function duplicateAction(): Action
+    {
+        return Action::make('duplicate')
+            ->label('Duplicate')
+            ->icon(Heroicon::OutlinedDocumentDuplicate)
+            ->requiresConfirmation()
+            ->modalIcon(Heroicon::OutlinedDocumentDuplicate)
+            ->modalHeading('Duplicate this product?')
+            ->modalDescription('The copy keeps the details, prices, photos and variation options. It starts hidden with zero stock so you can adjust it before publishing.')
+            ->modalSubmitActionLabel('Duplicate')
+            ->action(function (Product $record) {
+                $copy = app(ProductDuplicationService::class)->duplicate($record);
+
+                Notification::make()
+                    ->title('Hidden copy created')
+                    ->body('Update the name, SKUs and stock, then make it visible.')
+                    ->success()
+                    ->send();
+
+                return redirect(ProductResource::getUrl('edit', ['record' => $copy]));
+            });
+    }
+
+    public static function deleteAction(): DeleteAction
+    {
+        return DeleteAction::make()
+            ->modalHeading(fn (Product $record): string => "Delete “{$record->title}”?")
+            ->modalDescription('This removes the product, its prices, photos and stock records. It cannot be undone.')
+            ->before(function (DeleteAction $action, Product $record): void {
+                if ($record->hasBeenOrdered()) {
+                    Notification::make()
+                        ->title('This product has orders, so it cannot be deleted')
+                        ->body('Turn off “Visible” to hide it from buyers instead. Past invoices keep working.')
+                        ->warning()
+                        ->persistent()
+                        ->send();
+
+                    $action->cancel();
+                }
+            });
+    }
+
+    protected static function setVisibility(Collection $records, bool $visible): void
+    {
+        $count = Product::query()
+            ->whereKey($records->modelKeys())
+            ->where('seller_id', auth()->id())
+            ->update(['is_active' => $visible]);
+
+        Notification::make()
+            ->title($visible ? "{$count} product(s) now visible" : "{$count} product(s) hidden")
+            ->success()
+            ->send();
+    }
+
+    protected static function deleteOrHide(Collection $records): void
+    {
+        $deleted = 0;
+        $hidden = 0;
+
+        /** @var Product $product */
+        foreach ($records as $product) {
+            if ((int) $product->seller_id !== (int) auth()->id()) {
+                continue;
+            }
+
+            if ($product->hasBeenOrdered()) {
+                $product->update(['is_active' => false]);
+                $hidden++;
+
+                continue;
+            }
+
+            $product->delete();
+            $deleted++;
+        }
+
+        Notification::make()
+            ->title("{$deleted} product(s) deleted")
+            ->body($hidden > 0 ? "{$hidden} product(s) with orders were hidden instead." : null)
+            ->success()
+            ->send();
     }
 }

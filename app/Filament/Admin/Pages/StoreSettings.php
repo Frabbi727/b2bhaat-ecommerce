@@ -20,15 +20,15 @@ class StoreSettings extends Page
 {
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-adjustments-horizontal';
 
-    protected static ?string $navigationLabel = 'Store Settings';
+    protected static UnitEnum|string|null $navigationGroup = 'Settings';
+
+    protected static ?int $navigationSort = 1;
+
+    protected static ?string $navigationLabel = 'Store settings';
 
     protected static ?string $title = 'Store Configuration & Policies';
 
     protected static ?string $slug = 'store-settings';
-
-    protected static UnitEnum|string|null $navigationGroup = 'Settings & Management';
-
-    protected static ?int $navigationSort = 10;
 
     protected string $view = 'filament.admin.pages.store-settings';
 

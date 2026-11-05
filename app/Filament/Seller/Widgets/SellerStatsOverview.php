@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Filament\Seller\Widgets;
 
+use App\Filament\Seller\Resources\RfqRequests\RfqRequestResource;
+use App\Filament\Seller\Resources\SellerWallets\SellerWalletResource;
+use App\Filament\Seller\Resources\SubOrders\SubOrderResource;
 use App\Models\RfqRequest;
 use App\Models\SellerWallet;
 use App\Models\SubOrder;
@@ -37,7 +40,8 @@ class SellerStatsOverview extends StatsOverviewWidget
         $days = collect(range(6, 0))->map(fn ($i) => now()->subDays($i)->format('Y-m-d'));
         $recentSubOrders = SubOrder::where('seller_id', $sellerId)
             ->where('created_at', '>=', now()->subDays(7)->startOfDay())
-            ->get();
+            ->whereDoesntHave('fulfillmentStatus', fn ($q) => $q->where('slug', 'cancelled'))
+            ->get(['id', 'subtotal', 'created_at']);
 
         $sparklineEarnings = [];
         foreach ($days as $dateStr) {
@@ -49,22 +53,26 @@ class SellerStatsOverview extends StatsOverviewWidget
                 ->description('Settled earnings ready to withdraw')
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->chart($sparklineEarnings)
-                ->color('success'),
+                ->color('success')
+                ->url(SellerWalletResource::getUrl('index')),
 
             Stat::make('Escrow In-Transit Reserve', '৳'.number_format($escrowBalance, 2))
-                ->description('Held until courier delivery confirmed')
+                ->description('Released 48 hours after delivery')
                 ->descriptionIcon('heroicon-m-shield-check')
-                ->color('indigo'),
+                ->color('gray')
+                ->url(SellerWalletResource::getUrl('index')),
 
-            Stat::make('Pending Dispatch', (string) $pendingFulfillment)
-                ->description('Packages awaiting courier pickup')
+            Stat::make('Orders to dispatch', (string) $pendingFulfillment)
+                ->description($pendingFulfillment > 0 ? 'Pack and book a courier' : 'All caught up')
                 ->descriptionIcon('heroicon-m-truck')
-                ->color($pendingFulfillment > 0 ? 'warning' : 'gray'),
+                ->color($pendingFulfillment > 0 ? 'warning' : 'gray')
+                ->url(SubOrderResource::getUrl('index')),
 
-            Stat::make('Wholesale RFQ Inquiries', (string) $pendingRfqs)
-                ->description('Pending wholesale price quotes')
+            Stat::make('Quote requests', (string) $pendingRfqs)
+                ->description($pendingRfqs > 0 ? 'Wholesale buyers waiting for your price' : 'No open requests')
                 ->descriptionIcon('heroicon-m-chat-bubble-left-right')
-                ->color($pendingRfqs > 0 ? 'primary' : 'gray'),
+                ->color($pendingRfqs > 0 ? 'primary' : 'gray')
+                ->url(RfqRequestResource::getUrl('index')),
         ];
     }
 }

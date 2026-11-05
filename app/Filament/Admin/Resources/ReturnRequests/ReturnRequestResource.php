@@ -28,9 +28,11 @@ class ReturnRequestResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-arrow-uturn-left';
 
-    protected static ?string $navigationLabel = 'Returns & problems';
+    protected static UnitEnum|string|null $navigationGroup = 'Orders & Fulfilment';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Moderation';
+    protected static ?int $navigationSort = 3;
+
+    protected static ?string $navigationLabel = 'Returns & disputes';
 
     public static function canAccess(): bool
     {

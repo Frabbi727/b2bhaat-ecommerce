@@ -33,9 +33,11 @@ class CourierParcelResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-truck';
 
-    protected static ?string $navigationLabel = 'Courier parcels';
+    protected static UnitEnum|string|null $navigationGroup = 'Orders & Fulfilment';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Financial Payouts & Logistics';
+    protected static ?int $navigationSort = 2;
+
+    protected static ?string $navigationLabel = 'Courier parcels';
 
     /** @var array<string, string> */
     private const UPDATES = [

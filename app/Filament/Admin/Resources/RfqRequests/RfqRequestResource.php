@@ -23,9 +23,11 @@ class RfqRequestResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-chat-bubble-left-right';
 
-    protected static ?string $navigationLabel = 'Quote requests';
+    protected static UnitEnum|string|null $navigationGroup = 'Catalog';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Moderation';
+    protected static ?int $navigationSort = 4;
+
+    protected static ?string $navigationLabel = 'Quote requests';
 
     public static function canAccess(): bool
     {

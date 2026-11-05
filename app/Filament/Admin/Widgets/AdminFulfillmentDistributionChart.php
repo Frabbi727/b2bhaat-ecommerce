@@ -11,9 +11,9 @@ class AdminFulfillmentDistributionChart extends ChartWidget
 {
     protected static ?int $sort = 3;
 
-    protected ?string $heading = 'Consignment Fulfillment Distribution';
+    protected ?string $heading = 'Packages by status';
 
-    protected ?string $description = 'Real-time multi-vendor package dispatch statuses.';
+    protected ?string $description = 'Where every seller package is right now.';
 
     protected int|string|array $columnSpan = [
         'md' => 1,

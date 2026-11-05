@@ -12,9 +12,11 @@ class SellerRevenueChart extends ChartWidget
 {
     protected static ?int $sort = 2;
 
-    protected ?string $heading = 'Store Sales & Settlement Volume';
+    protected ?string $heading = 'Sales, last 14 days';
 
-    protected ?string $description = 'Your daily dispatch earnings over the last 14 days.';
+    protected ?string $description = 'Order value received each day (৳), excluding cancelled orders.';
+
+    protected ?string $maxHeight = '260px';
 
     protected int|string|array $columnSpan = 'full';
 
@@ -29,8 +31,9 @@ class SellerRevenueChart extends ChartWidget
         $days = collect(range(13, 0))->map(fn ($i) => now()->subDays($i)->format('Y-m-d'));
 
         $subOrders = SubOrder::where('seller_id', $sellerId)
-            ->where('created_at', '>=', now()->subDays(14)->startOfDay())
-            ->get();
+            ->where('created_at', '>=', now()->subDays(13)->startOfDay())
+            ->whereDoesntHave('fulfillmentStatus', fn ($q) => $q->where('slug', 'cancelled'))
+            ->get(['id', 'subtotal', 'created_at']);
 
         $dailyEarnings = [];
         $labels = [];
@@ -46,12 +49,13 @@ class SellerRevenueChart extends ChartWidget
         return [
             'datasets' => [
                 [
-                    'label' => 'Store Earnings (BDT)',
+                    'label' => 'Sales (৳)',
                     'data' => $dailyEarnings,
                     'borderColor' => '#059669',
                     'backgroundColor' => 'rgba(5, 150, 105, 0.08)',
                     'fill' => true,
                     'tension' => 0.3,
+                    'pointRadius' => 2,
                 ],
             ],
             'labels' => $labels,

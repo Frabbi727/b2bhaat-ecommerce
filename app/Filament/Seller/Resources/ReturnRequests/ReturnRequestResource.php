@@ -12,6 +12,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use UnitEnum;
 
 class ReturnRequestResource extends Resource
 {
@@ -19,7 +20,11 @@ class ReturnRequestResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowPathRoundedSquare;
 
-    protected static ?string $navigationLabel = 'Returns & Disputes';
+    protected static UnitEnum|string|null $navigationGroup = 'Sales';
+
+    protected static ?int $navigationSort = 2;
+
+    protected static ?string $navigationLabel = 'Returns & disputes';
 
     protected static ?string $modelLabel = 'Dispute / Return';
 

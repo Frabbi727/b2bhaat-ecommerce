@@ -21,7 +21,7 @@ class BannerResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedPhoto;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Promotions & Marketing';
+    protected static UnitEnum|string|null $navigationGroup = 'Marketing';
 
     protected static ?int $navigationSort = 1;
 

@@ -29,6 +29,37 @@ class BulkStockImportExportTest extends TestCase
         $this->seed(DemoCatalogSeeder::class);
     }
 
+    public function test_sheet_listing_products_that_were_never_added_reports_no_change_instead_of_success(): void
+    {
+        $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
+        $this->actingAs($seller);
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+
+        $variation = Product::where('seller_id', $seller->id)->firstOrFail()->variations()->firstOrFail();
+        $csv = "variation_id,sku,new_stock_quantity\n"
+            ."{$variation->id},{$variation->sku},{$variation->stock_quantity}\n"
+            ."999999,PON-NUDE-ALM-SHO,450\n";
+
+        Livewire::test(ListProducts::class)
+            ->callAction('bulk_update_stock', data: ['csv_text' => $csv])
+            ->assertNotified(ListProducts::importResultNotification([
+                'total_rows' => 2,
+                'updated' => 0,
+                'unchanged' => 1,
+                'errors' => ["Row 3: 'PON-NUDE-ALM-SHO' not found in your catalog."],
+            ]));
+
+        $this->assertDatabaseMissing('product_variations', ['sku' => 'PON-NUDE-ALM-SHO']);
+    }
+
+    public function test_import_result_messages_match_what_happened(): void
+    {
+        $this->assertSame('No stock was changed', ListProducts::importResultNotification(['total_rows' => 3, 'updated' => 0, 'unchanged' => 0, 'errors' => ['a', 'b', 'c']])->getTitle());
+        $this->assertSame('Stock partly updated', ListProducts::importResultNotification(['total_rows' => 3, 'updated' => 2, 'unchanged' => 0, 'errors' => ['a']])->getTitle());
+        $this->assertSame('Nothing to update', ListProducts::importResultNotification(['total_rows' => 2, 'updated' => 0, 'unchanged' => 2, 'errors' => []])->getTitle());
+        $this->assertSame('Stock updated for 2 variation(s)', ListProducts::importResultNotification(['total_rows' => 2, 'updated' => 2, 'unchanged' => 0, 'errors' => []])->getTitle());
+    }
+
     public function test_seller_can_export_csv_stock_sheet(): void
     {
         $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();

@@ -27,9 +27,11 @@ class ProductReviewResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-star';
 
-    protected static ?string $navigationLabel = 'Reviews';
+    protected static UnitEnum|string|null $navigationGroup = 'Catalog';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Moderation';
+    protected static ?int $navigationSort = 3;
+
+    protected static ?string $navigationLabel = 'Reviews';
 
     public static function canAccess(): bool
     {

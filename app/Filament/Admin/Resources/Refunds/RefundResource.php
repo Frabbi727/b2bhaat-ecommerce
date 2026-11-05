@@ -27,9 +27,11 @@ class RefundResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-receipt-refund';
 
-    protected static ?string $navigationLabel = 'Customer Refunds';
+    protected static UnitEnum|string|null $navigationGroup = 'Finance';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Financial Payouts & Logistics';
+    protected static ?int $navigationSort = 2;
+
+    protected static ?string $navigationLabel = 'Customer refunds';
 
     public static function canAccess(): bool
     {

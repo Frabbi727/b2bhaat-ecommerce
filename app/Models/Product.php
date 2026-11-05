@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Inventory\ProductCodeGenerator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,6 +21,7 @@ class Product extends Model
         'title',
         'slug',
         'sku',
+        'barcode',
         'model_number',
         'short_description',
         'full_description',
@@ -49,11 +51,26 @@ class Product extends Model
     public const DEFAULT_VARIATION_SUFFIX = '-DEFAULT';
 
     /**
-     * Simple products (no variations) get one default variation so stock is reserved like any SKU (PRA-011).
+     * Products get a generated SKU and barcode; simple products (no variations) get one default variation so stock is reserved like any SKU (PRA-011).
      */
     protected static function booted(): void
     {
+        // A copied product is a different item: it must not inherit the original's SKU or barcode
+        static::replicating(function (Product $replica): void {
+            $replica->sku = null;
+            $replica->barcode = null;
+        });
+
         static::created(function (Product $product): void {
+            // SKU and barcode are generated, never typed, so they are always present and unique
+            $codes = array_filter([
+                'sku' => blank($product->sku) ? ProductCodeGenerator::productSku($product) : null,
+                'barcode' => blank($product->barcode) ? ProductCodeGenerator::barcode($product->id) : null,
+            ]);
+            if ($codes !== []) {
+                $product->forceFill($codes)->saveQuietly();
+            }
+
             if (! $product->has_variations) {
                 $product->ensureDefaultVariation();
             }
@@ -76,6 +93,28 @@ class Product extends Model
             'buy_price' => $this->buy_price ?? 0,
             'is_active' => true,
         ]);
+    }
+
+    /**
+     * The storefront uses the first photo by sort order as the cover; keep `is_primary` pointing at that same photo.
+     */
+    public function syncPrimaryImageFlag(): void
+    {
+        $coverId = $this->images()->reorder()->orderBy('sort_order')->orderBy('id')->value('id');
+
+        $this->images()->where('id', '!=', $coverId ?? 0)->where('is_primary', true)->update(['is_primary' => false]);
+
+        if ($coverId) {
+            $this->images()->whereKey($coverId)->update(['is_primary' => true]);
+        }
+    }
+
+    /**
+     * Products that appear on an order must stay on record for invoices and disputes; sellers hide them instead.
+     */
+    public function hasBeenOrdered(): bool
+    {
+        return OrderItem::where('product_id', $this->id)->exists();
     }
 
     /**

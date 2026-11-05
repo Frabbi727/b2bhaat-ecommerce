@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Widgets;
 
+use App\Filament\Admin\Resources\Orders\OrderResource;
 use App\Models\Order;
 use Filament\Actions\Action;
 use Filament\Support\Colors\Color;
@@ -12,15 +13,21 @@ use Illuminate\Database\Eloquent\Builder;
 
 class LatestOrdersWidget extends TableWidget
 {
-    protected static ?int $sort = 2;
+    protected static ?int $sort = 4;
 
     protected int|string|array $columnSpan = 'full';
 
     public function table(Table $table): Table
     {
         return $table
-            ->heading('Recent Marketplace Orders (Live Feed)')
-            ->description('Latest transactions routed through the multi-vendor escrow engine.')
+            ->heading('Latest orders')
+            ->description('The newest orders across every seller.')
+            ->headerActions([
+                Action::make('all')
+                    ->label('View all orders')
+                    ->link()
+                    ->url(OrderResource::getUrl('index')),
+            ])
             ->query(
                 fn (): Builder => Order::with([
                     'customer',

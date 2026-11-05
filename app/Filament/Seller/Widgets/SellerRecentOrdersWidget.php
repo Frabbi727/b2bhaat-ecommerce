@@ -12,7 +12,7 @@ use Filament\Widgets\TableWidget;
 
 class SellerRecentOrdersWidget extends TableWidget
 {
-    protected static ?int $sort = 2;
+    protected static ?int $sort = 3;
 
     protected int|string|array $columnSpan = 'full';
 
@@ -26,18 +26,28 @@ class SellerRecentOrdersWidget extends TableWidget
                     ->where('seller_id', $sellerId)
                     ->with(['order.customer', 'fulfillmentStatus'])
                     ->latest()
+                    ->limit(6)
             )
-            ->heading('Recent Store Packages & Dispatches')
+            ->heading('Latest orders')
+            ->paginated(false)
+            ->searchable(false)
+            ->headerActions([
+                Action::make('all')
+                    ->label('View all orders')
+                    ->link()
+                    ->url(SubOrderResource::getUrl('index')),
+            ])
+            ->emptyStateHeading('No orders yet')
+            ->emptyStateDescription('New orders for your products will show up here.')
             ->columns([
                 TextColumn::make('sub_order_number')
                     ->label('Package #')
                     ->fontFamily('mono')
-                    ->weight('bold')
-                    ->searchable(),
+                    ->weight('medium'),
 
                 TextColumn::make('order.customer.name')
                     ->label('Customer')
-                    ->searchable(),
+                    ->placeholder('Guest'),
 
                 TextColumn::make('fulfillmentStatus.name')
                     ->label('Fulfillment')
@@ -53,30 +63,28 @@ class SellerRecentOrdersWidget extends TableWidget
 
                 TextColumn::make('courier_name')
                     ->label('Courier')
-                    ->placeholder('Unassigned'),
-
-                TextColumn::make('tracking_number')
-                    ->label('Consignment #')
-                    ->fontFamily('mono')
-                    ->placeholder('None'),
+                    ->placeholder('Not booked')
+                    ->color('gray'),
 
                 TextColumn::make('net_earnings')
-                    ->label('Net Payout')
+                    ->label('Your payout')
                     ->formatStateUsing(fn ($state) => '৳'.number_format((float) $state, 2))
-                    ->weight('bold')
-                    ->color('success')
-                    ->alignment('right'),
+                    ->weight('medium')
+                    ->color(fn (SubOrder $record): string => $record->fulfillmentStatus?->slug === 'cancelled' ? 'gray' : 'success')
+                    ->alignEnd(),
 
                 TextColumn::make('created_at')
-                    ->label('Date')
-                    ->dateTime('M d, Y H:i')
-                    ->alignment('right'),
+                    ->label('Received')
+                    ->since()
+                    ->dateTimeTooltip('M d, Y H:i')
+                    ->alignEnd(),
             ])
+            ->recordUrl(fn (SubOrder $record): string => SubOrderResource::getUrl('view', ['record' => $record]))
             ->recordActions([
                 Action::make('manage')
-                    ->label('View Package')
-                    ->icon('heroicon-o-eye')
-                    ->color('indigo')
+                    ->label('Open')
+                    ->icon('heroicon-o-arrow-right')
+                    ->color('gray')
                     ->url(fn (SubOrder $record): string => SubOrderResource::getUrl('view', ['record' => $record])),
             ]);
     }

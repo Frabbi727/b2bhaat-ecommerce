@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Inventory\ProductCodeGenerator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -20,6 +21,18 @@ class ProductVariation extends Model
     protected $hidden = [
         'buy_price',
     ];
+
+    /**
+     * Variations added without a SKU get the next one in the product's sequence (e.g. `BEA-000042-03`).
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (ProductVariation $variation): void {
+            if (blank($variation->sku) && $variation->product_id) {
+                $variation->sku = ProductCodeGenerator::variationSku($variation->product ?? Product::findOrFail($variation->product_id));
+            }
+        });
+    }
 
     protected function casts(): array
     {

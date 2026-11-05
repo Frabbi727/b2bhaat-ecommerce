@@ -103,7 +103,7 @@ class StockBulkUpdateService
             if ($line === '') {
                 continue;
             }
-            $parsed = str_getcsv($line);
+            $parsed = str_getcsv($line, ',', '"', '');
             if (! empty($parsed)) {
                 $rows[] = $parsed;
             }
@@ -150,7 +150,7 @@ class StockBulkUpdateService
                 $stockVal = isset($row[$newStockIdx]) ? trim((string) $row[$newStockIdx]) : null;
 
                 if (! is_numeric($stockVal) || (int) $stockVal < 0) {
-                    $errors[] = "Row {$rowNumber}: Invalid stock quantity '{$stockVal}'. Must be a non-negative integer.";
+                    $errors[] = "Row {$rowNumber}: '{$stockVal}' is not a valid quantity (use a whole number, 0 or more).";
 
                     continue;
                 }
@@ -172,7 +172,7 @@ class StockBulkUpdateService
 
                 if (! $variation) {
                     $identifier = $sku ?: ($varId ? "ID {$varId}" : 'unknown');
-                    $errors[] = "Row {$rowNumber}: Variation '{$identifier}' not found in your catalog.";
+                    $errors[] = "Row {$rowNumber}: '{$identifier}' not found in your catalog.";
 
                     continue;
                 }

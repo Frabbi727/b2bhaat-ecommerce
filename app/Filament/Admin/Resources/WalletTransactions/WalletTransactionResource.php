@@ -11,16 +11,21 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class WalletTransactionResource extends Resource
 {
     protected static ?string $model = WalletTransaction::class;
 
-    protected static ?string $navigationLabel = 'Seller Payout Disbursements';
+    protected static ?string $navigationLabel = 'Seller payouts';
 
     protected static ?string $modelLabel = 'Payout & Ledger Transaction';
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
+
+    protected static UnitEnum|string|null $navigationGroup = 'Finance';
+
+    protected static ?int $navigationSort = 1;
 
     public static function form(Schema $schema): Schema
     {

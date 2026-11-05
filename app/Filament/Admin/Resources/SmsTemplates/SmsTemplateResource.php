@@ -20,11 +20,11 @@ class SmsTemplateResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
 
-    protected static ?string $navigationLabel = 'SMS Templates';
+    protected static UnitEnum|string|null $navigationGroup = 'Settings';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Settings & Management';
+    protected static ?int $navigationSort = 3;
 
-    protected static ?int $navigationSort = 13;
+    protected static ?string $navigationLabel = 'SMS templates';
 
     public static function canAccess(): bool
     {

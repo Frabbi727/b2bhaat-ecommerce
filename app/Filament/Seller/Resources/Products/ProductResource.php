@@ -14,12 +14,29 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use UnitEnum;
 
 class ProductResource extends Resource
 {
     protected static ?string $model = Product::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCube;
+
+    protected static UnitEnum|string|null $navigationGroup = 'Catalog';
+
+    protected static ?int $navigationSort = 1;
+
+    protected static ?string $recordTitleAttribute = 'title';
+
+    /**
+     * @return array<int, string>
+     */
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['title', 'sku', 'barcode'];
+    }
+
+    protected static ?string $navigationLabel = 'Products';
 
     public static function form(Schema $schema): Schema
     {

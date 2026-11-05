@@ -26,42 +26,47 @@ class SellerStockAlertsWidget extends TableWidget
         $threshold = app(StoreConfigurationService::class)->getLowStockThreshold();
 
         return $table
-            ->heading('Critical Low-Stock Alerts')
-            ->description("SKUs with inventory at or below threshold ({$threshold} units). Restock to prevent missed wholesale & retail sales.")
+            ->heading('Running low on stock')
+            ->description("Variations with {$threshold} units or fewer. Restock them before buyers see “out of stock”.")
+            ->defaultPaginationPageOption(5)
+            ->paginationPageOptions([5, 10, 25])
+            ->emptyStateIcon('heroicon-o-check-circle')
+            ->emptyStateHeading('Stock levels look healthy')
+            ->emptyStateDescription('Nothing is at or below your low-stock threshold.')
             ->query(
                 fn (): Builder => ProductVariation::query()
-                    ->whereHas('product', fn ($q) => $q->where('seller_id', $sellerId))
+                    ->whereHas('product', fn ($q) => $q->where('seller_id', $sellerId)->where('is_active', true))
+                    ->where('is_active', true)
                     ->with(['product', 'attributeValues.attribute'])
                     ->where('stock_quantity', '<=', $threshold)
                     ->orderBy('stock_quantity', 'asc')
             )
             ->columns([
                 TextColumn::make('product.title')
-                    ->label('Product Title')
-                    ->weight('bold')
+                    ->label('Product')
+                    ->weight('medium')
                     ->searchable()
                     ->limit(40),
 
                 TextColumn::make('sku')
-                    ->label('SKU Code')
+                    ->label('SKU')
                     ->fontFamily('mono')
-                    ->badge()
-                    ->color(Color::Slate),
+                    ->color('gray'),
 
                 TextColumn::make('variation_attributes')
-                    ->label('Variation / Spec')
-                    ->state(fn (ProductVariation $record): string => $record->attributeValues->map(fn ($av) => "{$av->attribute?->name}: {$av->value}")->implode(', ') ?: 'Standard Base Item'),
+                    ->label('Options')
+                    ->state(fn (ProductVariation $record): string => $record->attributeValues->map(fn ($av) => "{$av->attribute?->name}: {$av->value}")->implode(', ') ?: 'Single item'),
 
                 TextColumn::make('stock_quantity')
-                    ->label('Remaining Stock')
-                    ->fontFamily('mono')
-                    ->weight('bold')
+                    ->label('In stock')
+                    ->alignEnd()
+                    ->weight('medium')
                     ->badge()
                     ->color(fn (ProductVariation $record): array => $record->stock_quantity == 0 ? Color::Red : Color::Amber),
             ])
-            ->actions([
+            ->recordActions([
                 Action::make('edit')
-                    ->label('Edit Product')
+                    ->label('Restock')
                     ->icon('heroicon-m-pencil-square')
                     ->url(fn (ProductVariation $record): string => ProductResource::getUrl('edit', ['record' => $record->product_id])),
             ]);

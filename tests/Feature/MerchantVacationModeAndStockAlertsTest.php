@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Seller\Pages\StoreSettings;
+use App\Filament\Seller\Widgets\SellerStockAlertsWidget;
 use App\Livewire\Storefront\ProductDetail;
 use App\Livewire\Storefront\SellerStore;
 use App\Models\Product;
@@ -10,9 +11,11 @@ use App\Models\SalesChannel;
 use App\Models\User;
 use App\Services\Cart\CartSessionService;
 use App\Services\Orders\OrderSplitterService;
+use App\Services\Settings\StoreConfigurationService;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use Exception;
+use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -35,19 +38,67 @@ class MerchantVacationModeAndStockAlertsTest extends TestCase
 
         $this->actingAs($seller);
 
+        $reopening = now()->addDays(5)->format('Y-m-d');
+
         Livewire::test(StoreSettings::class)
             ->assertStatus(200)
-            ->assertSet('is_on_vacation', false)
-            ->set('is_on_vacation', true)
-            ->set('vacation_message', 'Factory closed for annual maintenance. Resuming dispatches on Nov 10.')
-            ->set('vacation_ends_at', '2026-11-10')
+            ->assertSet('data.is_on_vacation', false)
+            ->set('data.is_on_vacation', true)
+            ->set('data.vacation_message', 'Factory closed for annual maintenance. Resuming dispatches soon.')
+            ->set('data.vacation_ends_at', $reopening)
             ->call('save')
             ->assertHasNoErrors();
 
         $profile->refresh();
         $this->assertTrue($profile->is_on_vacation);
-        $this->assertSame('Factory closed for annual maintenance. Resuming dispatches on Nov 10.', $profile->vacation_message);
-        $this->assertSame('2026-11-10', $profile->vacation_ends_at->format('Y-m-d'));
+        $this->assertSame('Factory closed for annual maintenance. Resuming dispatches soon.', $profile->vacation_message);
+        $this->assertSame($reopening, $profile->vacation_ends_at->format('Y-m-d'));
+    }
+
+    public function test_reopening_date_cannot_be_in_the_past(): void
+    {
+        $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
+        $this->actingAs($seller);
+
+        Livewire::test(StoreSettings::class)
+            ->set('data.is_on_vacation', true)
+            ->set('data.vacation_ends_at', now()->subDay()->format('Y-m-d'))
+            ->call('save')
+            ->assertHasErrors(['data.vacation_ends_at']);
+
+        $this->assertFalse($seller->sellerProfile->fresh()->is_on_vacation);
+    }
+
+    public function test_reopening_the_store_keeps_the_notice_for_next_time(): void
+    {
+        $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
+        $seller->sellerProfile->update(['is_on_vacation' => true, 'vacation_message' => 'Closed for Eid.']);
+        $this->actingAs($seller);
+
+        Livewire::test(StoreSettings::class)
+            ->set('data.is_on_vacation', false)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $profile = $seller->sellerProfile->fresh();
+        $this->assertFalse($profile->is_on_vacation);
+        $this->assertSame('Closed for Eid.', $profile->vacation_message);
+    }
+
+    public function test_store_settings_show_real_approval_status_and_platform_rates(): void
+    {
+        $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
+        $seller->sellerProfile->update(['trade_license_number' => null]);
+        $this->actingAs($seller);
+
+        $insideDhaka = app(StoreConfigurationService::class)->getDeliveryFee('inside_dhaka');
+
+        Livewire::test(StoreSettings::class)
+            ->assertSee('Approved')
+            ->assertSee('Not provided')
+            ->assertDontSee('Verified on File')
+            ->assertDontSee('Tier A')
+            ->assertSee('Marketplace rate: ৳'.number_format($insideDhaka, $insideDhaka == floor($insideDhaka) ? 0 : 2));
     }
 
     public function test_storefront_displays_vacation_banner_and_disables_retail_add_to_cart(): void
@@ -179,22 +230,22 @@ class MerchantVacationModeAndStockAlertsTest extends TestCase
             ->assertSee('Nov 15, 2026');
     }
 
-    public function test_low_stock_variations_detected_and_listed_on_store_settings_page(): void
+    public function test_low_stock_variations_are_listed_on_the_seller_dashboard(): void
     {
         $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
         $product = $seller->products()->firstOrFail();
         $variation = $product->variations()->firstOrFail();
 
-        // Artificially drop variation stock to 4 units (<= 10 is low stock)
+        // Artificially drop variation stock to 4 units (at or below the low-stock threshold)
         $variation->update(['stock_quantity' => 4]);
 
         $this->actingAs($seller);
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
 
-        Livewire::test(StoreSettings::class)
+        Livewire::test(SellerStockAlertsWidget::class)
             ->assertStatus(200)
-            ->assertSee('Low Stock Warnings (Stock ≤ 10 units)')
-            ->assertSee($variation->sku)
-            ->assertSee('4 units left')
-            ->assertSee('Update Stock');
+            ->assertSee('Running low on stock')
+            ->assertCanSeeTableRecords([$variation])
+            ->assertSee('Restock');
     }
 }

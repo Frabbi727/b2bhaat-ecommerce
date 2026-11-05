@@ -17,15 +17,15 @@ class SmsSettings extends Page
 {
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-chat-bubble-left-right';
 
-    protected static ?string $navigationLabel = 'SMS Gateway & OTP';
+    protected static UnitEnum|string|null $navigationGroup = 'Settings';
+
+    protected static ?int $navigationSort = 2;
+
+    protected static ?string $navigationLabel = 'SMS gateway & OTP';
 
     protected static ?string $title = 'SMS Gateway Configuration & Live Balance';
 
     protected static ?string $slug = 'sms-settings';
-
-    protected static UnitEnum|string|null $navigationGroup = 'Settings & Management';
-
-    protected static ?int $navigationSort = 11;
 
     protected string $view = 'filament.admin.pages.sms-settings';
 

@@ -21,7 +21,7 @@ class CouponResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTicket;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Promotions & Marketing';
+    protected static UnitEnum|string|null $navigationGroup = 'Marketing';
 
     protected static ?int $navigationSort = 2;
 
