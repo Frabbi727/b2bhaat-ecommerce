@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Enums\FlashSaleStatus;
 use App\Models\FlashSale;
+use App\Services\Promotions\FlashSalePricing;
 use Illuminate\Console\Command;
 
 class SyncFlashSaleStatusesCommand extends Command
@@ -48,6 +49,10 @@ class SyncFlashSaleStatusesCommand extends Command
                 'status' => FlashSaleStatus::Ended,
                 'ended_at' => $now,
             ]);
+
+        if ($startedCount > 0 || $endedCount > 0) {
+            FlashSalePricing::flushResolved();
+        }
 
         $this->info("{$startedCount} started, {$endedCount} ended.");
 

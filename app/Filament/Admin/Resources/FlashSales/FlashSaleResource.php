@@ -8,6 +8,7 @@ use App\Filament\Admin\Resources\FlashSales\Pages\CreateFlashSale;
 use App\Filament\Admin\Resources\FlashSales\Pages\EditFlashSale;
 use App\Filament\Admin\Resources\FlashSales\Pages\ListFlashSales;
 use App\Filament\Admin\Resources\FlashSales\RelationManagers\ProductsRelationManager;
+use App\Filament\Admin\Resources\FlashSales\RelationManagers\SubmissionsRelationManager;
 use App\Filament\Admin\Resources\FlashSales\Schemas\FlashSaleForm;
 use App\Filament\Admin\Resources\FlashSales\Tables\FlashSalesTable;
 use App\Filament\Admin\Resources\FlashSales\Widgets\FlashSaleStatsOverview;
@@ -55,6 +56,7 @@ class FlashSaleResource extends Resource
     public static function getRelations(): array
     {
         return [
+            SubmissionsRelationManager::class,
             ProductsRelationManager::class,
         ];
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Promotions;
 
+use App\Enums\FlashSaleSubmissionStatus;
 use App\Exceptions\FlashSaleUnavailableException;
 use App\Models\FlashSaleProduct;
 use App\Models\Product;
@@ -44,12 +45,14 @@ class FlashSaleAllocationService
             $offer = FlashSaleProduct::query()->whereKey($offerId)->lockForUpdate()->first();
             $title = (string) Product::query()->whereKey($offer?->product_id ?? $productIds[$offerId])->value('title');
 
-            if ($offer === null || ! $offer->flashSale()->first()?->isLive()) {
+            if ($offer === null
+                || $offer->status !== FlashSaleSubmissionStatus::Approved
+                || ! $offer->flashSale()->first()?->isLive()) {
                 throw FlashSaleUnavailableException::ended($title);
             }
 
             if ($offer->stock_limit !== null) {
-                $remaining = max(0, $offer->stock_limit - $offer->unitsSold());
+                $remaining = max(0, (int) $offer->stock_limit - (int) $offer->units_sold);
                 if ($quantity > $remaining) {
                     throw FlashSaleUnavailableException::onlyLeft($remaining, $title);
                 }
@@ -59,6 +62,8 @@ class FlashSaleAllocationService
                 && $offer->unitsBoughtBy((int) $customer->getKey()) + $quantity > $offer->per_customer_limit) {
                 throw FlashSaleUnavailableException::customerLimit($offer->per_customer_limit, $title);
             }
+
+            $offer->increment('units_sold', $quantity);
         }
     }
 }

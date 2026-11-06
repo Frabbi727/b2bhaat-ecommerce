@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\FlashSaleStatus;
+use App\Enums\SellerEligibilityType;
 use App\Services\Promotions\FlashSalePricing;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -32,6 +33,16 @@ class FlashSale extends Model
         'paused_at',
         'ended_at',
         'created_by',
+        'registration_starts_at',
+        'registration_ends_at',
+        'min_discount_percentage',
+        'max_discount_percentage',
+        'max_products_per_seller',
+        'min_stock_per_product',
+        'max_stock_per_product',
+        'requires_approval',
+        'seller_eligibility_type',
+        'minimum_seller_rating',
     ];
 
     /**
@@ -57,6 +68,16 @@ class FlashSale extends Model
             'ended_at' => 'datetime',
             'is_featured' => 'boolean',
             'display_priority' => 'integer',
+            'registration_starts_at' => 'datetime',
+            'registration_ends_at' => 'datetime',
+            'min_discount_percentage' => 'decimal:2',
+            'max_discount_percentage' => 'decimal:2',
+            'max_products_per_seller' => 'integer',
+            'min_stock_per_product' => 'integer',
+            'max_stock_per_product' => 'integer',
+            'requires_approval' => 'boolean',
+            'seller_eligibility_type' => SellerEligibilityType::class,
+            'minimum_seller_rating' => 'decimal:2',
         ];
     }
 
@@ -71,8 +92,16 @@ class FlashSale extends Model
     public function products(): BelongsToMany
     {
         return $this->belongsToMany(Product::class, 'flash_sale_products')
-            ->withPivot(['id', 'discount_type', 'discount_value', 'stock_limit', 'per_customer_limit', 'sort_order'])
+            ->withPivot(['id', 'seller_id', 'status', 'discount_type', 'discount_value', 'original_retail_price', 'campaign_price', 'stock_limit', 'units_sold', 'per_customer_limit', 'sort_order'])
             ->withTimestamps();
+    }
+
+    /**
+     * @return BelongsToMany<Category, $this>
+     */
+    public function categories(): BelongsToMany
+    {
+        return $this->belongsToMany(Category::class, 'flash_sale_categories')->withTimestamps();
     }
 
     /**
@@ -95,6 +124,10 @@ class FlashSale extends Model
             return $this->status;
         }
 
+        if ($this->starts_at === null || $this->ends_at === null) {
+            return $this->status;
+        }
+
         if ($at->lt($this->starts_at)) {
             return FlashSaleStatus::Scheduled;
         }
@@ -109,6 +142,24 @@ class FlashSale extends Model
     public function isLive(?CarbonInterface $at = null): bool
     {
         return $this->effectiveStatus($at) === FlashSaleStatus::Active;
+    }
+
+    public function isRegistrationOpen(?CarbonInterface $at = null): bool
+    {
+        $at ??= now();
+
+        if (in_array($this->effectiveStatus($at), [FlashSaleStatus::Cancelled, FlashSaleStatus::Ended], true)) {
+            return false;
+        }
+
+        $starts = $this->registration_starts_at ?? $this->created_at ?? $this->starts_at;
+        $ends = $this->registration_ends_at ?? $this->starts_at;
+
+        if ($starts === null || $ends === null) {
+            return false;
+        }
+
+        return $at->gte($starts) && $at->lt($ends);
     }
 
     /**

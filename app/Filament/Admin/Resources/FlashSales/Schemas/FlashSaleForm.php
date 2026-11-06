@@ -5,14 +5,17 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\FlashSales\Schemas;
 
 use App\Enums\FlashSaleStatus;
+use App\Enums\SellerEligibilityType;
 use App\Models\FlashSale;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Str;
@@ -26,6 +29,7 @@ class FlashSaleForm
             ->components([
                 Group::make([
                     self::generalSection(),
+                    self::participationSection(),
                     self::termsSection(),
                 ])->columnSpan(['lg' => 2]),
 
@@ -122,6 +126,104 @@ class FlashSaleForm
                     ->numeric()
                     ->default(0)
                     ->helperText('Higher numbers appear earlier in listings.')
+                    ->disabled(fn (?FlashSale $record): bool => self::isTerminal($record)),
+            ]);
+    }
+
+    private static function participationSection(): Section
+    {
+        return Section::make('Seller Participation & Eligibility Rules')
+            ->columns(2)
+            ->schema([
+                DateTimePicker::make('registration_starts_at')
+                    ->label('Registration Starts at')
+                    ->timezone('Asia/Dhaka')
+                    ->seconds(false)
+                    ->native(false)
+                    ->disabled(fn (?FlashSale $record): bool => self::isTerminal($record)),
+
+                DateTimePicker::make('registration_ends_at')
+                    ->label('Registration Ends at')
+                    ->timezone('Asia/Dhaka')
+                    ->seconds(false)
+                    ->native(false)
+                    ->afterOrEqual('registration_starts_at')
+                    ->beforeOrEqual('starts_at')
+                    ->disabled(fn (?FlashSale $record): bool => self::isTerminal($record)),
+
+                TextInput::make('min_discount_percentage')
+                    ->label('Min Discount Percentage')
+                    ->numeric()
+                    ->default(5.00)
+                    ->minValue(1)
+                    ->maxValue(99)
+                    ->lte('max_discount_percentage')
+                    ->suffix('%')
+                    ->disabled(fn (?FlashSale $record): bool => self::isTerminal($record)),
+
+                TextInput::make('max_discount_percentage')
+                    ->label('Max Discount Percentage')
+                    ->numeric()
+                    ->default(80.00)
+                    ->minValue(1)
+                    ->maxValue(99)
+                    ->gte('min_discount_percentage')
+                    ->suffix('%')
+                    ->disabled(fn (?FlashSale $record): bool => self::isTerminal($record)),
+
+                TextInput::make('max_products_per_seller')
+                    ->label('Max Products per Seller')
+                    ->numeric()
+                    ->default(10)
+                    ->minValue(1)
+                    ->disabled(fn (?FlashSale $record): bool => self::isTerminal($record)),
+
+                TextInput::make('min_stock_per_product')
+                    ->label('Min Stock per Product')
+                    ->numeric()
+                    ->default(1)
+                    ->minValue(1)
+                    ->disabled(fn (?FlashSale $record): bool => self::isTerminal($record)),
+
+                TextInput::make('max_stock_per_product')
+                    ->label('Max Stock per Product')
+                    ->numeric()
+                    ->nullable()
+                    ->gte('min_stock_per_product')
+                    ->disabled(fn (?FlashSale $record): bool => self::isTerminal($record)),
+
+                Select::make('seller_eligibility_type')
+                    ->label('Seller Eligibility')
+                    ->options(SellerEligibilityType::class)
+                    ->default(SellerEligibilityType::All->value)
+                    ->live()
+                    ->disabled(fn (?FlashSale $record): bool => self::isTerminal($record)),
+
+                TextInput::make('minimum_seller_rating')
+                    ->label('Minimum Seller Rating')
+                    ->numeric()
+                    ->nullable()
+                    ->live()
+                    ->step(0.1)
+                    ->minValue(0)
+                    ->maxValue(5)
+                    ->visible(fn (Get $get): bool => $get('seller_eligibility_type') === SellerEligibilityType::MinimumRating->value || $get('seller_eligibility_type') === SellerEligibilityType::MinimumRating)
+                    ->required(fn (Get $get): bool => $get('seller_eligibility_type') === SellerEligibilityType::MinimumRating->value || $get('seller_eligibility_type') === SellerEligibilityType::MinimumRating)
+                    ->disabled(fn (?FlashSale $record): bool => self::isTerminal($record)),
+
+                Toggle::make('requires_approval')
+                    ->label('Requires Approval')
+                    ->default(true)
+                    ->helperText('Require manual admin review before seller products appear in flash sale')
+                    ->disabled(fn (?FlashSale $record): bool => self::isTerminal($record)),
+
+                Select::make('categories')
+                    ->label('Eligible Categories')
+                    ->relationship('categories', 'name')
+                    ->multiple()
+                    ->preload()
+                    ->helperText('Select eligible categories. Leave empty to allow all product categories.')
+                    ->columnSpanFull()
                     ->disabled(fn (?FlashSale $record): bool => self::isTerminal($record)),
             ]);
     }

@@ -45,6 +45,35 @@ class FlashSalesTable
                         FlashSaleStatus::Ended, FlashSaleStatus::Cancelled => 'gray',
                     }),
 
+                TextColumn::make('registration')
+                    ->label('Registration')
+                    ->badge()
+                    ->state(function (FlashSale $record): string {
+                        if ($record->isRegistrationOpen()) {
+                            return 'Open';
+                        }
+                        if ($record->registration_starts_at && now()->lt($record->registration_starts_at)) {
+                            return 'Upcoming';
+                        }
+
+                        return 'Closed';
+                    })
+                    ->color(function (FlashSale $record): string {
+                        if ($record->isRegistrationOpen()) {
+                            return 'success';
+                        }
+                        if ($record->registration_starts_at && now()->lt($record->registration_starts_at)) {
+                            return 'info';
+                        }
+
+                        return 'gray';
+                    }),
+
+                TextColumn::make('discount_range')
+                    ->label('Discounts')
+                    ->state(fn (FlashSale $record): string => (int) ($record->min_discount_percentage ?? 5).'% - '.(int) ($record->max_discount_percentage ?? 80).'%')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
                 TextColumn::make('starts_at')
                     ->label('Starts (Dhaka)')
                     ->dateTime('d M Y, h:i A', 'Asia/Dhaka')

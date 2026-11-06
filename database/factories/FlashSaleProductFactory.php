@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Factories;
 
 use App\Enums\FlashSaleDiscountType;
+use App\Enums\FlashSaleSubmissionStatus;
 use App\Models\FlashSale;
 use App\Models\FlashSaleProduct;
 use App\Models\Product;
@@ -28,11 +29,28 @@ class FlashSaleProductFactory extends Factory
         return [
             'flash_sale_id' => FlashSale::factory(),
             'product_id' => fn (): mixed => Product::query()->value('id'),
+            'status' => FlashSaleSubmissionStatus::Approved,
             'discount_type' => FlashSaleDiscountType::Percentage,
             'discount_value' => 10,
             'stock_limit' => null,
+            'units_sold' => 0,
             'per_customer_limit' => null,
             'sort_order' => 0,
         ];
+    }
+
+    public function approved(): static
+    {
+        return $this->state(fn (): array => ['status' => FlashSaleSubmissionStatus::Approved]);
+    }
+
+    public function pending(): static
+    {
+        return $this->state(fn (): array => ['status' => FlashSaleSubmissionStatus::Pending]);
+    }
+
+    public function rejected(): static
+    {
+        return $this->state(fn (): array => ['status' => FlashSaleSubmissionStatus::Rejected]);
     }
 }

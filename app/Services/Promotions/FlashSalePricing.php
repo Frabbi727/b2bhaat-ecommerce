@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Promotions;
 
+use App\Enums\FlashSaleSubmissionStatus;
 use App\Models\FlashSaleProduct;
 use App\Models\Product;
 use Illuminate\Database\Eloquent\Builder;
@@ -108,6 +109,7 @@ class FlashSalePricing
     {
         $found = FlashSaleProduct::query()
             ->whereIn('product_id', $productIds)
+            ->where('status', FlashSaleSubmissionStatus::Approved)
             ->whereHas('flashSale', fn (Builder $sale): Builder => $sale->live())
             ->with('flashSale')
             ->orderBy('id')

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\FlashSaleDiscountType;
+use App\Enums\FlashSaleSubmissionStatus;
 use App\Services\Promotions\FlashSalePricing;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -22,11 +23,19 @@ class FlashSaleProduct extends Model
     protected $fillable = [
         'flash_sale_id',
         'product_id',
+        'seller_id',
+        'status',
         'discount_type',
         'discount_value',
+        'original_retail_price',
+        'campaign_price',
         'stock_limit',
+        'units_sold',
         'per_customer_limit',
         'sort_order',
+        'rejection_reason',
+        'reviewed_by',
+        'reviewed_at',
     ];
 
     /**
@@ -45,11 +54,16 @@ class FlashSaleProduct extends Model
     protected function casts(): array
     {
         return [
+            'status' => FlashSaleSubmissionStatus::class,
             'discount_type' => FlashSaleDiscountType::class,
             'discount_value' => 'decimal:2',
+            'original_retail_price' => 'decimal:2',
+            'campaign_price' => 'decimal:2',
             'stock_limit' => 'integer',
+            'units_sold' => 'integer',
             'per_customer_limit' => 'integer',
             'sort_order' => 'integer',
+            'reviewed_at' => 'datetime',
         ];
     }
 
@@ -61,6 +75,16 @@ class FlashSaleProduct extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function seller(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'seller_id');
+    }
+
+    public function reviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
     }
 
     public function orderItems(): HasMany

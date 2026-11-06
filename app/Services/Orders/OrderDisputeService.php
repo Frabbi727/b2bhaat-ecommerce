@@ -2,6 +2,7 @@
 
 namespace App\Services\Orders;
 
+use App\Models\FlashSaleProduct;
 use App\Models\FulfillmentStatus;
 use App\Models\Order;
 use App\Models\OrderStatus;
@@ -71,6 +72,15 @@ class OrderDisputeService
                         'variation_id' => $item->variation_id,
                         'quantity' => $item->quantity,
                     ];
+                }
+
+                if ($item->flash_sale_product_id) {
+                    $offer = FlashSaleProduct::whereKey($item->flash_sale_product_id)->lockForUpdate()->first();
+                    if ($offer) {
+                        $offer->update([
+                            'units_sold' => max(0, (int) $offer->units_sold - (int) $item->quantity),
+                        ]);
+                    }
                 }
             }
 

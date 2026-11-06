@@ -72,3 +72,14 @@ php artisan filament:upgrade && \
 php artisan optimize:clear && \
 php artisan optimize
 ```
+
+```bash
+MAIL_MAILER=smtp
+MAIL_HOST=mail.b2bhaat.com
+MAIL_PORT=465
+MAIL_USERNAME=noreply@b2bhaat.com
+MAIL_PASSWORD= b2bhaat@
+MAIL_ENCRYPTION=ssl
+MAIL_FROM_ADDRESS="noreply@b2bhaat.com"
+MAIL_FROM_NAME="B2B Haat"
+```

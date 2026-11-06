@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\FlashSales\RelationManagers;
 
 use App\Enums\FlashSaleDiscountType;
+use App\Enums\FlashSaleSubmissionStatus;
 use App\Models\FlashSaleProduct;
 use App\Models\Product;
 use App\Models\ProductPrice;
@@ -87,6 +88,11 @@ class ProductsRelationManager extends RelationManager
             ])
             ->headerActions([
                 AttachAction::make()
+                    ->mutateFormDataUsing(function (array $data): array {
+                        $data['status'] = FlashSaleSubmissionStatus::Approved->value;
+
+                        return $data;
+                    })
                     ->preloadRecordSelect()
                     ->recordSelectOptionsQuery(fn ($query) => $query->where('is_active', true)->whereNull('blocked_at'))
                     ->form(fn (AttachAction $action): array => [
