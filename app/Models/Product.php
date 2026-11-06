@@ -262,7 +262,8 @@ class Product extends Model
         return $query->where($query->qualifyColumn('is_active'), true)
             ->whereNull($query->qualifyColumn('blocked_at'))
             ->whereHas('seller', fn (Builder $seller) => $seller->where('is_active', true)
-                ->whereHas('sellerProfile', fn (Builder $profile) => $profile->where('is_approved', true)));
+                ->whereHas('sellerProfile', fn (Builder $profile) => $profile->where('is_approved', true)
+                    ->where('monetization_status', 'active')));
     }
 
     /**
