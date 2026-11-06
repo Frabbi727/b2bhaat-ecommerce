@@ -99,6 +99,7 @@ class CartComponent extends Component
     public function render()
     {
         $cart = app(CartSessionService::class);
+        $cart->refreshPrices();
         $items = $cart->getItems();
         $subtotal = $cart->getSubtotal();
         $itemCount = $cart->getItemCount();

@@ -59,14 +59,16 @@ class FlashSalePricing
 
     /**
      * Price of a retail cart line whose normal (tier) price is $tierPrice.
+     * An offer that saves nothing on this line is not recorded, so it uses up no campaign quota.
      *
      * @return array{unit_price: float, flash_sale_product_id: ?int, original_unit_price: ?float}
      */
     public function retailLinePrice(Product $product, float $tierPrice): array
     {
         $offer = $this->offerFor($product);
+        $flashPrice = $offer?->priceFrom($tierPrice);
 
-        if ($offer === null) {
+        if ($offer === null || $flashPrice >= $tierPrice) {
             return [
                 'unit_price' => $tierPrice,
                 'flash_sale_product_id' => null,
@@ -75,7 +77,7 @@ class FlashSalePricing
         }
 
         return [
-            'unit_price' => $offer->priceFrom($tierPrice),
+            'unit_price' => $flashPrice,
             'flash_sale_product_id' => (int) $offer->getKey(),
             'original_unit_price' => $tierPrice,
         ];

@@ -13,6 +13,7 @@ use App\Models\SubOrder;
 use App\Models\User;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Logistics\ShippingCalculatorService;
+use App\Services\Promotions\FlashSaleAllocationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -20,7 +21,8 @@ class OrderSplitterService
 {
     public function __construct(
         protected StockReservationService $stockReservationService,
-        protected ShippingCalculatorService $shippingCalculatorService
+        protected ShippingCalculatorService $shippingCalculatorService,
+        protected FlashSaleAllocationService $flashSaleAllocationService,
     ) {}
 
     /**
@@ -34,13 +36,18 @@ class OrderSplitterService
      *         variation_id: ?int,
      *         sales_channel_id: int,
      *         quantity: int,
-     *         unit_price: float
+     *         unit_price: float,
+     *         flash_sale_product_id?: ?int,
+     *         original_unit_price?: ?float
      *     }>
      * } $data
      */
     public function createAndSplitOrder(User $customer, array $data): Order
     {
         return DB::transaction(function () use ($customer, $data) {
+            // Flash-priced lines are checked and their offers locked before anything is written
+            $this->flashSaleAllocationService->claim($customer, $data['items']);
+
             // 0. Verify no participating vendor is currently on vacation mode
             $productIds = collect($data['items'])->pluck('product_id')->unique()->filter();
             $vacationProducts = Product::with('seller.sellerProfile')
@@ -180,6 +187,8 @@ class OrderSplitterService
                         'variation_id' => $itemData['variation_id'] ?? null,
                         'sales_channel_id' => $itemData['sales_channel_id'],
                         'unit_price' => $itemData['unit_price'],
+                        'flash_sale_product_id' => $itemData['flash_sale_product_id'] ?? null,
+                        'original_unit_price' => $itemData['original_unit_price'] ?? null,
                         'quantity' => $itemData['quantity'],
                         'total_price' => round($itemData['unit_price'] * $itemData['quantity'], 2),
                     ]);

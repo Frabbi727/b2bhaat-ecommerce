@@ -223,21 +223,92 @@ class CartSessionService
         // Dynamically recalculate unit_price to match the updated quantity volume tier
         $product = Product::with(['prices.salesChannel'])->find($item['product_id']);
         if ($product) {
-            $channelPrices = $product->prices
-                ->filter(fn ($p) => $p->salesChannel?->slug === $item['sales_channel_slug'] && ($p->variation_id === $item['variation_id'] || is_null($p->variation_id)))
-                ->sortBy('min_quantity');
-
-            if ($channelPrices->isNotEmpty()) {
-                $matchedTier = $this->resolveTierRecord($channelPrices, $newQuantity);
-                if ($matchedTier) {
-                    $item = [...$item, ...$this->applyFlashSale($product, $item['sales_channel_slug'], (float) $matchedTier->unit_price)];
-                }
-            }
+            $item = [...$item, ...($this->linePricing($product, $item, $newQuantity) ?? [])];
         }
 
         $item['quantity'] = $newQuantity;
         $items[$key] = $item;
         Session::put(self::SESSION_KEY, $items);
+    }
+
+    /**
+     * Re-price every non-quoted line at today's tier and live campaign price, so a flash price
+     * that has ended (or a campaign that was paused) is never charged from an old cart.
+     *
+     * @return array<int, string> titles of the products whose price changed
+     */
+    public function refreshPrices(): array
+    {
+        $before = $this->getItems();
+        if ($before === []) {
+            return [];
+        }
+
+        $pricing = app(FlashSalePricing::class);
+        $pricing->flush();
+
+        $products = Product::with('prices.salesChannel')
+            ->whereIn('id', collect($before)->pluck('product_id')->unique())
+            ->get()
+            ->keyBy('id');
+        $pricing->primeFor($products);
+
+        $items = $before;
+        $wholesaleProductIds = [];
+        foreach ($items as $key => $item) {
+            if ($item['is_quoted'] ?? false) {
+                continue;
+            }
+
+            if ($item['sales_channel_slug'] === SalesChannel::WHOLESALE) {
+                $wholesaleProductIds[(int) $item['product_id']] = (int) $item['product_id'];
+
+                continue;
+            }
+
+            $product = $products->get($item['product_id']);
+            if ($product) {
+                $items[$key] = [...$item, ...($this->linePricing($product, $item, (int) $item['quantity']) ?? [])];
+            }
+        }
+
+        Session::put(self::SESSION_KEY, $items);
+
+        foreach ($wholesaleProductIds as $productId) {
+            $this->repriceWholesaleGroup($productId);
+        }
+
+        $changedTitles = [];
+        foreach ($this->getItems() as $key => $item) {
+            if (abs((float) $item['unit_price'] - (float) $before[$key]['unit_price']) > 0.005) {
+                $changedTitles[] = (string) $item['product_title'];
+            }
+        }
+
+        return array_values(array_unique($changedTitles));
+    }
+
+    /**
+     * Tier price for the line at $quantity, with the live campaign price for retail lines.
+     *
+     * @param  array<string, mixed>  $item
+     * @return array{unit_price: float, flash_sale_product_id: ?int, original_unit_price: ?float}|null
+     */
+    private function linePricing(Product $product, array $item, int $quantity): ?array
+    {
+        $channelPrices = $product->prices
+            ->filter(fn ($p) => $p->salesChannel?->slug === $item['sales_channel_slug'] && ($p->variation_id === $item['variation_id'] || is_null($p->variation_id)))
+            ->sortBy('min_quantity');
+
+        if ($channelPrices->isEmpty()) {
+            return null;
+        }
+
+        $matchedTier = $this->resolveTierRecord($channelPrices, $quantity);
+
+        return $matchedTier
+            ? $this->applyFlashSale($product, $item['sales_channel_slug'], (float) $matchedTier->unit_price)
+            : null;
     }
 
     /**

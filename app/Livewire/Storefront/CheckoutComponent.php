@@ -3,6 +3,7 @@
 namespace App\Livewire\Storefront;
 
 use App\Actions\Checkout\ResolveCheckoutCustomer;
+use App\Exceptions\FlashSaleUnavailableException;
 use App\Models\Coupon;
 use App\Models\CustomerAddress;
 use App\Models\OrderStatus;
@@ -239,6 +240,14 @@ class CheckoutComponent extends Component
             return;
         }
 
+        $changedTitles = $cart->refreshPrices();
+        if ($changedTitles !== []) {
+            $this->errorMessage = 'Prices changed for '.implode(', ', $changedTitles).' because a flash sale ended. Please check your cart and place the order again.';
+
+            return;
+        }
+        $items = $cart->getItems();
+
         $config = app(StoreConfigurationService::class);
 
         // 1. Guest checkout policy safeguard
@@ -342,6 +351,8 @@ class CheckoutComponent extends Component
                         'sales_channel_id' => $item['sales_channel_id'],
                         'quantity' => $item['quantity'],
                         'unit_price' => $item['unit_price'],
+                        'flash_sale_product_id' => $item['flash_sale_product_id'] ?? null,
+                        'original_unit_price' => $item['original_unit_price'] ?? null,
                     ];
                 }, $items)),
             ];
@@ -420,6 +431,11 @@ class CheckoutComponent extends Component
                 'order' => $order->order_number,
                 'phone' => $this->recipientPhone,
             ]);
+        } catch (FlashSaleUnavailableException $e) {
+            $this->errorMessage = $e->getMessage();
+            if ($e->saleEnded) {
+                $cart->refreshPrices();
+            }
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
         }
