@@ -13,22 +13,26 @@ use App\Filament\Seller\Resources\FlashSales\RelationManagers\MySubmissionsRelat
 use App\Models\FlashSale;
 use App\Models\FlashSaleProduct;
 use App\Models\Product;
+use App\Models\SalesChannel;
 use App\Services\Promotions\FlashSaleSubmissionService;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 use UnitEnum;
 
 class FlashSaleResource extends Resource
@@ -146,66 +150,240 @@ class FlashSaleResource extends Resource
             ])
             ->recordActions([
                 ViewAction::make(),
-                Action::make('submitProduct')
-                    ->label('Submit Product')
-                    ->icon('heroicon-o-plus-circle')
-                    ->color('primary')
-                    ->visible(fn (FlashSale $record): bool => $record->isRegistrationOpen())
-                    ->form(fn (FlashSale $record): array => [
-                        Select::make('product_id')
-                            ->label('Select Product')
-                            ->required()
-                            ->options(function () use ($record): array {
-                                $query = Product::query()
-                                    ->where('seller_id', auth()->id())
-                                    ->where('is_active', true);
-
-                                if ($record->categories()->exists()) {
-                                    $query->whereIn('category_id', $record->categories()->pluck('categories.id'));
-                                }
-
-                                $submittedProductIds = FlashSaleProduct::where('flash_sale_id', $record->id)->pluck('product_id');
-                                $query->whereNotIn('id', $submittedProductIds);
-
-                                return $query->pluck('title', 'id')->all();
-                            }),
-                        Select::make('discount_type')
-                            ->options(FlashSaleDiscountType::class)
-                            ->default(FlashSaleDiscountType::Percentage->value)
-                            ->required(),
-                        TextInput::make('discount_value')
-                            ->numeric()
-                            ->required()
-                            ->label('Discount Value')
-                            ->helperText(fn (FlashSale $record): string => "Campaign discount must be between {$record->min_discount_percentage}% and {$record->max_discount_percentage}%"),
-                        TextInput::make('stock_limit')
-                            ->numeric()
-                            ->required()
-                            ->label('Allocated Stock')
-                            ->helperText(fn (FlashSale $record): string => "Minimum {$record->min_stock_per_product} units required. Must not exceed your physical stock."),
-                        TextInput::make('per_customer_limit')
-                            ->numeric()
-                            ->nullable()
-                            ->label('Per Customer Limit'),
-                    ])
-                    ->action(function (FlashSale $record, array $data, Action $action): void {
-                        try {
-                            app(FlashSaleSubmissionService::class)->submit(auth()->user(), $record, $data);
-                            Notification::make()
-                                ->title('Product submitted successfully for review')
-                                ->success()
-                                ->send();
-                        } catch (FlashSaleSubmissionException $e) {
-                            Notification::make()
-                                ->title('Submission failed')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
-
-                            $action->halt();
-                        }
-                    }),
+                static::getSubmitProductAction(),
             ]);
+    }
+
+    public static function getSubmitProductAction(): Action
+    {
+        return Action::make('submitProduct')
+            ->label('Submit Product')
+            ->icon('heroicon-o-plus-circle')
+            ->color('primary')
+            ->visible(fn (FlashSale $record): bool => $record->isRegistrationOpen())
+            ->form(fn (FlashSale $record): array => static::getProductSubmissionForm($record))
+            ->action(function (FlashSale $record, array $data, Action $action): void {
+                try {
+                    app(FlashSaleSubmissionService::class)->submit(auth()->user(), $record, $data);
+                    Notification::make()
+                        ->title('Product submitted successfully for review')
+                        ->success()
+                        ->send();
+                } catch (FlashSaleSubmissionException $e) {
+                    Notification::make()
+                        ->title('Submission failed')
+                        ->body($e->getMessage())
+                        ->danger()
+                        ->send();
+
+                    $action->halt();
+                }
+            });
+    }
+
+    public static function getProductSubmissionForm(FlashSale $record): array
+    {
+        return [
+            Select::make('product_id')
+                ->label('Select Product')
+                ->required()
+                ->searchable()
+                ->preload()
+                ->live()
+                ->options(function () use ($record): array {
+                    $query = Product::query()
+                        ->where('seller_id', auth()->id())
+                        ->where('is_active', true)
+                        ->with(['prices.salesChannel', 'variations']);
+
+                    if ($record->categories()->exists()) {
+                        $query->whereIn('category_id', $record->categories()->pluck('categories.id'));
+                    }
+
+                    $submittedProductIds = FlashSaleProduct::where('flash_sale_id', $record->id)->pluck('product_id');
+                    $query->whereNotIn('id', $submittedProductIds);
+
+                    return $query->get()->mapWithKeys(function (Product $product): array {
+                        $base = static::resolveProductRetailPrice($product);
+                        $stock = static::resolveProductStock($product);
+
+                        return [$product->id => "{$product->title} — ৳".number_format($base, 0)." ({$stock} in stock)"];
+                    })->all();
+                }),
+
+            Placeholder::make('product_details')
+                ->label('Product Summary')
+                ->visible(fn (Get $get): bool => filled($get('product_id')))
+                ->content(function (Get $get): ?HtmlString {
+                    $productId = $get('product_id');
+                    if (! $productId) {
+                        return null;
+                    }
+
+                    $product = Product::with(['prices.salesChannel', 'variations'])->find($productId);
+                    if (! $product) {
+                        return null;
+                    }
+
+                    $base = static::resolveProductRetailPrice($product);
+                    $stock = static::resolveProductStock($product);
+
+                    return new HtmlString('
+                        <div class="grid grid-cols-2 gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700">
+                            <div>
+                                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Original Retail Price</span>
+                                <p class="text-base font-bold text-gray-900 dark:text-white">৳'.number_format($base, 2)."</p>
+                            </div>
+                            <div>
+                                <span class=\"text-xs font-medium text-gray-500 dark:text-gray-400\">Available Warehouse Stock</span>
+                                <p class=\"text-base font-bold text-gray-900 dark:text-white\">{$stock} units</p>
+                            </div>
+                        </div>
+                    ");
+                }),
+
+            Select::make('discount_type')
+                ->label('Discount Type')
+                ->options(FlashSaleDiscountType::class)
+                ->default(FlashSaleDiscountType::Percentage->value)
+                ->required()
+                ->live(),
+
+            TextInput::make('discount_value')
+                ->numeric()
+                ->required()
+                ->label('Discount Value')
+                ->live(debounce: 300)
+                ->helperText(fn (FlashSale $record): string => "Campaign discount must be between {$record->min_discount_percentage}% and {$record->max_discount_percentage}%"),
+
+            Placeholder::make('price_preview')
+                ->label('Flash Price Preview')
+                ->visible(fn (Get $get): bool => filled($get('product_id')))
+                ->content(function (Get $get) use ($record): HtmlString {
+                    $productId = $get('product_id');
+                    $type = $get('discount_type') ?? FlashSaleDiscountType::Percentage->value;
+                    $val = (float) ($get('discount_value') ?? 0);
+
+                    if (! $productId) {
+                        return new HtmlString('<span class="text-sm text-gray-500 dark:text-gray-400">Select a product above.</span>');
+                    }
+
+                    $product = Product::with(['prices.salesChannel', 'variations'])->find($productId);
+                    if (! $product) {
+                        return new HtmlString('<span class="text-sm text-gray-500 dark:text-gray-400">Product not found.</span>');
+                    }
+
+                    $base = static::resolveProductRetailPrice($product);
+                    if ($base <= 0) {
+                        return new HtmlString('<span class="text-sm text-danger-600 dark:text-danger-400">This product does not have an active retail price.</span>');
+                    }
+
+                    if ($val <= 0) {
+                        return new HtmlString('<span class="text-sm text-gray-500 dark:text-gray-400">৳'.number_format($base, 2).' (Enter a discount value above to preview the flash price)</span>');
+                    }
+
+                    $typeEnum = $type instanceof FlashSaleDiscountType ? $type : FlashSaleDiscountType::tryFrom((string) $type);
+
+                    $previewPrice = match ($typeEnum) {
+                        FlashSaleDiscountType::Percentage => round($base * (1 - ($val / 100)), 2),
+                        FlashSaleDiscountType::FixedAmount => round($base - $val, 2),
+                        FlashSaleDiscountType::FixedPrice => round($val, 2),
+                        default => $base,
+                    };
+
+                    if ($previewPrice <= 0) {
+                        return new HtmlString('<span class="text-sm font-semibold text-danger-600 dark:text-danger-400">Invalid: Flash price must be greater than ৳0.</span>');
+                    }
+
+                    if ($previewPrice >= $base) {
+                        return new HtmlString('<span class="text-sm font-semibold text-danger-600 dark:text-danger-400">Invalid: Flash price must be lower than original price (৳'.number_format($base, 2).').</span>');
+                    }
+
+                    $savings = max(0, round($base - $previewPrice, 2));
+                    $discountPercent = round(($savings / $base) * 100, 2);
+
+                    $warning = null;
+                    if ($record->min_discount_percentage !== null && $discountPercent < (float) $record->min_discount_percentage) {
+                        $warning = "Below campaign minimum ({$record->min_discount_percentage}%)";
+                    } elseif ($record->max_discount_percentage !== null && $discountPercent > (float) $record->max_discount_percentage) {
+                        $warning = "Exceeds campaign maximum ({$record->max_discount_percentage}%)";
+                    }
+
+                    $warningHtml = $warning
+                        ? "<div class=\"mt-1 text-xs font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1\">⚠️ {$warning}</div>"
+                        : '';
+
+                    $previewFormatted = floor($previewPrice) == $previewPrice ? number_format($previewPrice, 0) : number_format($previewPrice, 2);
+                    $savingsFormatted = floor($savings) == $savings ? number_format($savings, 0) : number_format($savings, 2);
+
+                    return new HtmlString("
+                        <div class=\"p-3 rounded-lg bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700\">
+                            <div class=\"flex items-baseline gap-2\">
+                                <span class=\"text-lg font-extrabold text-success-600 dark:text-success-400\">৳{$previewFormatted}</span>
+                                <span class=\"text-sm font-semibold text-gray-700 dark:text-gray-300\">(saving ৳{$savingsFormatted} • {$discountPercent}% off)</span>
+                            </div>
+                            {$warningHtml}
+                        </div>
+                    ");
+                }),
+
+            TextInput::make('stock_limit')
+                ->numeric()
+                ->required()
+                ->label('Allocated Stock')
+                ->helperText(function (Get $get, FlashSale $record): string {
+                    $productId = $get('product_id');
+                    if ($productId) {
+                        $product = Product::with('variations')->find($productId);
+                        if ($product) {
+                            $stock = static::resolveProductStock($product);
+
+                            return "Available warehouse stock: {$stock} units. Minimum {$record->min_stock_per_product} units required. Must not exceed your physical stock.";
+                        }
+                    }
+
+                    return "Minimum {$record->min_stock_per_product} units required. Must not exceed your physical stock.";
+                }),
+
+            TextInput::make('per_customer_limit')
+                ->numeric()
+                ->nullable()
+                ->label('Per Customer Limit')
+                ->helperText('Optional limit on maximum units a single customer can purchase.'),
+        ];
+    }
+
+    public static function resolveProductRetailPrice(Product $product): float
+    {
+        if ($product->relationLoaded('prices')) {
+            $retailPriceRecord = $product->prices
+                ->where(fn ($p) => $p->salesChannel?->slug === SalesChannel::RETAIL && $p->variation_id === null)
+                ->first()
+                ?? $product->prices
+                    ->where(fn ($p) => $p->salesChannel?->slug === SalesChannel::RETAIL)
+                    ->first();
+
+            return $retailPriceRecord ? (float) $retailPriceRecord->unit_price : (float) ($product->regular_price ?? 0.0);
+        }
+
+        $retailPriceRecord = $product->prices()
+            ->whereHas('salesChannel', fn (Builder $q) => $q->where('slug', SalesChannel::RETAIL))
+            ->whereNull('variation_id')
+            ->first()
+            ?? $product->prices()
+                ->whereHas('salesChannel', fn (Builder $q) => $q->where('slug', SalesChannel::RETAIL))
+                ->first();
+
+        return $retailPriceRecord ? (float) $retailPriceRecord->unit_price : (float) ($product->regular_price ?? 0.0);
+    }
+
+    public static function resolveProductStock(Product $product): int
+    {
+        if ($product->relationLoaded('variations')) {
+            return (int) $product->variations->sum('stock_quantity');
+        }
+
+        return (int) $product->variations()->sum('stock_quantity');
     }
 
     public static function canCreate(): bool

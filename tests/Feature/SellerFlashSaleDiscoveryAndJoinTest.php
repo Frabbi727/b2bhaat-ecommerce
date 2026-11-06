@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Enums\FlashSaleDiscountType;
 use App\Enums\FlashSaleStatus;
 use App\Enums\FlashSaleSubmissionStatus;
+use App\Filament\Seller\Resources\FlashSales\FlashSaleResource;
 use App\Filament\Seller\Resources\FlashSales\Pages\ListFlashSales;
 use App\Filament\Seller\Resources\FlashSales\Pages\ViewFlashSale;
 use App\Models\FlashSale;
@@ -271,5 +272,38 @@ class SellerFlashSaleDiscoveryAndJoinTest extends TestCase
         Livewire::test(ViewFlashSale::class, ['record' => $campaign->getRouteKey()])
             ->assertSuccessful()
             ->assertSee('Viewable Campaign Details');
+    }
+
+    public function test_submission_form_resolves_product_price_and_stock_for_preview(): void
+    {
+        $campaign = FlashSale::create([
+            'name' => 'Preview Test Campaign',
+            'slug' => 'preview-test-campaign',
+            'status' => FlashSaleStatus::Scheduled,
+            'registration_starts_at' => Carbon::now()->subDay(),
+            'registration_ends_at' => Carbon::now()->addDays(2),
+            'starts_at' => Carbon::now()->addDays(3),
+            'ends_at' => Carbon::now()->addDays(5),
+            'min_discount_percentage' => 10,
+            'max_discount_percentage' => 50,
+            'min_stock_per_product' => 1,
+            'max_stock_per_product' => 100,
+        ]);
+
+        $retail = FlashSaleResource::resolveProductRetailPrice($this->product);
+        $this->assertEquals(1000.00, $retail);
+
+        $stock = FlashSaleResource::resolveProductStock($this->product);
+        $this->assertGreaterThanOrEqual(1, $stock);
+
+        $form = FlashSaleResource::getProductSubmissionForm($campaign);
+        $componentNames = array_map(fn ($c) => $c->getName(), $form);
+
+        $this->assertContains('product_id', $componentNames);
+        $this->assertContains('product_details', $componentNames);
+        $this->assertContains('discount_type', $componentNames);
+        $this->assertContains('discount_value', $componentNames);
+        $this->assertContains('price_preview', $componentNames);
+        $this->assertContains('stock_limit', $componentNames);
     }
 }

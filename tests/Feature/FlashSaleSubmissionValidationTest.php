@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Enums\FlashSaleDiscountType;
 use App\Enums\FlashSaleSubmissionStatus;
+use App\Enums\SellerEligibilityType;
 use App\Exceptions\FlashSaleSubmissionException;
 use App\Models\Category;
 use App\Models\FlashSale;
@@ -379,6 +380,22 @@ class FlashSaleSubmissionValidationTest extends TestCase
             'id' => $submission->id,
             'status' => FlashSaleSubmissionStatus::Approved->value,
             'campaign_price' => 800.00,
+        ]);
+    }
+
+    public function test_rejects_submission_if_campaign_is_verified_sellers_only_and_seller_is_not_approved(): void
+    {
+        $this->campaign->update(['seller_eligibility_type' => SellerEligibilityType::VerifiedOnly]);
+
+        // Seller has no approved sellerProfile
+        $this->expectException(FlashSaleSubmissionException::class);
+        $this->expectExceptionMessage('Only KYC-verified sellers can join this campaign.');
+
+        $this->service->submit($this->seller, $this->campaign, [
+            'product_id' => $this->product->id,
+            'discount_type' => FlashSaleDiscountType::Percentage->value,
+            'discount_value' => 20,
+            'stock_limit' => 10,
         ]);
     }
 }

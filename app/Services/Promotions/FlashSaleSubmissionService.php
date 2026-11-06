@@ -6,6 +6,7 @@ namespace App\Services\Promotions;
 
 use App\Enums\FlashSaleDiscountType;
 use App\Enums\FlashSaleSubmissionStatus;
+use App\Enums\SellerEligibilityType;
 use App\Exceptions\FlashSaleSubmissionException;
 use App\Models\FlashSale;
 use App\Models\FlashSaleProduct;
@@ -47,6 +48,12 @@ class FlashSaleSubmissionService
 
             if (! $campaign->isRegistrationOpen()) {
                 throw new FlashSaleSubmissionException('Registration is closed for this campaign.');
+            }
+
+            if ($campaign->seller_eligibility_type === SellerEligibilityType::VerifiedOnly) {
+                if (! ($seller->sellerProfile?->is_approved ?? false)) {
+                    throw new FlashSaleSubmissionException('Only KYC-verified sellers can join this campaign.');
+                }
             }
 
             $eligibleCategoryIds = $campaign->categories()->pluck('categories.id')->map(fn ($id) => (int) $id)->all();
