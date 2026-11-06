@@ -18,8 +18,8 @@ return new class extends Migration
             $table->string('warranty_period', 100)->nullable()->after('regular_price');
             $table->text('warranty_policy')->nullable()->after('warranty_period');
             $table->string('delivery_info')->nullable()->after('warranty_policy');
-            $table->json('specifications')->nullable()->after('full_description');
-            $table->json('features')->nullable()->after('specifications');
+            $table->jsonb('specifications')->nullable()->after('full_description');
+            $table->jsonb('features')->nullable()->after('specifications');
             $table->boolean('is_featured')->default(false)->after('is_active');
             $table->boolean('is_flash_sale')->default(false)->after('is_featured');
             $table->decimal('flash_sale_price', 12, 2)->nullable()->after('is_flash_sale');
