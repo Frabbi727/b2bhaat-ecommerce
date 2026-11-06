@@ -109,9 +109,14 @@ class FlashSalesTable
             ])
             ->recordActions([
                 Action::make('openEnrollment')
-                    ->label('Open Participation')
+                    ->label('Start Accepting Submissions')
+                    ->tooltip('Open this campaign for sellers to submit products')
                     ->icon('heroicon-o-user-group')
                     ->color('info')
+                    ->requiresConfirmation()
+                    ->modalHeading('Open Campaign for Seller Submissions')
+                    ->modalDescription('This will open the campaign for sellers to view in Seller Center and submit products.')
+                    ->modalSubmitActionLabel('Open Submissions')
                     ->visible(fn (FlashSale $record): bool => in_array($record->status, [FlashSaleStatus::Draft, FlashSaleStatus::Reviewing], true))
                     ->action(function (FlashSale $record) use ($service): void {
                         try {
@@ -124,8 +129,13 @@ class FlashSalesTable
 
                 Action::make('closeEnrollment')
                     ->label('Close Submissions')
+                    ->tooltip('Close submissions and move to admin review')
                     ->icon('heroicon-o-lock-closed')
                     ->color('warning')
+                    ->requiresConfirmation()
+                    ->modalHeading('Close Seller Submissions')
+                    ->modalDescription('Are you sure you want to close seller submissions? Sellers will no longer be able to submit new products for this campaign.')
+                    ->modalSubmitActionLabel('Close Submissions')
                     ->visible(fn (FlashSale $record): bool => $record->status === FlashSaleStatus::Enrolling)
                     ->action(function (FlashSale $record) use ($service): void {
                         try {

@@ -7,6 +7,8 @@ namespace App\Filament\Seller\Resources\FlashSales\RelationManagers;
 use App\Enums\FlashSaleDiscountType;
 use App\Enums\FlashSaleSubmissionStatus;
 use App\Exceptions\FlashSaleSubmissionException;
+use App\Filament\Seller\Resources\FlashSales\FlashSaleResource;
+use App\Models\FlashSale;
 use App\Models\FlashSaleProduct;
 use App\Services\Promotions\FlashSaleSubmissionService;
 use Filament\Actions\Action;
@@ -30,6 +32,42 @@ class MySubmissionsRelationManager extends RelationManager
         return $table
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->where('seller_id', auth()->id())->with(['product', 'flashSale']))
             ->defaultSort('created_at', 'desc')
+            ->headerActions([
+                Action::make('submitProduct')
+                    ->label('Submit Product to Campaign')
+                    ->icon('heroicon-o-plus-circle')
+                    ->color('primary')
+                    ->visible(function (): bool {
+                        $sale = $this->getOwnerRecord();
+
+                        return $sale instanceof FlashSale && $sale->isRegistrationOpen();
+                    })
+                    ->form(function (): array {
+                        /** @var FlashSale $sale */
+                        $sale = $this->getOwnerRecord();
+
+                        return FlashSaleResource::getProductSubmissionForm($sale);
+                    })
+                    ->action(function (array $data, Action $action): void {
+                        /** @var FlashSale $sale */
+                        $sale = $this->getOwnerRecord();
+                        try {
+                            app(FlashSaleSubmissionService::class)->submit(auth()->user(), $sale, $data);
+                            Notification::make()
+                                ->title('Product submitted successfully for review')
+                                ->success()
+                                ->send();
+                        } catch (FlashSaleSubmissionException $e) {
+                            Notification::make()
+                                ->title('Submission failed')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+
+                            $action->halt();
+                        }
+                    }),
+            ])
             ->columns([
                 TextColumn::make('product.title')
                     ->label('Product')

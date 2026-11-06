@@ -29,10 +29,20 @@ class FlashSaleLifecycleService
                 throw new InvalidStatusTransitionException('The campaign end time has already passed.');
             }
 
-            $locked->update([
+            $data = [
                 'status' => FlashSaleStatus::Enrolling,
-                'registration_starts_at' => $locked->registration_starts_at ?? now(),
-            ]);
+                'registration_starts_at' => ($locked->registration_starts_at && $locked->registration_starts_at->lte(now()))
+                    ? $locked->registration_starts_at
+                    : now(),
+            ];
+
+            if ($locked->registration_ends_at === null || $locked->registration_ends_at->lte(now())) {
+                $data['registration_ends_at'] = ($locked->starts_at && $locked->starts_at->isFuture())
+                    ? $locked->starts_at
+                    : now()->addDays(3);
+            }
+
+            $locked->update($data);
         });
     }
 

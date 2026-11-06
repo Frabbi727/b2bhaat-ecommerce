@@ -166,11 +166,27 @@ class FlashSaleResource extends Resource
             ->label('Submit Product')
             ->icon('heroicon-o-plus-circle')
             ->color('primary')
-            ->visible(fn (FlashSale $record): bool => $record->isRegistrationOpen())
-            ->form(fn (FlashSale $record): array => static::getProductSubmissionForm($record))
-            ->action(function (FlashSale $record, array $data, Action $action): void {
+            ->visible(function ($record = null, $livewire = null): bool {
+                $sale = $record instanceof FlashSale ? $record : ($livewire?->getRecord() ?? null);
+
+                return $sale instanceof FlashSale && $sale->isRegistrationOpen();
+            })
+            ->form(function ($record = null, $livewire = null): array {
+                /** @var FlashSale|null $sale */
+                $sale = $record instanceof FlashSale ? $record : ($livewire?->getRecord() ?? null);
+
+                return $sale instanceof FlashSale ? static::getProductSubmissionForm($sale) : [];
+            })
+            ->action(function (array $data, Action $action, $record = null, $livewire = null): void {
+                /** @var FlashSale|null $sale */
+                $sale = $record instanceof FlashSale ? $record : ($livewire?->getRecord() ?? null);
+
+                if (! $sale instanceof FlashSale) {
+                    return;
+                }
+
                 try {
-                    app(FlashSaleSubmissionService::class)->submit(auth()->user(), $record, $data);
+                    app(FlashSaleSubmissionService::class)->submit(auth()->user(), $sale, $data);
                     Notification::make()
                         ->title('Product submitted successfully for review')
                         ->success()

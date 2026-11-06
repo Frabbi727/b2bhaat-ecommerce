@@ -9,6 +9,7 @@ use App\Exceptions\InvalidStatusTransitionException;
 use App\Filament\Admin\Resources\FlashSales\FlashSaleResource;
 use App\Models\FlashSale;
 use App\Services\Promotions\FlashSaleLifecycleService;
+use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Notifications\Notification;
@@ -17,6 +18,16 @@ use Filament\Resources\Pages\EditRecord;
 class EditFlashSale extends EditRecord
 {
     protected static string $resource = FlashSaleResource::class;
+
+    public function getSubheading(): ?string
+    {
+        $status = $this->record->effectiveStatus()->getLabel();
+        $regStatus = $this->record->isRegistrationOpen()
+            ? 'Accepting Seller Submissions'
+            : ($this->record->status === FlashSaleStatus::Reviewing ? 'Submissions Closed (In Review)' : 'Closed');
+
+        return "Campaign Status: {$status} • Seller Participation: {$regStatus}";
+    }
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
@@ -34,6 +45,16 @@ class EditFlashSale extends EditRecord
             $this->halt();
         }
 
+        if (in_array($this->record->status, [FlashSaleStatus::Draft, FlashSaleStatus::Reviewing], true)) {
+            $now = now();
+            $regStarts = ! empty($data['registration_starts_at']) ? Carbon::parse($data['registration_starts_at']) : $this->record->registration_starts_at;
+            $regEnds = ! empty($data['registration_ends_at']) ? Carbon::parse($data['registration_ends_at']) : $this->record->registration_ends_at;
+
+            if ($regStarts && $regEnds && $regStarts->lte($now) && $regEnds->gt($now)) {
+                $data['status'] = FlashSaleStatus::Enrolling;
+            }
+        }
+
         return $data;
     }
 
@@ -43,15 +64,19 @@ class EditFlashSale extends EditRecord
 
         return [
             Action::make('openEnrollment')
-                ->label('Open Seller Participation')
+                ->label('Start Accepting Submissions')
                 ->icon('heroicon-o-user-group')
                 ->color('info')
+                ->requiresConfirmation()
+                ->modalHeading('Open Campaign for Seller Submissions')
+                ->modalDescription('This will open the campaign for sellers to view in Seller Center and submit products.')
+                ->modalSubmitActionLabel('Open Submissions')
                 ->visible(fn (FlashSale $record): bool => in_array($record->status, [FlashSaleStatus::Draft, FlashSaleStatus::Reviewing], true))
                 ->action(function (FlashSale $record) use ($service): void {
                     try {
                         $service->openForEnrollment($record);
                         Notification::make()->success()->title('Campaign opened for seller participation!')->send();
-                        $this->refreshFormData(['status', 'registration_starts_at']);
+                        $this->refreshFormData(['status', 'registration_starts_at', 'registration_ends_at']);
                     } catch (InvalidStatusTransitionException $e) {
                         Notification::make()->danger()->title('Cannot open enrollment')->body($e->getMessage())->send();
                     }
@@ -61,6 +86,10 @@ class EditFlashSale extends EditRecord
                 ->label('Close Submissions')
                 ->icon('heroicon-o-lock-closed')
                 ->color('warning')
+                ->requiresConfirmation()
+                ->modalHeading('Close Seller Submissions')
+                ->modalDescription('Are you sure you want to close seller submissions? Sellers will no longer be able to submit new products for this campaign.')
+                ->modalSubmitActionLabel('Close Submissions')
                 ->visible(fn (FlashSale $record): bool => $record->status === FlashSaleStatus::Enrolling)
                 ->action(function (FlashSale $record) use ($service): void {
                     try {
