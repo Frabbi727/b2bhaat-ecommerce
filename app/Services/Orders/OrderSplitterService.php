@@ -13,6 +13,7 @@ use App\Models\SubOrder;
 use App\Models\User;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Logistics\ShippingCalculatorService;
+use App\Services\Monetization\MonetizationEngineService;
 use App\Services\Promotions\FlashSaleAllocationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -23,6 +24,7 @@ class OrderSplitterService
         protected StockReservationService $stockReservationService,
         protected ShippingCalculatorService $shippingCalculatorService,
         protected FlashSaleAllocationService $flashSaleAllocationService,
+        protected MonetizationEngineService $monetizationEngine,
     ) {}
 
     /**
@@ -154,16 +156,20 @@ class OrderSplitterService
 
                 // Calculate subtotal and commission
                 $seller = $sellerItemList[0]['product']->seller;
-                $defaultCommissionRate = $seller?->sellerProfile?->commission_rate_percentage ?? 10.00;
 
                 foreach ($sellerItemList as $entry) {
+                    $product = $entry['product'];
                     $itemData = $entry['item_data'];
                     $lineTotal = $itemData['unit_price'] * $itemData['quantity'];
                     $subtotal += $lineTotal;
 
-                    // Channel-specific take rate (Retail: 10%, Wholesale: 4%)
-                    $channel = SalesChannel::find($itemData['sales_channel_id']);
-                    $rate = ($channel && $channel->slug === SalesChannel::WHOLESALE) ? 4.00 : (float) $defaultCommissionRate;
+                    // Dynamically resolve commission rate through MonetizationEngine
+                    $channel = SalesChannel::find($itemData['sales_channel_id'])
+                        ?? $product->salesChannel;
+                    $rate = $channel
+                        ? $this->monetizationEngine->resolveCommissionRate($seller, $product, $channel)
+                        : (float) ($seller?->sellerProfile?->commission_rate_percentage ?? 10.00);
+
                     $commissionAmount += ($lineTotal * ($rate / 100.0));
                 }
 
