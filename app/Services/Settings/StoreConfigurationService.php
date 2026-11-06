@@ -174,4 +174,54 @@ class StoreConfigurationService
     {
         return (int) $this->get('escrow_holding_period_hours', 48);
     }
+
+    public function isMonetizationEnabled(): bool
+    {
+        return (bool) $this->get('monetization_enabled', true);
+    }
+
+    public function getMonetizationGracePeriodDays(): int
+    {
+        return (int) $this->get('monetization_default_grace_days', 3);
+    }
+
+    public function getMonetizationPreExpiryNoticeDays(): int
+    {
+        return (int) $this->get('monetization_pre_expiry_notice_days', 3);
+    }
+
+    public function isWalletAutoRenewAllowed(): bool
+    {
+        return (bool) $this->get('monetization_allow_wallet_auto_renew', true);
+    }
+
+    public function getListingAddonPackSize(): int
+    {
+        return (int) $this->get('monetization_addon_pack_size', 25);
+    }
+
+    public function getListingAddonPackPrice(): float
+    {
+        return (float) $this->get('monetization_addon_pack_price', 250.00);
+    }
+
+    public function getCodDeficitGraceDays(): int
+    {
+        return (int) $this->get('monetization_cod_deficit_threshold_days', 7);
+    }
+
+    public function getMonetizationBkashNumber(): ?string
+    {
+        return $this->get('monetization_bkash_merchant_number') ?: null;
+    }
+
+    public function getMonetizationNagadNumber(): ?string
+    {
+        return $this->get('monetization_nagad_merchant_number') ?: null;
+    }
+
+    public function getMonetizationBankInstructions(): ?string
+    {
+        return $this->get('monetization_offline_bank_details') ?: null;
+    }
 }
