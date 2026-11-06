@@ -1,0 +1,233 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Filament\Admin\Resources\SellerMonetization;
+
+use App\Filament\Admin\Resources\SellerMonetization\Pages\ListSellerMonetizations;
+use App\Models\SellerInvoice;
+use App\Models\SellerPayment;
+use App\Models\SellerProfile;
+use App\Models\SellerSubscription;
+use App\Services\Monetization\MonetizationSuspensionService;
+use BackedEnum;
+use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Resources\Resource;
+use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use UnitEnum;
+
+class SellerMonetizationResource extends Resource
+{
+    protected static ?string $model = SellerProfile::class;
+
+    protected static ?string $slug = 'seller-monetization';
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
+
+    protected static UnitEnum|string|null $navigationGroup = 'Monetization & Plans';
+
+    protected static ?int $navigationSort = 2;
+
+    protected static ?string $navigationLabel = 'Seller Monetization & Billing';
+
+    protected static ?string $modelLabel = 'seller billing';
+
+    protected static ?string $pluralModelLabel = 'seller monetization';
+
+    public static function canAccess(): bool
+    {
+        $user = auth()->user();
+
+        return $user && in_array($user->role?->slug, ['super_admin', 'admin'], true);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->modifyQueryUsing(fn (Builder $query) => $query->with([
+                'user.activeSellerSubscription.plan',
+                'user.sellerInvoices',
+            ])->withCount(['products' => fn ($q) => $q->where('products.is_active', true)]))
+            ->defaultSort('created_at', 'desc')
+            ->columns([
+                TextColumn::make('store_name')
+                    ->label('Store')
+                    ->description(fn (SellerProfile $record): ?string => $record->user?->name)
+                    ->weight('medium')
+                    ->searchable(),
+
+                TextColumn::make('user.activeSellerSubscription.plan.name')
+                    ->label('Current Plan')
+                    ->placeholder('No Plan')
+                    ->badge(),
+
+                TextColumn::make('monetization_status')
+                    ->label('Billing Status')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'active' => 'success',
+                        'grace_period' => 'warning',
+                        'suspended' => 'danger',
+                        default => 'gray',
+                    }),
+
+                TextColumn::make('products_count')
+                    ->label('Active Listings / Quota')
+                    ->formatStateUsing(function ($state, SellerProfile $record): string {
+                        $sub = $record->user?->activeSellerSubscription;
+                        $limit = $sub?->custom_product_limit ?? $sub?->plan?->max_active_products;
+                        $limitText = $limit ? "{$limit}" : '∞';
+
+                        return "{$state} / {$limitText}";
+                    }),
+
+                TextColumn::make('outstanding_balance')
+                    ->label('Unpaid Invoices (৳)')
+                    ->state(fn (SellerProfile $record): float => (float) SellerInvoice::where('seller_id', $record->user_id)
+                        ->where('status', SellerInvoice::STATUS_UNPAID)
+                        ->sum('total_amount'))
+                    ->money('BDT')
+                    ->color(fn ($state): string => (float) $state > 0 ? 'danger' : 'gray'),
+            ])
+            ->recordActions([
+                Action::make('suspend')
+                    ->label('Suspend')
+                    ->icon(Heroicon::OutlinedNoSymbol)
+                    ->color('danger')
+                    ->visible(fn (SellerProfile $record): bool => $record->monetization_status !== 'suspended')
+                    ->modalHeading('Suspend Seller Selling Privileges')
+                    ->modalDescription('This will immediately snapshot all active products, set them inactive, and hide the store from the customer-facing storefront.')
+                    ->schema([
+                        Textarea::make('reason')
+                            ->label('Suspension Reason')
+                            ->required()
+                            ->minLength(5)
+                            ->maxLength(500),
+                    ])
+                    ->action(function (SellerProfile $record, array $data): void {
+                        if ($record->user) {
+                            app(MonetizationSuspensionService::class)->suspendSeller($record->user, $data['reason'], auth()->user());
+                            Notification::make()->title('Seller successfully suspended')->success()->send();
+                        }
+                    }),
+
+                Action::make('restore')
+                    ->label('Restore')
+                    ->icon(Heroicon::OutlinedCheckCircle)
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->visible(fn (SellerProfile $record): bool => $record->monetization_status === 'suspended')
+                    ->action(function (SellerProfile $record): void {
+                        if ($record->user) {
+                            $restored = app(MonetizationSuspensionService::class)->restoreSeller($record->user, auth()->user());
+                            Notification::make()
+                                ->title('Seller successfully restored')
+                                ->body(count($restored).' previously active products have been reactivated.')
+                                ->success()
+                                ->send();
+                        }
+                    }),
+
+                ActionGroup::make([
+                    Action::make('recordOfflinePayment')
+                        ->label('Record Offline Payment')
+                        ->icon(Heroicon::OutlinedCurrencyBangladeshi)
+                        ->color('primary')
+                        ->schema([
+                            Select::make('payment_method')
+                                ->label('Payment Channel')
+                                ->options([
+                                    'bkash' => 'bKash MFS',
+                                    'nagad' => 'Nagad MFS',
+                                    'bank_wire' => 'Bank Wire / Deposit',
+                                    'admin_waiver' => 'Admin Fee Waiver',
+                                ])
+                                ->required(),
+
+                            TextInput::make('amount')
+                                ->label('Amount Received (৳)')
+                                ->numeric()
+                                ->prefix('৳')
+                                ->required(),
+
+                            TextInput::make('transaction_reference')
+                                ->label('TrxID / Deposit Slip #')
+                                ->required(),
+
+                            Textarea::make('notes')
+                                ->label('Admin Verification Notes')
+                                ->maxLength(500),
+                        ])
+                        ->action(function (SellerProfile $record, array $data): void {
+                            $invoice = SellerInvoice::where('seller_id', $record->user_id)
+                                ->where('status', SellerInvoice::STATUS_UNPAID)
+                                ->latest('id')
+                                ->first();
+
+                            if ($invoice) {
+                                SellerPayment::create([
+                                    'invoice_id' => $invoice->id,
+                                    'seller_id' => $record->user_id,
+                                    'amount' => (float) $data['amount'],
+                                    'payment_method' => $data['payment_method'],
+                                    'transaction_reference' => $data['transaction_reference'],
+                                    'status' => SellerPayment::STATUS_SUCCESSFUL,
+                                    'verified_by_user_id' => auth()->id(),
+                                    'verified_at' => now(),
+                                    'notes' => $data['notes'] ?? null,
+                                ]);
+
+                                $invoice->update([
+                                    'status' => SellerInvoice::STATUS_PAID,
+                                    'paid_at' => now(),
+                                ]);
+                            }
+
+                            if ($record->monetization_status === 'suspended' && $record->user) {
+                                app(MonetizationSuspensionService::class)->restoreSeller($record->user, auth()->user());
+                            }
+
+                            Notification::make()->title('Offline payment recorded and seller account updated')->success()->send();
+                        }),
+
+                    Action::make('extendGrace')
+                        ->label('Extend Grace Period')
+                        ->icon(Heroicon::OutlinedClock)
+                        ->schema([
+                            TextInput::make('days')
+                                ->label('Extra Grace Days')
+                                ->numeric()
+                                ->default(3)
+                                ->required(),
+                        ])
+                        ->action(function (SellerProfile $record, array $data): void {
+                            $sub = $record->user?->activeSellerSubscription;
+                            if ($sub) {
+                                $currentGrace = $sub->grace_period_ends_at ?? now();
+                                $sub->update([
+                                    'grace_period_ends_at' => $currentGrace->addDays((int) $data['days']),
+                                    'status' => SellerSubscription::STATUS_GRACE_PERIOD,
+                                ]);
+                                $record->update(['monetization_status' => 'grace_period']);
+                                Notification::make()->title('Grace period extended')->success()->send();
+                            }
+                        }),
+                ]),
+            ]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => ListSellerMonetizations::route('/'),
+        ];
+    }
+}
