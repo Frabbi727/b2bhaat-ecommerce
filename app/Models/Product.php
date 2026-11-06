@@ -198,6 +198,16 @@ class Product extends Model
         return $this->hasMany(FlashSaleProduct::class);
     }
 
+    /**
+     * @return BelongsToMany<FlashSale, $this>
+     */
+    public function flashSales(): BelongsToMany
+    {
+        return $this->belongsToMany(FlashSale::class, 'flash_sale_products')
+            ->withPivot(['id', 'discount_type', 'discount_value', 'stock_limit', 'per_customer_limit', 'sort_order'])
+            ->withTimestamps();
+    }
+
     public function reviews(): HasMany
     {
         return $this->hasMany(ProductReview::class);

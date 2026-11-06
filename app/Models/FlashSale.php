@@ -70,7 +70,9 @@ class FlashSale extends Model
      */
     public function products(): BelongsToMany
     {
-        return $this->belongsToMany(Product::class, 'flash_sale_products')->withTimestamps();
+        return $this->belongsToMany(Product::class, 'flash_sale_products')
+            ->withPivot(['id', 'discount_type', 'discount_value', 'stock_limit', 'per_customer_limit', 'sort_order'])
+            ->withTimestamps();
     }
 
     /**
