@@ -7,6 +7,8 @@ namespace App\Services\Sms;
 use App\Filament\Seller\Resources\SubOrders\SubOrderResource;
 use App\Jobs\SendSmsJob;
 use App\Models\Order;
+use App\Models\SellerInvoice;
+use App\Models\SellerSubscription;
 use App\Models\SmsTemplate;
 use App\Models\SubOrder;
 use App\Models\User;
@@ -197,6 +199,54 @@ class OrderNotificationService
                 'Dear {customer_name}, your wholesale application on {store_name} was not approved: {reason}. You can apply again: {apply_url}');
 
         SendSmsJob::dispatch(PhoneNormalizer::normalize($user->phone), $message, 'wholesale_decision', bypassDeduplication: true);
+
+        return true;
+    }
+
+    public function sendSubscriptionRenewalReminder(User $seller, SellerSubscription $subscription, SellerInvoice $invoice): bool
+    {
+        if (empty($seller->phone) || ! PhoneNormalizer::isValid($seller->phone)) {
+            return false;
+        }
+
+        $message = "Dear {$seller->name}, your B2Bhaat subscription renewal is due on {$invoice->due_date?->format('d M, Y')}. Amount: Tk ".number_format((float) $invoice->total_amount, 2).'. Pay via your seller dashboard.';
+        SendSmsJob::dispatch(PhoneNormalizer::normalize($seller->phone), $message, 'subscription_renewal', bypassDeduplication: true);
+
+        return true;
+    }
+
+    public function sendGracePeriodWarning(User $seller, SellerSubscription $subscription, int $graceDays): bool
+    {
+        if (empty($seller->phone) || ! PhoneNormalizer::isValid($seller->phone)) {
+            return false;
+        }
+
+        $message = "Important: Your B2Bhaat subscription is overdue. You have {$graceDays} days grace period before your active products are hidden.";
+        SendSmsJob::dispatch(PhoneNormalizer::normalize($seller->phone), $message, 'grace_period_warning', bypassDeduplication: true);
+
+        return true;
+    }
+
+    public function sendAccountSuspendedNotice(User $seller, string $reason): bool
+    {
+        if (empty($seller->phone) || ! PhoneNormalizer::isValid($seller->phone)) {
+            return false;
+        }
+
+        $message = "Your B2Bhaat store selling privileges have been suspended: {$reason}. Settle your invoice in the seller dashboard to restore your store.";
+        SendSmsJob::dispatch(PhoneNormalizer::normalize($seller->phone), $message, 'account_suspended', bypassDeduplication: true);
+
+        return true;
+    }
+
+    public function sendAccountRestoredNotice(User $seller, int $restoredCount): bool
+    {
+        if (empty($seller->phone) || ! PhoneNormalizer::isValid($seller->phone)) {
+            return false;
+        }
+
+        $message = "Payment received! Your B2Bhaat store and {$restoredCount} products have been restored. Thank you for partnering with B2Bhaat.";
+        SendSmsJob::dispatch(PhoneNormalizer::normalize($seller->phone), $message, 'account_restored', bypassDeduplication: true);
 
         return true;
     }

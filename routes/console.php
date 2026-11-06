@@ -19,3 +19,12 @@ Schedule::command('flash-sales:sync-statuses')->everyMinute()->withoutOverlappin
 
 // Automatically synchronize active banners and coupon promotions hourly
 Schedule::command('promotions:sync-active-campaigns')->hourly()->withoutOverlapping()->onOneServer();
+
+// Monetization automation: Daily renewals at 00:05
+Schedule::command('monetization:process-renewals')->dailyAt('00:05')->withoutOverlapping()->onOneServer();
+
+// Monetization automation: Daily grace period check at 01:00
+Schedule::command('monetization:check-grace-periods')->dailyAt('01:00')->withoutOverlapping()->onOneServer();
+
+// Monetization automation: Hourly suspension enforcement for expired grace accounts
+Schedule::command('monetization:enforce-suspensions')->hourly()->withoutOverlapping()->onOneServer();
