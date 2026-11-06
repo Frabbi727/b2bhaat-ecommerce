@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Refunds;
 
+use App\Events\Finance\RefundSettledEvent;
 use App\Filament\Admin\Resources\Refunds\Pages\ListRefunds;
 use App\Models\Refund;
 use BackedEnum;
@@ -16,6 +17,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use UnitEnum;
 
 /**
@@ -101,9 +103,17 @@ class RefundResource extends Resource
                             return true;
                         });
 
-                        $updated
-                            ? Notification::make()->title('Refund marked as paid')->success()->send()
-                            : Notification::make()->title('Refund was already settled')->warning()->send();
+                        if ($updated) {
+                            try {
+                                event(new RefundSettledEvent($record->fresh()));
+                            } catch (\Throwable $e) {
+                                Log::warning('Refund settled email event failed: '.$e->getMessage());
+                            }
+
+                            Notification::make()->title('Refund marked as paid')->success()->send();
+                        } else {
+                            Notification::make()->title('Refund was already settled')->warning()->send();
+                        }
                     }),
             ]);
     }

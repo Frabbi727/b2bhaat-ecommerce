@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Kyc;
 
+use App\Events\Sellers\SellerKycDecidedEvent;
+use App\Events\Sellers\WholesaleKycDecidedEvent;
 use App\Models\Role;
 use App\Models\SellerProfile;
 use App\Models\User;
@@ -24,6 +26,12 @@ class ApplicationReviewService
             'rejection_reason' => null,
             'commission_rate_percentage' => $commissionRatePercentage,
         ]);
+
+        try {
+            event(new SellerKycDecidedEvent($profile->fresh(), true));
+        } catch (\Throwable $e) {
+            // Non-blocking log
+        }
     }
 
     public function rejectSeller(SellerProfile $profile, string $reason): void
@@ -33,6 +41,12 @@ class ApplicationReviewService
             'rejected_at' => now(),
             'rejection_reason' => $reason,
         ]);
+
+        try {
+            event(new SellerKycDecidedEvent($profile->fresh(), false, $reason));
+        } catch (\Throwable $e) {
+            // Non-blocking log
+        }
     }
 
     /**
@@ -47,6 +61,12 @@ class ApplicationReviewService
             'wholesale_rejection_reason' => null,
             'role_id' => Role::where('slug', 'wholesale_buyer')->value('id') ?? $user->role_id,
         ]);
+
+        try {
+            event(new WholesaleKycDecidedEvent($user->fresh(), true));
+        } catch (\Throwable $e) {
+            // Non-blocking log
+        }
     }
 
     public function rejectWholesaleBuyer(User $user, string $reason): void
@@ -56,6 +76,12 @@ class ApplicationReviewService
             'wholesale_rejected_at' => now(),
             'wholesale_rejection_reason' => $reason,
         ]);
+
+        try {
+            event(new WholesaleKycDecidedEvent($user->fresh(), false, $reason));
+        } catch (\Throwable $e) {
+            // Non-blocking log
+        }
     }
 
     /**

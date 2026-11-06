@@ -2,11 +2,29 @@
 
 namespace App\Providers;
 
+use App\Events\Finance\PayoutStatusUpdatedEvent;
+use App\Events\Finance\RefundSettledEvent;
+use App\Events\Orders\ConsignmentStatusUpdatedEvent;
+use App\Events\Orders\OrderPlacedEvent;
+use App\Events\Promotions\FlashSaleSubmissionDecidedEvent;
+use App\Events\Sellers\SellerKycDecidedEvent;
+use App\Events\Sellers\SellerRegisteredEvent;
+use App\Events\Sellers\WholesaleKycDecidedEvent;
+use App\Listeners\Finance\SendPayoutStatusEmailListener;
+use App\Listeners\Finance\SendRefundSettledEmailListener;
+use App\Listeners\Orders\SendOrderConfirmationEmailListener;
+use App\Listeners\Orders\SendParcelTrackingEmailListener;
+use App\Listeners\Orders\SendSellerNewConsignmentEmailListener;
+use App\Listeners\Promotions\SendFlashSaleSubmissionEmailListener;
+use App\Listeners\Sellers\SendSellerKycDecisionEmailListener;
+use App\Listeners\Sellers\SendSellerRegistrationEmailListener;
+use App\Listeners\Sellers\SendWholesaleDecisionEmailListener;
 use App\Services\Promotions\FlashSalePricing;
 use App\Services\Sms\Contracts\SmsGatewayInterface;
 use App\Services\Sms\SmsManager;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -46,5 +64,15 @@ class AppServiceProvider extends ServiceProvider
             ->by(strtolower((string) $request->input('email')).'|'.$request->ip()));
 
         RateLimiter::for('public-lookup', fn (Request $request) => Limit::perMinute(20)->by($request->ip()));
+
+        Event::listen(OrderPlacedEvent::class, SendOrderConfirmationEmailListener::class);
+        Event::listen(OrderPlacedEvent::class, SendSellerNewConsignmentEmailListener::class);
+        Event::listen(ConsignmentStatusUpdatedEvent::class, SendParcelTrackingEmailListener::class);
+        Event::listen(RefundSettledEvent::class, SendRefundSettledEmailListener::class);
+        Event::listen(PayoutStatusUpdatedEvent::class, SendPayoutStatusEmailListener::class);
+        Event::listen(SellerRegisteredEvent::class, SendSellerRegistrationEmailListener::class);
+        Event::listen(SellerKycDecidedEvent::class, SendSellerKycDecisionEmailListener::class);
+        Event::listen(WholesaleKycDecidedEvent::class, SendWholesaleDecisionEmailListener::class);
+        Event::listen(FlashSaleSubmissionDecidedEvent::class, SendFlashSaleSubmissionEmailListener::class);
     }
 }

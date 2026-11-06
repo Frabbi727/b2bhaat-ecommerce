@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\Orders\ConsignmentStatusUpdatedEvent;
 use App\Services\Sms\OrderNotificationService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -40,11 +41,18 @@ class SubOrder extends Model
             }
 
             DB::afterCommit(function () use ($subOrder): void {
+                $slug = (string) FulfillmentStatus::whereKey($subOrder->fulfillment_status_id)->value('slug');
+
                 try {
-                    $slug = FulfillmentStatus::whereKey($subOrder->fulfillment_status_id)->value('slug');
-                    app(OrderNotificationService::class)->sendParcelStatusUpdate($subOrder, (string) $slug);
+                    app(OrderNotificationService::class)->sendParcelStatusUpdate($subOrder, $slug);
                 } catch (\Throwable $exception) {
                     Log::warning('Parcel status SMS not sent: '.$exception->getMessage(), ['sub_order_id' => $subOrder->id]);
+                }
+
+                try {
+                    event(new ConsignmentStatusUpdatedEvent($subOrder, $slug));
+                } catch (\Throwable $exception) {
+                    Log::warning('Parcel status email event not sent: '.$exception->getMessage(), ['sub_order_id' => $subOrder->id]);
                 }
             });
         });

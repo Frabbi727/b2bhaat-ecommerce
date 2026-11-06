@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\FlashSales\RelationManagers;
 
 use App\Enums\FlashSaleDiscountType;
 use App\Enums\FlashSaleSubmissionStatus;
+use App\Events\Promotions\FlashSaleSubmissionDecidedEvent;
 use App\Models\FlashSaleProduct;
 use App\Services\Promotions\FlashSaleSubmissionService;
 use Filament\Actions\Action;
@@ -112,6 +113,12 @@ class SubmissionsRelationManager extends RelationManager
                             'reviewed_at' => now(),
                         ]);
 
+                        try {
+                            event(new FlashSaleSubmissionDecidedEvent($record->fresh(), 'approved'));
+                        } catch (\Throwable $e) {
+                            // Non-blocking log
+                        }
+
                         Notification::make()
                             ->title('Submission Approved')
                             ->success()
@@ -131,6 +138,12 @@ class SubmissionsRelationManager extends RelationManager
                     ])
                     ->action(function (FlashSaleProduct $record, array $data): void {
                         app(FlashSaleSubmissionService::class)->requestRevision($record, $data['revision_reason']);
+
+                        try {
+                            event(new FlashSaleSubmissionDecidedEvent($record->fresh(), 'revision_requested', $data['revision_reason']));
+                        } catch (\Throwable $e) {
+                            // Non-blocking log
+                        }
 
                         Notification::make()
                             ->title('Revision Requested')
@@ -156,6 +169,12 @@ class SubmissionsRelationManager extends RelationManager
                             'reviewed_by' => auth()->id(),
                             'reviewed_at' => now(),
                         ]);
+
+                        try {
+                            event(new FlashSaleSubmissionDecidedEvent($record->fresh(), 'rejected', $data['rejection_reason']));
+                        } catch (\Throwable $e) {
+                            // Non-blocking log
+                        }
 
                         Notification::make()
                             ->title('Submission Rejected')

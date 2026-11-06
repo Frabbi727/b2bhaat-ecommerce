@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Payments;
 
+use App\Listeners\Orders\SendSellerNewConsignmentEmailListener;
 use App\Models\FulfillmentStatus;
 use App\Models\Order;
 use App\Models\OrderStatus;
@@ -102,6 +103,12 @@ class PaymentVerificationService
                     app(OrderNotificationService::class)->notifySellersOfNewOrder($order);
                 } catch (\Throwable $exception) {
                     Log::warning('Seller new-order SMS not sent: '.$exception->getMessage(), ['order_id' => $order->id]);
+                }
+
+                try {
+                    app(SendSellerNewConsignmentEmailListener::class)->notifySellers($order);
+                } catch (\Throwable $exception) {
+                    Log::warning('Seller new-order email not sent: '.$exception->getMessage(), ['order_id' => $order->id]);
                 }
             });
 

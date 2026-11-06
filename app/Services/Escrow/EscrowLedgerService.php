@@ -2,6 +2,7 @@
 
 namespace App\Services\Escrow;
 
+use App\Events\Finance\PayoutStatusUpdatedEvent;
 use App\Models\SellerWallet;
 use App\Models\SubOrder;
 use App\Models\User;
@@ -9,6 +10,7 @@ use App\Models\WalletTransaction;
 use App\Services\Settings\StoreConfigurationService;
 use Exception;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class EscrowLedgerService
 {
@@ -281,6 +283,14 @@ class EscrowLedgerService
                 'status' => WalletTransaction::STATUS_DISBURSED,
                 'reference_note' => trim(($locked->reference_note ?? '')." [DISBURSED - TrxID: {$trxId}]"),
             ]);
+
+            DB::afterCommit(function () use ($payout, $trxId): void {
+                try {
+                    event(new PayoutStatusUpdatedEvent($payout->fresh(), 'disbursed', $trxId));
+                } catch (\Throwable $e) {
+                    Log::warning('Payout disbursed email event failed: '.$e->getMessage());
+                }
+            });
         });
     }
 
@@ -308,6 +318,14 @@ class EscrowLedgerService
                 'status' => WalletTransaction::STATUS_REJECTED,
                 'reference_note' => trim(($locked->reference_note ?? '')." [REJECTED - {$reason}]"),
             ]);
+
+            DB::afterCommit(function () use ($payout, $reason): void {
+                try {
+                    event(new PayoutStatusUpdatedEvent($payout->fresh(), 'rejected', $reason));
+                } catch (\Throwable $e) {
+                    Log::warning('Payout rejected email event failed: '.$e->getMessage());
+                }
+            });
 
             return WalletTransaction::create([
                 'seller_wallet_id' => $wallet->id,

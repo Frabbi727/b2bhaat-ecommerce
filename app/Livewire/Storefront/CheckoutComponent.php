@@ -3,6 +3,7 @@
 namespace App\Livewire\Storefront;
 
 use App\Actions\Checkout\ResolveCheckoutCustomer;
+use App\Events\Orders\OrderPlacedEvent;
 use App\Exceptions\FlashSaleUnavailableException;
 use App\Models\Coupon;
 use App\Models\CustomerAddress;
@@ -423,6 +424,13 @@ class CheckoutComponent extends Component
                 }
             } catch (\Throwable $e) {
                 Log::warning('Order SMS dispatch failure: '.$e->getMessage());
+            }
+
+            // Trigger OrderPlacedEvent for asynchronous email notification dispatching
+            try {
+                event(new OrderPlacedEvent($order));
+            } catch (\Throwable $e) {
+                Log::warning('Order email event dispatch failure: '.$e->getMessage());
             }
 
             $cart->clear();
