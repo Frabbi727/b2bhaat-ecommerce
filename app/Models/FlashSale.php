@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\FlashSaleStatus;
+use App\Services\Promotions\FlashSalePricing;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -32,6 +33,19 @@ class FlashSale extends Model
         'ended_at',
         'created_by',
     ];
+
+    /**
+     * Any change to a campaign can change prices, so the in-request offer memo is dropped.
+     */
+    protected static function booted(): void
+    {
+        static::saved(static function (): void {
+            FlashSalePricing::flushResolved();
+        });
+        static::deleted(static function (): void {
+            FlashSalePricing::flushResolved();
+        });
+    }
 
     protected function casts(): array
     {

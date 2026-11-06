@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\Promotions\FlashSalePricing;
 use App\Services\Sms\Contracts\SmsGatewayInterface;
 use App\Services\Sms\SmsManager;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -29,6 +30,9 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(SmsGatewayInterface::class, function ($app) {
             return $app['sms']->driver();
         });
+
+        // One instance per request (and per queued job), so remembered campaign offers never go stale across requests
+        $this->app->scoped(FlashSalePricing::class);
     }
 
     /**

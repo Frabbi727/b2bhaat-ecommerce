@@ -6,6 +6,7 @@ namespace App\Livewire\Storefront;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Services\Promotions\FlashSalePricing;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
@@ -91,6 +92,8 @@ class HeaderSearch extends Component
                 })
                 ->take(6)
                 ->get();
+
+            app(FlashSalePricing::class)->primeFor($results);
 
             $categoryResults = Category::where('is_active', true)
                 ->where('name', $like, "%{$searchTerm}%")

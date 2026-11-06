@@ -5,6 +5,7 @@ namespace App\Livewire\Storefront;
 use App\Models\Product;
 use App\Models\SalesChannel;
 use App\Services\Cart\CartSessionService;
+use App\Services\Promotions\FlashSalePricing;
 use Exception;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
@@ -73,6 +74,8 @@ class CustomerWishlist extends Component
                 ->latest()
                 ->get()
             : collect();
+
+        app(FlashSalePricing::class)->primeFor($wishlists->pluck('product')->filter());
 
         return view('livewire.storefront.customer-wishlist', [
             'wishlists' => $wishlists,

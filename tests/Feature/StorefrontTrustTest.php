@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Enums\FlashSaleDiscountType;
 use App\Filament\Seller\Resources\Products\Pages\EditProduct;
 use App\Livewire\Storefront\CartComponent;
 use App\Livewire\Storefront\CheckoutComponent;
+use App\Models\FlashSale;
+use App\Models\FlashSaleProduct;
 use App\Models\FulfillmentStatus;
 use App\Models\OrderTrackingLog;
 use App\Models\Product;
@@ -49,6 +52,21 @@ class StorefrontTrustTest extends TestCase
         $config->set('delivery_fee_sub_dhaka', 220, 'delivery', 'float');
         $config->set('delivery_fee_outside_dhaka', 430, 'delivery', 'float');
         $config->set('free_shipping_threshold', 50000, 'delivery', 'float');
+    }
+
+    /**
+     * Puts the nails in a live campaign at a fixed sale price.
+     *
+     * @param  array<string, mixed>  $campaign
+     */
+    private function nailsInLiveCampaign(float $salePrice, array $campaign = []): void
+    {
+        FlashSaleProduct::factory()->create([
+            'flash_sale_id' => FlashSale::factory()->live()->create($campaign)->id,
+            'product_id' => $this->nails->id,
+            'discount_type' => FlashSaleDiscountType::FixedPrice,
+            'discount_value' => $salePrice,
+        ]);
     }
 
     private function addNailsToCart(): void
@@ -102,7 +120,7 @@ class StorefrontTrustTest extends TestCase
     public function test_flash_sale_countdown_counts_to_the_real_end_time(): void
     {
         $endsAt = now()->addHours(3)->startOfMinute();
-        $this->nails->update(['is_flash_sale' => true, 'flash_sale_price' => 200, 'flash_sale_end' => $endsAt]);
+        $this->nailsInLiveCampaign(200, ['ends_at' => $endsAt]);
 
         $this->get(route('catalog.index'))
             ->assertOk()
@@ -113,7 +131,7 @@ class StorefrontTrustTest extends TestCase
 
     public function test_cart_charges_the_flash_sale_price_the_shop_shows(): void
     {
-        $this->nails->update(['is_flash_sale' => true, 'flash_sale_price' => 199, 'flash_sale_end' => now()->addHours(3)]);
+        $this->nailsInLiveCampaign(199, ['ends_at' => now()->addHours(3)]);
 
         $this->addNailsToCart();
         $cart = app(CartSessionService::class);
@@ -129,11 +147,15 @@ class StorefrontTrustTest extends TestCase
         $this->assertGreaterThan(199.0, $cart->getItems()[$key]['unit_price']);
     }
 
-    public function test_flash_sale_without_end_time_shows_no_countdown(): void
+    public function test_no_live_campaign_shows_no_flash_section_or_countdown(): void
     {
         $this->nails->update(['is_flash_sale' => true, 'flash_sale_price' => 200, 'flash_sale_end' => null]);
+        FlashSaleProduct::factory()->create([
+            'flash_sale_id' => FlashSale::factory()->upcoming()->create()->id,
+            'product_id' => $this->nails->id,
+        ]);
 
-        $this->get(route('catalog.index'))->assertOk()->assertSee('Flash Sale')->assertDontSee('Ends in:');
+        $this->get(route('catalog.index'))->assertOk()->assertDontSee('id="flash-sales"', false)->assertDontSee('Ends in:');
     }
 
     // 3. Product claims

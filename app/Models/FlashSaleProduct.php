@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\FlashSaleDiscountType;
+use App\Services\Promotions\FlashSalePricing;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -27,6 +28,19 @@ class FlashSaleProduct extends Model
         'per_customer_limit',
         'sort_order',
     ];
+
+    /**
+     * Any change to a campaign product can change prices, so the in-request offer memo is dropped.
+     */
+    protected static function booted(): void
+    {
+        static::saved(static function (): void {
+            FlashSalePricing::flushResolved();
+        });
+        static::deleted(static function (): void {
+            FlashSalePricing::flushResolved();
+        });
+    }
 
     protected function casts(): array
     {

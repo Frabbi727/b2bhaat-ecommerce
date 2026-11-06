@@ -6,6 +6,7 @@ use App\Models\Coupon;
 use App\Models\Product;
 use App\Models\ProductPrice;
 use App\Models\SalesChannel;
+use App\Services\Promotions\FlashSalePricing;
 use Exception;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Session;
@@ -122,16 +123,15 @@ class CartSessionService
         }
 
         // Match progressive volume tier or apply passed override rate
-        $effectivePrice = $overrideUnitPrice ?? ($isQuoted ? (float) $items[$key]['unit_price'] : null);
-        $matchedRecord = null;
         if (! $isQuoted) {
             $matchedRecord = $this->resolveTierRecord($channelPrices, $totalQuantity);
-            $effectivePrice = $this->applyFlashSale($product, $channelSlug, (float) $matchedRecord?->unit_price);
-            if ($effectivePrice <= 0) {
+            $pricing = $this->applyFlashSale($product, $channelSlug, (float) $matchedRecord?->unit_price);
+            if ($pricing['unit_price'] <= 0) {
                 throw new Exception('This product has no valid price yet and cannot be ordered.');
             }
         } else {
             $matchedRecord = $channelPrices->first();
+            $pricing = $this->tierOnlyPrice((float) ($overrideUnitPrice ?? $items[$key]['unit_price']));
         }
 
         $sku = $variation ? $variation->sku : ($product->slug.'-BASE');
@@ -143,8 +143,8 @@ class CartSessionService
         }
 
         if (isset($items[$key])) {
+            $items[$key] = [...$items[$key], ...$pricing];
             $items[$key]['quantity'] = $totalQuantity;
-            $items[$key]['unit_price'] = $effectivePrice;
             $items[$key]['is_quoted'] = $isQuoted;
         } else {
             $items[$key] = [
@@ -157,7 +157,7 @@ class CartSessionService
                 'attributes_summary' => $attrs,
                 'sales_channel_id' => $matchedRecord ? $matchedRecord->sales_channel_id : $channelPrices->first()->sales_channel_id,
                 'sales_channel_slug' => $channelSlug,
-                'unit_price' => $effectivePrice,
+                ...$pricing,
                 'min_quantity' => $minQty,
                 'quantity' => $quantity,
                 'is_quoted' => $isQuoted,
@@ -230,7 +230,7 @@ class CartSessionService
             if ($channelPrices->isNotEmpty()) {
                 $matchedTier = $this->resolveTierRecord($channelPrices, $newQuantity);
                 if ($matchedTier) {
-                    $item['unit_price'] = $this->applyFlashSale($product, $item['sales_channel_slug'], (float) $matchedTier->unit_price);
+                    $item = [...$item, ...$this->applyFlashSale($product, $item['sales_channel_slug'], (float) $matchedTier->unit_price)];
                 }
             }
         }
@@ -267,7 +267,7 @@ class CartSessionService
 
             $tier = $channelPrices->isNotEmpty() ? $this->resolveTierRecord($channelPrices, $lotTotal) : null;
             if ($tier) {
-                $items[$key]['unit_price'] = (float) $tier->unit_price;
+                $items[$key] = [...$items[$key], ...$this->tierOnlyPrice((float) $tier->unit_price)];
             }
             $items[$key]['lot_quantity'] = $lotTotal;
         }
@@ -354,20 +354,39 @@ class CartSessionService
     }
 
     /**
+     * Shop (retail) lines are charged the live campaign price worked out from their own tier price;
+     * wholesale lines keep the tier price.
+     *
+     * @return array{unit_price: float, flash_sale_product_id: ?int, original_unit_price: ?float}
+     */
+    private function applyFlashSale(Product $product, string $channelSlug, float $tierPrice): array
+    {
+        if ($channelSlug !== SalesChannel::RETAIL) {
+            return $this->tierOnlyPrice($tierPrice);
+        }
+
+        return app(FlashSalePricing::class)->retailLinePrice($product, $tierPrice);
+    }
+
+    /**
+     * Line price with no campaign: wholesale tiers and accepted RFQ quotes.
+     *
+     * @return array{unit_price: float, flash_sale_product_id: null, original_unit_price: null}
+     */
+    private function tierOnlyPrice(float $unitPrice): array
+    {
+        return [
+            'unit_price' => $unitPrice,
+            'flash_sale_product_id' => null,
+            'original_unit_price' => null,
+        ];
+    }
+
+    /**
      * Resolve the effective product price record based on quantity and channel price tiers.
      *
      * @param  Collection<int, ProductPrice>  $channelPrices
      */
-    /**
-     * Shop (retail) lines are charged the running flash-sale price the storefront shows, never more than the tier price.
-     */
-    private function applyFlashSale(Product $product, string $channelSlug, float $tierPrice): float
-    {
-        $flashPrice = $channelSlug === SalesChannel::RETAIL ? $product->activeFlashSalePrice() : null;
-
-        return $flashPrice !== null ? min($flashPrice, $tierPrice) : $tierPrice;
-    }
-
     public function resolveTierRecord($channelPrices, int $quantity): ?ProductPrice
     {
         // 1. Check exact min_quantity and max_quantity range

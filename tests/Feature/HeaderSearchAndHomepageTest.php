@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Enums\FlashSaleDiscountType;
 use App\Livewire\Storefront\HeaderSearch;
 use App\Livewire\Storefront\ProductCatalog;
 use App\Models\Banner;
 use App\Models\Category;
+use App\Models\FlashSale;
+use App\Models\FlashSaleProduct;
 use App\Models\Product;
 use App\Models\ProductPrice;
 use App\Models\Role;
@@ -104,7 +107,7 @@ class HeaderSearchAndHomepageTest extends TestCase
         $unit = Unit::where('symbol', 'pc')->firstOrFail();
         $cat = Category::create(['name' => 'Phones', 'slug' => 'phones', 'is_active' => true]);
 
-        $this->withRetailPrice(Product::create([
+        $phone = $this->withRetailPrice(Product::create([
             'seller_id' => $seller->id,
             'category_id' => $cat->id,
             'sales_channel_id' => $channel->id,
@@ -113,11 +116,14 @@ class HeaderSearchAndHomepageTest extends TestCase
             'slug' => 'flash-sale-phone',
             'regular_price' => 50000.00,
             'buy_price' => 30000.00,
-            'is_flash_sale' => true,
-            'flash_sale_price' => 39999.00,
-            'flash_sale_end' => now()->addDays(2),
             'is_active' => true,
         ]));
+        FlashSaleProduct::factory()->create([
+            'flash_sale_id' => FlashSale::factory()->live()->create()->id,
+            'product_id' => $phone->id,
+            'discount_type' => FlashSaleDiscountType::FixedPrice,
+            'discount_value' => 39999.00,
+        ]);
 
         $response = $this->get('/');
         $response->assertStatus(200);

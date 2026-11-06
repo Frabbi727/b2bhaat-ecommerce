@@ -7,12 +7,17 @@ namespace App\Livewire\Storefront;
 use App\Models\Banner;
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\FlashSale;
 use App\Models\Product;
+use App\Models\ProductPrice;
 use App\Models\SalesChannel;
 use App\Models\SellerProfile;
 use App\Models\Wishlist;
 use App\Services\Cart\CartSessionService;
+use App\Services\Promotions\FlashSalePricing;
+use Carbon\Carbon;
 use Exception;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
@@ -460,7 +465,7 @@ class ProductCatalog extends Component
                 $query->orderBy('views_count', 'desc')->orderBy('sales_count', 'desc');
                 break;
             case 'discount':
-                $query->orderByRaw('(CASE WHEN regular_price > 0 AND flash_sale_price > 0 THEN ((regular_price - flash_sale_price) / regular_price) ELSE 0 END) DESC');
+                $this->orderByRetailDiscount($query);
                 break;
             case 'newest':
             default:
@@ -469,6 +474,8 @@ class ProductCatalog extends Component
         }
 
         $products = $query->paginate(12);
+
+        app(FlashSalePricing::class)->primeFor([...$flashSaleProducts, ...$featuredProducts, ...$products->items()]);
 
         // Determine if customer is filtering/searching or viewing standard homepage
         $isFiltering = ! empty($this->search)
@@ -491,11 +498,32 @@ class ProductCatalog extends Component
             'heroBanners' => $heroBanners,
             'promoStripBanners' => $promoStripBanners,
             'flashSaleProducts' => $flashSaleProducts,
-            // The countdown runs to the soonest real end time; no end time means no countdown
-            'flashSaleEndsAt' => $flashSaleProducts->pluck('flash_sale_end')->filter()->min(),
+            // The countdown runs to the soonest end of a live campaign
+            'flashSaleEndsAt' => $flashSaleProducts->isNotEmpty() && ($endsAt = FlashSale::live()->min('ends_at')) ? Carbon::parse($endsAt) : null,
             'featuredProducts' => $featuredProducts,
             'userWishlistIds' => $userWishlistIds,
             'isFiltering' => $isFiltering,
         ]);
+    }
+
+    /**
+     * Biggest saving of the shop price against the list (regular) price first. Campaign prices are left out of the sort.
+     *
+     * @param  Builder<Product>  $query
+     */
+    private function orderByRetailDiscount(Builder $query): void
+    {
+        $retailPrice = ProductPrice::query()
+            ->select('unit_price')
+            ->whereColumn('product_prices.product_id', 'products.id')
+            ->whereNull('product_prices.variation_id')
+            ->whereHas('salesChannel', fn (Builder $channel): Builder => $channel->where('slug', SalesChannel::RETAIL))
+            ->orderBy('product_prices.min_quantity')
+            ->limit(1);
+
+        $query->orderByRaw(
+            "(CASE WHEN products.regular_price > 0 THEN ((products.regular_price - COALESCE(({$retailPrice->toSql()}), products.regular_price)) / products.regular_price) ELSE 0 END) DESC",
+            $retailPrice->getBindings(),
+        )->orderBy('products.id', 'desc');
     }
 }

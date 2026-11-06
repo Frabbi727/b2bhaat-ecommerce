@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Enums\FlashSaleDiscountType;
 use App\Livewire\Storefront\ProductDetail;
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\FlashSale;
+use App\Models\FlashSaleProduct;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\ProductPrice;
@@ -67,9 +70,6 @@ class ProductDetailPickabooStandardTest extends TestCase
             'sku' => 'H55M80GUX-55',
             'regular_price' => 115000.00,
             'buy_price' => 70000.00,
-            'is_flash_sale' => true,
-            'flash_sale_price' => 84900.00,
-            'flash_sale_end' => now()->addDays(5),
             'warranty_period' => '4 Years Panel Warranty',
             'specifications' => [
                 'Display' => [
@@ -105,6 +105,13 @@ class ProductDetailPickabooStandardTest extends TestCase
             'sales_channel_id' => $channel->id,
             'min_quantity' => 1,
             'unit_price' => 88900.00,
+        ]);
+
+        FlashSaleProduct::factory()->create([
+            'flash_sale_id' => FlashSale::factory()->live()->create()->id,
+            'product_id' => $product->id,
+            'discount_type' => FlashSaleDiscountType::FixedPrice,
+            'discount_value' => 84900.00,
         ]);
 
         $var = ProductVariation::create([

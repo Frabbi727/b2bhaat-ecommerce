@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\Inventory\ProductCodeGenerator;
+use App\Services\Promotions\FlashSalePricing;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -278,14 +279,12 @@ class Product extends Model
         return $query->where('is_featured', true);
     }
 
+    /**
+     * Products with an offer in a campaign that is live now.
+     */
     public function scopeFlashSale(Builder $query): Builder
     {
-        $now = now();
-
-        return $query->where('is_flash_sale', true)
-            ->where(function (Builder $q) use ($now) {
-                $q->whereNull('flash_sale_end')->orWhere('flash_sale_end', '>=', $now);
-            });
+        return $query->whereHas('flashSaleItems.flashSale', fn (Builder $sale): Builder => $sale->live());
     }
 
     public function scopeForChannel(Builder $query, string $channelSlug): Builder
@@ -296,33 +295,22 @@ class Product extends Model
     }
 
     /**
-     * The flash-sale price while the sale is running, otherwise null. The cart charges it for shop (retail) lines.
+     * This product's offer in a campaign that is live now, or null. Only retail prices use it.
      */
-    public function activeFlashSalePrice(): ?float
+    public function liveFlashOffer(): ?FlashSaleProduct
     {
-        if ($this->is_flash_sale && (float) $this->flash_sale_price > 0 && (! $this->flash_sale_end || $this->flash_sale_end->isFuture())) {
-            return (float) $this->flash_sale_price;
-        }
-
-        return null;
+        return app(FlashSalePricing::class)->offerFor($this);
     }
 
+    /**
+     * The shop (retail) price a listing card shows: the live campaign price when there is one.
+     */
     public function getEffectiveSellingPriceAttribute(): float
     {
-        if (($flashPrice = $this->activeFlashSalePrice()) !== null) {
-            return $flashPrice;
-        }
+        $retailPrice = $this->retailPrice ? (float) $this->retailPrice->unit_price : (float) ($this->regular_price ?? 0.0);
+        $offer = $this->liveFlashOffer();
 
-        if ($this->relationLoaded('retailPrice') && $this->retailPrice) {
-            return (float) $this->retailPrice->unit_price;
-        }
-
-        $retail = $this->retailPrice;
-        if ($retail) {
-            return (float) $retail->unit_price;
-        }
-
-        return (float) ($this->regular_price ?? 0.0);
+        return $offer ? $offer->priceFrom($retailPrice) : $retailPrice;
     }
 
     public function getDiscountPercentageAttribute(): ?int
@@ -347,6 +335,6 @@ class Product extends Model
 
     public function getIsFlashSaleActiveAttribute(): bool
     {
-        return $this->is_flash_sale && (! $this->flash_sale_end || $this->flash_sale_end->isFuture());
+        return $this->liveFlashOffer() !== null;
     }
 }

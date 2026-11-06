@@ -9,6 +9,7 @@ use App\Models\RfqRequest;
 use App\Models\SalesChannel;
 use App\Models\Wishlist;
 use App\Services\Cart\CartSessionService;
+use App\Services\Promotions\FlashSalePricing;
 use App\Services\Settings\StoreConfigurationService;
 use Exception;
 use Illuminate\Database\Eloquent\Builder;
@@ -528,6 +529,8 @@ class ProductDetail extends Component
         $recentlyViewed = ! empty($recentIds)
             ? Product::query()->listable()->whereIn('id', $recentIds)->with(['primaryImage', 'brand', 'retailPrice'])->take(4)->get()
             : collect();
+
+        app(FlashSalePricing::class)->primeFor([$this->product, ...$relatedProducts, ...$frequentlyBoughtTogether, ...$recentlyViewed]);
 
         return view('livewire.storefront.product-detail', [
             'isWholesaleUser' => $isWholesaleUser,

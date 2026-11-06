@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Enums\FlashSaleDiscountType;
 use App\Models\Banner;
 use App\Models\Category;
 use App\Models\Coupon;
+use App\Models\FlashSale;
+use App\Models\FlashSaleProduct;
 use App\Models\Product;
 use App\Models\ProductPrice;
 use App\Models\Role;
@@ -17,6 +20,7 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Services\Cart\CartSessionService;
 use App\Services\Cart\CouponService;
+use App\Services\Promotions\FlashSaleLifecycleService;
 use Database\Seeders\SystemLookupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -173,9 +177,6 @@ class PromotionsAndBusinessLogicTest extends TestCase
             'slug' => 'test-oled-tv',
             'regular_price' => 100000.00,
             'buy_price' => 60000.00,
-            'is_flash_sale' => true,
-            'flash_sale_price' => 75000.00,
-            'flash_sale_end' => now()->addDays(3),
             'is_active' => true,
         ]);
 
@@ -187,7 +188,15 @@ class PromotionsAndBusinessLogicTest extends TestCase
             'unit_price' => 80000.00,
         ]);
 
-        // While flash sale is active, effective price should be flash_sale_price (75,000)
+        $campaign = FlashSale::factory()->live()->create();
+        FlashSaleProduct::factory()->create([
+            'flash_sale_id' => $campaign->id,
+            'product_id' => $product->id,
+            'discount_type' => FlashSaleDiscountType::FixedPrice,
+            'discount_value' => 75000.00,
+        ]);
+
+        // While the campaign is live, the effective price is the campaign price (75,000)
         $this->assertEquals(75000.00, $product->effective_selling_price);
 
         // Savings should be 100,000 - 75,000 = 25,000
@@ -196,8 +205,8 @@ class PromotionsAndBusinessLogicTest extends TestCase
         // Discount percentage should be 25%
         $this->assertEquals(25, $product->discount_percentage);
 
-        // Expire the flash sale
-        $product->update(['flash_sale_end' => now()->subHour()]);
+        // Turn the campaign off
+        app(FlashSaleLifecycleService::class)->endNow($campaign);
         $product->refresh();
 
         // Effective price reverts to regular retail price (80,000)
