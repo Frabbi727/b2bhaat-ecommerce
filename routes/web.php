@@ -13,6 +13,8 @@ use App\Livewire\Storefront\CustomerAddresses;
 use App\Livewire\Storefront\CustomerAuth;
 use App\Livewire\Storefront\CustomerOrders;
 use App\Livewire\Storefront\CustomerWishlist;
+use App\Livewire\Storefront\FlashSaleIndex;
+use App\Livewire\Storefront\FlashSaleShow;
 use App\Livewire\Storefront\OrderTracking;
 use App\Livewire\Storefront\ProductCatalog;
 use App\Livewire\Storefront\ProductDetail;
@@ -34,6 +36,8 @@ Route::get('/login', CustomerAuth::class)->name('login');
 Route::get('/register', CustomerAuth::class)->name('register');
 Route::get('/store/{slug}', SellerStore::class)->name('store.show');
 Route::get('/product/{slug}', ProductDetail::class)->name('catalog.show');
+Route::get('/flash-sales', FlashSaleIndex::class)->name('flash-sales.index');
+Route::get('/flash-sales/{slug}', FlashSaleShow::class)->name('flash-sales.show');
 Route::get('/cart', CartComponent::class)->name('cart.index');
 Route::get('/checkout', CheckoutComponent::class)->name('checkout.index');
 Route::middleware('throttle:public-lookup')->group(function () {

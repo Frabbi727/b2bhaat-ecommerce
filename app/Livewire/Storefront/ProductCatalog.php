@@ -15,7 +15,6 @@ use App\Models\SellerProfile;
 use App\Models\Wishlist;
 use App\Services\Cart\CartSessionService;
 use App\Services\Promotions\FlashSalePricing;
-use Carbon\Carbon;
 use Exception;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -354,13 +353,26 @@ class ProductCatalog extends Component
         $heroBanners = Banner::active()->forPosition('hero_slider')->get();
         $promoStripBanners = Banner::active()->forPosition('promo_strip')->get();
 
-        // Flash Sales Section Products
-        $flashSaleProducts = Product::query()
-            ->listable()
-            ->flashSale()
-            ->with(['seller.sellerProfile', 'category', 'brand', 'primaryImage', 'retailPrice'])
-            ->take(6)
-            ->get();
+        // Top priority live campaign for the homepage section
+        $activeFlashSale = FlashSale::query()->live()
+            ->orderByDesc('is_featured')
+            ->orderByDesc('display_priority')
+            ->orderBy('ends_at')
+            ->first();
+
+        $liveCampaignsCount = FlashSale::query()->live()->count();
+
+        $flashSaleProducts = $activeFlashSale
+            ? $activeFlashSale->products()
+                ->listable()
+                ->with(['seller.sellerProfile', 'category', 'brand', 'primaryImage', 'retailPrice'])
+                ->take(6)
+                ->get()
+            : collect();
+
+        if ($flashSaleProducts->isNotEmpty()) {
+            app(FlashSalePricing::class)->primeFor($flashSaleProducts);
+        }
 
         // Featured Products Section
         $featuredProducts = Product::query()
@@ -497,9 +509,10 @@ class ProductCatalog extends Component
             'isWholesalePending' => (bool) $user?->isWholesalePending(),
             'heroBanners' => $heroBanners,
             'promoStripBanners' => $promoStripBanners,
+            'activeFlashSale' => $activeFlashSale,
+            'liveCampaignsCount' => $liveCampaignsCount,
             'flashSaleProducts' => $flashSaleProducts,
-            // The countdown runs to the soonest end of a live campaign
-            'flashSaleEndsAt' => $flashSaleProducts->isNotEmpty() && ($endsAt = FlashSale::live()->min('ends_at')) ? Carbon::parse($endsAt) : null,
+            'flashSaleEndsAt' => $activeFlashSale?->ends_at,
             'featuredProducts' => $featuredProducts,
             'userWishlistIds' => $userWishlistIds,
             'isFiltering' => $isFiltering,

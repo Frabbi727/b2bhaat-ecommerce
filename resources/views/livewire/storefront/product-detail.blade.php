@@ -221,6 +221,32 @@
                 </div>
             </div>
 
+            @if ($product->is_flash_sale_active && ($offer = $product->liveFlashOffer()))
+                <div class="p-4 rounded-3xl bg-gradient-to-r from-rose-950 via-slate-900 to-indigo-950 text-white border border-rose-800/40 space-y-2">
+                    <div class="flex items-center justify-between gap-3 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <span class="w-7 h-7 rounded-lg bg-rose-600 text-white flex items-center justify-center text-sm font-black">⚡</span>
+                            <a href="{{ route('flash-sales.show', $offer->flashSale->slug) }}" class="text-sm font-bold text-rose-300 hover:text-white underline">
+                                {{ $offer->flashSale->name }}
+                            </a>
+                        </div>
+                        <x-storefront.flash-countdown :ends-at="$offer->flashSale->ends_at" label="Ends in:" />
+                    </div>
+                    <div class="flex items-center gap-3 text-xs text-rose-200">
+                        @if ($offer->per_customer_limit)
+                            <span>Limit {{ $offer->per_customer_limit }} per customer</span>
+                        @endif
+                        @if ($offer->stock_limit !== null)
+                            @if ($offer->per_customer_limit) <span>•</span> @endif
+                            @php
+                                $unitsLeft = max(0, $offer->stock_limit - $offer->unitsSold());
+                            @endphp
+                            <span class="font-bold text-white">{{ $unitsLeft }} left</span>
+                        @endif
+                    </div>
+                </div>
+            @endif
+
             <!-- Pricing & Savings Block (Pickaboo Standard) -->
             <div class="p-5 rounded-3xl bg-slate-50 border border-slate-200/80 space-y-3">
                 <div class="flex items-baseline gap-3 flex-wrap">

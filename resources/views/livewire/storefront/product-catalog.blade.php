@@ -240,25 +240,9 @@
         @endif
 
         <!-- ================= FLASH SALE SECTION WITH LIVE COUNTDOWN ================= -->
-        @if ($flashSaleProducts->isNotEmpty())
+        @if ($flashSaleProducts->isNotEmpty() && isset($activeFlashSale) && $activeFlashSale)
             <div
                 id="flash-sales"
-                @if ($flashSaleEndsAt)
-                data-ends-at="{{ $flashSaleEndsAt->getTimestampMs() }}"
-                x-data="{
-                    endsAt: {{ $flashSaleEndsAt->getTimestampMs() }},
-                    hours: 0,
-                    minutes: 0,
-                    seconds: 0,
-                    tick() {
-                        const left = Math.max(0, Math.floor((this.endsAt - Date.now()) / 1000));
-                        this.hours = Math.floor(left / 3600);
-                        this.minutes = Math.floor((left % 3600) / 60);
-                        this.seconds = left % 60;
-                    }
-                }"
-                x-init="tick(); setInterval(() => tick(), 1000)"
-                @endif
                 class="rounded-3xl bg-gradient-to-r from-rose-950 via-slate-900 to-indigo-950 p-6 sm:p-8 text-white shadow-xl border border-rose-900/40 space-y-6"
             >
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-rose-900/30 pb-5">
@@ -268,26 +252,24 @@
                         </span>
                         <div>
                             <div class="flex items-center gap-2">
-                                <h2 class="text-xl sm:text-2xl font-black tracking-tight text-white">Flash Sale</h2>
+                                <h2 class="text-xl sm:text-2xl font-black tracking-tight text-white">{{ $activeFlashSale->name }}</h2>
                                 <span class="px-2 py-0.5 rounded-full bg-rose-500/30 border border-rose-400/40 text-rose-300 text-[10px] font-bold uppercase tracking-wider animate-pulse">
                                     Live Now
                                 </span>
                             </div>
-                            <p class="text-xs text-rose-200/80">Massive limited-time price drops on flagship tech & essentials</p>
+                            <p class="text-xs text-rose-200/80">{{ $activeFlashSale->description ?: 'Massive limited-time price drops on flagship tech & essentials' }}</p>
                         </div>
                     </div>
 
-                    <!-- Countdown Clock -->
-                    @if ($flashSaleEndsAt)
-                    <div class="flex items-center gap-2 self-start sm:self-auto bg-slate-950/60 px-4 py-2 rounded-2xl border border-rose-800/40">
-                        <span class="text-xs text-rose-200 font-semibold mr-1">Ends in:</span>
-                        <div class="w-8 h-8 rounded-lg bg-rose-600 font-mono font-black text-xs flex items-center justify-center text-white" x-text="String(hours).padStart(2, '0')">{{ str_pad((string) intdiv((int) max(0, now()->diffInSeconds($flashSaleEndsAt, false)), 3600), 2, '0', STR_PAD_LEFT) }}</div>
-                        <span class="font-bold text-rose-400">:</span>
-                        <div class="w-8 h-8 rounded-lg bg-rose-600 font-mono font-black text-xs flex items-center justify-center text-white" x-text="String(minutes).padStart(2, '0')">{{ str_pad((string) intdiv((int) max(0, now()->diffInSeconds($flashSaleEndsAt, false)) % 3600, 60), 2, '0', STR_PAD_LEFT) }}</div>
-                        <span class="font-bold text-rose-400">:</span>
-                        <div class="w-8 h-8 rounded-lg bg-rose-600 font-mono font-black text-xs flex items-center justify-center text-white" x-text="String(seconds).padStart(2, '0')">{{ str_pad((string) ((int) max(0, now()->diffInSeconds($flashSaleEndsAt, false)) % 60), 2, '0', STR_PAD_LEFT) }}</div>
+                    <!-- Countdown Clock & Link -->
+                    <div class="flex items-center gap-4 flex-wrap">
+                        <x-storefront.flash-countdown :ends-at="$activeFlashSale->ends_at" label="Ends in:" />
+                        @if (isset($liveCampaignsCount) && $liveCampaignsCount > 1)
+                            <a href="{{ route('flash-sales.index') }}" class="text-xs font-bold text-rose-300 hover:text-white underline">
+                                See all {{ $liveCampaignsCount }} flash sales &rarr;
+                            </a>
+                        @endif
                     </div>
-                    @endif
                 </div>
 
                 <!-- Flash Products Grid -->
@@ -367,6 +349,20 @@
                                         <span class="text-[10px] font-mono text-slate-400 uppercase">Mod: {{ $product->model_number }}</span>
                                     @endif
                                 </div>
+
+                                @php
+                                    $offer = $product->liveFlashOffer();
+                                    $stockLimit = $offer?->stock_limit;
+                                    $unitsSold = $offer ? $offer->unitsSold() : 0;
+                                    $remainingUnits = $stockLimit !== null ? max(0, $stockLimit - $unitsSold) : null;
+                                @endphp
+
+                                @if ($remainingUnits !== null)
+                                    <div class="mb-3 text-[11px] font-bold text-rose-600 flex items-center gap-1.5">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                                        <span>{{ $remainingUnits }} left</span>
+                                    </div>
+                                @endif
 
                                 <div class="grid grid-cols-2 gap-2">
                                     <button
