@@ -37,7 +37,7 @@ class AdminBrandAndUnitManagementTest extends TestCase
     public function test_admin_adds_a_brand_and_a_unit_that_sellers_can_then_import_with(): void
     {
         Livewire::test(CreateBrand::class)
-            ->fillForm(['name' => 'Nails Factory Ltd', 'slug' => 'nails-factory-ltd', 'is_active' => true])
+            ->fillForm(['name' => 'Dhaka Nail Supplies', 'slug' => 'dhaka-nail-supplies', 'is_active' => true])
             ->call('create')
             ->assertHasNoFormErrors();
 
@@ -50,13 +50,13 @@ class AdminBrandAndUnitManagementTest extends TestCase
 
         $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
         $category = Product::where('seller_id', $seller->id)->firstOrFail()->category->name;
-        $csv = "product_title,category,sell_to,unit,stock,retail_price,brand\nNail Tray Organiser,{$category},retail,tray,10,250,Nails Factory Ltd\n";
+        $csv = "product_title,category,sell_to,unit,stock,retail_price,brand\nNail Tray Organiser,{$category},retail,tray,10,250,Dhaka Nail Supplies\n";
 
         $result = app(ProductBulkImportService::class)->import($seller, $csv);
 
         $this->assertSame([], $result['errors']);
         $product = Product::where('title', 'Nail Tray Organiser')->firstOrFail();
-        $this->assertSame('Nails Factory Ltd', $product->brand->name);
+        $this->assertSame('Dhaka Nail Supplies', $product->brand->name);
         $this->assertSame('tray', $product->unit->symbol);
     }
 
@@ -83,6 +83,19 @@ class AdminBrandAndUnitManagementTest extends TestCase
         $usedBrand = Brand::whereHas('products')->firstOrFail();
         Livewire::test(ListBrands::class)
             ->assertActionHidden(TestAction::make(DeleteAction::class)->table($usedBrand));
+    }
+
+    public function test_a_freshly_seeded_shop_has_what_the_nail_catalogue_sheet_needs(): void
+    {
+        $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
+        $csv = "product_title,category,sell_to,unit,stock,retail_price,brand\n"
+            ."Gel Top Coat,Nail Polish & Gel,retail,bottle,10,350,Nails Factory Ltd\n"
+            ."UV LED Lamp,Salon Equipment & Lamps,retail,pc,5,2500,Nails Factory Ltd\n";
+
+        $result = app(ProductBulkImportService::class)->import($seller, $csv, true);
+
+        $this->assertSame([], $result['errors']);
+        $this->assertSame(2, $result['products_created']);
     }
 
     public function test_sellers_cannot_open_the_admin_screens(): void

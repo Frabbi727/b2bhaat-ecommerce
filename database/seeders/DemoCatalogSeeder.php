@@ -28,6 +28,7 @@ use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class DemoCatalogSeeder extends Seeder
 {
@@ -184,6 +185,21 @@ class DemoCatalogSeeder extends Seeder
             ]
         );
 
+        // The demo nail seller's full catalogue sheet uses these, so a reseeded database can import it again
+        foreach ([
+            'Nail Polish & Gel',
+            'Nail Tools & Implements',
+            'Nail Art & Charms',
+            'Acrylic & Polygel Systems',
+            'Nail Care & Liquids',
+            'Salon Equipment & Lamps',
+        ] as $position => $nailCategory) {
+            Category::firstOrCreate(
+                ['slug' => Str::slug($nailCategory)],
+                ['parent_id' => $parentCat->id, 'name' => $nailCategory, 'sort_order' => 10 + $position, 'is_active' => true]
+            );
+        }
+
         // 6. Brand
         $brand = Brand::firstOrCreate(
             ['slug' => 'glamourpro'],
@@ -193,6 +209,8 @@ class DemoCatalogSeeder extends Seeder
                 'is_active' => true,
             ]
         );
+
+        Brand::firstOrCreate(['slug' => 'nails-factory-ltd'], ['name' => 'Nails Factory Ltd', 'is_active' => true]);
 
         // 7. Attributes & Values
         $colorAttr = Attribute::firstOrCreate(['slug' => 'color'], ['name' => 'Color']);
