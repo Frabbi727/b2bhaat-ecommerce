@@ -38,6 +38,7 @@ class Product extends Model
         'views_count',
         'sales_count',
         'is_active',
+        'was_active_before_suspension',
         'blocked_at',
         'blocked_reason',
     ];
@@ -141,6 +142,7 @@ class Product extends Model
             'views_count' => 'integer',
             'sales_count' => 'integer',
             'is_active' => 'boolean',
+            'was_active_before_suspension' => 'boolean',
             'blocked_at' => 'datetime',
         ];
     }

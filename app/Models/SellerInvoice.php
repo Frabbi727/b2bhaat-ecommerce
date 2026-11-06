@@ -1,0 +1,81 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class SellerInvoice extends Model
+{
+    use HasFactory;
+
+    public const STATUS_UNPAID = 'unpaid';
+
+    public const STATUS_PAID = 'paid';
+
+    public const STATUS_PENDING_VERIFICATION = 'pending_verification';
+
+    public const STATUS_VOID = 'void';
+
+    public const STATUS_REFUNDED = 'refunded';
+
+    public const TYPE_SUBSCRIPTION_FEE = 'subscription_fee';
+
+    public const TYPE_LISTING_PACK = 'listing_pack';
+
+    public const TYPE_COD_COMMISSION_DEFICIT = 'cod_commission_deficit';
+
+    public const TYPE_MANUAL_FEE = 'manual_fee';
+
+    protected $fillable = [
+        'invoice_number',
+        'seller_id',
+        'subscription_id',
+        'invoice_type',
+        'subtotal',
+        'discount_amount',
+        'tax_amount',
+        'total_amount',
+        'status',
+        'due_date',
+        'paid_at',
+        'metadata',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'subtotal' => 'decimal:2',
+            'discount_amount' => 'decimal:2',
+            'tax_amount' => 'decimal:2',
+            'total_amount' => 'decimal:2',
+            'due_date' => 'date',
+            'paid_at' => 'datetime',
+            'metadata' => 'array',
+        ];
+    }
+
+    public function seller(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'seller_id');
+    }
+
+    public function subscription(): BelongsTo
+    {
+        return $this->belongsTo(SellerSubscription::class, 'subscription_id');
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(SellerPayment::class, 'invoice_id');
+    }
+
+    public function isPaid(): bool
+    {
+        return $this->status === self::STATUS_PAID;
+    }
+}

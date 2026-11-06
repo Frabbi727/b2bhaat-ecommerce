@@ -18,6 +18,7 @@ class SellerProfile extends Model
         'inside_dhaka_rate',
         'outside_dhaka_rate',
         'free_shipping_threshold',
+        'monetization_status',
         'is_approved',
         'rejection_reason',
         'approved_at',

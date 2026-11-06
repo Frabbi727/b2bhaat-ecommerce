@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -59,7 +60,10 @@ class FlashSaleSchemaExpansionTest extends TestCase
 
     public function test_migrations_can_be_rolled_back(): void
     {
-        $this->artisan('migrate:rollback', ['--step' => 3])->assertSuccessful();
+        $targetMigration = '2026_11_06_100001_expand_flash_sales_for_seller_campaigns';
+        $steps = DB::table('migrations')->where('migration', '>=', $targetMigration)->count();
+
+        $this->artisan('migrate:rollback', ['--step' => $steps])->assertSuccessful();
 
         $this->assertFalse(Schema::hasTable('flash_sale_categories'));
         $this->assertFalse(Schema::hasColumn('flash_sale_products', 'seller_id'));

@@ -101,6 +101,28 @@ class User extends Authenticatable implements FilamentUser
         return $this->hasOne(SellerWallet::class, 'seller_id');
     }
 
+    public function sellerSubscriptions(): HasMany
+    {
+        return $this->hasMany(SellerSubscription::class, 'seller_id');
+    }
+
+    public function activeSellerSubscription(): HasOne
+    {
+        return $this->hasOne(SellerSubscription::class, 'seller_id')
+            ->whereIn('status', [SellerSubscription::STATUS_ACTIVE, SellerSubscription::STATUS_GRACE_PERIOD])
+            ->latestOfMany();
+    }
+
+    public function sellerInvoices(): HasMany
+    {
+        return $this->hasMany(SellerInvoice::class, 'seller_id');
+    }
+
+    public function sellerSuspensionEvents(): HasMany
+    {
+        return $this->hasMany(SellerSuspensionEvent::class, 'seller_id');
+    }
+
     public function reviews(): HasMany
     {
         return $this->hasMany(ProductReview::class);
