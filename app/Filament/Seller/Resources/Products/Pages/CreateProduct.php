@@ -5,7 +5,9 @@ namespace App\Filament\Seller\Resources\Products\Pages;
 use App\Filament\Seller\Resources\Products\ProductResource;
 use App\Filament\Seller\Resources\Products\Schemas\ProductForm;
 use App\Models\Product;
+use App\Services\Monetization\MonetizationEngineService;
 use Filament\Actions\Action;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 
 class CreateProduct extends CreateRecord
@@ -52,6 +54,29 @@ class CreateProduct extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
+        $seller = auth()->user();
+        $isActive = (bool) ($data['is_active'] ?? true);
+
+        if ($isActive && $seller) {
+            if ($seller->sellerProfile?->monetization_status === 'suspended') {
+                Notification::make()
+                    ->title('Store Suspended')
+                    ->body('You cannot publish active products while your store privileges are suspended. Save as draft or settle your payment.')
+                    ->danger()
+                    ->send();
+                $this->halt();
+            }
+
+            if (! app(MonetizationEngineService::class)->canActivateMoreProducts($seller)) {
+                Notification::make()
+                    ->title('Listing Quota Reached')
+                    ->body('You have reached the maximum active product quota for your plan. Please save as draft or upgrade your plan.')
+                    ->warning()
+                    ->send();
+                $this->halt();
+            }
+        }
+
         $data['seller_id'] = auth()->id();
         $data['specifications'] = ProductForm::groupsToSpecifications($data['specification_groups'] ?? null);
         unset($data['specification_groups']);

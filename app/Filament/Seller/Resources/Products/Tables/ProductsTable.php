@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\SalesChannel;
 use App\Services\Inventory\ProductDuplicationService;
+use App\Services\Monetization\MonetizationEngineService;
 use App\Services\Settings\StoreConfigurationService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -121,7 +122,33 @@ class ProductsTable
 
                 ToggleColumn::make('is_active')
                     ->label('Visible')
-                    ->tooltip(fn (Product $record): string => $record->is_active ? 'Shown on your storefront' : 'Hidden from buyers'),
+                    ->tooltip(fn (Product $record): string => $record->is_active ? 'Shown on your storefront' : 'Hidden from buyers')
+                    ->beforeStateUpdated(function (Product $record, $state): bool {
+                        if ($state) {
+                            $seller = auth()->user();
+                            if ($seller?->sellerProfile?->monetization_status === 'suspended') {
+                                Notification::make()
+                                    ->title('Store Suspended')
+                                    ->body('You cannot activate products while your store privileges are suspended.')
+                                    ->danger()
+                                    ->send();
+
+                                return false;
+                            }
+
+                            if (! app(MonetizationEngineService::class)->canActivateMoreProducts($seller)) {
+                                Notification::make()
+                                    ->title('Listing Quota Reached')
+                                    ->body('You have reached the maximum active product quota for your plan. Upgrade your plan to activate more items.')
+                                    ->warning()
+                                    ->send();
+
+                                return false;
+                            }
+                        }
+
+                        return true;
+                    }),
 
                 TextColumn::make('updated_at')
                     ->label('Updated')
