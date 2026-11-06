@@ -13,7 +13,9 @@ class OrderItem extends Model
         'product_id',
         'variation_id',
         'sales_channel_id',
+        'flash_sale_product_id',
         'unit_price',
+        'original_unit_price',
         'quantity',
         'total_price',
     ];
@@ -22,6 +24,7 @@ class OrderItem extends Model
     {
         return [
             'unit_price' => 'decimal:2',
+            'original_unit_price' => 'decimal:2',
             'quantity' => 'integer',
             'total_price' => 'decimal:2',
         ];
@@ -50,5 +53,10 @@ class OrderItem extends Model
     public function salesChannel(): BelongsTo
     {
         return $this->belongsTo(SalesChannel::class);
+    }
+
+    public function flashSaleProduct(): BelongsTo
+    {
+        return $this->belongsTo(FlashSaleProduct::class);
     }
 }

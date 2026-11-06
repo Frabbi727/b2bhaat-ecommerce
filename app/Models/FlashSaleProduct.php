@@ -1,0 +1,97 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Models;
+
+use App\Enums\FlashSaleDiscountType;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Facades\DB;
+
+class FlashSaleProduct extends Model
+{
+    use HasFactory;
+
+    private const CANCELLED_FULFILLMENT_SLUG = 'cancelled';
+
+    protected $fillable = [
+        'flash_sale_id',
+        'product_id',
+        'discount_type',
+        'discount_value',
+        'stock_limit',
+        'per_customer_limit',
+        'sort_order',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'discount_type' => FlashSaleDiscountType::class,
+            'discount_value' => 'decimal:2',
+            'stock_limit' => 'integer',
+            'per_customer_limit' => 'integer',
+            'sort_order' => 'integer',
+        ];
+    }
+
+    public function flashSale(): BelongsTo
+    {
+        return $this->belongsTo(FlashSale::class);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    public function orderItems(): HasMany
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+
+    /**
+     * Campaign price for a line whose normal price is $basePrice, kept between 0.01 and the base.
+     */
+    public function priceFrom(float $basePrice): float
+    {
+        $value = (float) $this->discount_value;
+
+        $calculated = match ($this->discount_type) {
+            FlashSaleDiscountType::Percentage => $basePrice * (1 - $value / 100),
+            FlashSaleDiscountType::FixedAmount => $basePrice - $value,
+            FlashSaleDiscountType::FixedPrice => $value,
+        };
+
+        return round(min($basePrice, max(0.01, round($calculated, 2))), 2);
+    }
+
+    /**
+     * Units sold on this offer, ignoring cancelled sub-orders.
+     */
+    public function unitsSold(): int
+    {
+        return (int) $this->nonCancelledItemsQuery()->sum('order_items.quantity');
+    }
+
+    public function unitsBoughtBy(int $customerId): int
+    {
+        return (int) $this->nonCancelledItemsQuery()
+            ->join('orders', 'orders.id', '=', 'sub_orders.parent_order_id')
+            ->where('orders.customer_id', $customerId)
+            ->sum('order_items.quantity');
+    }
+
+    private function nonCancelledItemsQuery(): Builder
+    {
+        return DB::table('order_items')
+            ->join('sub_orders', 'sub_orders.id', '=', 'order_items.sub_order_id')
+            ->join('fulfillment_statuses', 'fulfillment_statuses.id', '=', 'sub_orders.fulfillment_status_id')
+            ->where('order_items.flash_sale_product_id', $this->getKey())
+            ->where('fulfillment_statuses.slug', '!=', self::CANCELLED_FULFILLMENT_SLUG);
+    }
+}

@@ -198,6 +198,11 @@ class Product extends Model
         return $this->hasMany(ProductPrice::class);
     }
 
+    public function flashSaleItems(): HasMany
+    {
+        return $this->hasMany(FlashSaleProduct::class);
+    }
+
     public function reviews(): HasMany
     {
         return $this->hasMany(ProductReview::class);
