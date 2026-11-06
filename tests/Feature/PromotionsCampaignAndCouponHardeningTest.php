@@ -38,34 +38,6 @@ class PromotionsCampaignAndCouponHardeningTest extends TestCase
         $this->couponService = app(CouponService::class);
     }
 
-    public function test_sync_active_campaigns_command_concludes_expired_flash_sales(): void
-    {
-        $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
-        $product = Product::where('seller_id', $seller->id)->firstOrFail();
-
-        // Expired flash sale
-        $product->update([
-            'is_flash_sale' => true,
-            'flash_sale_price' => 1500.00,
-            'flash_sale_end' => now()->subMinutes(10),
-        ]);
-
-        // Active future flash sale product
-        $activeProduct = Product::where('id', '!=', $product->id)->firstOrFail();
-        $activeProduct->update([
-            'is_flash_sale' => true,
-            'flash_sale_price' => 1800.00,
-            'flash_sale_end' => now()->addHours(24),
-        ]);
-
-        $this->artisan('promotions:sync-active-campaigns')
-            ->expectsOutputToContain('Campaign synchronization complete: 1 flash sale(s) concluded')
-            ->assertExitCode(0);
-
-        $this->assertFalse((bool) $product->fresh()->is_flash_sale);
-        $this->assertTrue((bool) $activeProduct->fresh()->is_flash_sale);
-    }
-
     public function test_sync_active_campaigns_command_retires_expired_banners(): void
     {
         // Expired banner

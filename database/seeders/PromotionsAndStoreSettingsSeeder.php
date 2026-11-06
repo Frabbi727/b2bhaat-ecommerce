@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Enums\FlashSaleDiscountType;
+use App\Enums\FlashSaleStatus;
 use App\Models\Attribute;
 use App\Models\AttributeValue;
 use App\Models\Banner;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Coupon;
+use App\Models\FlashSale;
+use App\Models\FlashSaleProduct;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\ProductPrice;
@@ -281,9 +285,6 @@ class PromotionsAndStoreSettingsSeeder extends Seeder
                 ],
                 'has_variations' => true,
                 'is_featured' => true,
-                'is_flash_sale' => true,
-                'flash_sale_price' => 84900.00,
-                'flash_sale_end' => now()->addDays(7),
                 'views_count' => 1420,
                 'sales_count' => 18,
                 'is_active' => true,
@@ -426,7 +427,6 @@ class PromotionsAndStoreSettingsSeeder extends Seeder
                 ],
                 'has_variations' => true,
                 'is_featured' => true,
-                'is_flash_sale' => false,
                 'views_count' => 890,
                 'sales_count' => 34,
                 'is_active' => true,
@@ -510,9 +510,6 @@ class PromotionsAndStoreSettingsSeeder extends Seeder
                 ],
                 'has_variations' => true,
                 'is_featured' => true,
-                'is_flash_sale' => true,
-                'flash_sale_price' => 149999.00,
-                'flash_sale_end' => now()->addDays(5),
                 'views_count' => 2100,
                 'sales_count' => 28,
                 'is_active' => true,
@@ -576,6 +573,72 @@ class PromotionsAndStoreSettingsSeeder extends Seeder
                 ],
                 'is_featured' => true,
             ]);
+        }
+
+        // Seed Flash Sale Campaigns
+        $liveSale = FlashSale::updateOrCreate(
+            ['slug' => 'weekend-mega-flash-sale'],
+            [
+                'name' => 'Weekend Mega Flash Sale',
+                'description' => 'Unbeatable limited-time prices on flagship electronics and displays.',
+                'status' => FlashSaleStatus::Active,
+                'starts_at' => now()->subDay(),
+                'ends_at' => now()->addDays(2),
+                'is_featured' => true,
+                'display_priority' => 10,
+            ]
+        );
+
+        if ($tvProduct) {
+            FlashSaleProduct::updateOrCreate(
+                ['flash_sale_id' => $liveSale->id, 'product_id' => $tvProduct->id],
+                [
+                    'discount_type' => FlashSaleDiscountType::FixedPrice,
+                    'discount_value' => 84900.00,
+                    'stock_limit' => 50,
+                    'per_customer_limit' => 5,
+                    'sort_order' => 1,
+                ]
+            );
+        }
+
+        if ($phoneProduct) {
+            FlashSaleProduct::updateOrCreate(
+                ['flash_sale_id' => $liveSale->id, 'product_id' => $phoneProduct->id],
+                [
+                    'discount_type' => FlashSaleDiscountType::FixedPrice,
+                    'discount_value' => 149999.00,
+                    'stock_limit' => 15,
+                    'per_customer_limit' => 2,
+                    'sort_order' => 2,
+                ]
+            );
+        }
+
+        $upcomingSale = FlashSale::updateOrCreate(
+            ['slug' => 'tech-tuesday-flash-deal'],
+            [
+                'name' => 'Tech Tuesday Flash Deal',
+                'description' => 'Exclusive early access deals on audio and personal technology.',
+                'status' => FlashSaleStatus::Scheduled,
+                'starts_at' => now()->addDays(2),
+                'ends_at' => now()->addDays(4),
+                'is_featured' => false,
+                'display_priority' => 5,
+            ]
+        );
+
+        if ($audioProduct) {
+            FlashSaleProduct::updateOrCreate(
+                ['flash_sale_id' => $upcomingSale->id, 'product_id' => $audioProduct->id],
+                [
+                    'discount_type' => FlashSaleDiscountType::Percentage,
+                    'discount_value' => 20.00,
+                    'stock_limit' => 30,
+                    'per_customer_limit' => 2,
+                    'sort_order' => 1,
+                ]
+            );
         }
     }
 }

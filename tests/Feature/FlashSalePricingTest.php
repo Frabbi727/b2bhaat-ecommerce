@@ -104,7 +104,6 @@ class FlashSalePricingTest extends TestCase
     {
         $this->offer(FlashSale::factory()->upcoming(), FlashSaleDiscountType::Percentage, 20);
         $this->offer(FlashSale::factory()->paused(), FlashSaleDiscountType::Percentage, 30);
-        $this->nails->update(['is_flash_sale' => true, 'flash_sale_price' => 99, 'flash_sale_end' => now()->addDay()]);
 
         $this->cart->addItem($this->nails->id, $this->variation('NAIL-PNK-MED')->id, SalesChannel::RETAIL, 1);
         $line = $this->onlyLine();
@@ -122,8 +121,6 @@ class FlashSalePricingTest extends TestCase
 
     public function test_homepage_flash_section_lists_only_live_campaign_products(): void
     {
-        $this->nails->update(['is_flash_sale' => true, 'flash_sale_price' => 99, 'flash_sale_end' => now()->addDay()]);
-
         Livewire::test(ProductCatalog::class)
             ->assertViewHas('flashSaleProducts', fn ($products): bool => $products->isEmpty())
             ->assertViewHas('flashSaleEndsAt', null);

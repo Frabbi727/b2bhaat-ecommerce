@@ -31,9 +31,6 @@ class ProductDuplicationService
                 'buy_price' => $source->getAttribute('buy_price') ?? 0,
                 'is_active' => false,
                 'is_featured' => false,
-                'is_flash_sale' => false,
-                'flash_sale_price' => null,
-                'flash_sale_end' => null,
                 'views_count' => 0,
                 'sales_count' => 0,
             ]);

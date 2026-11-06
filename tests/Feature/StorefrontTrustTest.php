@@ -149,7 +149,6 @@ class StorefrontTrustTest extends TestCase
 
     public function test_no_live_campaign_shows_no_flash_section_or_countdown(): void
     {
-        $this->nails->update(['is_flash_sale' => true, 'flash_sale_price' => 200, 'flash_sale_end' => null]);
         FlashSaleProduct::factory()->create([
             'flash_sale_id' => FlashSale::factory()->upcoming()->create()->id,
             'product_id' => $this->nails->id,

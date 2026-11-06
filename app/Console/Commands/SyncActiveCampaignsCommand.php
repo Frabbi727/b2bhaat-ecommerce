@@ -6,7 +6,6 @@ namespace App\Console\Commands;
 
 use App\Models\Banner;
 use App\Models\Coupon;
-use App\Models\Product;
 use Illuminate\Console\Command;
 
 class SyncActiveCampaignsCommand extends Command
@@ -23,7 +22,7 @@ class SyncActiveCampaignsCommand extends Command
      *
      * @var string
      */
-    protected $description = 'Synchronizes and deactivates expired flash sales, promotional banners, and exhausted coupons.';
+    protected $description = 'Synchronizes and deactivates expired promotional banners and exhausted coupons.';
 
     /**
      * Execute the console command.
@@ -32,15 +31,7 @@ class SyncActiveCampaignsCommand extends Command
     {
         $now = now();
 
-        // 1. Conclude expired flash sales
-        $expiredFlashCount = Product::where('is_flash_sale', true)
-            ->whereNotNull('flash_sale_end')
-            ->where('flash_sale_end', '<=', $now)
-            ->update([
-                'is_flash_sale' => false,
-            ]);
-
-        // 2. Retire expired banners
+        // 1. Retire expired banners
         $expiredBannerCount = Banner::where('is_active', true)
             ->whereNotNull('end_at')
             ->where('end_at', '<=', $now)
@@ -48,7 +39,7 @@ class SyncActiveCampaignsCommand extends Command
                 'is_active' => false,
             ]);
 
-        // 3. Deactivate expired or fully exhausted coupons
+        // 2. Deactivate expired or fully exhausted coupons
         $expiredCouponsCount = Coupon::where('is_active', true)
             ->where(function ($query) use ($now) {
                 $query->where(function ($q) use ($now) {
@@ -61,7 +52,7 @@ class SyncActiveCampaignsCommand extends Command
                 'is_active' => false,
             ]);
 
-        $this->info("Campaign synchronization complete: {$expiredFlashCount} flash sale(s) concluded, {$expiredBannerCount} banner(s) retired, {$expiredCouponsCount} coupon(s) deactivated.");
+        $this->info("Campaign synchronization complete: {$expiredBannerCount} banner(s) retired, {$expiredCouponsCount} coupon(s) deactivated.");
 
         return self::SUCCESS;
     }

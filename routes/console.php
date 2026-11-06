@@ -14,5 +14,8 @@ Schedule::command('escrow:release-delivered')->hourly()->withoutOverlapping()->o
 // Automatically cancel expired unpaid reservations and release stock every 5 minutes
 Schedule::command('inventory:release-expired-reservations')->everyFiveMinutes()->withoutOverlapping()->onOneServer();
 
-// Automatically synchronize active flash sales, banners, and coupon promotions hourly
+// Automatically synchronize flash sale campaign statuses every minute
+Schedule::command('flash-sales:sync-statuses')->everyMinute()->withoutOverlapping()->onOneServer();
+
+// Automatically synchronize active banners and coupon promotions hourly
 Schedule::command('promotions:sync-active-campaigns')->hourly()->withoutOverlapping()->onOneServer();

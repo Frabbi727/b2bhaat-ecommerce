@@ -9,10 +9,10 @@ use App\Models\Product;
 use App\Models\SalesChannel;
 use App\Models\Unit;
 use Closure;
-use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\KeyValue;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
@@ -412,26 +412,19 @@ class ProductForm
                     ->label('Feature on homepage')
                     ->default(false),
 
-                Toggle::make('is_flash_sale')
-                    ->label('Include in flash sale')
-                    ->default(false)
-                    ->live(),
+                Placeholder::make('flash_sale_status')
+                    ->label('Flash Sale')
+                    ->content(function (?Product $record): string {
+                        $offer = $record?->liveFlashOffer();
+                        if (! $offer || ! $offer->flashSale) {
+                            return '';
+                        }
 
-                TextInput::make('flash_sale_price')
-                    ->label('Flash sale price')
-                    ->prefix('৳')
-                    ->numeric()
-                    ->minValue(0.01)
-                    ->required(fn (Get $get): bool => (bool) $get('is_flash_sale'))
-                    ->visible(fn (Get $get): bool => (bool) $get('is_flash_sale'))
-                    ->helperText('Replaces the retail price while the sale runs.'),
+                        $dhakaEnd = $offer->flashSale->ends_at?->timezone('Asia/Dhaka')->format('d M Y, h:i A');
 
-                DateTimePicker::make('flash_sale_end')
-                    ->label('Sale ends')
-                    ->seconds(false)
-                    ->native(false)
-                    ->visible(fn (Get $get): bool => (bool) $get('is_flash_sale'))
-                    ->helperText('Leave empty to run until you switch it off.'),
+                        return "Flash sale: {$offer->flashSale->name} until {$dhakaEnd}";
+                    })
+                    ->visible(fn (?Product $record): bool => (bool) $record?->liveFlashOffer()),
             ]);
     }
 
