@@ -53,6 +53,46 @@ class OrderConfirmationEmailTest extends TestCase
         Mail::assertNothingQueued();
     }
 
+    public function test_sends_email_to_recipient_email_in_shipping_address_for_guest(): void
+    {
+        Mail::fake();
+
+        $guest = User::factory()->create([
+            'email' => 'guest+uuid123@guest.b2bhaat.invalid',
+            'name' => 'Guest Buyer',
+        ]);
+
+        $status = OrderStatus::firstOrCreate(['slug' => 'pending'], ['name' => 'Pending']);
+        $paymentStatus = PaymentStatus::firstOrCreate(['slug' => 'unpaid'], ['name' => 'Unpaid']);
+        $paymentMethod = PaymentMethod::firstOrCreate(['slug' => 'cod'], ['name' => 'Cash on Delivery']);
+
+        $order = Order::create([
+            'order_number' => 'ORD-'.date('Ymd').'-TESTGUEST',
+            'customer_id' => $guest->id,
+            'order_status_id' => $status->id,
+            'payment_status_id' => $paymentStatus->id,
+            'payment_method_id' => $paymentMethod->id,
+            'total_amount' => 1250.00,
+            'shipping_amount' => 100.00,
+            'discount_amount' => 0.00,
+            'shipping_address' => [
+                'recipient_name' => 'Guest Shopper',
+                'recipient_phone' => '01711111111',
+                'recipient_email' => 'guestshopper@gmail.com',
+                'street_address' => 'Mirpur-10',
+                'city' => 'Dhaka',
+            ],
+            'invoice_token' => 'test-invoice-token-guest',
+            'tracking_token' => 'test-tracking-token-guest',
+        ]);
+
+        event(new OrderPlacedEvent($order));
+
+        Mail::assertQueued(OrderConfirmationMail::class, function (OrderConfirmationMail $mail) {
+            return $mail->hasTo('guestshopper@gmail.com');
+        });
+    }
+
     private function createMockOrder(User $customer): Order
     {
         $status = OrderStatus::firstOrCreate(['slug' => 'pending'], ['name' => 'Pending']);

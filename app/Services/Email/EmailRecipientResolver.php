@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Email;
 
 use App\Actions\Checkout\ResolveCheckoutCustomer;
+use App\Models\Order;
 
 class EmailRecipientResolver
 {
@@ -29,5 +30,24 @@ class EmailRecipientResolver
         }
 
         return true;
+    }
+
+    /**
+     * Resolve the best deliverable notification email for an order.
+     * Checks shipping address recipient_email first, then falls back to customer account email.
+     */
+    public function resolveOrderCustomerEmail(Order $order): ?string
+    {
+        $shippingEmail = $order->shipping_address['recipient_email'] ?? null;
+        if ($this->isDeliverable($shippingEmail)) {
+            return trim(strtolower((string) $shippingEmail));
+        }
+
+        $customerEmail = $order->customer?->email;
+        if ($this->isDeliverable($customerEmail)) {
+            return trim(strtolower((string) $customerEmail));
+        }
+
+        return null;
     }
 }

@@ -102,6 +102,22 @@
                     </div>
 
                     <div class="sm:col-span-2">
+                        <div class="flex items-center justify-between mb-1">
+                            <label for="checkout-recipient-email" class="block font-semibold text-slate-700">Email address <span class="text-slate-400 font-normal">(optional)</span></label>
+                            <span class="text-[11px] text-slate-400">Order invoice & tracking sent here</span>
+                        </div>
+                        <input 
+                            id="checkout-recipient-email"
+                            type="email" 
+                            autocomplete="email"
+                            placeholder="e.g. buyer@example.com"
+                            wire:model="recipientEmail" 
+                            class="w-full py-2 px-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                        />
+                        @error('recipientEmail') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div class="sm:col-span-2">
                         <label class="block font-semibold text-slate-700 mb-1">Address (house, road, area) *</label>
                         <textarea 
                             rows="2" 

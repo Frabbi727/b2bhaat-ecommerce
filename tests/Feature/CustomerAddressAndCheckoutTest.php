@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Livewire\Storefront\CheckoutComponent;
 use App\Livewire\Storefront\CustomerAddresses;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\SalesChannel;
 use App\Models\User;
@@ -187,5 +188,89 @@ class CustomerAddressAndCheckoutTest extends TestCase
             'city' => 'Chattogram',
             'postal_code' => '4100',
         ]);
+    }
+
+    public function test_checkout_prefills_account_email_for_registered_user(): void
+    {
+        $retailUser = User::where('email', 'customer@retail.com')->firstOrFail();
+        $this->actingAs($retailUser);
+
+        $product = Product::where('slug', 'luxury-press-on-fake-nails-set')->firstOrFail();
+        $variation = $product->variations()->firstOrFail();
+
+        $cart = app(CartSessionService::class);
+        $cart->clear();
+        $cart->addItem(
+            productId: $product->id,
+            variationId: $variation->id,
+            channelSlug: SalesChannel::RETAIL,
+            quantity: 1
+        );
+
+        Livewire::test(CheckoutComponent::class)
+            ->assertSet('recipientEmail', 'customer@retail.com')
+            ->assertSee('Email address');
+    }
+
+    public function test_checkout_saves_custom_email_in_shipping_address(): void
+    {
+        $retailUser = User::where('email', 'customer@retail.com')->firstOrFail();
+        $this->actingAs($retailUser);
+
+        $product = Product::where('slug', 'luxury-press-on-fake-nails-set')->firstOrFail();
+        $variation = $product->variations()->firstOrFail();
+
+        $cart = app(CartSessionService::class);
+        $cart->clear();
+        $cart->addItem(
+            productId: $product->id,
+            variationId: $variation->id,
+            channelSlug: SalesChannel::RETAIL,
+            quantity: 1
+        );
+
+        Livewire::test(CheckoutComponent::class)
+            ->set('recipientName', 'Tanvir Hasan')
+            ->set('recipientPhone', '01899001122')
+            ->set('recipientEmail', 'alerts@mybusiness.com')
+            ->set('streetAddress', 'Road 3, CDA Avenue')
+            ->set('city', 'Chittagong')
+            ->set('postalCode', '4100')
+            ->set('deliveryZone', 'outside_dhaka')
+            ->call('placeOrder')
+            ->assertHasNoErrors()
+            ->assertRedirect();
+
+        $latestOrder = Order::latest('id')->firstOrFail();
+        $this->assertSame('alerts@mybusiness.com', $latestOrder->shipping_address['recipient_email']);
+    }
+
+    public function test_checkout_validates_email_format(): void
+    {
+        $retailUser = User::where('email', 'customer@retail.com')->firstOrFail();
+        $this->actingAs($retailUser);
+
+        $product = Product::where('slug', 'luxury-press-on-fake-nails-set')->firstOrFail();
+        $variation = $product->variations()->firstOrFail();
+
+        $cart = app(CartSessionService::class);
+        $cart->clear();
+        $cart->addItem(
+            productId: $product->id,
+            variationId: $variation->id,
+            channelSlug: SalesChannel::RETAIL,
+            quantity: 1
+        );
+
+        Livewire::test(CheckoutComponent::class)
+            ->set('recipientName', 'Tanvir Hasan')
+            ->set('recipientPhone', '01899001122')
+            ->set('recipientEmail', 'invalid-email-address')
+            ->set('streetAddress', 'Road 3, CDA Avenue')
+            ->set('city', 'Chittagong')
+            ->set('postalCode', '4100')
+            ->set('deliveryZone', 'outside_dhaka')
+            ->call('placeOrder')
+            ->assertHasErrors(['recipientEmail']);
     }
 }

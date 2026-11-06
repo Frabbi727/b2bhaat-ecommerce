@@ -22,9 +22,9 @@ class SendOrderConfirmationEmailListener implements ShouldQueue
         $order = $event->order;
         $customer = $order->customer;
 
-        $email = $customer?->email ?? ($order->shipping_address['recipient_email'] ?? null);
+        $email = $this->resolver->resolveOrderCustomerEmail($order);
 
-        if (! $this->resolver->isDeliverable($email)) {
+        if (! $email) {
             return;
         }
 

@@ -11,8 +11,10 @@ use App\Models\OrderStatus;
 use App\Models\PaymentMethod;
 use App\Models\PaymentStatus;
 use App\Models\SalesChannel;
+use App\Models\User;
 use App\Services\Cart\CartSessionService;
 use App\Services\Cart\CouponService;
+use App\Services\Email\EmailRecipientResolver;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Logistics\BangladeshDistricts;
 use App\Services\Logistics\ShippingCalculatorService;
@@ -38,6 +40,8 @@ class CheckoutComponent extends Component
     public string $recipientName = '';
 
     public string $recipientPhone = '';
+
+    public string $recipientEmail = '';
 
     public string $streetAddress = '';
 
@@ -77,6 +81,12 @@ class CheckoutComponent extends Component
             $this->recipientName = $user->name;
             $this->recipientPhone = $user->phone ?? '';
             $this->mfsSenderNumber = $user->phone ?? '';
+
+            $resolver = app(EmailRecipientResolver::class);
+            if ($user->email && $resolver->isDeliverable($user->email)) {
+                $this->recipientEmail = $user->email;
+            }
+
             $defaultAddress = $user->addresses()->where('is_default', true)->first()
                 ?? $user->addresses()->first();
 
@@ -193,6 +203,7 @@ class CheckoutComponent extends Component
         $this->validate([
             'recipientName' => 'required|string|min:3|max:255',
             'recipientPhone' => ['required', 'string', 'regex:/^(\+?8801|01)\d{7,9}$/'],
+            'recipientEmail' => 'nullable|email|max:255',
             'streetAddress' => 'required|string|min:5',
             'city' => ['required', 'string', function (string $attribute, mixed $value, \Closure $fail): void {
                 if (BangladeshDistricts::normalize((string) $value) === null) {
@@ -214,6 +225,7 @@ class CheckoutComponent extends Component
         ], [
             'recipientPhone.regex' => 'Enter an 11-digit Bangladeshi mobile number, for example 01712345678.',
             'recipientName.min' => 'Enter the full name of the person receiving the parcel.',
+            'recipientEmail.email' => 'Please enter a valid email address.',
             'streetAddress.min' => 'Add your house, road and area so the courier can find you.',
         ]);
 
@@ -323,14 +335,27 @@ class CheckoutComponent extends Component
                 $discountAmount = 0.00;
             }
 
+            $cleanEmail = trim(strtolower($this->recipientEmail));
+
             $shippingAddressPayload = [
                 'recipient_name' => $this->recipientName,
                 'recipient_phone' => $this->recipientPhone,
+                'recipient_email' => $cleanEmail !== '' ? $cleanEmail : null,
                 'street_address' => $this->streetAddress,
                 'city' => $this->city,
                 'postal_code' => $this->postalCode,
                 'delivery_zone' => $this->deliveryZone,
             ];
+
+            if (Auth::check() && $cleanEmail !== '') {
+                $authUser = Auth::user();
+                $resolver = app(EmailRecipientResolver::class);
+                if (! $resolver->isDeliverable($authUser->email)) {
+                    if (! User::where('email', $cleanEmail)->where('id', '!=', $authUser->id)->exists()) {
+                        $authUser->update(['email' => $cleanEmail]);
+                    }
+                }
+            }
 
             if ($paymentMethod && in_array($paymentMethod->slug, ['bkash', 'nagad'])) {
                 $shippingAddressPayload['mfs_gateway'] = $paymentMethod->slug;

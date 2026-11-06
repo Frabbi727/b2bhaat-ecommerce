@@ -76,6 +76,9 @@
                     <div class="text-slate-600 mt-0.5">{{ $order->shipping_address['street_address'] ?? '' }}</div>
                     <div class="text-slate-600">{{ $order->shipping_address['city'] ?? '' }} - {{ $order->shipping_address['postal_code'] ?? '' }}</div>
                     <div class="text-slate-600 font-mono mt-1">Contact: {{ $order->shipping_address['recipient_phone'] ?? $order->customer?->phone }}</div>
+                    @if (! empty($order->shipping_address['recipient_email']))
+                        <div class="text-slate-600 text-xs mt-0.5">Email: {{ $order->shipping_address['recipient_email'] }}</div>
+                    @endif
                 </div>
 
                 <div class="text-right">

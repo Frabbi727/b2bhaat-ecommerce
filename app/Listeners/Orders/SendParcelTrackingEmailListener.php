@@ -39,9 +39,9 @@ class SendParcelTrackingEmailListener implements ShouldQueue
             return;
         }
 
-        $email = $order->customer?->email ?? ($order->shipping_address['recipient_email'] ?? null);
+        $email = $this->resolver->resolveOrderCustomerEmail($order);
 
-        if (! $this->resolver->isDeliverable($email)) {
+        if (! $email) {
             return;
         }
 
