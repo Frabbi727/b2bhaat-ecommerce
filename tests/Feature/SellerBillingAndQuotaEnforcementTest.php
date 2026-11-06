@@ -201,4 +201,44 @@ class SellerBillingAndQuotaEnforcementTest extends TestCase
             'title' => 'Saree 2 Exceeding Quota',
         ]);
     }
+
+    public function test_seller_can_toggle_auto_renew(): void
+    {
+        $this->actingAs($this->seller);
+        $this->subscription->update(['auto_renew' => true]);
+
+        $this->assertTrue((bool) $this->subscription->fresh()->auto_renew);
+
+        Livewire::test(SubscriptionBilling::class)
+            ->call('toggleAutoRenew');
+
+        $this->assertFalse((bool) $this->subscription->fresh()->auto_renew);
+
+        Livewire::test(SubscriptionBilling::class)
+            ->call('toggleAutoRenew');
+
+        $this->assertTrue((bool) $this->subscription->fresh()->auto_renew);
+    }
+
+    public function test_seller_sees_paid_invoices_in_history(): void
+    {
+        $this->actingAs($this->seller);
+
+        $paidInvoice = SellerInvoice::create([
+            'invoice_number' => 'SINV-PAID-001',
+            'seller_id' => $this->seller->id,
+            'subscription_id' => $this->subscription->id,
+            'invoice_type' => 'subscription_fee',
+            'subtotal' => 250.00,
+            'total_amount' => 250.00,
+            'status' => SellerInvoice::STATUS_PAID,
+            'due_date' => now()->toDateString(),
+            'paid_at' => now(),
+        ]);
+
+        Livewire::test(SubscriptionBilling::class)
+            ->assertSuccessful()
+            ->assertSee('SINV-PAID-001')
+            ->assertSee('Settled Billing History');
+    }
 }

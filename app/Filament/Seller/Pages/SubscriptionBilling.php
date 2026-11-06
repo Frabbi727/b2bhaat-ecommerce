@@ -62,6 +62,33 @@ class SubscriptionBilling extends Page
             ->get();
     }
 
+    public function getPaidInvoices()
+    {
+        return SellerInvoice::where('seller_id', auth()->id())
+            ->where('status', SellerInvoice::STATUS_PAID)
+            ->latest('paid_at')
+            ->take(5)
+            ->get();
+    }
+
+    public function toggleAutoRenew(): void
+    {
+        $subscription = $this->getActiveSubscription();
+        if (! $subscription) {
+            return;
+        }
+
+        $subscription->update([
+            'auto_renew' => ! $subscription->auto_renew,
+        ]);
+
+        Notification::make()
+            ->title($subscription->auto_renew ? 'Auto-renewal enabled' : 'Auto-renewal paused')
+            ->body($subscription->auto_renew ? 'Your subscription will automatically renew using available wallet balance.' : 'Auto-renewal has been paused.')
+            ->success()
+            ->send();
+    }
+
     public function getAvailablePlans()
     {
         return SellerPlan::where('is_active', true)

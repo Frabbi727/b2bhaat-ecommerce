@@ -3,174 +3,504 @@
         $subscription = $this->getActiveSubscription();
         $usedSlots = $this->getUsedProductSlots();
         $allowedSlots = $this->getAllowedProductSlots();
-        $invoices = $this->getPendingInvoices();
+        $pendingInvoices = $this->getPendingInvoices();
+        $paidInvoices = $this->getPaidInvoices();
         $plans = $this->getAvailablePlans();
         $walletBalance = $this->getWalletBalance();
         $monetizationStatus = auth()->user()->sellerProfile?->monetization_status ?? 'active';
+
+        $percentCapacity = $allowedSlots ? min(100, (int) round(($usedSlots / $allowedSlots) * 100)) : 0;
+        $isOverQuota = $allowedSlots !== null && $usedSlots >= $allowedSlots;
+        $daysRemaining = $subscription?->ends_at ? (int) ceil(now()->diffInDays($subscription->ends_at, false)) : null;
     @endphp
 
+    <style>
+        .b2b-sub-deck {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+        @media (min-width: 768px) {
+            .b2b-sub-deck {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        .b2b-plan-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.25rem;
+            margin-top: 1rem;
+        }
+        @media (min-width: 640px) {
+            .b2b-plan-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (min-width: 1024px) {
+            .b2b-plan-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+        .b2b-plan-card {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            border: 1px solid rgba(228, 228, 231, 0.8);
+            background: #ffffff;
+            transition: all 0.2s ease;
+        }
+        .dark .b2b-plan-card {
+            background: #18181b;
+            border-color: rgba(39, 39, 42, 0.9);
+        }
+        .b2b-plan-card:hover {
+            border-color: rgba(161, 161, 170, 0.8);
+        }
+        .dark .b2b-plan-card:hover {
+            border-color: rgba(82, 82, 91, 0.8);
+        }
+        .b2b-plan-card.is-current {
+            border: 2px solid rgb(16, 185, 129);
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+        }
+        .b2b-progress-track {
+            width: 100%;
+            height: 8px;
+            border-radius: 9999px;
+            background: #f4f4f5;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+        .dark .b2b-progress-track {
+            background: #27272a;
+        }
+        .b2b-progress-fill {
+            height: 100%;
+            border-radius: 9999px;
+            transition: width 0.4s ease;
+        }
+        .b2b-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8125rem;
+        }
+        .b2b-table th {
+            text-align: left;
+            padding: 0.625rem 1rem;
+            font-weight: 600;
+            color: #71717a;
+            border-bottom: 1px solid #e4e4e7;
+            background: rgba(244, 244, 245, 0.6);
+        }
+        .dark .b2b-table th {
+            color: #a1a1aa;
+            border-bottom-color: #27272a;
+            background: rgba(24, 24, 27, 0.6);
+        }
+        .b2b-table td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #f4f4f5;
+            color: #27272a;
+        }
+        .dark .b2b-table td {
+            border-bottom-color: #27272a;
+            color: #e4e4e7;
+        }
+        .b2b-table tr:hover td {
+            background: rgba(244, 244, 245, 0.3);
+        }
+        .dark .b2b-table tr:hover td {
+            background: rgba(39, 39, 42, 0.3);
+        }
+    </style>
+
+    {{-- 1. Urgent Status Alerts (Grace Period or Suspension) --}}
     @if ($monetizationStatus === 'suspended')
-        <div class="p-4 mb-4 rounded-xl border border-red-300 bg-red-50 text-red-900 dark:bg-red-950/40 dark:border-red-800 dark:text-red-200">
-            <div class="flex items-start gap-3">
-                <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
-                <div>
-                    <h3 class="font-bold text-base">Store Privileges Suspended</h3>
-                    <p class="text-sm mt-1">Your products are temporarily hidden from the marketplace due to an overdue platform invoice. Please settle your pending invoice below to immediately restore your store.</p>
-                </div>
-            </div>
-        </div>
-    @elseif ($monetizationStatus === 'grace_period')
-        <div class="p-4 mb-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200">
-            <div class="flex items-start gap-3">
-                <x-filament::icon icon="heroicon-o-clock" class="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div>
-                    <h3 class="font-bold text-base">Account in Grace Period</h3>
-                    <p class="text-sm mt-1">Your subscription payment is overdue. Please settle your payment before the grace period ends to prevent your products from being hidden.</p>
-                </div>
-            </div>
-        </div>
-    @endif
-
-    {{-- 1. Current Plan & Quota Card --}}
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm flex flex-col justify-between">
-            <div>
-                <span class="text-xs uppercase tracking-wider text-gray-500 font-bold">Current Subscription</span>
-                <h2 class="text-2xl font-black mt-1 text-gray-950 dark:text-white">
-                    {{ $subscription?->plan?->name ?? 'Free Starter' }}
-                </h2>
-                <div class="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold {{ $monetizationStatus === 'active' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-red-100 text-red-800' }}">
-                    ● {{ ucfirst($monetizationStatus) }}
-                </div>
-            </div>
-            <div class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-500">
-                Cycle ends: <strong class="text-gray-900 dark:text-gray-200">{{ $subscription?->ends_at?->format('d M, Y') ?? 'N/A' }}</strong>
-            </div>
-        </div>
-
-        <div class="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm flex flex-col justify-between">
-            <div>
-                <span class="text-xs uppercase tracking-wider text-gray-500 font-bold">Listing Capacity Gauge</span>
-                <div class="flex items-baseline gap-2 mt-1">
-                    <span class="text-3xl font-black text-gray-950 dark:text-white">{{ $usedSlots }}</span>
-                    <span class="text-gray-500 font-medium text-sm">/ {{ $allowedSlots ? $allowedSlots.' max active' : 'Unlimited' }}</span>
-                </div>
-                @if ($allowedSlots)
-                    @php $percent = min(100, (int)(($usedSlots / $allowedSlots) * 100)); @endphp
-                    <div class="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-2.5 mt-3 overflow-hidden">
-                        <div class="h-2.5 rounded-full {{ $percent >= 90 ? 'bg-red-500' : ($percent >= 70 ? 'bg-amber-500' : 'bg-indigo-600') }}" style="width: {{ $percent }}%"></div>
+        <x-filament::callout
+            color="danger"
+            icon="heroicon-o-shield-exclamation"
+            heading="Store Privileges Suspended"
+            class="mb-5"
+        >
+            <div style="font-size: 0.8125rem; line-height: 1.5;">
+                Your products are temporarily hidden from the marketplace due to an overdue billing invoice.
+                Please settle your pending invoice below to immediately restore your store visibility.
+                @if ($pendingInvoices->isNotEmpty())
+                    <div style="margin-top: 0.5rem;">
+                        <x-filament::link href="#pending-invoices-section" color="danger">
+                            Jump to pending invoice ↓
+                        </x-filament::link>
                     </div>
                 @endif
             </div>
-            <div class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-500">
-                {{ $allowedSlots ? ($allowedSlots - $usedSlots).' slots available' : 'Unlimited products allowed' }}
+        </x-filament::callout>
+    @elseif ($monetizationStatus === 'grace_period')
+        <x-filament::callout
+            color="warning"
+            icon="heroicon-o-clock"
+            heading="Account in Grace Period"
+            class="mb-5"
+        >
+            <div style="font-size: 0.8125rem; line-height: 1.5;">
+                Your subscription payment is overdue. Please settle your invoice before the grace period ends to prevent your products from being hidden.
             </div>
-        </div>
+        </x-filament::callout>
+    @endif
 
-        <div class="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm flex flex-col justify-between">
-            <div>
-                <span class="text-xs uppercase tracking-wider text-gray-500 font-bold">Seller Wallet Balance</span>
-                <div class="text-3xl font-black mt-1 text-emerald-600 dark:text-emerald-400">
+    {{-- 2. Overview Metric Deck (Operate Mode: Clean, native cards) --}}
+    <div class="b2b-sub-deck">
+        {{-- Card 1: Active Subscription --}}
+        <x-filament::section>
+            <x-slot name="heading">
+                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                    <span style="font-size: 0.8125rem; font-weight: 600; color: #71717a;">Current Plan</span>
+                    <x-filament::badge :color="$monetizationStatus === 'active' ? 'success' : 'danger'">
+                        ● {{ ucfirst($monetizationStatus) }}
+                    </x-filament::badge>
+                </div>
+            </x-slot>
+
+            <div style="margin-top: 0.25rem;">
+                <div style="font-size: 1.5rem; font-weight: 800; letter-spacing: -0.025em; color: inherit;">
+                    {{ $subscription?->plan?->name ?? 'Free Starter' }}
+                </div>
+                <div style="margin-top: 0.35rem; font-size: 0.75rem; color: #71717a;">
+                    @if ($subscription?->ends_at)
+                        @if ($daysRemaining > 0)
+                            Renews on <strong style="color: inherit;">{{ $subscription->ends_at->format('d M, Y') }}</strong> ({{ $daysRemaining }} {{ Str::plural('day', $daysRemaining) }} left)
+                        @else
+                            Cycle expired on <strong style="color: #e11d48;">{{ $subscription->ends_at->format('d M, Y') }}</strong>
+                        @endif
+                    @else
+                        Continuous active tier
+                    @endif
+                </div>
+            </div>
+
+            <x-slot name="footer">
+                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem;">
+                    <span style="color: #71717a;">Wallet Auto-Renewal</span>
+                    <button
+                        type="button"
+                        wire:click="toggleAutoRenew"
+                        wire:loading.attr="disabled"
+                        title="Click to toggle automatic renewal"
+                        style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; font-weight: 600; padding: 0.2rem 0.5rem; border-radius: 0.375rem; border: none; cursor: pointer; {{ ($subscription?->auto_renew ?? true) ? 'background: rgba(16, 185, 129, 0.12); color: #059669;' : 'background: #f4f4f5; color: #71717a;' }}"
+                    >
+                        <span style="width: 6px; height: 6px; border-radius: 9999px; background: {{ ($subscription?->auto_renew ?? true) ? '#10b981' : '#a1a1aa' }};"></span>
+                        {{ ($subscription?->auto_renew ?? true) ? 'Enabled' : 'Paused' }}
+                    </button>
+                </div>
+            </x-slot>
+        </x-filament::section>
+
+        {{-- Card 2: Listing Capacity Gauge --}}
+        <x-filament::section>
+            <x-slot name="heading">
+                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                    <span style="font-size: 0.8125rem; font-weight: 600; color: #71717a;">Listing Capacity</span>
+                    @if ($allowedSlots)
+                        <x-filament::badge :color="$isOverQuota ? 'danger' : ($percentCapacity >= 80 ? 'warning' : 'gray')">
+                            {{ $percentCapacity }}% Used
+                        </x-filament::badge>
+                    @else
+                        <x-filament::badge color="success">Unlimited</x-filament::badge>
+                    @endif
+                </div>
+            </x-slot>
+
+            <div style="margin-top: 0.25rem;">
+                <div style="display: flex; align-items: baseline; gap: 0.5rem;">
+                    <span style="font-size: 1.625rem; font-weight: 800; letter-spacing: -0.025em; color: inherit;">{{ number_format($usedSlots) }}</span>
+                    <span style="font-size: 0.8125rem; color: #71717a;">/ {{ $allowedSlots ? number_format($allowedSlots) . ' max listings' : 'unlimited products' }}</span>
+                </div>
+
+                @if ($allowedSlots)
+                    <div class="b2b-progress-track">
+                        <div
+                            class="b2b-progress-fill"
+                            style="width: {{ $percentCapacity }}%; background: {{ $isOverQuota ? '#ef4444' : ($percentCapacity >= 80 ? '#f59e0b' : '#10b981') }};"
+                        ></div>
+                    </div>
+                @endif
+            </div>
+
+            <x-slot name="footer">
+                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem;">
+                    <span style="color: #71717a;">Available Quota</span>
+                    @if ($allowedSlots)
+                        <span style="font-weight: 600; color: {{ $isOverQuota ? '#e11d48' : 'inherit' }};">
+                            {{ max(0, $allowedSlots - $usedSlots) }} slots remaining
+                        </span>
+                    @else
+                        <span style="font-weight: 600; color: #059669;">Unlimited catalog</span>
+                    @endif
+                </div>
+            </x-slot>
+        </x-filament::section>
+
+        {{-- Card 3: Wallet Balance & Payouts --}}
+        <x-filament::section>
+            <x-slot name="heading">
+                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                    <span style="font-size: 0.8125rem; font-weight: 600; color: #71717a;">Seller Wallet Balance</span>
+                    <x-filament::link :href="route('filament.seller.resources.seller-wallets.index')" color="primary" size="xs">
+                        Wallet & payouts →
+                    </x-filament::link>
+                </div>
+            </x-slot>
+
+            <div style="margin-top: 0.25rem;">
+                <div style="font-size: 1.625rem; font-weight: 800; font-family: monospace; letter-spacing: -0.025em; color: #059669;">
                     ৳{{ number_format($walletBalance, 2) }}
                 </div>
-                <p class="text-xs text-gray-500 mt-2">Available for withdrawal or instant invoice settlement.</p>
+                <div style="margin-top: 0.35rem; font-size: 0.75rem; color: #71717a;">
+                    Available for instant zero-fee billing settlement or direct payout.
+                </div>
             </div>
-            <div class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-500">
-                Auto-Renew with balance: <strong>{{ $subscription?->auto_renew ? 'Enabled' : 'Disabled' }}</strong>
-            </div>
-        </div>
+
+            <x-slot name="footer">
+                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; color: #71717a;">
+                    <span>Settlement Speed</span>
+                    <span style="font-weight: 600; color: inherit;">Instant Automatic Offset</span>
+                </div>
+            </x-slot>
+        </x-filament::section>
     </div>
 
-    {{-- 2. Pending Invoices Table --}}
-    @if ($invoices->isNotEmpty())
-        <div class="mt-6 p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
-            <h3 class="text-lg font-bold text-gray-950 dark:text-white mb-4">Unpaid Invoices</h3>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-sm">
-                    <thead>
-                        <tr class="border-b border-gray-200 dark:border-gray-800 text-gray-500">
-                            <th class="py-2.5">Invoice #</th>
-                            <th class="py-2.5">Type</th>
-                            <th class="py-2.5">Due Date</th>
-                            <th class="py-2.5 text-right">Amount (৳)</th>
-                            <th class="py-2.5 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach ($invoices as $inv)
-                            <tr class="border-b border-gray-100 dark:border-gray-800">
-                                <td class="py-3 font-semibold">{{ $inv->invoice_number }}</td>
-                                <td class="py-3 capitalize">{{ str_replace('_', ' ', $inv->invoice_type) }}</td>
-                                <td class="py-3">{{ $inv->due_date?->format('d M, Y') }}</td>
-                                <td class="py-3 text-right font-bold">৳{{ number_format((float)$inv->total_amount, 2) }}</td>
-                                <td class="py-3 text-right space-x-2">
-                                    @if ($walletBalance >= (float)$inv->total_amount)
-                                        <button wire:click="payWithWallet({{ $inv->id }})" wire:confirm="Deduct ৳{{ number_format((float)$inv->total_amount, 2) }} from your wallet balance to settle this invoice?" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition">
-                                            Pay from Wallet
-                                        </button>
-                                    @else
-                                        <span class="text-xs text-gray-500">Insufficient Wallet (bKash/Bank below)</span>
-                                    @endif
-                                </td>
+    {{-- 3. Pending Invoices Section (Action Required) --}}
+    @if ($pendingInvoices->isNotEmpty())
+        <div id="pending-invoices-section" style="margin-bottom: 1.5rem;">
+            <x-filament::section
+                icon="heroicon-o-receipt-percent"
+                icon-color="warning"
+                heading="Action Required: Unpaid Invoices"
+                :description="'You have ' . $pendingInvoices->count() . ' invoice(s) awaiting payment. Settle using your wallet to keep services active.'"
+            >
+                <div style="overflow-x: auto;">
+                    <table class="b2b-table">
+                        <thead>
+                            <tr>
+                                <th>Invoice #</th>
+                                <th>Description</th>
+                                <th>Due Date</th>
+                                <th style="text-align: right;">Amount (৳)</th>
+                                <th style="text-align: right;">Action</th>
                             </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody>
+                            @foreach ($pendingInvoices as $inv)
+                                <tr>
+                                    <td style="font-family: monospace; font-weight: 600;">
+                                        {{ $inv->invoice_number }}
+                                    </td>
+                                    <td>
+                                        <div style="font-weight: 600; text-transform: capitalize;">{{ str_replace('_', ' ', $inv->invoice_type) }}</div>
+                                        @if (!empty($inv->metadata['plan_name']))
+                                            <div style="font-size: 0.7rem; color: #71717a;">Plan: {{ $inv->metadata['plan_name'] }}</div>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        {{ $inv->due_date?->format('d M, Y') ?? 'Immediate' }}
+                                        @if ($inv->due_date && $inv->due_date->isPast())
+                                            <span style="color: #e11d48; font-weight: 600; font-size: 0.7rem; margin-left: 0.25rem;">(Overdue)</span>
+                                        @endif
+                                    </td>
+                                    <td style="text-align: right; font-family: monospace; font-weight: 700; font-size: 0.875rem;">
+                                        ৳{{ number_format((float) $inv->total_amount, 2) }}
+                                    </td>
+                                    <td style="text-align: right;">
+                                        @if ($walletBalance >= (float) $inv->total_amount)
+                                            <x-filament::button
+                                                color="success"
+                                                size="xs"
+                                                icon="heroicon-m-check-circle"
+                                                wire:click="payWithWallet({{ $inv->id }})"
+                                                wire:confirm="Deduct ৳{{ number_format((float) $inv->total_amount, 2) }} from your wallet balance to settle Invoice #{{ $inv->invoice_number }}?"
+                                                wire:loading.attr="disabled"
+                                            >
+                                                Pay from Wallet
+                                            </x-filament::button>
+                                        @else
+                                            <div style="display: inline-flex; align-items: center; gap: 0.5rem;">
+                                                <span style="font-size: 0.7rem; color: #71717a;">
+                                                    Short by ৳{{ number_format((float) $inv->total_amount - $walletBalance, 2) }}
+                                                </span>
+                                                <x-filament::button
+                                                    color="gray"
+                                                    size="xs"
+                                                    tag="a"
+                                                    :href="route('filament.seller.resources.seller-wallets.index')"
+                                                >
+                                                    Top-up Wallet
+                                                </x-filament::button>
+                                            </div>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </x-filament::section>
         </div>
     @endif
 
-    {{-- 3. Available Plans / Upgrade Section --}}
-    <div class="mt-8">
-        <h3 class="text-xl font-bold text-gray-950 dark:text-white mb-1">Available Marketplace Plans</h3>
-        <p class="text-sm text-gray-500 mb-6">Upgrade your plan to unlock more product listing slots and reduced commission rates.</p>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    {{-- 4. Available Marketplace Plans --}}
+    <x-filament::section
+        heading="Available Marketplace Plans"
+        description="Upgrade your plan to unlock more product listing slots and lower sales commission rates."
+    >
+        <div class="b2b-plan-grid">
             @foreach ($plans as $p)
-                @php $isCurrent = ($subscription?->plan_id === $p->id); @endphp
-                <div class="p-6 bg-white dark:bg-gray-900 rounded-2xl border {{ $isCurrent ? 'border-indigo-600 ring-2 ring-indigo-600/20' : 'border-gray-200 dark:border-gray-800' }} shadow-sm flex flex-col justify-between">
+                @php
+                    $isCurrent = ($subscription?->plan_id === $p->id);
+                    $isFree = $p->isFree();
+                @endphp
+                <div class="b2b-plan-card {{ $isCurrent ? 'is-current' : '' }}">
                     <div>
-                        <div class="flex items-center justify-between">
-                            <h4 class="font-bold text-lg text-gray-900 dark:text-white">{{ $p->name }}</h4>
-                            @if ($p->badge_label)
-                                <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 rounded">
-                                    {{ $p->badge_label }}
-                                </span>
+                        {{-- Header & Badges --}}
+                        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem;">
+                            <div>
+                                <div style="font-size: 1.05rem; font-weight: 700; color: inherit;">
+                                    {{ $p->name }}
+                                </div>
+                                @if ($p->description)
+                                    <div style="font-size: 0.75rem; color: #71717a; margin-top: 0.2rem; line-height: 1.35;">
+                                        {{ $p->description }}
+                                    </div>
+                                @endif
+                            </div>
+
+                            @if ($isCurrent)
+                                <x-filament::badge color="success" size="xs">
+                                    CURRENT
+                                </x-filament::badge>
+                            @elseif ($p->badge_label)
+                                <x-filament::badge color="gray" size="xs">
+                                    {{ strtoupper($p->badge_label) }}
+                                </x-filament::badge>
                             @endif
                         </div>
-                        <div class="mt-4 flex items-baseline gap-1">
-                            <span class="text-3xl font-black text-gray-950 dark:text-white">৳{{ number_format((float)$p->subscription_price, 0) }}</span>
-                            <span class="text-xs text-gray-500">/ {{ $p->billing_cycle_days }} days</span>
+
+                        {{-- Price Block --}}
+                        <div style="margin-top: 1rem; padding-bottom: 0.875rem; border-bottom: 1px solid rgba(228, 228, 231, 0.6); display: flex; align-items: baseline; gap: 0.35rem;">
+                            @if ($isFree)
+                                <span style="font-size: 1.75rem; font-weight: 800; color: inherit;">Free</span>
+                                <span style="font-size: 0.75rem; color: #71717a;">/ forever</span>
+                            @else
+                                <span style="font-size: 1.75rem; font-weight: 800; color: inherit;">৳{{ number_format((float) $p->subscription_price, 0) }}</span>
+                                <span style="font-size: 0.75rem; color: #71717a;">/ {{ $p->billing_cycle_days }} days</span>
+                            @endif
                         </div>
-                        <ul class="mt-6 space-y-2.5 text-xs text-gray-600 dark:text-gray-400">
-                            <li class="flex items-center gap-2">
-                                <x-filament::icon icon="heroicon-o-check" class="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                                <span><strong>{{ $p->is_listing_limit_enabled ? $p->max_active_products.' Products' : 'Unlimited Products' }}</strong></span>
+
+                        {{-- Features List --}}
+                        <ul style="margin-top: 0.875rem; list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.625rem; font-size: 0.75rem; color: #52525b;">
+                            <li style="display: flex; align-items: center; gap: 0.5rem;">
+                                <x-filament::icon icon="heroicon-o-cube" class="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                <span><strong>{{ $p->is_listing_limit_enabled ? number_format($p->max_active_products) . ' Active Listings' : 'Unlimited Listings' }}</strong></span>
                             </li>
-                            <li class="flex items-center gap-2">
-                                <x-filament::icon icon="heroicon-o-check" class="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                                <span>Retail Commission: <strong>{{ $p->is_commission_enabled ? $p->retail_commission_rate.'%' : '0%' }}</strong></span>
+                            <li style="display: flex; align-items: center; gap: 0.5rem;">
+                                <x-filament::icon icon="heroicon-o-shopping-bag" class="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                <span>Retail Commission: <strong style="color: inherit;">{{ $p->is_commission_enabled ? $p->retail_commission_rate . '%' : '0%' }}</strong></span>
                             </li>
-                            <li class="flex items-center gap-2">
-                                <x-filament::icon icon="heroicon-o-check" class="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                                <span>Wholesale Commission: <strong>{{ $p->is_commission_enabled ? $p->wholesale_commission_rate.'%' : '0%' }}</strong></span>
+                            <li style="display: flex; align-items: center; gap: 0.5rem;">
+                                <x-filament::icon icon="heroicon-o-building-storefront" class="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                <span>Wholesale Commission: <strong style="color: inherit;">{{ $p->is_commission_enabled ? $p->wholesale_commission_rate . '%' : '0%' }}</strong></span>
+                            </li>
+                            <li style="display: flex; align-items: center; gap: 0.5rem;">
+                                <x-filament::icon icon="heroicon-o-puzzle-piece" class="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                <span>{{ $p->allow_listing_addons ? 'Listing Pack Add-ons Supported' : 'Fixed Product Quota' }}</span>
                             </li>
                         </ul>
                     </div>
 
-                    <div class="mt-8 pt-4 border-t border-gray-100 dark:border-gray-800">
+                    {{-- Action Button --}}
+                    <div style="margin-top: 1.25rem; padding-top: 0.875rem; border-top: 1px solid rgba(228, 228, 231, 0.6);">
                         @if ($isCurrent)
-                            <button disabled class="w-full py-2 bg-gray-100 dark:bg-gray-800 text-gray-500 text-xs font-bold rounded-lg cursor-not-allowed">
-                                Current Active Plan
-                            </button>
+                            <x-filament::button color="gray" size="sm" disabled style="width: 100%;">
+                                Active Plan
+                            </x-filament::button>
                         @else
-                            <button wire:click="upgradePlan({{ $p->id }})" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition shadow-sm">
-                                Switch to {{ $p->name }}
-                            </button>
+                            @if ($isFree)
+                                <x-filament::button
+                                    color="gray"
+                                    size="sm"
+                                    style="width: 100%;"
+                                    wire:click="upgradePlan({{ $p->id }})"
+                                    wire:confirm="Switch to {{ $p->name }} plan for free?"
+                                    wire:loading.attr="disabled"
+                                >
+                                    Switch to {{ $p->name }}
+                                </x-filament::button>
+                            @else
+                                <x-filament::button
+                                    color="primary"
+                                    size="sm"
+                                    style="width: 100%;"
+                                    wire:click="upgradePlan({{ $p->id }})"
+                                    wire:confirm="Generate an invoice of ৳{{ number_format((float) $p->subscription_price, 2) }} to upgrade to {{ $p->name }}?"
+                                    wire:loading.attr="disabled"
+                                >
+                                    Upgrade to {{ $p->name }}
+                                </x-filament::button>
+                            @endif
                         @endif
                     </div>
                 </div>
             @endforeach
         </div>
-    </div>
+    </x-filament::section>
+
+    {{-- 5. Settled Billing History --}}
+    @if ($paidInvoices->isNotEmpty())
+        <div style="margin-top: 1.5rem;">
+            <x-filament::section
+                icon="heroicon-o-check-badge"
+                icon-color="success"
+                heading="Settled Billing History"
+                description="Recent platform billing payments settled for your account."
+            >
+                <div style="overflow-x: auto;">
+                    <table class="b2b-table">
+                        <thead>
+                            <tr>
+                                <th>Invoice #</th>
+                                <th>Fee Type</th>
+                                <th>Settled Date</th>
+                                <th style="text-align: right;">Amount Paid (৳)</th>
+                                <th style="text-align: right;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($paidInvoices as $paidInv)
+                                <tr>
+                                    <td style="font-family: monospace; font-weight: 600;">
+                                        {{ $paidInv->invoice_number }}
+                                    </td>
+                                    <td style="text-transform: capitalize;">
+                                        {{ str_replace('_', ' ', $paidInv->invoice_type) }}
+                                    </td>
+                                    <td>
+                                        {{ $paidInv->paid_at?->format('d M, Y (h:i A)') ?? 'Settled' }}
+                                    </td>
+                                    <td style="text-align: right; font-family: monospace; font-weight: 700;">
+                                        ৳{{ number_format((float) $paidInv->total_amount, 2) }}
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <x-filament::badge color="success" icon="heroicon-m-check">
+                                            Paid
+                                        </x-filament::badge>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </x-filament::section>
+        </div>
+    @endif
 </x-filament-panels::page>
