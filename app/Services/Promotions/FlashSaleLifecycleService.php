@@ -8,6 +8,7 @@ use App\Enums\FlashSaleStatus;
 use App\Exceptions\InvalidStatusTransitionException;
 use App\Models\FlashSale;
 use App\Models\FlashSaleProduct;
+use App\Models\Product;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +33,7 @@ class FlashSaleLifecycleService
             if ($locked->ends_at->lte($locked->starts_at)) {
                 throw new InvalidStatusTransitionException('The end time must be after the start time.');
             }
+            $this->lockProducts($locked->items()->pluck('product_id')->all());
             $this->assertNoConflicts($this->conflicts->conflicts($locked));
 
             $locked->update(['status' => FlashSaleStatus::Scheduled]);
@@ -44,12 +46,9 @@ class FlashSaleLifecycleService
             if ($locked->status !== FlashSaleStatus::Scheduled || $locked->starts_at->lte(now())) {
                 throw new InvalidStatusTransitionException('This campaign has already started or cannot be started now.');
             }
-            $this->assertNoConflicts($this->conflicts->conflictsForWindow(
-                $locked->id,
-                now(),
-                $locked->ends_at,
-                $locked->items()->pluck('product_id')->all(),
-            ));
+            $productIds = $locked->items()->pluck('product_id')->all();
+            $this->lockProducts($productIds);
+            $this->assertNoConflicts($this->conflicts->conflictsForWindow($locked->id, now(), $locked->ends_at, $productIds));
 
             $locked->update(['starts_at' => now()]);
         });
@@ -75,6 +74,7 @@ class FlashSaleLifecycleService
             if ($locked->ends_at->lte(now())) {
                 throw new InvalidStatusTransitionException('This campaign has ended, so it cannot be resumed. Duplicate it to run it again.');
             }
+            $this->lockProducts($locked->items()->pluck('product_id')->all());
             $this->assertNoConflicts($this->conflicts->conflicts($locked));
 
             $locked->update(['status' => FlashSaleStatus::Scheduled, 'paused_at' => null]);
@@ -177,23 +177,56 @@ class FlashSaleLifecycleService
             throw new InvalidStatusTransitionException('The end time must be after the start time.');
         }
 
-        $items = is_array($changes['items'] ?? null) ? $changes['items'] : [];
+        $hasItems = is_array($changes['items'] ?? null);
+        $items = $hasItems ? $changes['items'] : [];
         $newProductIds = [];
+        $keptItemIds = [];
         foreach ($items as $row) {
             if (! empty($row['flash_sale_product_id'])) {
+                $keptItemIds[] = (int) $row['flash_sale_product_id'];
+                $stockLimit = $row['stock_limit'] ?? null;
                 $this->assertStockLimitAllowed(
                     FlashSaleProduct::query()->where('flash_sale_id', $sale->id)->findOrFail($row['flash_sale_product_id']),
-                    isset($row['stock_limit']) ? (int) $row['stock_limit'] : null,
+                    $stockLimit === null || $stockLimit === '' ? null : (int) $stockLimit,
                 );
             } elseif (! empty($row['product_id'])) {
                 $newProductIds[] = (int) $row['product_id'];
             }
         }
 
+        if ($hasItems) {
+            $sale->items()->whereNotIn('id', $keptItemIds)->get()->each(fn (FlashSaleProduct $item) => $this->assertItemRemovable($item));
+        }
+
         $windowChanged = $startsAt->ne($sale->starts_at) || $endsAt->ne($sale->ends_at);
         if (! $isDraft && ($windowChanged || $newProductIds !== [])) {
             $productIds = array_values(array_unique([...$sale->items()->pluck('product_id')->all(), ...$newProductIds]));
-            $this->assertNoConflicts($this->conflicts->conflictsForWindow($sale->id, $startsAt, $endsAt, $productIds));
+            DB::transaction(function () use ($sale, $startsAt, $endsAt, $productIds): void {
+                $this->lockProducts($productIds);
+                $this->assertNoConflicts($this->conflicts->conflictsForWindow($sale->id, $startsAt, $endsAt, $productIds));
+            });
+        }
+    }
+
+    /**
+     * A product that has sales stays in its campaign; lower its stock limit instead.
+     */
+    public function assertItemRemovable(FlashSaleProduct $item): void
+    {
+        if ($item->unitsSold() > 0) {
+            throw new InvalidStatusTransitionException('This product already has sales in the campaign, so it cannot be removed. Lower its stock limit instead.');
+        }
+    }
+
+    /**
+     * Serialises overlap checks across campaigns: two campaigns sharing a product lock the same product rows, so only one checks at a time.
+     *
+     * @param  list<int>  $productIds
+     */
+    private function lockProducts(array $productIds): void
+    {
+        if ($productIds !== []) {
+            Product::query()->whereIn('id', $productIds)->orderBy('id')->lockForUpdate()->get();
         }
     }
 

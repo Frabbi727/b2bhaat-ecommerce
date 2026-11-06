@@ -224,6 +224,53 @@ class FlashSaleLifecycleTest extends TestCase
         ]));
     }
 
+    public function test_a_product_with_sales_cannot_be_removed_from_a_campaign(): void
+    {
+        $sale = FlashSale::factory()->live()->create();
+        $sold = FlashSaleProduct::factory()->create(['flash_sale_id' => $sale->id]);
+        $this->placeItem($sold, 2);
+
+        $this->assertRefused('Lower its stock limit', fn () => $this->lifecycle->assertItemRemovable($sold));
+        $this->assertRefused('Lower its stock limit', fn () => $this->lifecycle->assertEditable($sale, ['items' => []]));
+        $this->lifecycle->assertEditable($sale, ['items' => [['flash_sale_product_id' => $sold->id]]]);
+    }
+
+    public function test_a_product_without_sales_can_be_removed(): void
+    {
+        $sale = FlashSale::factory()->live()->create();
+        $unsold = FlashSaleProduct::factory()->create(['flash_sale_id' => $sale->id]);
+
+        $this->lifecycle->assertItemRemovable($unsold);
+        $this->lifecycle->assertEditable($sale, ['items' => []]);
+        $this->addToAssertionCount(1);
+    }
+
+    public function test_a_blank_stock_limit_means_no_cap_not_zero(): void
+    {
+        $sale = FlashSale::factory()->live()->create();
+        $offer = FlashSaleProduct::factory()->create(['flash_sale_id' => $sale->id]);
+        $this->placeItem($offer, 4);
+
+        $this->lifecycle->assertEditable($sale, ['items' => [['flash_sale_product_id' => $offer->id, 'stock_limit' => '']]]);
+        $this->assertRefused('4', fn () => $this->lifecycle->assertEditable($sale, [
+            'items' => [['flash_sale_product_id' => $offer->id, 'stock_limit' => '0']],
+        ]));
+    }
+
+    public function test_editing_a_published_campaign_with_a_new_product_still_checks_overlaps(): void
+    {
+        $sale = FlashSale::factory()->live()->create();
+        $productId = Product::query()->orderBy('id')->value('id');
+
+        $this->lifecycle->assertEditable($sale, ['items' => [['product_id' => $productId]]]);
+
+        $other = FlashSale::factory()->upcoming()->create(['starts_at' => now()->addHour(), 'ends_at' => now()->addDays(2)]);
+        FlashSaleProduct::factory()->create(['flash_sale_id' => $other->id, 'product_id' => $productId]);
+        $this->assertRefused('already in', fn () => $this->lifecycle->assertEditable($sale, [
+            'ends_at' => now()->addDay(), 'items' => [['product_id' => $productId]],
+        ]));
+    }
+
     /**
      * @param  callable(): mixed  $action
      */
