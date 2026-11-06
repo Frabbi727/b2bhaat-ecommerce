@@ -107,6 +107,9 @@ class FlashSaleResource extends Resource
                         if ($record->isRegistrationOpen()) {
                             return 'Open';
                         }
+                        if ($record->status === FlashSaleStatus::Reviewing) {
+                            return 'In Review';
+                        }
                         if ($record->registration_starts_at && now()->lt($record->registration_starts_at)) {
                             return 'Upcoming';
                         }
@@ -116,6 +119,9 @@ class FlashSaleResource extends Resource
                     ->color(function (FlashSale $record): string {
                         if ($record->isRegistrationOpen()) {
                             return 'success';
+                        }
+                        if ($record->status === FlashSaleStatus::Reviewing) {
+                            return 'warning';
                         }
                         if ($record->registration_starts_at && now()->lt($record->registration_starts_at)) {
                             return 'info';
@@ -350,6 +356,12 @@ class FlashSaleResource extends Resource
                 ->nullable()
                 ->label('Per Customer Limit')
                 ->helperText('Optional limit on maximum units a single customer can purchase.'),
+
+            Textarea::make('seller_notes')
+                ->label('Notes for Reviewer (Optional)')
+                ->rows(2)
+                ->nullable()
+                ->helperText('Add any commercial details or messages for the admin review team.'),
         ];
     }
 

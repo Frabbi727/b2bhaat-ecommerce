@@ -217,6 +217,14 @@ class FlashSaleForm
                     ->helperText('Require manual admin review before seller products appear in flash sale')
                     ->disabled(fn (?FlashSale $record): bool => self::isTerminal($record)),
 
+                TextInput::make('min_approved_products')
+                    ->label('Min Approved Products to Launch')
+                    ->numeric()
+                    ->default(1)
+                    ->minValue(1)
+                    ->helperText('Minimum approved products required before this campaign can be published to the storefront.')
+                    ->disabled(fn (?FlashSale $record): bool => self::isTerminal($record)),
+
                 Select::make('categories')
                     ->label('Eligible Categories')
                     ->relationship('categories', 'name')

@@ -59,7 +59,7 @@ class FlashSaleSchemaExpansionTest extends TestCase
 
     public function test_migrations_can_be_rolled_back(): void
     {
-        $this->artisan('migrate:rollback', ['--step' => 2])->assertSuccessful();
+        $this->artisan('migrate:rollback', ['--step' => 3])->assertSuccessful();
 
         $this->assertFalse(Schema::hasTable('flash_sale_categories'));
         $this->assertFalse(Schema::hasColumn('flash_sale_products', 'seller_id'));

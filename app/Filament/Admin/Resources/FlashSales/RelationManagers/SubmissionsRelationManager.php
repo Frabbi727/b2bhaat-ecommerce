@@ -7,6 +7,7 @@ namespace App\Filament\Admin\Resources\FlashSales\RelationManagers;
 use App\Enums\FlashSaleDiscountType;
 use App\Enums\FlashSaleSubmissionStatus;
 use App\Models\FlashSaleProduct;
+use App\Services\Promotions\FlashSaleSubmissionService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -86,6 +87,12 @@ class SubmissionsRelationManager extends RelationManager
                     ->tooltip(fn (FlashSaleProduct $record): ?string => $record->rejection_reason)
                     ->toggleable()
                     ->placeholder('-'),
+                TextColumn::make('seller_notes')
+                    ->label('Seller Notes')
+                    ->limit(40)
+                    ->tooltip(fn (FlashSaleProduct $record): ?string => $record->seller_notes)
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->placeholder('—'),
             ])
             ->filters([
                 SelectFilter::make('status')
@@ -96,7 +103,7 @@ class SubmissionsRelationManager extends RelationManager
                     ->label('Approve')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
-                    ->visible(fn (FlashSaleProduct $record): bool => in_array($record->status, [FlashSaleSubmissionStatus::Pending, FlashSaleSubmissionStatus::Rejected], true))
+                    ->visible(fn (FlashSaleProduct $record): bool => in_array($record->status, [FlashSaleSubmissionStatus::Pending, FlashSaleSubmissionStatus::RevisionRequested, FlashSaleSubmissionStatus::Rejected], true))
                     ->action(function (FlashSaleProduct $record): void {
                         $record->update([
                             'status' => FlashSaleSubmissionStatus::Approved,
@@ -108,6 +115,27 @@ class SubmissionsRelationManager extends RelationManager
                         Notification::make()
                             ->title('Submission Approved')
                             ->success()
+                            ->send();
+                    }),
+
+                Action::make('requestRevision')
+                    ->label('Request Revision')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('warning')
+                    ->visible(fn (FlashSaleProduct $record): bool => in_array($record->status, [FlashSaleSubmissionStatus::Pending, FlashSaleSubmissionStatus::Approved], true))
+                    ->form([
+                        Textarea::make('revision_reason')
+                            ->required()
+                            ->label('Feedback for Seller')
+                            ->placeholder('Explain required changes (e.g. increase discount or adjust stock)...'),
+                    ])
+                    ->action(function (FlashSaleProduct $record, array $data): void {
+                        app(FlashSaleSubmissionService::class)->requestRevision($record, $data['revision_reason']);
+
+                        Notification::make()
+                            ->title('Revision Requested')
+                            ->body('The seller has been notified to revise their offer.')
+                            ->warning()
                             ->send();
                     }),
 
@@ -147,7 +175,7 @@ class SubmissionsRelationManager extends RelationManager
                         ->action(function (Collection $records): void {
                             $approvedCount = 0;
                             $records
-                                ->filter(fn (FlashSaleProduct $record): bool => in_array($record->status, [FlashSaleSubmissionStatus::Pending, FlashSaleSubmissionStatus::Rejected], true))
+                                ->filter(fn (FlashSaleProduct $record): bool => in_array($record->status, [FlashSaleSubmissionStatus::Pending, FlashSaleSubmissionStatus::RevisionRequested, FlashSaleSubmissionStatus::Rejected], true))
                                 ->each(function (FlashSaleProduct $record) use (&$approvedCount): void {
                                     $record->update([
                                         'status' => FlashSaleSubmissionStatus::Approved,

@@ -24,13 +24,13 @@ class FlashSaleShow extends Component
     {
         $sale = FlashSale::where('slug', $this->slug)->first();
 
-        if (! $sale || in_array($sale->status, [FlashSaleStatus::Draft, FlashSaleStatus::Cancelled], true)) {
+        if (! $sale || in_array($sale->status, [FlashSaleStatus::Draft, FlashSaleStatus::Enrolling, FlashSaleStatus::Reviewing, FlashSaleStatus::Cancelled], true)) {
             abort(404);
         }
 
         $effective = $sale->effectiveStatus();
 
-        $products = $sale->products()
+        $products = $sale->approvedProducts()
             ->with(['primaryImage', 'brand', 'prices.salesChannel'])
             ->get();
 

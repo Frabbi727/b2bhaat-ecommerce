@@ -34,6 +34,7 @@ class FlashSaleProduct extends Model
         'per_customer_limit',
         'sort_order',
         'rejection_reason',
+        'seller_notes',
         'reviewed_by',
         'reviewed_at',
     ];

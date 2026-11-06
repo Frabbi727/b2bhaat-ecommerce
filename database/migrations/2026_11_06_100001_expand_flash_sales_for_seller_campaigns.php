@@ -19,7 +19,7 @@ return new class extends Migration
             $table->unsignedInteger('min_stock_per_product')->default(1)->after('max_products_per_seller');
             $table->unsignedInteger('max_stock_per_product')->nullable()->after('min_stock_per_product');
             $table->boolean('requires_approval')->default(true)->after('max_stock_per_product');
-            $table->string('seller_eligibility_type', 30)->default('all')->after('requires_approval');
+            $table->string('seller_eligibility_type', 30)->default('all')->after('min_approved_products');
             $table->decimal('minimum_seller_rating', 3, 2)->nullable()->after('seller_eligibility_type');
         });
 
@@ -30,7 +30,7 @@ return new class extends Migration
             $table->decimal('campaign_price', 12, 2)->default(0.00)->after('original_retail_price');
             $table->unsignedInteger('units_sold')->default(0)->after('stock_limit');
             $table->text('rejection_reason')->nullable()->after('sort_order');
-            $table->foreignId('reviewed_by')->nullable()->after('rejection_reason')->constrained('users')->nullOnDelete();
+            $table->foreignId('reviewed_by')->nullable()->after('seller_notes')->constrained('users')->nullOnDelete();
             $table->timestamp('reviewed_at')->nullable()->after('reviewed_by');
 
             $table->index(['seller_id', 'status']);

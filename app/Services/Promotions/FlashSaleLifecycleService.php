@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Promotions;
 
 use App\Enums\FlashSaleStatus;
+use App\Enums\FlashSaleSubmissionStatus;
 use App\Exceptions\InvalidStatusTransitionException;
 use App\Models\FlashSale;
 use App\Models\FlashSaleProduct;
@@ -18,14 +19,56 @@ class FlashSaleLifecycleService
 {
     public function __construct(private readonly FlashSaleConflictChecker $conflicts) {}
 
+    public function openForEnrollment(FlashSale $sale): FlashSale
+    {
+        return $this->transition($sale, function (FlashSale $locked): void {
+            if (! in_array($locked->status, [FlashSaleStatus::Draft, FlashSaleStatus::Reviewing], true)) {
+                throw new InvalidStatusTransitionException('Only draft or reviewing campaigns can be opened for seller participation.');
+            }
+            if ($locked->ends_at->lte(now())) {
+                throw new InvalidStatusTransitionException('The campaign end time has already passed.');
+            }
+
+            $locked->update([
+                'status' => FlashSaleStatus::Enrolling,
+                'registration_starts_at' => $locked->registration_starts_at ?? now(),
+            ]);
+        });
+    }
+
+    public function closeEnrollment(FlashSale $sale): FlashSale
+    {
+        return $this->transition($sale, function (FlashSale $locked): void {
+            if ($locked->status !== FlashSaleStatus::Enrolling) {
+                throw new InvalidStatusTransitionException('Only campaigns open for participation can be closed.');
+            }
+
+            $locked->update([
+                'status' => FlashSaleStatus::Reviewing,
+                'registration_ends_at' => now(),
+            ]);
+        });
+    }
+
     public function publish(FlashSale $sale): FlashSale
     {
         return $this->transition($sale, function (FlashSale $locked): void {
-            if ($locked->status !== FlashSaleStatus::Draft) {
-                throw new InvalidStatusTransitionException('Only a draft can be published.');
+            if (! in_array($locked->status, [FlashSaleStatus::Draft, FlashSaleStatus::Enrolling, FlashSaleStatus::Reviewing], true)) {
+                throw new InvalidStatusTransitionException('Only draft, enrolling, or reviewing campaigns can be published.');
             }
+
             if (! $locked->items()->exists()) {
                 throw new InvalidStatusTransitionException('Add at least one product before publishing.');
+            }
+
+            $approvedCount = $locked->items()
+                ->where('status', FlashSaleSubmissionStatus::Approved)
+                ->count();
+
+            $minRequired = max(1, (int) ($locked->min_approved_products ?? 1));
+
+            if ($approvedCount < $minRequired) {
+                throw new InvalidStatusTransitionException("At least {$minRequired} approved product(s) required before publishing. Currently approved: {$approvedCount}.");
             }
             if ($locked->ends_at->lte(now())) {
                 throw new InvalidStatusTransitionException('The end time has already passed.');
@@ -33,7 +76,13 @@ class FlashSaleLifecycleService
             if ($locked->ends_at->lte($locked->starts_at)) {
                 throw new InvalidStatusTransitionException('The end time must be after the start time.');
             }
-            $this->lockProducts($locked->items()->pluck('product_id')->all());
+
+            $approvedProductIds = $locked->items()
+                ->where('status', FlashSaleSubmissionStatus::Approved)
+                ->pluck('product_id')
+                ->all();
+
+            $this->lockProducts($approvedProductIds);
             $this->assertNoConflicts($this->conflicts->conflicts($locked));
 
             $locked->update(['status' => FlashSaleStatus::Scheduled]);
@@ -163,7 +212,8 @@ class FlashSaleLifecycleService
         }
 
         $isDraft = $sale->status === FlashSaleStatus::Draft;
-        $hasStarted = ! $isDraft && $sale->starts_at->lte(now());
+        $isPreLaunch = in_array($sale->status, [FlashSaleStatus::Draft, FlashSaleStatus::Enrolling, FlashSaleStatus::Reviewing], true);
+        $hasStarted = ! $isPreLaunch && $sale->starts_at->lte(now());
         $hasStartsAtChange = array_key_exists('starts_at', $changes) && $changes['starts_at'] !== null && $changes['starts_at'] !== '';
         $hasEndsAtChange = array_key_exists('ends_at', $changes) && $changes['ends_at'] !== null && $changes['ends_at'] !== '';
 
@@ -181,7 +231,7 @@ class FlashSaleLifecycleService
                 throw new InvalidStatusTransitionException('The start time cannot change once the campaign has started.');
             }
         }
-        if (! $isDraft && $hasEndsAtChange && $endsAt->lte(now())) {
+        if (! $isPreLaunch && $hasEndsAtChange && $endsAt->lte(now())) {
             throw new InvalidStatusTransitionException('The end time must stay in the future. To stop the campaign now, use "Turn off now".');
         }
         if ($endsAt->lte($startsAt)) {

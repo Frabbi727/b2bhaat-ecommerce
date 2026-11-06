@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\FlashSaleStatus;
+use App\Enums\FlashSaleSubmissionStatus;
 use App\Enums\SellerEligibilityType;
 use App\Services\Promotions\FlashSalePricing;
 use Carbon\CarbonInterface;
@@ -41,6 +42,7 @@ class FlashSale extends Model
         'min_stock_per_product',
         'max_stock_per_product',
         'requires_approval',
+        'min_approved_products',
         'seller_eligibility_type',
         'minimum_seller_rating',
     ];
@@ -76,6 +78,7 @@ class FlashSale extends Model
             'min_stock_per_product' => 'integer',
             'max_stock_per_product' => 'integer',
             'requires_approval' => 'boolean',
+            'min_approved_products' => 'integer',
             'seller_eligibility_type' => SellerEligibilityType::class,
             'minimum_seller_rating' => 'decimal:2',
         ];
@@ -107,6 +110,15 @@ class FlashSale extends Model
     /**
      * @return HasMany<FlashSaleProduct, $this>
      */
+    /**
+     * @return BelongsToMany<Product, $this>
+     */
+    public function approvedProducts(): BelongsToMany
+    {
+        return $this->products()
+            ->wherePivot('status', FlashSaleSubmissionStatus::Approved->value);
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(FlashSaleProduct::class);
@@ -119,6 +131,14 @@ class FlashSale extends Model
     public function effectiveStatus(?CarbonInterface $at = null): FlashSaleStatus
     {
         $at ??= now();
+
+        if ($this->status === FlashSaleStatus::Enrolling) {
+            if ($this->registration_ends_at && $at->gte($this->registration_ends_at)) {
+                return FlashSaleStatus::Reviewing;
+            }
+
+            return FlashSaleStatus::Enrolling;
+        }
 
         if (! in_array($this->status, [FlashSaleStatus::Scheduled, FlashSaleStatus::Active], true)) {
             return $this->status;
@@ -148,8 +168,19 @@ class FlashSale extends Model
     {
         $at ??= now();
 
-        if (in_array($this->effectiveStatus($at), [FlashSaleStatus::Cancelled, FlashSaleStatus::Ended], true)) {
+        if (in_array($this->effectiveStatus($at), [FlashSaleStatus::Cancelled, FlashSaleStatus::Ended, FlashSaleStatus::Reviewing], true)) {
             return false;
+        }
+
+        if ($this->status === FlashSaleStatus::Enrolling) {
+            if ($this->registration_ends_at && $at->gte($this->registration_ends_at)) {
+                return false;
+            }
+            if ($this->registration_starts_at && $at->lt($this->registration_starts_at)) {
+                return false;
+            }
+
+            return true;
         }
 
         $starts = $this->registration_starts_at ?? $this->created_at ?? $this->starts_at;

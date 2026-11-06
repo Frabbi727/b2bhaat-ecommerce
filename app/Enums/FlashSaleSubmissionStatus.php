@@ -11,6 +11,7 @@ enum FlashSaleSubmissionStatus: string implements HasColor, HasLabel
 {
     case Draft = 'draft';
     case Pending = 'pending';
+    case RevisionRequested = 'revision_requested';
     case Approved = 'approved';
     case Rejected = 'rejected';
     case Withdrawn = 'withdrawn';
@@ -21,6 +22,7 @@ enum FlashSaleSubmissionStatus: string implements HasColor, HasLabel
         return match ($this) {
             self::Draft => 'Draft',
             self::Pending => 'Pending Approval',
+            self::RevisionRequested => 'Needs Revision',
             self::Approved => 'Approved',
             self::Rejected => 'Rejected',
             self::Withdrawn => 'Withdrawn',
@@ -38,6 +40,7 @@ enum FlashSaleSubmissionStatus: string implements HasColor, HasLabel
         return match ($this) {
             self::Draft => 'gray',
             self::Pending => 'warning',
+            self::RevisionRequested => 'amber',
             self::Approved => 'success',
             self::Rejected => 'danger',
             self::Withdrawn => 'gray',

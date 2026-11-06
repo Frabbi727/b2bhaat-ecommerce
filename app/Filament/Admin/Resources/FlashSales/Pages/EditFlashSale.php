@@ -42,14 +42,45 @@ class EditFlashSale extends EditRecord
         $service = app(FlashSaleLifecycleService::class);
 
         return [
+            Action::make('openEnrollment')
+                ->label('Open Seller Participation')
+                ->icon('heroicon-o-user-group')
+                ->color('info')
+                ->visible(fn (FlashSale $record): bool => in_array($record->status, [FlashSaleStatus::Draft, FlashSaleStatus::Reviewing], true))
+                ->action(function (FlashSale $record) use ($service): void {
+                    try {
+                        $service->openForEnrollment($record);
+                        Notification::make()->success()->title('Campaign opened for seller participation!')->send();
+                        $this->refreshFormData(['status', 'registration_starts_at']);
+                    } catch (InvalidStatusTransitionException $e) {
+                        Notification::make()->danger()->title('Cannot open enrollment')->body($e->getMessage())->send();
+                    }
+                }),
+
+            Action::make('closeEnrollment')
+                ->label('Close Submissions')
+                ->icon('heroicon-o-lock-closed')
+                ->color('warning')
+                ->visible(fn (FlashSale $record): bool => $record->status === FlashSaleStatus::Enrolling)
+                ->action(function (FlashSale $record) use ($service): void {
+                    try {
+                        $service->closeEnrollment($record);
+                        Notification::make()->success()->title('Seller enrollment closed. In review.')->send();
+                        $this->refreshFormData(['status', 'registration_ends_at']);
+                    } catch (InvalidStatusTransitionException $e) {
+                        Notification::make()->danger()->title('Cannot close enrollment')->body($e->getMessage())->send();
+                    }
+                }),
+
             Action::make('publish')
                 ->label('Publish Campaign')
+                ->icon('heroicon-o-rocket-launch')
                 ->color('success')
-                ->visible(fn (FlashSale $record): bool => $record->status === FlashSaleStatus::Draft)
+                ->visible(fn (FlashSale $record): bool => in_array($record->status, [FlashSaleStatus::Draft, FlashSaleStatus::Enrolling, FlashSaleStatus::Reviewing], true))
                 ->action(function (FlashSale $record) use ($service): void {
                     try {
                         $service->publish($record);
-                        Notification::make()->success()->title('Campaign published and scheduled.')->send();
+                        Notification::make()->success()->title('Campaign published and scheduled!')->send();
                         $this->refreshFormData(['status']);
                     } catch (InvalidStatusTransitionException $e) {
                         Notification::make()->danger()->title('Cannot publish')->body($e->getMessage())->send();

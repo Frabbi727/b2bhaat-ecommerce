@@ -155,7 +155,117 @@ class FlashSaleSubmissionService
                 'units_sold' => 0,
                 'per_customer_limit' => $payload['per_customer_limit'] ?? null,
                 'sort_order' => (int) ($payload['sort_order'] ?? 0),
+                'seller_notes' => $payload['seller_notes'] ?? null,
             ]);
         });
+    }
+
+    public function updateSubmission(User $seller, FlashSaleProduct $submission, array $payload): FlashSaleProduct
+    {
+        return DB::transaction(function () use ($seller, $submission, $payload): FlashSaleProduct {
+            $campaign = $submission->flashSale;
+            if (! $campaign) {
+                throw new FlashSaleSubmissionException('Campaign not found.');
+            }
+
+            if ((int) $submission->seller_id !== (int) $seller->id) {
+                throw new FlashSaleSubmissionException('You can only update your own submissions.');
+            }
+
+            if (! in_array($submission->status, [FlashSaleSubmissionStatus::Pending, FlashSaleSubmissionStatus::RevisionRequested], true)) {
+                throw new FlashSaleSubmissionException('Only pending or revision-requested submissions can be edited.');
+            }
+
+            if (! $campaign->isRegistrationOpen()) {
+                throw new FlashSaleSubmissionException('Registration has closed for this campaign.');
+            }
+
+            $product = $submission->product;
+            $basePrice = (float) $submission->original_retail_price;
+            if ($basePrice <= 0) {
+                $retailPriceRecord = $product->prices()
+                    ->whereHas('salesChannel', fn (Builder $q) => $q->where('slug', SalesChannel::RETAIL))
+                    ->whereNull('variation_id')
+                    ->first()
+                    ?? $product->prices()
+                        ->whereHas('salesChannel', fn (Builder $q) => $q->where('slug', SalesChannel::RETAIL))
+                        ->first();
+                $basePrice = $retailPriceRecord ? (float) $retailPriceRecord->unit_price : 0.0;
+            }
+
+            $discountType = isset($payload['discount_type'])
+                ? ($payload['discount_type'] instanceof FlashSaleDiscountType ? $payload['discount_type'] : FlashSaleDiscountType::from((string) $payload['discount_type']))
+                : $submission->discount_type;
+
+            $discountValue = isset($payload['discount_value']) ? (float) $payload['discount_value'] : (float) $submission->discount_value;
+
+            $campaignPrice = match ($discountType) {
+                FlashSaleDiscountType::Percentage => $basePrice * (1 - ($discountValue / 100)),
+                FlashSaleDiscountType::FixedAmount => $basePrice - $discountValue,
+                FlashSaleDiscountType::FixedPrice => $discountValue,
+            };
+
+            $campaignPrice = round($campaignPrice, 2);
+            if ($campaignPrice <= 0) {
+                throw new FlashSaleSubmissionException('Campaign price must be greater than zero.');
+            }
+            if ($campaignPrice >= $basePrice) {
+                throw new FlashSaleSubmissionException('Campaign price must be lower than the original retail price.');
+            }
+
+            $effectiveDiscountPercentage = round((($basePrice - $campaignPrice) / $basePrice) * 100, 2);
+
+            if ($campaign->min_discount_percentage !== null && $effectiveDiscountPercentage < (float) $campaign->min_discount_percentage) {
+                throw new FlashSaleSubmissionException("Discount must be at least {$campaign->min_discount_percentage}%.");
+            }
+
+            if ($campaign->max_discount_percentage !== null && $effectiveDiscountPercentage > (float) $campaign->max_discount_percentage) {
+                throw new FlashSaleSubmissionException("Discount cannot exceed {$campaign->max_discount_percentage}%.");
+            }
+
+            $allocatedStock = (int) ($payload['stock_limit'] ?? $payload['campaign_stock'] ?? $submission->stock_limit);
+            if ($allocatedStock <= 0) {
+                throw new FlashSaleSubmissionException('Campaign stock must be at least 1 unit.');
+            }
+
+            if ($campaign->min_stock_per_product !== null && $allocatedStock < (int) $campaign->min_stock_per_product) {
+                throw new FlashSaleSubmissionException("Campaign stock must be at least {$campaign->min_stock_per_product} units.");
+            }
+
+            if ($campaign->max_stock_per_product !== null && $campaign->max_stock_per_product > 0 && $allocatedStock > (int) $campaign->max_stock_per_product) {
+                throw new FlashSaleSubmissionException("Campaign stock cannot exceed {$campaign->max_stock_per_product} units.");
+            }
+
+            $totalPhysicalStock = (int) $product->variations()->sum('stock_quantity');
+            if ($allocatedStock > $totalPhysicalStock) {
+                throw new FlashSaleSubmissionException("Campaign stock ({$allocatedStock}) cannot exceed your current physical warehouse stock ({$totalPhysicalStock}).");
+            }
+
+            $submission->update([
+                'discount_type' => $discountType,
+                'discount_value' => $discountValue,
+                'original_retail_price' => $basePrice,
+                'campaign_price' => $campaignPrice,
+                'stock_limit' => $allocatedStock,
+                'per_customer_limit' => $payload['per_customer_limit'] ?? $submission->per_customer_limit,
+                'seller_notes' => $payload['seller_notes'] ?? $submission->seller_notes,
+                'status' => FlashSaleSubmissionStatus::Pending,
+                'rejection_reason' => null,
+            ]);
+
+            return $submission->fresh();
+        });
+    }
+
+    public function requestRevision(FlashSaleProduct $submission, string $reason, ?User $reviewer = null): FlashSaleProduct
+    {
+        $submission->update([
+            'status' => FlashSaleSubmissionStatus::RevisionRequested,
+            'rejection_reason' => $reason,
+            'reviewed_by' => $reviewer?->id ?? auth()->id(),
+            'reviewed_at' => now(),
+        ]);
+
+        return $submission->fresh();
     }
 }

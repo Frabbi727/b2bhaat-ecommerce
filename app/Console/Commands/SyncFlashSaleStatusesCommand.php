@@ -32,6 +32,15 @@ class SyncFlashSaleStatusesCommand extends Command
     {
         $now = now();
 
+        // 0. Move enrolling campaigns whose registration deadline has passed to reviewing
+        $reviewedCount = FlashSale::query()
+            ->where('status', FlashSaleStatus::Enrolling)
+            ->whereNotNull('registration_ends_at')
+            ->where('registration_ends_at', '<=', $now)
+            ->update([
+                'status' => FlashSaleStatus::Reviewing,
+            ]);
+
         // 1. Move scheduled campaigns whose start time has arrived to active
         $startedCount = FlashSale::query()
             ->where('status', FlashSaleStatus::Scheduled)
@@ -55,6 +64,10 @@ class SyncFlashSaleStatusesCommand extends Command
         }
 
         $this->info("{$startedCount} started, {$endedCount} ended.");
+
+        if ($reviewedCount > 0) {
+            $this->info("{$reviewedCount} moved to reviewing.");
+        }
 
         return self::SUCCESS;
     }

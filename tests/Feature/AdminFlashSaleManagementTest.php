@@ -249,4 +249,22 @@ class AdminFlashSaleManagementTest extends TestCase
             ->assertSee('Active Campaigns')
             ->assertSee('Scheduled');
     }
+
+    public function test_table_renders_enrolling_and_reviewing_campaigns_correctly(): void
+    {
+        $enrolling = FlashSale::factory()->create([
+            'status' => FlashSaleStatus::Enrolling,
+            'name' => 'Enrolling Campaign Test',
+        ]);
+
+        $reviewing = FlashSale::factory()->create([
+            'status' => FlashSaleStatus::Reviewing,
+            'name' => 'Reviewing Campaign Test',
+        ]);
+
+        Livewire::test(ListFlashSales::class)
+            ->assertSuccessful()
+            ->assertSee('Enrolling Campaign Test')
+            ->assertSee('Reviewing Campaign Test');
+    }
 }

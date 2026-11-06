@@ -6,8 +6,13 @@ namespace App\Filament\Seller\Resources\FlashSales\RelationManagers;
 
 use App\Enums\FlashSaleDiscountType;
 use App\Enums\FlashSaleSubmissionStatus;
+use App\Exceptions\FlashSaleSubmissionException;
 use App\Models\FlashSaleProduct;
+use App\Services\Promotions\FlashSaleSubmissionService;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
@@ -74,6 +79,61 @@ class MySubmissionsRelationManager extends RelationManager
                     ->limit(50),
             ])
             ->recordActions([
+                Action::make('editOffer')
+                    ->label('Edit Offer')
+                    ->icon('heroicon-o-pencil-square')
+                    ->color('primary')
+                    ->visible(fn (FlashSaleProduct $record): bool => in_array($record->status, [FlashSaleSubmissionStatus::Pending, FlashSaleSubmissionStatus::RevisionRequested], true) && ($record->flashSale?->isRegistrationOpen() ?? false))
+                    ->fillForm(fn (FlashSaleProduct $record): array => [
+                        'discount_type' => $record->discount_type instanceof FlashSaleDiscountType ? $record->discount_type->value : (string) $record->discount_type,
+                        'discount_value' => (float) $record->discount_value,
+                        'stock_limit' => $record->stock_limit,
+                        'per_customer_limit' => $record->per_customer_limit,
+                        'seller_notes' => $record->seller_notes,
+                    ])
+                    ->form(fn (FlashSaleProduct $record): array => [
+                        Select::make('discount_type')
+                            ->label('Discount Type')
+                            ->options(FlashSaleDiscountType::class)
+                            ->required(),
+                        TextInput::make('discount_value')
+                            ->label('Discount Value')
+                            ->numeric()
+                            ->required()
+                            ->helperText("Campaign discount must be between {$record->flashSale?->min_discount_percentage}% and {$record->flashSale?->max_discount_percentage}%"),
+                        TextInput::make('stock_limit')
+                            ->label('Allocated Stock')
+                            ->numeric()
+                            ->required()
+                            ->helperText("Minimum {$record->flashSale?->min_stock_per_product} units required."),
+                        TextInput::make('per_customer_limit')
+                            ->label('Per Customer Limit')
+                            ->numeric()
+                            ->nullable(),
+                        Textarea::make('seller_notes')
+                            ->label('Notes for Reviewer')
+                            ->rows(2)
+                            ->nullable(),
+                    ])
+                    ->action(function (FlashSaleProduct $record, array $data, Action $action): void {
+                        try {
+                            app(FlashSaleSubmissionService::class)->updateSubmission(auth()->user(), $record, $data);
+                            Notification::make()
+                                ->title('Submission Updated')
+                                ->body('Your revised offer has been submitted for admin review.')
+                                ->success()
+                                ->send();
+                        } catch (FlashSaleSubmissionException $e) {
+                            Notification::make()
+                                ->title('Update Failed')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+
+                            $action->halt();
+                        }
+                    }),
+
                 Action::make('withdraw')
                     ->label('Withdraw')
                     ->icon('heroicon-o-arrow-uturn-left')
@@ -81,9 +141,9 @@ class MySubmissionsRelationManager extends RelationManager
                     ->requiresConfirmation()
                     ->modalHeading('Withdraw Product from Campaign')
                     ->modalDescription('Are you sure you want to withdraw this product? It will no longer participate in the flash sale.')
-                    ->visible(fn (FlashSaleProduct $record): bool => in_array($record->status, [FlashSaleSubmissionStatus::Pending, FlashSaleSubmissionStatus::Approved], true) && $record->flashSale && $record->flashSale->starts_at->isFuture())
+                    ->visible(fn (FlashSaleProduct $record): bool => in_array($record->status, [FlashSaleSubmissionStatus::Pending, FlashSaleSubmissionStatus::RevisionRequested, FlashSaleSubmissionStatus::Approved], true) && $record->flashSale && $record->flashSale->starts_at->isFuture())
                     ->action(function (FlashSaleProduct $record): void {
-                        if (! $record->flashSale?->starts_at?->isFuture() || ! in_array($record->status, [FlashSaleSubmissionStatus::Pending, FlashSaleSubmissionStatus::Approved], true)) {
+                        if (! $record->flashSale?->starts_at?->isFuture() || ! in_array($record->status, [FlashSaleSubmissionStatus::Pending, FlashSaleSubmissionStatus::RevisionRequested, FlashSaleSubmissionStatus::Approved], true)) {
                             Notification::make()
                                 ->title('Cannot withdraw submission')
                                 ->body('Submissions can only be withdrawn before the campaign starts.')

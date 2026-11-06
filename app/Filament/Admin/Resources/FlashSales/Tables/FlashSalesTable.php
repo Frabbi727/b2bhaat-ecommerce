@@ -37,13 +37,7 @@ class FlashSalesTable
                     ->label('Status')
                     ->badge()
                     ->state(fn (FlashSale $record): string => $record->effectiveStatus()->label())
-                    ->color(fn (FlashSale $record): string => match ($record->effectiveStatus()) {
-                        FlashSaleStatus::Draft => 'gray',
-                        FlashSaleStatus::Scheduled => 'info',
-                        FlashSaleStatus::Active => 'success',
-                        FlashSaleStatus::Paused => 'warning',
-                        FlashSaleStatus::Ended, FlashSaleStatus::Cancelled => 'gray',
-                    }),
+                    ->color(fn (FlashSale $record): string|array|null => $record->effectiveStatus()->getColor()),
 
                 TextColumn::make('registration')
                     ->label('Registration')
@@ -51,6 +45,9 @@ class FlashSalesTable
                     ->state(function (FlashSale $record): string {
                         if ($record->isRegistrationOpen()) {
                             return 'Open';
+                        }
+                        if ($record->status === FlashSaleStatus::Reviewing) {
+                            return 'In Review';
                         }
                         if ($record->registration_starts_at && now()->lt($record->registration_starts_at)) {
                             return 'Upcoming';
@@ -61,6 +58,9 @@ class FlashSalesTable
                     ->color(function (FlashSale $record): string {
                         if ($record->isRegistrationOpen()) {
                             return 'success';
+                        }
+                        if ($record->status === FlashSaleStatus::Reviewing) {
+                            return 'warning';
                         }
                         if ($record->registration_starts_at && now()->lt($record->registration_starts_at)) {
                             return 'info';
@@ -108,6 +108,47 @@ class FlashSalesTable
                     ]),
             ])
             ->recordActions([
+                Action::make('openEnrollment')
+                    ->label('Open Participation')
+                    ->icon('heroicon-o-user-group')
+                    ->color('info')
+                    ->visible(fn (FlashSale $record): bool => in_array($record->status, [FlashSaleStatus::Draft, FlashSaleStatus::Reviewing], true))
+                    ->action(function (FlashSale $record) use ($service): void {
+                        try {
+                            $service->openForEnrollment($record);
+                            Notification::make()->success()->title('Opened for seller participation.')->send();
+                        } catch (InvalidStatusTransitionException $e) {
+                            Notification::make()->danger()->title('Cannot open enrollment')->body($e->getMessage())->send();
+                        }
+                    }),
+
+                Action::make('closeEnrollment')
+                    ->label('Close Submissions')
+                    ->icon('heroicon-o-lock-closed')
+                    ->color('warning')
+                    ->visible(fn (FlashSale $record): bool => $record->status === FlashSaleStatus::Enrolling)
+                    ->action(function (FlashSale $record) use ($service): void {
+                        try {
+                            $service->closeEnrollment($record);
+                            Notification::make()->success()->title('Submissions closed. In review.')->send();
+                        } catch (InvalidStatusTransitionException $e) {
+                            Notification::make()->danger()->title('Cannot close enrollment')->body($e->getMessage())->send();
+                        }
+                    }),
+
+                Action::make('publish')
+                    ->label('Publish')
+                    ->icon('heroicon-o-rocket-launch')
+                    ->color('success')
+                    ->visible(fn (FlashSale $record): bool => in_array($record->status, [FlashSaleStatus::Draft, FlashSaleStatus::Enrolling, FlashSaleStatus::Reviewing], true))
+                    ->action(function (FlashSale $record) use ($service): void {
+                        try {
+                            $service->publish($record);
+                            Notification::make()->success()->title('Campaign published and scheduled.')->send();
+                        } catch (InvalidStatusTransitionException $e) {
+                            Notification::make()->danger()->title('Cannot publish')->body($e->getMessage())->send();
+                        }
+                    }),
                 Action::make('endNow')
                     ->label('Turn off now')
                     ->color('danger')
