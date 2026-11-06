@@ -223,6 +223,25 @@ class AdminFlashSaleManagementTest extends TestCase
         $this->get('/admin/flash-sales')->assertForbidden();
     }
 
+    public function test_admin_can_save_already_started_campaign_without_triggering_start_time_error(): void
+    {
+        $sale = FlashSale::factory()->create([
+            'status' => FlashSaleStatus::Scheduled,
+            'starts_at' => now()->subDay(),
+            'ends_at' => now()->addDays(2),
+            'name' => 'Original Name',
+        ]);
+
+        Livewire::test(EditFlashSale::class, ['record' => $sale->id])
+            ->fillForm([
+                'name' => 'Updated Name While Active',
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('Updated Name While Active', $sale->fresh()->name);
+    }
+
     public function test_stats_widget_counts_campaigns_by_effective_status(): void
     {
         Livewire::test(FlashSaleStatsOverview::class)

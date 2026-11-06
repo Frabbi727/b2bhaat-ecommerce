@@ -164,13 +164,24 @@ class FlashSaleLifecycleService
 
         $isDraft = $sale->status === FlashSaleStatus::Draft;
         $hasStarted = ! $isDraft && $sale->starts_at->lte(now());
-        $startsAt = $this->asDate($changes['starts_at'] ?? null) ?? $sale->starts_at;
-        $endsAt = $this->asDate($changes['ends_at'] ?? null) ?? $sale->ends_at;
+        $hasStartsAtChange = array_key_exists('starts_at', $changes) && $changes['starts_at'] !== null && $changes['starts_at'] !== '';
+        $hasEndsAtChange = array_key_exists('ends_at', $changes) && $changes['ends_at'] !== null && $changes['ends_at'] !== '';
 
-        if ($hasStarted && $startsAt->ne($sale->starts_at)) {
-            throw new InvalidStatusTransitionException('The start time cannot change once the campaign has started.');
+        $startsAt = $hasStartsAtChange ? ($this->asDate($changes['starts_at']) ?? $sale->starts_at) : $sale->starts_at;
+        $endsAt = $hasEndsAtChange ? ($this->asDate($changes['ends_at']) ?? $sale->ends_at) : $sale->ends_at;
+
+        if ($hasStarted && $hasStartsAtChange) {
+            $isSame = $startsAt->equalTo($sale->starts_at);
+            if (! $isSame && is_string($changes['starts_at'])) {
+                $startsAtDhaka = $this->asDate($changes['starts_at'], 'Asia/Dhaka');
+                $isSame = $startsAtDhaka !== null && $startsAtDhaka->equalTo($sale->starts_at);
+            }
+
+            if (! $isSame) {
+                throw new InvalidStatusTransitionException('The start time cannot change once the campaign has started.');
+            }
         }
-        if (! $isDraft && $endsAt->lte(now())) {
+        if (! $isDraft && $hasEndsAtChange && $endsAt->lte(now())) {
             throw new InvalidStatusTransitionException('The end time must stay in the future. To stop the campaign now, use "Turn off now".');
         }
         if ($endsAt->lte($startsAt)) {
@@ -277,8 +288,20 @@ class FlashSaleLifecycleService
         return $sale->items->sum(fn (FlashSaleProduct $item): int => $item->unitsSold());
     }
 
-    private function asDate(mixed $value): ?Carbon
+    private function asDate(mixed $value, ?string $timezone = null): ?Carbon
     {
-        return $value === null || $value === '' ? null : Carbon::parse($value);
+        if ($value instanceof Carbon) {
+            return $value;
+        }
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value, $timezone);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

@@ -18,10 +18,23 @@ class EditFlashSale extends EditRecord
 {
     protected static string $resource = FlashSaleResource::class;
 
-    protected function beforeSave(): void
+    protected function mutateFormDataBeforeSave(array $data): array
     {
         $service = app(FlashSaleLifecycleService::class);
-        $service->assertEditable($this->record, $this->data);
+
+        try {
+            $service->assertEditable($this->record, $data);
+        } catch (InvalidStatusTransitionException $e) {
+            Notification::make()
+                ->title('Cannot update campaign')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+
+            $this->halt();
+        }
+
+        return $data;
     }
 
     protected function getHeaderActions(): array
