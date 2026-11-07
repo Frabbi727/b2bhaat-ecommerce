@@ -1,0 +1,261 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Filament\Admin\Pages;
+
+use App\Models\SellerWallet;
+use App\Models\User;
+use App\Services\Accounting\AccountingReconciliationService;
+use App\Services\Accounting\GeneralLedgerService;
+use BackedEnum;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Carbon;
+use UnitEnum;
+
+class FinancialReconciliationPage extends Page
+{
+    protected static UnitEnum|string|null $navigationGroup = 'Accounting';
+
+    protected static ?int $navigationSort = 4;
+
+    protected static ?string $navigationLabel = 'Reconciliation';
+
+    protected static ?string $title = 'Financial Reconciliation';
+
+    protected static ?string $slug = 'financial-reconciliation';
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShieldCheck;
+
+    protected string $view = 'filament.admin.pages.financial-reconciliation-page';
+
+    public bool $showOnlyDiscrepancies = false;
+
+    public ?string $lastAuditedAt = null;
+
+    public static function canAccess(): bool
+    {
+        $user = auth()->user();
+
+        return (bool) ($user && in_array($user->role?->slug, ['super_admin', 'admin'], true));
+    }
+
+    public function mount(): void
+    {
+        $this->lastAuditedAt = Carbon::now()->toDateTimeString();
+    }
+
+    /**
+     * Run full financial audit action.
+     */
+    public function runAudit(): void
+    {
+        $this->lastAuditedAt = Carbon::now()->toDateTimeString();
+
+        $metrics = $this->getReconciliationMetrics();
+        $sellersData = $this->getSellersAuditData();
+
+        $discrepancyCount = 0;
+        if (! $metrics['seller_wallet']['is_reconciled']) {
+            $discrepancyCount++;
+        }
+        if (! $metrics['seller_escrow']['is_reconciled']) {
+            $discrepancyCount++;
+        }
+        if (! $metrics['reserved_payouts']['is_reconciled']) {
+            $discrepancyCount++;
+        }
+        if (! $metrics['customer_refunds']['is_reconciled']) {
+            $discrepancyCount++;
+        }
+        $discrepancyCount += $sellersData['unreconciled_count'];
+
+        $body = $discrepancyCount === 0
+            ? 'All sub-ledgers and general ledger liability balances are fully reconciled.'
+            : "Audit completed with {$discrepancyCount} discrepancy item(s) detected.";
+
+        Notification::make()
+            ->title('Marketplace Financial Audit Complete')
+            ->body($body)
+            ->success()
+            ->send();
+    }
+
+    /**
+     * Compile the 4 core reconciliation metrics.
+     *
+     * @return array{
+     *     seller_wallet: array{
+     *         title: string,
+     *         sub_ledger_total: float,
+     *         gl_total: float,
+     *         discrepancy: float,
+     *         is_reconciled: bool
+     *     },
+     *     seller_escrow: array{
+     *         title: string,
+     *         sub_ledger_total: float,
+     *         gl_total: float,
+     *         discrepancy: float,
+     *         is_reconciled: bool
+     *     },
+     *     reserved_payouts: array{
+     *         title: string,
+     *         sub_ledger_total: float,
+     *         gl_total: float,
+     *         discrepancy: float,
+     *         is_reconciled: bool
+     *     },
+     *     customer_refunds: array{
+     *         title: string,
+     *         sub_ledger_total: float,
+     *         gl_total: float,
+     *         discrepancy: float,
+     *         is_reconciled: bool
+     *     }
+     * }
+     */
+    public function getReconciliationMetrics(): array
+    {
+        /** @var GeneralLedgerService $glService */
+        $glService = app(GeneralLedgerService::class);
+        /** @var AccountingReconciliationService $reconciliationService */
+        $reconciliationService = app(AccountingReconciliationService::class);
+
+        // 1. Seller Wallet Payables
+        $walletSubTotal = round((float) SellerWallet::sum('available_balance'), 2);
+        $walletGlTotal = round($glService->getBalanceForSlug('seller_wallet_payable'), 2);
+        $walletDiscrepancy = round($walletSubTotal - $walletGlTotal, 2);
+        $walletIsReconciled = abs($walletDiscrepancy) < 0.001;
+
+        // 2. Seller Escrow Payables
+        $escrowSubTotal = round((float) SellerWallet::sum('escrow_held_balance'), 2);
+        $escrowGlTotal = round($glService->getBalanceForSlug('seller_escrow_payable'), 2);
+        $escrowDiscrepancy = round($escrowSubTotal - $escrowGlTotal, 2);
+        $escrowIsReconciled = abs($escrowDiscrepancy) < 0.001;
+
+        // 3. Reserved Payout Payables
+        $reservedResult = $reconciliationService->verifyReservedPayouts();
+        $reservedSubTotal = $reservedResult['total_pending_payouts'];
+        $reservedGlTotal = $reservedResult['ledger_reserved_balance'];
+        $reservedDiscrepancy = $reservedResult['discrepancy'];
+        $reservedIsReconciled = $reservedResult['is_reconciled'];
+
+        // 4. Customer Refund Payables
+        $refundResult = $reconciliationService->verifyCustomerRefundPayables();
+        $refundSubTotal = $refundResult['total_pending_refunds'];
+        $refundGlTotal = $refundResult['ledger_refund_payable_balance'];
+        $refundDiscrepancy = $refundResult['discrepancy'];
+        $refundIsReconciled = $refundResult['is_reconciled'];
+
+        return [
+            'seller_wallet' => [
+                'title' => 'Seller Wallet Payables',
+                'sub_ledger_total' => $walletSubTotal,
+                'gl_total' => $walletGlTotal,
+                'discrepancy' => $walletDiscrepancy,
+                'is_reconciled' => $walletIsReconciled,
+            ],
+            'seller_escrow' => [
+                'title' => 'Seller Escrow Payables',
+                'sub_ledger_total' => $escrowSubTotal,
+                'gl_total' => $escrowGlTotal,
+                'discrepancy' => $escrowDiscrepancy,
+                'is_reconciled' => $escrowIsReconciled,
+            ],
+            'reserved_payouts' => [
+                'title' => 'Reserved Payout Payables',
+                'sub_ledger_total' => $reservedSubTotal,
+                'gl_total' => $reservedGlTotal,
+                'discrepancy' => $reservedDiscrepancy,
+                'is_reconciled' => $reservedIsReconciled,
+            ],
+            'customer_refunds' => [
+                'title' => 'Customer Refund Payables',
+                'sub_ledger_total' => $refundSubTotal,
+                'gl_total' => $refundGlTotal,
+                'discrepancy' => $refundDiscrepancy,
+                'is_reconciled' => $refundIsReconciled,
+            ],
+        ];
+    }
+
+    /**
+     * Get sellers audit data with optional filtering for discrepancies only.
+     *
+     * @return array{
+     *     total_sellers: int,
+     *     reconciled_count: int,
+     *     unreconciled_count: int,
+     *     items: list<array{
+     *         seller_id: int,
+     *         seller_name: string,
+     *         seller_email: string,
+     *         wallet_balance: float,
+     *         ledger_balance: float,
+     *         discrepancy: float,
+     *         escrow_wallet_balance: float,
+     *         escrow_ledger_balance: float,
+     *         escrow_discrepancy: float,
+     *         reserved_wallet_balance: float,
+     *         reserved_ledger_balance: float,
+     *         reserved_discrepancy: float,
+     *         net_discrepancy: float,
+     *         is_reconciled: bool
+     *     }>
+     * }
+     */
+    public function getSellersAuditData(): array
+    {
+        /** @var AccountingReconciliationService $reconciliationService */
+        $reconciliationService = app(AccountingReconciliationService::class);
+        $sellersAudit = $reconciliationService->verifyAllSellers();
+
+        // Load seller records to display names and emails
+        $sellerIds = array_column($sellersAudit['details'], 'seller_id');
+        $sellersById = User::whereIn('id', $sellerIds)
+            ->get(['id', 'name', 'email'])
+            ->keyBy('id');
+
+        $items = [];
+        foreach ($sellersAudit['details'] as $detail) {
+            $seller = $sellersById->get($detail['seller_id']);
+            $netDiscrepancy = round(
+                abs($detail['discrepancy']) + abs($detail['escrow_discrepancy']) + abs($detail['reserved_discrepancy']),
+                2
+            );
+
+            $item = [
+                'seller_id' => $detail['seller_id'],
+                'seller_name' => $seller?->name ?? 'Unknown Seller',
+                'seller_email' => $seller?->email ?? 'N/A',
+                'wallet_balance' => $detail['wallet_balance'],
+                'ledger_balance' => $detail['ledger_balance'],
+                'discrepancy' => $detail['discrepancy'],
+                'escrow_wallet_balance' => $detail['escrow_wallet_balance'],
+                'escrow_ledger_balance' => $detail['escrow_ledger_balance'],
+                'escrow_discrepancy' => $detail['escrow_discrepancy'],
+                'reserved_wallet_balance' => $detail['reserved_wallet_balance'],
+                'reserved_ledger_balance' => $detail['reserved_ledger_balance'],
+                'reserved_discrepancy' => $detail['reserved_discrepancy'],
+                'net_discrepancy' => $netDiscrepancy,
+                'is_reconciled' => $detail['is_reconciled'],
+            ];
+
+            if ($this->showOnlyDiscrepancies && $detail['is_reconciled']) {
+                continue;
+            }
+
+            $items[] = $item;
+        }
+
+        return [
+            'total_sellers' => $sellersAudit['total_sellers'],
+            'reconciled_count' => $sellersAudit['reconciled_count'],
+            'unreconciled_count' => $sellersAudit['unreconciled_count'],
+            'items' => $items,
+        ];
+    }
+}
