@@ -10,10 +10,15 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class AuditLogStatsWidget extends StatsOverviewWidget
 {
+    public static function canView(): bool
+    {
+        return (bool) auth()->user()?->isSuperAdmin();
+    }
+
     protected function getStats(): array
     {
         $totalEvents = AuditLog::count();
-        $todayEvents = AuditLog::whereDate('created_at', today())->count();
+        $todayEvents = AuditLog::where('created_at', '>=', today()->startOfDay())->count();
         $failedLogins24h = AuditLog::where('action', 'login_failed')
             ->where('created_at', '>=', now()->subDay())
             ->count();

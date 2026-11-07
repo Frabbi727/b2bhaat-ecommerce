@@ -10,6 +10,7 @@ use App\Filament\Admin\Resources\AuditLogs\Widgets\AuditLogStatsWidget;
 use App\Models\AuditLog;
 use App\Models\User;
 use BackedEnum;
+use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\KeyValueEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -100,7 +101,11 @@ class AuditLogResource extends Resource
                         'products' => 'info',
                         'orders' => 'primary',
                         'finance' => 'success',
+                        'sellers' => 'success',
+                        'marketing' => 'info',
+                        'kyc' => 'warning',
                         'settings' => 'danger',
+                        'catalog' => 'gray',
                         default => 'gray',
                     })
                     ->sortable(),
@@ -161,7 +166,11 @@ class AuditLogResource extends Resource
                         'products' => 'Products (products)',
                         'orders' => 'Orders (orders)',
                         'finance' => 'Finance & Escrow (finance)',
+                        'sellers' => 'Sellers (sellers)',
+                        'marketing' => 'Marketing & Flash Sales (marketing)',
+                        'kyc' => 'KYC Verifications (kyc)',
                         'settings' => 'Settings (settings)',
+                        'catalog' => 'Catalog (catalog)',
                     ]),
 
                 SelectFilter::make('status')
@@ -176,6 +185,9 @@ class AuditLogResource extends Resource
                     ->placeholder('All events')
                     ->trueLabel('Suspicious only')
                     ->falseLabel('Normal only'),
+            ])
+            ->recordActions([
+                ViewAction::make(),
             ]);
     }
 
@@ -197,7 +209,11 @@ class AuditLogResource extends Resource
                                             'products' => 'info',
                                             'orders' => 'primary',
                                             'finance' => 'success',
+                                            'sellers' => 'success',
+                                            'marketing' => 'info',
+                                            'kyc' => 'warning',
                                             'settings' => 'danger',
+                                            'catalog' => 'gray',
                                             default => 'gray',
                                         }),
 
@@ -255,6 +271,12 @@ class AuditLogResource extends Resource
                                     KeyValueEntry::make('new_values')
                                         ->label('After (New Values)')
                                         ->placeholder('No updated values recorded'),
+
+                                    KeyValueEntry::make('metadata')
+                                        ->label('Additional Metadata')
+                                        ->columnSpanFull()
+                                        ->placeholder('No additional metadata recorded')
+                                        ->visible(fn (AuditLog $record): bool => ! empty($record->metadata)),
                                 ])
                                 ->columns(['default' => 1, 'md' => 2]),
                         ])->columnSpan(['lg' => 2]),

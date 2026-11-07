@@ -4,16 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Audit;
 
-$worktreePath = dirname(__DIR__, 2);
-if (basename($worktreePath) === 'tests') {
-    $worktreePath = dirname($worktreePath);
-}
-$_ENV['APP_BASE_PATH'] = $worktreePath;
-$_SERVER['APP_BASE_PATH'] = $worktreePath;
-putenv("APP_BASE_PATH={$worktreePath}");
-
 use App\Filament\Admin\Resources\AuditLogs\AuditLogResource;
 use App\Filament\Admin\Resources\AuditLogs\Pages\ListAuditLogs;
+use App\Filament\Admin\Resources\AuditLogs\Widgets\AuditLogStatsWidget;
 use App\Models\AuditLog;
 use App\Models\Role;
 use App\Models\User;
@@ -112,5 +105,37 @@ class FilamentAdminAuditResourceTest extends TestCase
             ->searchTable('Target payout')
             ->assertCanSeeTableRecords([$matchLog])
             ->assertCanNotSeeTableRecords([$otherLog]);
+    }
+
+    public function test_audit_log_resource_disables_manual_creation(): void
+    {
+        $this->assertFalse(AuditLogResource::canCreate());
+    }
+
+    public function test_audit_log_stats_widget_renders_metrics(): void
+    {
+        $role = Role::firstOrCreate(['slug' => 'super_admin'], ['name' => 'Super Administrator']);
+        $admin = User::factory()->create(['role_id' => $role->id]);
+
+        AuditLog::create([
+            'module' => 'auth',
+            'action' => 'login_failed',
+            'description' => 'Failed login attempt',
+            'is_suspicious' => true,
+            'status' => 'failed',
+            'created_at' => now(),
+        ]);
+
+        $this->actingAs($admin);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $this->assertTrue(AuditLogStatsWidget::canView());
+
+        Livewire::test(AuditLogStatsWidget::class)
+            ->assertSuccessful()
+            ->assertSee('Total Events')
+            ->assertSee("Today's Events")
+            ->assertSee('Failed Logins (24h)')
+            ->assertSee('Suspicious Events');
     }
 }
