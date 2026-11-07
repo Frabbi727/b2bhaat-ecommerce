@@ -10,6 +10,7 @@ use App\Models\SubOrder;
 use App\Models\User;
 use App\Models\WalletTransaction;
 use App\Services\Accounting\EventPipeline\EscrowReleaseJournalHandler;
+use App\Services\Accounting\EventPipeline\PayoutJournalHandler;
 use App\Services\Accounting\EventPipeline\RefundJournalHandler;
 use App\Services\Settings\StoreConfigurationService;
 use Exception;
@@ -22,9 +23,11 @@ class EscrowLedgerService
         protected StoreConfigurationService $config,
         protected ?EscrowReleaseJournalHandler $escrowReleaseJournalHandler = null,
         protected ?RefundJournalHandler $refundJournalHandler = null,
+        protected ?PayoutJournalHandler $payoutJournalHandler = null,
     ) {
         $this->escrowReleaseJournalHandler ??= app(EscrowReleaseJournalHandler::class);
         $this->refundJournalHandler ??= app(RefundJournalHandler::class);
+        $this->payoutJournalHandler ??= app(PayoutJournalHandler::class);
     }
 
     /**
@@ -277,7 +280,7 @@ class EscrowLedgerService
             $wallet->decrement('available_balance', $amount);
             $wallet->refresh();
 
-            return WalletTransaction::create([
+            $transaction = WalletTransaction::create([
                 'seller_wallet_id' => $wallet->id,
                 'sub_order_id' => null,
                 'transaction_type' => WalletTransaction::TYPE_PAYOUT,
@@ -286,6 +289,10 @@ class EscrowLedgerService
                 'running_balance' => $wallet->available_balance,
                 'reference_note' => $note ?? 'Seller payout withdrawal request',
             ]);
+
+            $this->payoutJournalHandler->recordPayoutRequested($transaction);
+
+            return $transaction;
         });
     }
 
@@ -294,20 +301,22 @@ class EscrowLedgerService
      *
      * @throws Exception
      */
-    public function disbursePayout(WalletTransaction $payout, string $trxId): void
+    public function disbursePayout(WalletTransaction $payout, string $trxId, string $channel = 'bank'): void
     {
         $trxId = trim($trxId);
         if ($trxId === '') {
             throw new Exception('A transaction ID is required to disburse a payout.');
         }
 
-        DB::transaction(function () use ($payout, $trxId): void {
+        DB::transaction(function () use ($payout, $trxId, $channel): void {
             $locked = $this->lockPendingPayout($payout);
 
             $locked->update([
                 'status' => WalletTransaction::STATUS_DISBURSED,
                 'reference_note' => trim(($locked->reference_note ?? '')." [DISBURSED - TrxID: {$trxId}]"),
             ]);
+
+            $this->payoutJournalHandler->recordPayoutDisbursed($locked, $channel, $trxId);
 
             DB::afterCommit(function () use ($payout, $trxId): void {
                 try {
@@ -343,6 +352,8 @@ class EscrowLedgerService
                 'status' => WalletTransaction::STATUS_REJECTED,
                 'reference_note' => trim(($locked->reference_note ?? '')." [REJECTED - {$reason}]"),
             ]);
+
+            $this->payoutJournalHandler->recordPayoutRejected($locked, $reason);
 
             DB::afterCommit(function () use ($payout, $reason): void {
                 try {
