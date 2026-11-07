@@ -32,13 +32,13 @@ class SellerActivityResource extends Resource
 
     protected static UnitEnum|string|null $navigationGroup = 'Store';
 
-    protected static ?int $navigationSort = 50;
+    protected static ?int $navigationSort = 15;
 
-    protected static ?string $navigationLabel = 'Activity history';
+    protected static ?string $navigationLabel = 'Audit & Activity Log';
 
-    protected static ?string $modelLabel = 'activity';
+    protected static ?string $modelLabel = 'Activity Log';
 
-    protected static ?string $pluralModelLabel = 'activities';
+    protected static ?string $pluralModelLabel = 'Activity Logs';
 
     public static function canAccess(): bool
     {

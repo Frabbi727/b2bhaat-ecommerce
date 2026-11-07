@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Admin\Resources\AuditLogs\Widgets\AuditLogStatsWidget;
 use App\Filament\Admin\Widgets\AdminFulfillmentDistributionChart;
 use App\Filament\Admin\Widgets\AdminOrdersRevenueChart;
 use App\Filament\Admin\Widgets\AdminStatsOverview;
@@ -44,6 +45,7 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Catalog'),
                 NavigationGroup::make('Finance'),
                 NavigationGroup::make('Marketing'),
+                NavigationGroup::make('Security & Audit'),
                 NavigationGroup::make('Settings')->collapsed(),
             ])
             ->discoverResources(in: app_path('Filament/Admin/Resources'), for: 'App\Filament\Admin\Resources')
@@ -57,6 +59,7 @@ class AdminPanelProvider extends PanelProvider
                 AdminOrdersRevenueChart::class,
                 AdminFulfillmentDistributionChart::class,
                 LatestOrdersWidget::class,
+                AuditLogStatsWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,

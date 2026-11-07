@@ -34,11 +34,11 @@ class AuditLogResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-shield-check';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Settings';
+    protected static UnitEnum|string|null $navigationGroup = 'Security & Audit';
 
-    protected static ?int $navigationSort = 90;
+    protected static ?int $navigationSort = 1;
 
-    protected static ?string $navigationLabel = 'Audit logs';
+    protected static ?string $navigationLabel = 'Audit Logs';
 
     protected static ?string $modelLabel = 'Audit Log';
 
