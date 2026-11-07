@@ -79,7 +79,7 @@ class AuditContext
      */
     public function snapshot(): array
     {
-        $actor = $this->actor ?? request()?->user();
+        $actor = $this->actor ?? Auth::user() ?? request()?->user();
         if ($this->actor === null && $actor !== null) {
             $this->actor = $actor;
         }
