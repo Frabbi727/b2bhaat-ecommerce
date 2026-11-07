@@ -7,6 +7,8 @@ use App\Models\SellerWallet;
 use App\Models\SubOrder;
 use App\Models\User;
 use App\Models\WalletTransaction;
+use App\Services\Accounting\EventPipeline\EscrowReleaseJournalHandler;
+use App\Services\Accounting\EventPipeline\RefundJournalHandler;
 use App\Services\Settings\StoreConfigurationService;
 use Exception;
 use Illuminate\Support\Facades\DB;
@@ -15,8 +17,13 @@ use Illuminate\Support\Facades\Log;
 class EscrowLedgerService
 {
     public function __construct(
-        protected StoreConfigurationService $config
-    ) {}
+        protected StoreConfigurationService $config,
+        protected ?EscrowReleaseJournalHandler $escrowReleaseJournalHandler = null,
+        protected ?RefundJournalHandler $refundJournalHandler = null,
+    ) {
+        $this->escrowReleaseJournalHandler ??= app(EscrowReleaseJournalHandler::class);
+        $this->refundJournalHandler ??= app(RefundJournalHandler::class);
+    }
 
     /**
      * Hold what the platform owes the seller for this sub-order (net earnings, plus the delivery fee when the
@@ -118,8 +125,12 @@ class EscrowLedgerService
             $wallet->increment('available_balance', $amount);
             $wallet->refresh();
 
-            return $this->record($wallet, $subOrder, WalletTransaction::TYPE_ESCROW_RELEASE, $amount,
+            $tx = $this->record($wallet, $subOrder, WalletTransaction::TYPE_ESCROW_RELEASE, $amount,
                 "Released to available balance for delivered Sub-Order #{$subOrder->sub_order_number}");
+
+            $this->escrowReleaseJournalHandler->recordEscrowRelease($subOrder, $amount);
+
+            return $tx;
         });
     }
 
@@ -150,8 +161,12 @@ class EscrowLedgerService
             $wallet->decrement('escrow_held_balance', $amount);
             $wallet->refresh();
 
-            return $this->record($wallet, $subOrder, WalletTransaction::TYPE_ESCROW_REFUND, $amount,
+            $tx = $this->record($wallet, $subOrder, WalletTransaction::TYPE_ESCROW_REFUND, $amount,
                 "Escrow hold refunded for Sub-Order #{$subOrder->sub_order_number}: {$reason}");
+
+            $this->refundJournalHandler->recordPrepaidCancellationRefund($subOrder, $amount, $reason);
+
+            return $tx;
         });
     }
 
@@ -182,8 +197,12 @@ class EscrowLedgerService
                 $wallet->increment('available_balance', $amount);
                 $wallet->refresh();
 
-                return $this->record($wallet, $subOrder, WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL, $amount,
+                $tx = $this->record($wallet, $subOrder, WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL, $amount,
                     "Commission charge reversed for returned Sub-Order #{$subOrder->sub_order_number}: {$reason}");
+
+                $this->refundJournalHandler->recordReturnedSubOrderRefund($subOrder, $reason);
+
+                return $tx;
             }
 
             $release = $this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_RELEASE);
@@ -195,8 +214,12 @@ class EscrowLedgerService
             $wallet->decrement('available_balance', $amount);
             $wallet->refresh();
 
-            return $this->record($wallet, $subOrder, WalletTransaction::TYPE_RETURN_REVERSAL, $amount,
+            $tx = $this->record($wallet, $subOrder, WalletTransaction::TYPE_RETURN_REVERSAL, $amount,
                 "Settlement reversed for returned Sub-Order #{$subOrder->sub_order_number}: {$reason}");
+
+            $this->refundJournalHandler->recordReturnedSubOrderRefund($subOrder, $reason);
+
+            return $tx;
         });
     }
 
