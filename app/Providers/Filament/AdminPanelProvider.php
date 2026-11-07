@@ -44,6 +44,7 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Sellers & Customers'),
                 NavigationGroup::make('Catalog'),
                 NavigationGroup::make('Finance'),
+                NavigationGroup::make('Accounting'),
                 NavigationGroup::make('Marketing'),
                 NavigationGroup::make('Security & Audit'),
                 NavigationGroup::make('Settings')->collapsed(),
