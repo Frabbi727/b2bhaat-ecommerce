@@ -23,7 +23,7 @@ class AccountingJournalEntriesTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['lines.account', 'reversalJournal']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['lines.account', 'reversalJournal'])->withExists('reversedEntries'))
             ->defaultSort('id', 'desc')
             ->columns([
                 TextColumn::make('entry_number')
@@ -118,9 +118,13 @@ class AccountingJournalEntriesTable
                     ? $record->status
                     : JournalEntryStatus::tryFrom((string) $record->status);
 
+                $isReversal = $record->relationLoaded('reversedEntries')
+                    ? $record->reversedEntries->isNotEmpty()
+                    : (bool) ($record->reversed_entries_exists ?? $record->reversedEntries()->exists());
+
                 return $status === JournalEntryStatus::POSTED
                     && ! $record->reversal_journal_id
-                    && $record->reversedEntries()->doesntExist();
+                    && ! $isReversal;
             })
             ->requiresConfirmation()
             ->modalHeading('Reverse Journal Entry')

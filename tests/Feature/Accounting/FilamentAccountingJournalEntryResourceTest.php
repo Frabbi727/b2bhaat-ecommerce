@@ -21,6 +21,7 @@ use Database\Seeders\AccountingChartOfAccountsSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -307,5 +308,39 @@ class FilamentAccountingJournalEntryResourceTest extends TestCase
         $this->assertFalse(AccountingJournalEntryResource::canEdit($entry));
         $this->assertFalse(AccountingJournalEntryResource::canDelete($entry));
         $this->assertFalse(AccountingJournalEntryResource::canDeleteAny());
+    }
+
+    public function test_table_eager_loads_reversal_relation_to_prevent_n_plus_one_queries(): void
+    {
+        for ($i = 1; $i <= 5; $i++) {
+            $this->postingService->post(new JournalEntryData(
+                entryDate: '2026-11-07',
+                financialEvent: AccountingEvent::MANUAL_JOURNAL->value,
+                idempotencyKey: "test_n_plus_one_{$i}",
+                description: "N+1 test entry {$i}",
+                lines: [
+                    new JournalLineData(accountSlug: 'cash_on_hand', debit: 100.00 * $i, credit: 0.00),
+                    new JournalLineData(accountSlug: 'bank_operating', debit: 0.00, credit: 100.00 * $i),
+                ],
+            ));
+        }
+
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+
+        Livewire::test(ListAccountingJournalEntries::class)
+            ->assertSuccessful();
+
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        // Ensure there are no separate queries per row checking reversedEntries
+        $individualExistenceQueries = collect($queries)->filter(
+            fn (array $query): bool => str_contains($query['query'], 'from "accounting_journal_entries"')
+                && str_contains($query['query'], 'reversal_journal_id')
+                && ! str_contains($query['query'], 'exists')
+        );
+
+        $this->assertCount(0, $individualExistenceQueries);
     }
 }
