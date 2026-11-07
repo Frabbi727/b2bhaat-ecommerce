@@ -165,6 +165,23 @@ class FilamentFinancialReconciliationPageTest extends TestCase
             ->assertNotified('Marketplace Financial Audit Complete');
     }
 
+    public function test_run_audit_emits_warning_notification_when_discrepancies_exist(): void
+    {
+        $sellerRole = Role::firstOrCreate(['slug' => 'seller'], ['name' => 'Seller']);
+        $seller = User::factory()->create(['role_id' => $sellerRole->id]);
+
+        SellerWallet::create([
+            'seller_id' => $seller->id,
+            'available_balance' => 999.00,
+            'escrow_held_balance' => 0.00,
+            'total_withdrawn' => 0.00,
+        ]);
+
+        Livewire::test(FinancialReconciliationPage::class)
+            ->call('runAudit')
+            ->assertNotified('Marketplace Financial Audit Complete');
+    }
+
     public function test_show_only_discrepancies_filter_works(): void
     {
         $sellerRole = Role::firstOrCreate(['slug' => 'seller'], ['name' => 'Seller']);

@@ -13,6 +13,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use UnitEnum;
 
 class FinancialReconciliationPage extends Page
@@ -35,6 +36,13 @@ class FinancialReconciliationPage extends Page
 
     public ?string $lastAuditedAt = null;
 
+    protected ?array $cachedMetrics = null;
+
+    /**
+     * @var array{total_sellers: int, reconciled_count: int, unreconciled_count: int, details: list<array{is_reconciled: bool, wallet_balance: float, ledger_balance: float, discrepancy: float, escrow_wallet_balance: float, escrow_ledger_balance: float, escrow_discrepancy: float, reserved_wallet_balance: float, reserved_ledger_balance: float, reserved_discrepancy: float, seller_id: int}>, sellers_by_id: Collection<int, User>}|null
+     */
+    protected ?array $cachedSellersRawAudit = null;
+
     public static function canAccess(): bool
     {
         $user = auth()->user();
@@ -53,6 +61,8 @@ class FinancialReconciliationPage extends Page
     public function runAudit(): void
     {
         $this->lastAuditedAt = Carbon::now()->toDateTimeString();
+        $this->cachedMetrics = null;
+        $this->cachedSellersRawAudit = null;
 
         $metrics = $this->getReconciliationMetrics();
         $sellersData = $this->getSellersAuditData();
@@ -76,11 +86,17 @@ class FinancialReconciliationPage extends Page
             ? 'All sub-ledgers and general ledger liability balances are fully reconciled.'
             : "Audit completed with {$discrepancyCount} discrepancy item(s) detected.";
 
-        Notification::make()
+        $notification = Notification::make()
             ->title('Marketplace Financial Audit Complete')
-            ->body($body)
-            ->success()
-            ->send();
+            ->body($body);
+
+        if ($discrepancyCount === 0) {
+            $notification->success();
+        } else {
+            $notification->warning();
+        }
+
+        $notification->send();
     }
 
     /**
@@ -119,6 +135,10 @@ class FinancialReconciliationPage extends Page
      */
     public function getReconciliationMetrics(): array
     {
+        if ($this->cachedMetrics !== null) {
+            return $this->cachedMetrics;
+        }
+
         /** @var GeneralLedgerService $glService */
         $glService = app(GeneralLedgerService::class);
         /** @var AccountingReconciliationService $reconciliationService */
@@ -129,12 +149,18 @@ class FinancialReconciliationPage extends Page
         $walletGlTotal = round($glService->getBalanceForSlug('seller_wallet_payable'), 2);
         $walletDiscrepancy = round($walletSubTotal - $walletGlTotal, 2);
         $walletIsReconciled = abs($walletDiscrepancy) < 0.001;
+        if ($walletIsReconciled) {
+            $walletDiscrepancy = 0.00;
+        }
 
         // 2. Seller Escrow Payables
         $escrowSubTotal = round((float) SellerWallet::sum('escrow_held_balance'), 2);
         $escrowGlTotal = round($glService->getBalanceForSlug('seller_escrow_payable'), 2);
         $escrowDiscrepancy = round($escrowSubTotal - $escrowGlTotal, 2);
         $escrowIsReconciled = abs($escrowDiscrepancy) < 0.001;
+        if ($escrowIsReconciled) {
+            $escrowDiscrepancy = 0.00;
+        }
 
         // 3. Reserved Payout Payables
         $reservedResult = $reconciliationService->verifyReservedPayouts();
@@ -150,7 +176,7 @@ class FinancialReconciliationPage extends Page
         $refundDiscrepancy = $refundResult['discrepancy'];
         $refundIsReconciled = $refundResult['is_reconciled'];
 
-        return [
+        return $this->cachedMetrics = [
             'seller_wallet' => [
                 'title' => 'Seller Wallet Payables',
                 'sub_ledger_total' => $walletSubTotal,
@@ -209,19 +235,30 @@ class FinancialReconciliationPage extends Page
      */
     public function getSellersAuditData(): array
     {
-        /** @var AccountingReconciliationService $reconciliationService */
-        $reconciliationService = app(AccountingReconciliationService::class);
-        $sellersAudit = $reconciliationService->verifyAllSellers();
+        if ($this->cachedSellersRawAudit === null) {
+            /** @var AccountingReconciliationService $reconciliationService */
+            $reconciliationService = app(AccountingReconciliationService::class);
+            $sellersAudit = $reconciliationService->verifyAllSellers();
 
-        // Load seller records to display names and emails
-        $sellerIds = array_column($sellersAudit['details'], 'seller_id');
-        $sellersById = User::whereIn('id', $sellerIds)
-            ->get(['id', 'name', 'email'])
-            ->keyBy('id');
+            // Load seller records to display names and emails
+            $sellerIds = array_column($sellersAudit['details'], 'seller_id');
+            $sellersById = User::whereIn('id', $sellerIds)
+                ->get(['id', 'name', 'email'])
+                ->keyBy('id');
 
+            $this->cachedSellersRawAudit = [
+                'total_sellers' => $sellersAudit['total_sellers'],
+                'reconciled_count' => $sellersAudit['reconciled_count'],
+                'unreconciled_count' => $sellersAudit['unreconciled_count'],
+                'details' => $sellersAudit['details'],
+                'sellers_by_id' => $sellersById,
+            ];
+        }
+
+        $raw = $this->cachedSellersRawAudit;
         $items = [];
-        foreach ($sellersAudit['details'] as $detail) {
-            $seller = $sellersById->get($detail['seller_id']);
+        foreach ($raw['details'] as $detail) {
+            $seller = $raw['sellers_by_id']->get($detail['seller_id']);
             $netDiscrepancy = round(
                 abs($detail['discrepancy']) + abs($detail['escrow_discrepancy']) + abs($detail['reserved_discrepancy']),
                 2
@@ -252,9 +289,9 @@ class FinancialReconciliationPage extends Page
         }
 
         return [
-            'total_sellers' => $sellersAudit['total_sellers'],
-            'reconciled_count' => $sellersAudit['reconciled_count'],
-            'unreconciled_count' => $sellersAudit['unreconciled_count'],
+            'total_sellers' => $raw['total_sellers'],
+            'reconciled_count' => $raw['reconciled_count'],
+            'unreconciled_count' => $raw['unreconciled_count'],
             'items' => $items,
         ];
     }
