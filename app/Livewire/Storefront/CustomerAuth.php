@@ -167,6 +167,7 @@ class CustomerAuth extends Component
         }
 
         if (! $user->is_active) {
+            event(new Failed('web', $user, ['email' => $this->loginIdentifier, 'password' => '***']));
             $this->errorMessage = 'Your account has been deactivated. Please contact customer helpline.';
 
             return;

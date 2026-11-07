@@ -33,6 +33,7 @@ class AuthAuditListener
             'actor_name' => $user->name,
             'actor_email' => $user->email,
             'actor_role' => $user->role?->slug,
+            'seller_id' => $user->isSeller() ? $user->id : null,
             'auth_guard' => $event->guard,
             'status' => 'success',
             'sync' => true,
@@ -44,11 +45,12 @@ class AuthAuditListener
         /** @var User|null $user */
         $user = $event->user;
         $credentials = $event->credentials;
-        $identifier = $credentials['email'] ?? $credentials['phone'] ?? 'unknown';
+        $identifier = ! empty($credentials['email']) ? $credentials['email'] : (! empty($credentials['phone']) ? $credentials['phone'] : 'unknown');
 
         $ip = request()?->ip();
 
-        $recentFails = AuditLog::where('action', 'login_failed')
+        $recentFails = AuditLog::where('module', 'auth')
+            ->where('action', 'login_failed')
             ->where('created_at', '>=', Carbon::now()->subMinutes(15))
             ->where(function ($q) use ($identifier, $ip): void {
                 $q->where('actor_email', $identifier);
@@ -69,6 +71,7 @@ class AuthAuditListener
             'actor_name' => $user?->name,
             'actor_email' => $user?->email ?: (is_string($identifier) ? $identifier : null),
             'actor_role' => $user?->role?->slug,
+            'seller_id' => $user?->isSeller() ? $user->id : null,
             'auth_guard' => $event->guard,
             'status' => 'failed',
             'failure_reason' => 'Invalid credentials or inactive account',
@@ -95,6 +98,7 @@ class AuthAuditListener
             'actor_name' => $user->name,
             'actor_email' => $user->email,
             'actor_role' => $user->role?->slug,
+            'seller_id' => $user->isSeller() ? $user->id : null,
             'auth_guard' => $event->guard,
             'status' => 'success',
             'sync' => true,

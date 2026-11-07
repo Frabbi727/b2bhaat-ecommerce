@@ -8,6 +8,7 @@ use App\Models\SellerProfile;
 use App\Models\SellerWallet;
 use App\Models\User;
 use Illuminate\Auth\Events\Failed;
+use Illuminate\Auth\Events\Login;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -161,6 +162,8 @@ class AuthController extends Controller
                 'email' => ['The provided credentials do not match our records.'],
             ]);
         }
+
+        event(new Login('sanctum', $user, false));
 
         $token = $user->createToken('auth-token')->plainTextToken;
 

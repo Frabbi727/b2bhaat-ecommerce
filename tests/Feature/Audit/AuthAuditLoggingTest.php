@@ -121,4 +121,69 @@ class AuthAuditLoggingTest extends TestCase
             'status' => 'failed',
         ]);
     }
+
+    public function test_successful_api_login_records_audit_log_with_sanctum_guard(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'api_success@test.com',
+            'password' => Hash::make('password123'),
+            'is_active' => true,
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/login', [
+            'email' => 'api_success@test.com',
+            'password' => 'password123',
+        ]);
+
+        $response->assertOk();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'module' => 'auth',
+            'action' => 'login',
+            'actor_id' => $user->id,
+            'actor_email' => 'api_success@test.com',
+            'auth_guard' => 'sanctum',
+            'status' => 'success',
+        ]);
+    }
+
+    public function test_deactivated_account_storefront_login_records_failed_audit_log(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'deactivated@test.com',
+            'password' => Hash::make('password123'),
+            'is_active' => false,
+        ]);
+
+        Livewire::test(CustomerAuth::class)
+            ->set('mode', 'login')
+            ->set('loginMethod', 'password')
+            ->set('loginIdentifier', 'deactivated@test.com')
+            ->set('loginPassword', 'password123')
+            ->call('login');
+
+        $this->assertDatabaseHas('audit_logs', [
+            'module' => 'auth',
+            'action' => 'login_failed',
+            'actor_id' => $user->id,
+            'actor_email' => 'deactivated@test.com',
+            'status' => 'failed',
+        ]);
+    }
+
+    public function test_seller_login_populates_seller_id(): void
+    {
+        $role = Role::firstOrCreate(['slug' => 'seller'], ['name' => 'Seller']);
+        $user = User::factory()->create(['role_id' => $role->id, 'email' => 'merchant@test.com']);
+
+        event(new Login('web', $user, false));
+
+        $this->assertDatabaseHas('audit_logs', [
+            'module' => 'auth',
+            'action' => 'login',
+            'actor_id' => $user->id,
+            'seller_id' => $user->id,
+            'status' => 'success',
+        ]);
+    }
 }
