@@ -9,11 +9,13 @@ use App\Models\User;
 use App\Services\Accounting\AccountingReconciliationService;
 use App\Services\Accounting\GeneralLedgerService;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use UnitEnum;
 
 class FinancialReconciliationPage extends Page
@@ -34,6 +36,10 @@ class FinancialReconciliationPage extends Page
 
     public bool $showOnlyDiscrepancies = false;
 
+    public string $search = '';
+
+    public string $sortBy = 'discrepancy_desc';
+
     public ?string $lastAuditedAt = null;
 
     protected ?array $cachedMetrics = null;
@@ -53,6 +59,26 @@ class FinancialReconciliationPage extends Page
     public function mount(): void
     {
         $this->lastAuditedAt = Carbon::now()->toDateTimeString();
+    }
+
+    /**
+     * @return array<Action>
+     */
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('exportCsv')
+                ->label('Export Audit CSV')
+                ->icon(Heroicon::OutlinedArrowDownTray)
+                ->color('gray')
+                ->action('exportCsv'),
+
+            Action::make('runAudit')
+                ->label('Run Full Audit')
+                ->icon(Heroicon::OutlinedArrowPath)
+                ->color('primary')
+                ->action('runAudit'),
+        ];
     }
 
     /**
@@ -97,6 +123,88 @@ class FinancialReconciliationPage extends Page
         }
 
         $notification->send();
+    }
+
+    /**
+     * Export reconciliation audit details as CSV.
+     */
+    public function exportCsv(): StreamedResponse
+    {
+        $metrics = $this->getReconciliationMetrics();
+        $sellersData = $this->getSellersAuditData();
+        $dateLabel = Carbon::now()->format('Y-m-d');
+        $filename = "financial-reconciliation-audit-{$dateLabel}.csv";
+
+        return response()->streamDownload(function () use ($metrics, $sellersData): void {
+            $handle = fopen('php://output', 'w');
+            if ($handle === false) {
+                return;
+            }
+
+            // UTF-8 BOM
+            fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
+
+            fputcsv($handle, ['B2Bhaat Marketplace — Financial Reconciliation Audit Statement']);
+            fputcsv($handle, ['Audited At:', Carbon::now()->toDateTimeString()]);
+            fputcsv($handle, ['Currency:', 'Bangladeshi Taka (BDT / ৳)']);
+            fputcsv($handle, []);
+
+            // Summary Metrics
+            fputcsv($handle, ['CORE RECONCILIATION SUBSYSTEMS']);
+            fputcsv($handle, ['Metric Name', 'Sub-Ledger Total (BDT)', 'General Ledger Total (BDT)', 'Variance (BDT)', 'Status']);
+            foreach ($metrics as $metric) {
+                fputcsv($handle, [
+                    $metric['title'],
+                    number_format($metric['sub_ledger_total'], 2, '.', ''),
+                    number_format($metric['gl_total'], 2, '.', ''),
+                    number_format($metric['discrepancy'], 2, '.', ''),
+                    $metric['is_reconciled'] ? 'RECONCILED' : 'DISCREPANCY',
+                ]);
+            }
+
+            fputcsv($handle, []);
+            fputcsv($handle, ['SELLER SUB-LEDGER RECONCILIATION BREAKDOWN']);
+            fputcsv($handle, [
+                'Seller ID',
+                'Seller Name',
+                'Seller Email',
+                'Wallet Avail (Subledger)',
+                'GL Wallet Payable',
+                'Wallet Variance',
+                'Escrow Held (Subledger)',
+                'GL Escrow Payable',
+                'Escrow Variance',
+                'Reserved Payout (Subledger)',
+                'GL Reserved Payable',
+                'Reserved Variance',
+                'Net Discrepancy',
+                'Status',
+            ]);
+
+            foreach ($sellersData['items'] as $item) {
+                fputcsv($handle, [
+                    $item['seller_id'],
+                    $item['seller_name'],
+                    $item['seller_email'],
+                    number_format($item['wallet_balance'], 2, '.', ''),
+                    number_format($item['ledger_balance'], 2, '.', ''),
+                    number_format($item['discrepancy'], 2, '.', ''),
+                    number_format($item['escrow_wallet_balance'], 2, '.', ''),
+                    number_format($item['escrow_ledger_balance'], 2, '.', ''),
+                    number_format($item['escrow_discrepancy'], 2, '.', ''),
+                    number_format($item['reserved_wallet_balance'], 2, '.', ''),
+                    number_format($item['reserved_ledger_balance'], 2, '.', ''),
+                    number_format($item['reserved_discrepancy'], 2, '.', ''),
+                    number_format($item['net_discrepancy'], 2, '.', ''),
+                    $item['is_reconciled'] ? 'RECONCILED' : 'DISCREPANCY',
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ]);
     }
 
     /**
@@ -209,7 +317,7 @@ class FinancialReconciliationPage extends Page
     }
 
     /**
-     * Get sellers audit data with optional filtering for discrepancies only.
+     * Get sellers audit data with optional search, sorting, and filtering for discrepancies only.
      *
      * @return array{
      *     total_sellers: int,
@@ -257,6 +365,8 @@ class FinancialReconciliationPage extends Page
 
         $raw = $this->cachedSellersRawAudit;
         $items = [];
+        $trimmedSearch = mb_strtolower(trim($this->search));
+
         foreach ($raw['details'] as $detail) {
             $seller = $raw['sellers_by_id']->get($detail['seller_id']);
             $netDiscrepancy = round(
@@ -285,8 +395,26 @@ class FinancialReconciliationPage extends Page
                 continue;
             }
 
+            if ($trimmedSearch !== '') {
+                $name = mb_strtolower($item['seller_name']);
+                $email = mb_strtolower($item['seller_email']);
+                $id = (string) $item['seller_id'];
+
+                if (! str_contains($name, $trimmedSearch) && ! str_contains($email, $trimmedSearch) && ! str_contains($id, $trimmedSearch)) {
+                    continue;
+                }
+            }
+
             $items[] = $item;
         }
+
+        // Sorting
+        match ($this->sortBy) {
+            'discrepancy_desc' => usort($items, fn (array $a, array $b): int => $b['net_discrepancy'] <=> $a['net_discrepancy']),
+            'name_asc' => usort($items, fn (array $a, array $b): int => strcasecmp($a['seller_name'], $b['seller_name'])),
+            'wallet_desc' => usort($items, fn (array $a, array $b): int => $b['wallet_balance'] <=> $a['wallet_balance']),
+            default => null,
+        };
 
         return [
             'total_sellers' => $raw['total_sellers'],

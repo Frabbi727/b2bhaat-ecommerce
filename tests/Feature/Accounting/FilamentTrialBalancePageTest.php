@@ -22,6 +22,7 @@ use Database\Seeders\SystemLookupSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Tests\TestCase;
 
 class FilamentTrialBalancePageTest extends TestCase
@@ -302,5 +303,30 @@ class FilamentTrialBalancePageTest extends TestCase
         $cashPresent = collect($dataWithoutZero['categories']['asset']['accounts'])->firstWhere('system_slug', 'cash_on_hand');
         $this->assertNotNull($cashPresent);
         $this->assertEquals(450.00, $cashPresent['total_debit']);
+    }
+
+    public function test_admin_can_export_trial_balance_csv(): void
+    {
+        $component = Livewire::test(TrialBalancePage::class);
+        $response = $component->instance()->exportCsv();
+
+        $this->assertInstanceOf(StreamedResponse::class, $response);
+        $this->assertStringContainsString('text/csv', (string) $response->headers->get('Content-Type'));
+        $this->assertStringContainsString('trial-balance-', (string) $response->headers->get('Content-Disposition'));
+    }
+
+    public function test_admin_can_use_date_presets_on_trial_balance(): void
+    {
+        $component = Livewire::test(TrialBalancePage::class)
+            ->call('setPreset', 'month');
+
+        $this->assertEquals(now()->startOfMonth()->toDateString(), $component->get('startDate'));
+        $this->assertEquals(now()->endOfMonth()->toDateString(), $component->get('endDate'));
+        $this->assertEquals('month', $component->get('preset'));
+
+        $component->call('setPreset', 'all');
+        $this->assertNull($component->get('startDate'));
+        $this->assertNull($component->get('endDate'));
+        $this->assertEquals('all', $component->get('preset'));
     }
 }

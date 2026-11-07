@@ -9,10 +9,13 @@ use App\Enums\Accounting\JournalEntryStatus;
 use App\Models\Accounting\AccountingAccount;
 use App\Models\Accounting\AccountingPeriod;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use UnitEnum;
 
 class TrialBalancePage extends Page
@@ -39,11 +42,83 @@ class TrialBalancePage extends Page
 
     public bool $hideZeroBalances = false;
 
+    public ?string $preset = 'all';
+
     public static function canAccess(): bool
     {
         $user = auth()->user();
 
         return (bool) ($user && in_array($user->role?->slug, ['super_admin', 'admin'], true));
+    }
+
+    /**
+     * @return array<Action>
+     */
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('print')
+                ->label('Print Statement')
+                ->icon(Heroicon::OutlinedPrinter)
+                ->color('gray')
+                ->extraAttributes(['onclick' => 'window.print(); return false;']),
+
+            Action::make('exportCsv')
+                ->label('Export CSV')
+                ->icon(Heroicon::OutlinedArrowDownTray)
+                ->color('primary')
+                ->action('exportCsv'),
+        ];
+    }
+
+    public function updatedPeriodId(?int $value): void
+    {
+        if ($value) {
+            $period = AccountingPeriod::find($value);
+            if ($period) {
+                $this->startDate = $period->start_date?->format('Y-m-d');
+                $this->endDate = $period->end_date?->format('Y-m-d');
+                $this->preset = null;
+            }
+        }
+    }
+
+    public function updatedStartDate(): void
+    {
+        $this->periodId = null;
+        $this->preset = null;
+    }
+
+    public function updatedEndDate(): void
+    {
+        $this->periodId = null;
+        $this->preset = null;
+    }
+
+    public function setPreset(string $preset): void
+    {
+        $this->preset = $preset;
+        $this->periodId = null;
+
+        match ($preset) {
+            'month' => (function (): void {
+                $this->startDate = Carbon::now()->startOfMonth()->toDateString();
+                $this->endDate = Carbon::now()->endOfMonth()->toDateString();
+            })(),
+            'quarter' => (function (): void {
+                $this->startDate = Carbon::now()->startOfQuarter()->toDateString();
+                $this->endDate = Carbon::now()->endOfQuarter()->toDateString();
+            })(),
+            'year' => (function (): void {
+                $this->startDate = Carbon::now()->startOfYear()->toDateString();
+                $this->endDate = Carbon::now()->endOfYear()->toDateString();
+            })(),
+            default => (function (): void {
+                $this->startDate = null;
+                $this->endDate = null;
+                $this->preset = 'all';
+            })(),
+        };
     }
 
     public function resetFilters(): void
@@ -52,6 +127,7 @@ class TrialBalancePage extends Page
         $this->endDate = null;
         $this->periodId = null;
         $this->hideZeroBalances = false;
+        $this->preset = 'all';
     }
 
     public function applyFilters(): void
@@ -67,6 +143,81 @@ class TrialBalancePage extends Page
         return AccountingPeriod::with('fiscalYear')
             ->orderByDesc('start_date')
             ->get();
+    }
+
+    /**
+     * Export the current trial balance report as a CSV download.
+     */
+    public function exportCsv(): StreamedResponse
+    {
+        $data = $this->getTrialBalanceData();
+        $dateLabel = $this->endDate ? Carbon::parse($this->endDate)->format('Y-m-d') : 'all-time';
+        $filename = "trial-balance-{$dateLabel}.csv";
+
+        return response()->streamDownload(function () use ($data): void {
+            $handle = fopen('php://output', 'w');
+            if ($handle === false) {
+                return;
+            }
+
+            // UTF-8 BOM for Excel compatibility
+            fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
+
+            fputcsv($handle, ['B2Bhaat Marketplace — General Ledger Trial Balance']);
+            fputcsv($handle, ['As of Date:', $this->endDate ?? 'All Time', 'Generated At:', Carbon::now()->toDateTimeString()]);
+            fputcsv($handle, ['Currency:', 'Bangladeshi Taka (BDT / ৳)']);
+            fputcsv($handle, []);
+
+            fputcsv($handle, ['Account Code', 'Account Name', 'Category', 'System Slug', 'Total Debit (BDT)', 'Total Credit (BDT)', 'Net Debit (BDT)', 'Net Credit (BDT)']);
+
+            foreach ($data['categories'] as $category) {
+                foreach ($category['accounts'] as $account) {
+                    fputcsv($handle, [
+                        $account['code'],
+                        $account['name'],
+                        $category['name'],
+                        $account['system_slug'] ?? '',
+                        number_format($account['total_debit'], 2, '.', ''),
+                        number_format($account['total_credit'], 2, '.', ''),
+                        number_format($account['net_debit'], 2, '.', ''),
+                        number_format($account['net_credit'], 2, '.', ''),
+                    ]);
+                }
+
+                // Category subtotal
+                fputcsv($handle, [
+                    '',
+                    'SUBTOTAL: '.$category['name'],
+                    $category['name'],
+                    '',
+                    number_format($category['total_debit'], 2, '.', ''),
+                    number_format($category['total_credit'], 2, '.', ''),
+                    number_format($category['total_net_debit'], 2, '.', ''),
+                    number_format($category['total_net_credit'], 2, '.', ''),
+                ]);
+                fputcsv($handle, []);
+            }
+
+            // Grand Total
+            fputcsv($handle, [
+                '',
+                'GRAND TOTAL',
+                '',
+                '',
+                number_format($data['grand_total']['total_debit'], 2, '.', ''),
+                number_format($data['grand_total']['total_credit'], 2, '.', ''),
+                number_format($data['grand_total']['total_net_debit'], 2, '.', ''),
+                number_format($data['grand_total']['total_net_credit'], 2, '.', ''),
+            ]);
+
+            fputcsv($handle, ['Equilibrium Status:', $data['grand_total']['is_balanced'] ? 'BALANCED' : 'OUT OF BALANCE']);
+            fputcsv($handle, ['Discrepancy Variance:', number_format(abs($data['grand_total']['difference']), 2, '.', '')]);
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ]);
     }
 
     /**
@@ -125,10 +276,9 @@ class TrialBalancePage extends Page
 
         $categories = [
             AccountType::ASSET->value => [
-                'key' => AccountType::ASSET->value,
                 'name' => 'Assets',
-                'label' => 'Assets',
                 'display_name' => '1. Assets',
+                'code_range' => '1000 - 1999',
                 'accounts' => [],
                 'total_debit' => 0.0,
                 'total_credit' => 0.0,
@@ -136,10 +286,9 @@ class TrialBalancePage extends Page
                 'total_net_credit' => 0.0,
             ],
             AccountType::LIABILITY->value => [
-                'key' => AccountType::LIABILITY->value,
                 'name' => 'Liabilities',
-                'label' => 'Liabilities',
                 'display_name' => '2. Liabilities',
+                'code_range' => '2000 - 2999',
                 'accounts' => [],
                 'total_debit' => 0.0,
                 'total_credit' => 0.0,
@@ -147,10 +296,9 @@ class TrialBalancePage extends Page
                 'total_net_credit' => 0.0,
             ],
             AccountType::EQUITY->value => [
-                'key' => AccountType::EQUITY->value,
                 'name' => 'Equity',
-                'label' => 'Equity',
                 'display_name' => '3. Equity',
+                'code_range' => '3000 - 3999',
                 'accounts' => [],
                 'total_debit' => 0.0,
                 'total_credit' => 0.0,
@@ -158,10 +306,9 @@ class TrialBalancePage extends Page
                 'total_net_credit' => 0.0,
             ],
             AccountType::REVENUE->value => [
-                'key' => AccountType::REVENUE->value,
                 'name' => 'Revenue',
-                'label' => 'Revenue',
                 'display_name' => '4. Revenue',
+                'code_range' => '4000 - 4999',
                 'accounts' => [],
                 'total_debit' => 0.0,
                 'total_credit' => 0.0,
@@ -169,10 +316,9 @@ class TrialBalancePage extends Page
                 'total_net_credit' => 0.0,
             ],
             AccountType::EXPENSE->value => [
-                'key' => AccountType::EXPENSE->value,
                 'name' => 'Expenses',
-                'label' => 'Expenses',
                 'display_name' => '5. Expenses',
+                'code_range' => '5000 - 5999',
                 'accounts' => [],
                 'total_debit' => 0.0,
                 'total_credit' => 0.0,
@@ -181,85 +327,71 @@ class TrialBalancePage extends Page
             ],
         ];
 
-        foreach ($accounts as $account) {
-            $accountTotal = $totals->get($account->id);
-            $totalDebit = round((float) ($accountTotal->total_debit ?? 0.0), 2);
-            $totalCredit = round((float) ($accountTotal->total_credit ?? 0.0), 2);
+        $grandDebit = 0.0;
+        $grandCredit = 0.0;
+        $grandNetDebit = 0.0;
+        $grandNetCredit = 0.0;
 
-            $netDebit = $totalDebit > $totalCredit ? round($totalDebit - $totalCredit, 2) : 0.0;
-            $netCredit = $totalCredit > $totalDebit ? round($totalCredit - $totalDebit, 2) : 0.0;
+        foreach ($accounts as $account) {
+            $type = $account->type instanceof AccountType ? $account->type->value : (string) $account->type;
+            if (! isset($categories[$type])) {
+                continue;
+            }
+
+            $line = $totals->get($account->id);
+            $totalDebit = round((float) ($line->total_debit ?? 0.0), 2);
+            $totalCredit = round((float) ($line->total_credit ?? 0.0), 2);
+
+            $netDebit = $totalDebit > $totalCredit ? round($totalDebit - $totalCredit, 2) : 0.00;
+            $netCredit = $totalCredit > $totalDebit ? round($totalCredit - $totalDebit, 2) : 0.00;
 
             if ($this->hideZeroBalances && abs($netDebit) < 0.001 && abs($netCredit) < 0.001 && abs($totalDebit) < 0.001 && abs($totalCredit) < 0.001) {
                 continue;
             }
 
-            $typeKey = $account->type instanceof AccountType ? $account->type->value : (string) $account->type;
-
-            if (! isset($categories[$typeKey])) {
-                $categories[$typeKey] = [
-                    'key' => $typeKey,
-                    'name' => ucfirst($typeKey),
-                    'label' => ucfirst($typeKey),
-                    'display_name' => ucfirst($typeKey),
-                    'accounts' => [],
-                    'total_debit' => 0.0,
-                    'total_credit' => 0.0,
-                    'total_net_debit' => 0.0,
-                    'total_net_credit' => 0.0,
-                ];
-            }
-
-            $categories[$typeKey]['accounts'][] = [
+            $categories[$type]['accounts'][] = [
                 'id' => $account->id,
-                'code' => (string) $account->code,
-                'name' => (string) $account->name,
-                'system_slug' => $account->system_slug ? (string) $account->system_slug : null,
-                'type' => $typeKey,
+                'code' => $account->code,
+                'name' => $account->name,
+                'system_slug' => $account->system_slug,
+                'is_system' => $account->is_system,
                 'total_debit' => $totalDebit,
                 'total_credit' => $totalCredit,
                 'net_debit' => $netDebit,
                 'net_credit' => $netCredit,
             ];
 
-            $categories[$typeKey]['total_debit'] = round($categories[$typeKey]['total_debit'] + $totalDebit, 2);
-            $categories[$typeKey]['total_credit'] = round($categories[$typeKey]['total_credit'] + $totalCredit, 2);
-            $categories[$typeKey]['total_net_debit'] = round($categories[$typeKey]['total_net_debit'] + $netDebit, 2);
-            $categories[$typeKey]['total_net_credit'] = round($categories[$typeKey]['total_net_credit'] + $netCredit, 2);
+            $categories[$type]['total_debit'] = round($categories[$type]['total_debit'] + $totalDebit, 2);
+            $categories[$type]['total_credit'] = round($categories[$type]['total_credit'] + $totalCredit, 2);
+            $categories[$type]['total_net_debit'] = round($categories[$type]['total_net_debit'] + $netDebit, 2);
+            $categories[$type]['total_net_credit'] = round($categories[$type]['total_net_credit'] + $netCredit, 2);
+
+            $grandDebit = round($grandDebit + $totalDebit, 2);
+            $grandCredit = round($grandCredit + $totalCredit, 2);
+            $grandNetDebit = round($grandNetDebit + $netDebit, 2);
+            $grandNetCredit = round($grandNetCredit + $netCredit, 2);
         }
 
-        $grandTotalDebit = 0.0;
-        $grandTotalCredit = 0.0;
-        $grandTotalNetDebit = 0.0;
-        $grandTotalNetCredit = 0.0;
+        $difference = round($grandDebit - $grandCredit, 2);
+        $isBalanced = abs($difference) < 0.001;
 
-        foreach ($categories as $cat) {
-            $grandTotalDebit = round($grandTotalDebit + $cat['total_debit'], 2);
-            $grandTotalCredit = round($grandTotalCredit + $cat['total_credit'], 2);
-            $grandTotalNetDebit = round($grandTotalNetDebit + $cat['total_net_debit'], 2);
-            $grandTotalNetCredit = round($grandTotalNetCredit + $cat['total_net_credit'], 2);
-        }
-
-        $difference = round($grandTotalDebit - $grandTotalCredit, 2);
-        $diffClean = abs($difference) < 0.001 ? 0.0 : $difference;
-        $isBalanced = abs($diffClean) < 0.001;
-
-        $grandTotalData = [
-            'total_debit' => $grandTotalDebit,
-            'total_credit' => $grandTotalCredit,
-            'total_net_debit' => $grandTotalNetDebit,
-            'total_net_credit' => $grandTotalNetCredit,
-            'difference' => $diffClean,
+        $grandTotal = [
+            'total_debit' => $grandDebit,
+            'total_credit' => $grandCredit,
+            'total_net_debit' => $grandNetDebit,
+            'total_net_credit' => $grandNetCredit,
+            'difference' => $difference,
             'is_balanced' => $isBalanced,
         ];
 
         return [
             'categories' => $categories,
-            'grand_total' => $grandTotalData,
-            'total_debit' => $grandTotalDebit,
-            'total_credit' => $grandTotalCredit,
-            'total_net_debit' => $grandTotalNetDebit,
-            'total_net_credit' => $grandTotalNetCredit,
-            'difference' => $diffClean,
+            'grand_total' => $grandTotal,
+            'total_debit' => $grandDebit,
+            'total_credit' => $grandCredit,
+            'total_net_debit' => $grandNetDebit,
+            'total_net_credit' => $grandNetCredit,
+            'difference' => $difference,
             'is_balanced' => $isBalanced,
         ];
     }

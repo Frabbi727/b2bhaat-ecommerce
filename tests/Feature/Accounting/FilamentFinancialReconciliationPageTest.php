@@ -17,6 +17,7 @@ use Database\Seeders\SystemLookupSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Tests\TestCase;
 
 class FilamentFinancialReconciliationPageTest extends TestCase
@@ -216,5 +217,32 @@ class FilamentFinancialReconciliationPageTest extends TestCase
         $sellersFiltered = $component->instance()->getSellersAuditData();
         $this->assertCount(1, $sellersFiltered['items']);
         $this->assertEquals($seller2->id, $sellersFiltered['items'][0]['seller_id']);
+    }
+
+    public function test_admin_can_search_sellers_in_reconciliation(): void
+    {
+        $sellerRole = Role::firstOrCreate(['slug' => 'seller'], ['name' => 'Seller']);
+        $sellerAlpha = User::factory()->create(['role_id' => $sellerRole->id, 'name' => 'Alpha Merchant', 'email' => 'alpha@test.com']);
+        $sellerBeta = User::factory()->create(['role_id' => $sellerRole->id, 'name' => 'Beta Merchant', 'email' => 'beta@test.com']);
+
+        SellerWallet::create(['seller_id' => $sellerAlpha->id, 'available_balance' => 0.00, 'escrow_held_balance' => 0.00, 'total_withdrawn' => 0.00]);
+        SellerWallet::create(['seller_id' => $sellerBeta->id, 'available_balance' => 0.00, 'escrow_held_balance' => 0.00, 'total_withdrawn' => 0.00]);
+
+        $component = Livewire::test(FinancialReconciliationPage::class)
+            ->set('search', 'Alpha');
+
+        $data = $component->instance()->getSellersAuditData();
+        $this->assertCount(1, $data['items']);
+        $this->assertEquals($sellerAlpha->id, $data['items'][0]['seller_id']);
+    }
+
+    public function test_admin_can_export_financial_reconciliation_csv(): void
+    {
+        $component = Livewire::test(FinancialReconciliationPage::class);
+        $response = $component->instance()->exportCsv();
+
+        $this->assertInstanceOf(StreamedResponse::class, $response);
+        $this->assertStringContainsString('text/csv', (string) $response->headers->get('Content-Type'));
+        $this->assertStringContainsString('financial-reconciliation-audit-', (string) $response->headers->get('Content-Disposition'));
     }
 }
