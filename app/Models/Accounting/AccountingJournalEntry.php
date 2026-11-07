@@ -116,6 +116,38 @@ class AccountingJournalEntry extends Model
     }
 
     /**
+     * @return HasMany<AccountingJournalEntry, $this>
+     */
+    public function reversedEntries(): HasMany
+    {
+        return $this->hasMany(self::class, 'reversal_journal_id');
+    }
+
+    /**
+     * Alias for journal_number to match standard accounting nomenclature and resource schemas.
+     */
+    public function getEntryNumberAttribute(): ?string
+    {
+        return $this->journal_number;
+    }
+
+    /**
+     * Computed total debit amount across all lines.
+     */
+    public function getTotalDebitAttribute(): float
+    {
+        return (float) $this->lines->sum('debit');
+    }
+
+    /**
+     * Computed total credit amount across all lines.
+     */
+    public function getTotalCreditAttribute(): float
+    {
+        return (float) $this->lines->sum('credit');
+    }
+
+    /**
      * @return BelongsTo<User, $this>
      */
     public function createdByUser(): BelongsTo
