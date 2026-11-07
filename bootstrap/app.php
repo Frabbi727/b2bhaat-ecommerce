@@ -15,10 +15,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->append(AuditRequestContextMiddleware::class);
-
         $middleware->web(append: [
             SecurityHeadersMiddleware::class,
+            AuditRequestContextMiddleware::class,
+        ]);
+
+        $middleware->api(append: [
+            AuditRequestContextMiddleware::class,
         ]);
 
         $middleware->redirectGuestsTo(function (Request $request): string {

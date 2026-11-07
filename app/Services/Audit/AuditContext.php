@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Audit;
 
 use App\Models\User;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
 class AuditContext
@@ -62,6 +63,24 @@ class AuditContext
      */
     public function snapshot(): array
     {
+        $actor = $this->actor ?? request()?->user();
+        if ($this->actor === null && $actor !== null) {
+            $this->actor = $actor;
+        }
+
+        $guard = $this->authGuard;
+        if ($guard === null && $actor !== null) {
+            $guard = Auth::guard('web')->check() ? 'web' : (Auth::guard('sanctum')->check() ? 'sanctum' : null);
+            $this->authGuard = $guard;
+        }
+
+        $routeName = $this->routeName ?? request()?->route()?->getName();
+        if ($this->routeName === null && $routeName !== null) {
+            $this->routeName = $routeName;
+        }
+
+        $actorRole = $actor?->role?->slug;
+
         return [
             'correlation_id' => $this->correlationId ?: (string) Str::uuid(),
             'ip_address' => $this->ipAddress,
@@ -71,12 +90,12 @@ class AuditContext
             'os' => $this->os,
             'request_method' => $this->requestMethod,
             'request_url' => $this->requestUrl,
-            'route_name' => $this->routeName,
-            'actor_id' => $this->actor?->id,
-            'actor_name' => $this->actor?->name,
-            'actor_email' => $this->actor?->email,
-            'actor_role' => $this->actor?->role?->slug,
-            'auth_guard' => $this->authGuard,
+            'route_name' => $routeName,
+            'actor_id' => $actor?->id,
+            'actor_name' => $actor?->name,
+            'actor_email' => $actor?->email,
+            'actor_role' => $actorRole,
+            'auth_guard' => $guard,
         ];
     }
 }
