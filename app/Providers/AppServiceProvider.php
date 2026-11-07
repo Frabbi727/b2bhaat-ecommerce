@@ -10,6 +10,7 @@ use App\Events\Promotions\FlashSaleSubmissionDecidedEvent;
 use App\Events\Sellers\SellerKycDecidedEvent;
 use App\Events\Sellers\SellerRegisteredEvent;
 use App\Events\Sellers\WholesaleKycDecidedEvent;
+use App\Listeners\Accounting\RecordCustomerRefundDisbursedListener;
 use App\Listeners\Audit\AuthAuditListener;
 use App\Listeners\Finance\SendPayoutStatusEmailListener;
 use App\Listeners\Finance\SendRefundSettledEmailListener;
@@ -84,6 +85,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(OrderPlacedEvent::class, SendSellerNewConsignmentEmailListener::class);
         Event::listen(ConsignmentStatusUpdatedEvent::class, SendParcelTrackingEmailListener::class);
         Event::listen(RefundSettledEvent::class, SendRefundSettledEmailListener::class);
+        Event::listen(RefundSettledEvent::class, RecordCustomerRefundDisbursedListener::class);
         Event::listen(PayoutStatusUpdatedEvent::class, SendPayoutStatusEmailListener::class);
         Event::listen(SellerRegisteredEvent::class, SendSellerRegistrationEmailListener::class);
         Event::listen(SellerKycDecidedEvent::class, SendSellerKycDecisionEmailListener::class);

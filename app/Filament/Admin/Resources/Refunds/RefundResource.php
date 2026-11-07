@@ -7,6 +7,7 @@ namespace App\Filament\Admin\Resources\Refunds;
 use App\Events\Finance\RefundSettledEvent;
 use App\Filament\Admin\Resources\Refunds\Pages\ListRefunds;
 use App\Models\Refund;
+use App\Services\Accounting\EventPipeline\CustomerRefundDisbursementJournalHandler;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
@@ -99,6 +100,8 @@ class RefundResource extends Resource
                                 'reference' => trim((string) $data['reference']),
                                 'paid_at' => now(),
                             ]);
+
+                            app(CustomerRefundDisbursementJournalHandler::class)->recordRefundDisbursed($locked);
 
                             return true;
                         });
