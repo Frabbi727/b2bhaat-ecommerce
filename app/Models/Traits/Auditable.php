@@ -4,18 +4,13 @@ declare(strict_types=1);
 
 namespace App\Models\Traits;
 
+use App\Models\Product;
+use App\Models\SubOrder;
 use App\Services\Audit\AuditService;
 use Illuminate\Database\Eloquent\Model;
 
 trait Auditable
 {
-    /** @var array<string> */
-    protected array $auditIgnoredAttributes = [
-        'updated_at',
-        'views_count',
-        'sales_count',
-    ];
-
     public static function bootAuditable(): void
     {
         static::created(function (Model $model): void {
@@ -95,7 +90,14 @@ trait Auditable
 
     public function getAuditRecordLabel(): ?string
     {
-        return $this->sku ?? $this->order_number ?? $this->sub_order_number ?? (string) $this->getKey();
+        return $this->sku
+            ?? $this->order_number
+            ?? $this->sub_order_number
+            ?? $this->title
+            ?? $this->store_name
+            ?? $this->key
+            ?? $this->name
+            ?? (string) $this->getKey();
     }
 
     public function resolveAuditSellerId(): ?int
@@ -106,11 +108,25 @@ trait Auditable
         if (isset($this->user_id) && class_basename($this) === 'SellerProfile') {
             return (int) $this->user_id;
         }
-        if (method_exists($this, 'product') && $this->product?->seller_id) {
-            return (int) $this->product->seller_id;
+        if (method_exists($this, 'product')) {
+            if ($this->relationLoaded('product')) {
+                return $this->product?->seller_id !== null ? (int) $this->product->seller_id : null;
+            }
+            if (isset($this->product_id)) {
+                $sellerId = Product::query()->whereKey($this->product_id)->value('seller_id');
+
+                return $sellerId !== null ? (int) $sellerId : null;
+            }
         }
-        if (method_exists($this, 'subOrder') && $this->subOrder?->seller_id) {
-            return (int) $this->subOrder->seller_id;
+        if (method_exists($this, 'subOrder')) {
+            if ($this->relationLoaded('subOrder')) {
+                return $this->subOrder?->seller_id !== null ? (int) $this->subOrder->seller_id : null;
+            }
+            if (isset($this->sub_order_id)) {
+                $sellerId = SubOrder::query()->whereKey($this->sub_order_id)->value('seller_id');
+
+                return $sellerId !== null ? (int) $sellerId : null;
+            }
         }
 
         return null;
@@ -121,6 +137,10 @@ trait Auditable
      */
     public function getAuditIgnoredAttributes(): array
     {
-        return $this->auditIgnoredAttributes;
+        $default = ['updated_at', 'views_count', 'sales_count'];
+
+        return property_exists($this, 'auditIgnoredAttributes')
+            ? array_values(array_unique(array_merge($default, (array) $this->auditIgnoredAttributes)))
+            : $default;
     }
 }

@@ -6,12 +6,20 @@ namespace Tests\Feature\Audit;
 
 use App\Models\AuditLog;
 use App\Models\Category;
+use App\Models\FulfillmentStatus;
+use App\Models\Order;
+use App\Models\OrderStatus;
+use App\Models\PaymentMethod;
+use App\Models\PaymentStatus;
 use App\Models\Product;
 use App\Models\ProductPrice;
+use App\Models\ProductVariation;
+use App\Models\Refund;
 use App\Models\Role;
 use App\Models\SalesChannel;
 use App\Models\SellerProfile;
 use App\Models\StoreSetting;
+use App\Models\SubOrder;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -84,6 +92,7 @@ class AuditableTraitTest extends TestCase
         $this->assertNotNull($createLog);
         $this->assertEquals($seller->id, $createLog->seller_id);
         $this->assertEquals('products', $createLog->module);
+        $this->assertEquals('Initial Title', $createLog->record_label);
 
         // Updated
         $product->update([
@@ -139,6 +148,84 @@ class AuditableTraitTest extends TestCase
 
         $this->assertNotNull($priceLog);
         $this->assertEquals($seller->id, $priceLog->seller_id);
+    }
+
+    public function test_product_variation_resolves_seller_id_via_parent_product(): void
+    {
+        $sellerRole = Role::firstOrCreate(['slug' => 'seller'], ['name' => 'Seller']);
+        $seller = User::factory()->create(['role_id' => $sellerRole->id]);
+
+        $product = $this->createProduct([
+            'seller_id' => $seller->id,
+            'title' => 'Product For Variation',
+            'regular_price' => 120.00,
+        ]);
+
+        $variation = ProductVariation::create([
+            'product_id' => $product->id,
+            'sku' => 'TEST-VAR-99',
+            'stock_quantity' => 25,
+            'buy_price' => 60.00,
+            'is_active' => true,
+        ]);
+
+        $variationLog = AuditLog::where('auditable_type', ProductVariation::class)
+            ->where('auditable_id', $variation->id)
+            ->where('action', 'created')
+            ->first();
+
+        $this->assertNotNull($variationLog);
+        $this->assertSame($seller->id, $variationLog->seller_id);
+        $this->assertSame('products', $variationLog->module);
+        $this->assertSame('TEST-VAR-99', $variationLog->record_label);
+    }
+
+    public function test_refund_resolves_seller_id_via_sub_order(): void
+    {
+        $sellerRole = Role::firstOrCreate(['slug' => 'seller'], ['name' => 'Seller']);
+        $seller = User::factory()->create(['role_id' => $sellerRole->id]);
+
+        $orderStatus = OrderStatus::firstOrCreate(['slug' => 'pending'], ['name' => 'Pending']);
+        $paymentStatus = PaymentStatus::firstOrCreate(['slug' => 'paid'], ['name' => 'Paid']);
+        $paymentMethod = PaymentMethod::firstOrCreate(['slug' => 'cod'], ['name' => 'Cash On Delivery']);
+        $fulfillmentStatus = FulfillmentStatus::firstOrCreate(['slug' => 'unfulfilled'], ['name' => 'Unfulfilled']);
+
+        $order = Order::create([
+            'order_number' => 'ORD-'.uniqid(),
+            'customer_id' => $seller->id,
+            'order_status_id' => $orderStatus->id,
+            'payment_status_id' => $paymentStatus->id,
+            'payment_method_id' => $paymentMethod->id,
+            'shipping_address' => ['address' => 'Dhaka'],
+            'total_amount' => 500.00,
+        ]);
+
+        $subOrder = SubOrder::create([
+            'parent_order_id' => $order->id,
+            'seller_id' => $seller->id,
+            'sub_order_number' => 'SUB-'.uniqid(),
+            'fulfillment_status_id' => $fulfillmentStatus->id,
+            'subtotal' => 500.00,
+            'commission_amount' => 50.00,
+        ]);
+
+        $refund = Refund::create([
+            'order_id' => $order->id,
+            'sub_order_id' => $subOrder->id,
+            'amount' => 100.00,
+            'reason' => 'Defective piece',
+            'status' => 'pending',
+            'method' => 'bkash',
+        ]);
+
+        $refundLog = AuditLog::where('auditable_type', Refund::class)
+            ->where('auditable_id', $refund->id)
+            ->where('action', 'created')
+            ->first();
+
+        $this->assertNotNull($refundLog);
+        $this->assertSame($seller->id, $refundLog->seller_id);
+        $this->assertSame('finance', $refundLog->module);
     }
 
     public function test_ignored_attributes_do_not_trigger_updated_audit_log(): void
@@ -205,6 +292,7 @@ class AuditableTraitTest extends TestCase
         $this->assertNotNull($log);
         $this->assertSame('sellers', $log->module);
         $this->assertSame($seller->id, $log->seller_id);
+        $this->assertSame('Super Factory', $log->record_label);
     }
 
     public function test_store_setting_audit_module_and_null_seller_id(): void
@@ -225,5 +313,6 @@ class AuditableTraitTest extends TestCase
         $this->assertNotNull($log);
         $this->assertSame('settings', $log->module);
         $this->assertNull($log->seller_id);
+        $this->assertSame('vat_percentage', $log->record_label);
     }
 }
