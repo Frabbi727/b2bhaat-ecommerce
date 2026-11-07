@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\Accounting;
 
+use App\Models\Refund;
 use App\Models\SellerWallet;
 use App\Models\User;
+use App\Models\WalletTransaction;
 
 class AccountingReconciliationService
 {
@@ -26,6 +28,9 @@ class AccountingReconciliationService
      *     escrow_wallet_balance: float,
      *     escrow_ledger_balance: float,
      *     escrow_discrepancy: float,
+     *     reserved_wallet_balance: float,
+     *     reserved_ledger_balance: float,
+     *     reserved_discrepancy: float,
      *     seller_id: int
      * }
      */
@@ -42,6 +47,15 @@ class AccountingReconciliationService
         $discrepancy = round($walletBalance - $ledgerBalance, 2);
         $escrowDiscrepancy = round($escrowWalletBalance - $escrowLedgerBalance, 2);
 
+        $reservedLedgerBalance = $this->generalLedgerService->getBalanceForSlug('reserved_payout_payable', sellerId: $seller->id);
+        $reservedWalletBalance = $wallet
+            ? (float) WalletTransaction::where('seller_wallet_id', $wallet->id)
+                ->where('transaction_type', WalletTransaction::TYPE_PAYOUT)
+                ->where('status', WalletTransaction::STATUS_REQUESTED)
+                ->sum('amount')
+            : 0.0;
+        $reservedDiscrepancy = $this->normalizeZero(round($reservedWalletBalance - $reservedLedgerBalance, 2));
+
         $walletBalance = $this->normalizeZero($walletBalance);
         $ledgerBalance = $this->normalizeZero($ledgerBalance);
         $discrepancy = $this->normalizeZero($discrepancy);
@@ -50,7 +64,10 @@ class AccountingReconciliationService
         $escrowLedgerBalance = $this->normalizeZero($escrowLedgerBalance);
         $escrowDiscrepancy = $this->normalizeZero($escrowDiscrepancy);
 
-        $isReconciled = ($discrepancy === 0.00 && $escrowDiscrepancy === 0.00);
+        $reservedWalletBalance = $this->normalizeZero($reservedWalletBalance);
+        $reservedLedgerBalance = $this->normalizeZero($reservedLedgerBalance);
+
+        $isReconciled = ($discrepancy === 0.00 && $escrowDiscrepancy === 0.00 && $reservedDiscrepancy === 0.00);
 
         return [
             'is_reconciled' => $isReconciled,
@@ -60,7 +77,60 @@ class AccountingReconciliationService
             'escrow_wallet_balance' => $escrowWalletBalance,
             'escrow_ledger_balance' => $escrowLedgerBalance,
             'escrow_discrepancy' => $escrowDiscrepancy,
+            'reserved_wallet_balance' => $reservedWalletBalance,
+            'reserved_ledger_balance' => $reservedLedgerBalance,
+            'reserved_discrepancy' => $reservedDiscrepancy,
             'seller_id' => (int) $seller->id,
+        ];
+    }
+
+    /**
+     * Reconcile system-wide pending seller payouts against the reserved payout payable liability account.
+     *
+     * @return array{
+     *     is_reconciled: bool,
+     *     total_pending_payouts: float,
+     *     ledger_reserved_balance: float,
+     *     discrepancy: float
+     * }
+     */
+    public function verifyReservedPayouts(): array
+    {
+        $totalPending = (float) WalletTransaction::where('transaction_type', WalletTransaction::TYPE_PAYOUT)
+            ->where('status', WalletTransaction::STATUS_REQUESTED)
+            ->sum('amount');
+        $ledgerBalance = $this->generalLedgerService->getBalanceForSlug('reserved_payout_payable');
+        $discrepancy = $this->normalizeZero(round($totalPending - $ledgerBalance, 2));
+
+        return [
+            'is_reconciled' => $discrepancy === 0.00,
+            'total_pending_payouts' => $this->normalizeZero($totalPending),
+            'ledger_reserved_balance' => $this->normalizeZero($ledgerBalance),
+            'discrepancy' => $discrepancy,
+        ];
+    }
+
+    /**
+     * Reconcile system-wide pending customer refunds against the customer refund payable liability account.
+     *
+     * @return array{
+     *     is_reconciled: bool,
+     *     total_pending_refunds: float,
+     *     ledger_refund_payable_balance: float,
+     *     discrepancy: float
+     * }
+     */
+    public function verifyCustomerRefundPayables(): array
+    {
+        $totalPending = (float) Refund::where('status', Refund::STATUS_PENDING)->sum('amount');
+        $ledgerBalance = $this->generalLedgerService->getBalanceForSlug('customer_refund_payable');
+        $discrepancy = $this->normalizeZero(round($totalPending - $ledgerBalance, 2));
+
+        return [
+            'is_reconciled' => $discrepancy === 0.00,
+            'total_pending_refunds' => $this->normalizeZero($totalPending),
+            'ledger_refund_payable_balance' => $this->normalizeZero($ledgerBalance),
+            'discrepancy' => $discrepancy,
         ];
     }
 
@@ -79,6 +149,9 @@ class AccountingReconciliationService
      *         escrow_wallet_balance: float,
      *         escrow_ledger_balance: float,
      *         escrow_discrepancy: float,
+     *         reserved_wallet_balance: float,
+     *         reserved_ledger_balance: float,
+     *         reserved_discrepancy: float,
      *         seller_id: int
      *     }>
      * }
