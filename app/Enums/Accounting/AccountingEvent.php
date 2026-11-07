@@ -14,4 +14,8 @@ enum AccountingEvent: string
     case SUBSCRIPTION_PAID = 'subscription_paid';
     case LISTING_PACK_PAID = 'listing_pack_paid';
     case MANUAL_JOURNAL = 'manual_journal';
+    case PAYOUT_REQUESTED = 'payout_requested';
+    case PAYOUT_DISBURSED = 'payout_disbursed';
+    case PAYOUT_REJECTED = 'payout_rejected';
+    case CUSTOMER_REFUND_DISBURSED = 'customer_refund_disbursed';
 }
