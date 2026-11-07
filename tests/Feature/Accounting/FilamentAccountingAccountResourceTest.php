@@ -57,6 +57,7 @@ class FilamentAccountingAccountResourceTest extends TestCase
         $response->assertSee('1010');
         $response->assertSee('Bank Account (Platform Operating)');
         $response->assertSee('1020');
+        $response->assertSee('Current Assets');
 
         Livewire::test(ListAccountingAccounts::class)
             ->assertSuccessful()
@@ -208,6 +209,7 @@ class FilamentAccountingAccountResourceTest extends TestCase
             ->assertFormFieldIsDisabled('code')
             ->assertFormFieldIsDisabled('type')
             ->assertFormFieldIsDisabled('normal_balance')
+            ->assertFormFieldIsDisabled('is_active')
             ->fillForm([
                 'name' => 'Cash in Hand (HQ & Retail)',
                 'description' => 'Updated operational cash description',
@@ -220,5 +222,85 @@ class FilamentAccountingAccountResourceTest extends TestCase
         $this->assertSame('1010', $systemAccount->code);
         $this->assertSame(AccountType::ASSET, $systemAccount->type);
         $this->assertTrue($systemAccount->is_system);
+        $this->assertTrue($systemAccount->is_active);
+    }
+
+    public function test_editing_custom_account_with_journal_lines_disables_structural_fields(): void
+    {
+        $this->seed(AccountingChartOfAccountsSeeder::class);
+
+        $group = AccountingAccountGroup::where('code_prefix', '10')->firstOrFail();
+        $customAccount = AccountingAccount::create([
+            'group_id' => $group->id,
+            'code' => '1096',
+            'name' => 'Used Custom Active Account',
+            'type' => AccountType::ASSET,
+            'normal_balance' => NormalBalance::DEBIT,
+            'is_system' => false,
+            'is_active' => true,
+        ]);
+
+        $year = AccountingFiscalYear::create(['name' => 'FY 2026', 'start_date' => '2026-01-01', 'end_date' => '2026-12-31']);
+        $period = AccountingPeriod::create(['fiscal_year_id' => $year->id, 'period_number' => 1, 'name' => 'Jan 2026', 'start_date' => '2026-01-01', 'end_date' => '2026-01-31']);
+
+        $entry = AccountingJournalEntry::create([
+            'journal_number' => 'JRN-202601-000098',
+            'period_id' => $period->id,
+            'entry_date' => '2026-01-15',
+            'posting_date' => now(),
+            'status' => JournalEntryStatus::DRAFT->value,
+            'financial_event' => 'manual_journal',
+            'idempotency_key' => 'idemp_edit_guard_1',
+            'description' => 'Test entry for edit guard',
+        ]);
+
+        AccountingJournalLine::create([
+            'journal_entry_id' => $entry->id,
+            'account_id' => $customAccount->id,
+            'debit' => 50.00,
+            'credit' => 0.00,
+        ]);
+
+        Livewire::test(EditAccountingAccount::class, ['record' => $customAccount->getKey()])
+            ->assertFormFieldIsDisabled('account_group_id')
+            ->assertFormFieldIsDisabled('code')
+            ->assertFormFieldIsDisabled('type')
+            ->assertFormFieldIsDisabled('normal_balance')
+            ->assertFormFieldIsEnabled('name')
+            ->assertFormFieldIsEnabled('description')
+            ->assertFormFieldIsEnabled('is_active');
+    }
+
+    public function test_parent_account_with_children_cannot_be_deleted(): void
+    {
+        $this->seed(AccountingChartOfAccountsSeeder::class);
+
+        $group = AccountingAccountGroup::where('code_prefix', '10')->firstOrFail();
+        $parentAccount = AccountingAccount::create([
+            'group_id' => $group->id,
+            'code' => '1091',
+            'name' => 'Parent Custom Account',
+            'type' => AccountType::ASSET,
+            'normal_balance' => NormalBalance::DEBIT,
+            'is_system' => false,
+            'is_active' => true,
+        ]);
+
+        $childAccount = AccountingAccount::create([
+            'group_id' => $group->id,
+            'parent_id' => $parentAccount->id,
+            'code' => '1092',
+            'name' => 'Child Custom Account',
+            'type' => AccountType::ASSET,
+            'normal_balance' => NormalBalance::DEBIT,
+            'is_system' => false,
+            'is_active' => true,
+        ]);
+
+        Livewire::test(ListAccountingAccounts::class)
+            ->assertTableActionHidden(DeleteAction::class, $parentAccount);
+
+        $this->assertFalse($parentAccount->delete());
+        $this->assertDatabaseHas('accounting_accounts', ['id' => $parentAccount->id]);
     }
 }

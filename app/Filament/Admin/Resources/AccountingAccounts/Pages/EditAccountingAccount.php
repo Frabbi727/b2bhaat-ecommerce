@@ -25,15 +25,20 @@ class EditAccountingAccount extends EditRecord
      */
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        if ($this->getRecord()->is_system) {
+        $record = $this->getRecord();
+
+        if ($record->is_system || $record->journalLines()->exists()) {
             unset(
                 $data['code'],
                 $data['type'],
                 $data['normal_balance'],
-                $data['is_system'],
                 $data['account_group_id'],
                 $data['group_id']
             );
+        }
+
+        if ($record->is_system) {
+            unset($data['is_system'], $data['is_active']);
         }
 
         if (isset($data['account_group_id']) && ! isset($data['group_id'])) {

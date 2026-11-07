@@ -61,6 +61,10 @@ class AccountingAccount extends Model
                 return false;
             }
 
+            if ($account->children()->exists()) {
+                return false;
+            }
+
             return true;
         });
     }

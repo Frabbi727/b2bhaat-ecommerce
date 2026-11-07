@@ -18,6 +18,8 @@ class AccountingAccountForm
 {
     public static function configure(Schema $schema): Schema
     {
+        $isImmutable = fn (?AccountingAccount $record): bool => (bool) ($record?->is_system || ($record?->exists && $record->journalLines()->exists()));
+
         return $schema
             ->components([
                 Section::make('Account Information')
@@ -29,20 +31,20 @@ class AccountingAccountForm
                             ->required()
                             ->searchable()
                             ->preload()
-                            ->disabled(fn (?AccountingAccount $record) => (bool) $record?->is_system),
+                            ->disabled($isImmutable),
 
                         Select::make('type')
                             ->label('Account Type')
                             ->options(collect(AccountType::cases())->mapWithKeys(fn (AccountType $type) => [$type->value => ucfirst($type->value)]))
                             ->required()
-                            ->disabled(fn (?AccountingAccount $record) => (bool) $record?->is_system),
+                            ->disabled($isImmutable),
 
                         TextInput::make('code')
                             ->label('Account Code')
                             ->numeric()
                             ->required()
                             ->unique(ignoreRecord: true)
-                            ->disabled(fn (?AccountingAccount $record) => (bool) $record?->is_system),
+                            ->disabled($isImmutable),
 
                         TextInput::make('name')
                             ->label('Account Name')
@@ -53,11 +55,12 @@ class AccountingAccountForm
                             ->label('Normal Balance')
                             ->options(collect(NormalBalance::cases())->mapWithKeys(fn (NormalBalance $nb) => [$nb->value => ucfirst($nb->value)]))
                             ->required()
-                            ->disabled(fn (?AccountingAccount $record) => (bool) $record?->is_system),
+                            ->disabled($isImmutable),
 
                         Toggle::make('is_active')
                             ->label('Active')
-                            ->default(true),
+                            ->default(true)
+                            ->disabled(fn (?AccountingAccount $record): bool => (bool) $record?->is_system),
 
                         Textarea::make('description')
                             ->label('Description')

@@ -36,6 +36,11 @@ class AccountingAccountsTable
                     ->sortable()
                     ->weight('medium'),
 
+                TextColumn::make('group.name')
+                    ->label('Account Group')
+                    ->sortable()
+                    ->toggleable(),
+
                 TextColumn::make('type')
                     ->label('Type')
                     ->badge()
@@ -64,7 +69,8 @@ class AccountingAccountsTable
                     ->sortable(),
 
                 ToggleColumn::make('is_active')
-                    ->label('Active'),
+                    ->label('Active')
+                    ->disabled(fn (?AccountingAccount $record): bool => (bool) $record?->is_system),
 
                 TextColumn::make('description')
                     ->label('Description')
@@ -95,6 +101,6 @@ class AccountingAccountsTable
     public static function deleteAction(): DeleteAction
     {
         return DeleteAction::make()
-            ->visible(fn (AccountingAccount $record): bool => ! $record->is_system && $record->lines()->doesntExist());
+            ->visible(fn (AccountingAccount $record): bool => ! $record->is_system && $record->lines()->doesntExist() && $record->children()->doesntExist());
     }
 }
