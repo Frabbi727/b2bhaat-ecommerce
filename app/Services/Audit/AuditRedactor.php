@@ -17,6 +17,10 @@ class AuditRedactor
         'otp_code',
         'api_key',
         'secret',
+        'secret_key',
+        'private_key',
+        'encryption_key',
+        'pin',
         'sms_gateway_password',
         'card_number',
         'cvv',
@@ -28,19 +32,23 @@ class AuditRedactor
      * @param  array<string, mixed>|null  $data
      * @return array<string, mixed>|null
      */
-    public function redact(?array $data): ?array
+    public function redact(?array $data, int $maxDepth = 20, int $depth = 0): ?array
     {
         if ($data === null) {
             return null;
         }
 
+        if ($depth >= $maxDepth) {
+            return ['[MAX_DEPTH_REACHED]'];
+        }
+
         $redacted = [];
         foreach ($data as $key => $value) {
-            $lowerKey = strtolower((string) $key);
-            if ($this->isBlacklisted($lowerKey)) {
+            $stringKey = (string) $key;
+            if ($this->isBlacklisted($stringKey)) {
                 $redacted[$key] = '[REDACTED]';
             } elseif (is_array($value)) {
-                $redacted[$key] = $this->redact($value);
+                $redacted[$key] = $this->redact($value, $maxDepth, $depth + 1);
             } else {
                 $redacted[$key] = $value;
             }
@@ -51,8 +59,11 @@ class AuditRedactor
 
     protected function isBlacklisted(string $key): bool
     {
+        $normalized = strtolower(str_replace(['-', '_'], '', $key));
+
         foreach ($this->blacklistedKeys as $blacklisted) {
-            if ($key === $blacklisted || str_ends_with($key, '_'.$blacklisted)) {
+            $normalizedBlacklisted = strtolower(str_replace(['-', '_'], '', $blacklisted));
+            if ($normalized === $normalizedBlacklisted || str_ends_with($normalized, $normalizedBlacklisted)) {
                 return true;
             }
         }
