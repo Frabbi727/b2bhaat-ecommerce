@@ -71,7 +71,6 @@ trait Auditable
             'new_values' => $new,
             'changed_fields' => $new ? array_keys($new) : null,
             'status' => 'success',
-            'sync' => true, // In tests / direct observer calls, sync guarantees immediate persistence
         ]);
     }
 

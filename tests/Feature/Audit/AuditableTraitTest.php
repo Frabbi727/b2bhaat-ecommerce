@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature\Audit;
 
 use App\Models\AuditLog;
+use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductPrice;
 use App\Models\Role;
+use App\Models\SalesChannel;
 use App\Models\SellerProfile;
 use App\Models\StoreSetting;
+use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -17,6 +20,46 @@ use Tests\TestCase;
 class AuditableTraitTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected Category $category;
+
+    protected SalesChannel $retailChannel;
+
+    protected Unit $unit;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->category = Category::firstOrCreate(
+            ['slug' => 'general'],
+            ['name' => 'General', 'is_active' => true]
+        );
+        $this->retailChannel = SalesChannel::firstOrCreate(
+            ['slug' => SalesChannel::RETAIL],
+            ['name' => 'Retail', 'is_active' => true]
+        );
+        $this->unit = Unit::firstOrCreate(
+            ['symbol' => 'pc'],
+            ['name' => 'Piece', 'symbol' => 'pc']
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    protected function createProduct(array $attributes = []): Product
+    {
+        return Product::create(array_merge([
+            'category_id' => $this->category->id,
+            'sales_channel_id' => $this->retailChannel->id,
+            'unit_id' => $this->unit->id,
+            'slug' => 'product-'.uniqid(),
+            'title' => 'Sample Product',
+            'regular_price' => 100.00,
+            'is_active' => true,
+        ], $attributes));
+    }
 
     public function test_product_lifecycle_automatically_logs_diffs_and_seller_id(): void
     {
@@ -26,7 +69,7 @@ class AuditableTraitTest extends TestCase
         $this->actingAs($seller);
 
         // Created
-        $product = Product::create([
+        $product = $this->createProduct([
             'seller_id' => $seller->id,
             'title' => 'Initial Title',
             'regular_price' => 100.00,
@@ -75,7 +118,7 @@ class AuditableTraitTest extends TestCase
         $sellerRole = Role::firstOrCreate(['slug' => 'seller'], ['name' => 'Seller']);
         $seller = User::factory()->create(['role_id' => $sellerRole->id]);
 
-        $product = Product::create([
+        $product = $this->createProduct([
             'seller_id' => $seller->id,
             'title' => 'Product For Price',
             'regular_price' => 100.00,
@@ -83,6 +126,7 @@ class AuditableTraitTest extends TestCase
 
         $price = ProductPrice::create([
             'product_id' => $product->id,
+            'sales_channel_id' => $this->retailChannel->id,
             'min_quantity' => 10,
             'max_quantity' => 50,
             'unit_price' => 85.00,
@@ -102,7 +146,7 @@ class AuditableTraitTest extends TestCase
         $sellerRole = Role::firstOrCreate(['slug' => 'seller'], ['name' => 'Seller']);
         $seller = User::factory()->create(['role_id' => $sellerRole->id]);
 
-        $product = Product::create([
+        $product = $this->createProduct([
             'seller_id' => $seller->id,
             'title' => 'Product For Ignore Test',
             'regular_price' => 100.00,
