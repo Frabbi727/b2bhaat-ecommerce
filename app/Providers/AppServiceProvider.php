@@ -20,6 +20,8 @@ use App\Listeners\Promotions\SendFlashSaleSubmissionEmailListener;
 use App\Listeners\Sellers\SendSellerKycDecisionEmailListener;
 use App\Listeners\Sellers\SendSellerRegistrationEmailListener;
 use App\Listeners\Sellers\SendWholesaleDecisionEmailListener;
+use App\Models\AuditLog;
+use App\Policies\AuditLogPolicy;
 use App\Services\Audit\AuditContext;
 use App\Services\Promotions\FlashSalePricing;
 use App\Services\Sms\Contracts\SmsGatewayInterface;
@@ -30,6 +32,7 @@ use Illuminate\Auth\Events\Logout;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -65,6 +68,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Gate::policy(AuditLog::class, AuditLogPolicy::class);
+
         RateLimiter::for('api', fn (Request $request) => Limit::perMinute(60)->by($request->ip()));
 
         RateLimiter::for('login', fn (Request $request) => Limit::perMinute(5)
