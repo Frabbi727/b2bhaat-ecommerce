@@ -15,6 +15,8 @@ class UserAgentParser
             return ['device_type' => 'unknown', 'browser' => 'Unknown', 'os' => 'Unknown'];
         }
 
+        $ua = substr($ua, 0, 500);
+
         $deviceType = 'desktop';
         if (preg_match('/(ipad|tablet|(android(?!.*mobile))|(windows(?!.*phone)(.*touch))|kindle|playbook|silk)/i', $ua)) {
             $deviceType = 'tablet';
@@ -38,14 +40,14 @@ class UserAgentParser
         $browser = 'Unknown';
         if (preg_match('/edg\//i', $ua)) {
             $browser = 'Edge';
-        } elseif (preg_match('/chrome|crios/i', $ua) && ! preg_match('/opr|opera/i', $ua)) {
+        } elseif (preg_match('/opr|opera/i', $ua)) {
+            $browser = 'Opera';
+        } elseif (preg_match('/chrome|crios/i', $ua)) {
             $browser = 'Chrome';
         } elseif (preg_match('/firefox|fxios/i', $ua)) {
             $browser = 'Firefox';
-        } elseif (preg_match('/safari/i', $ua) && ! preg_match('/chrome|crios/i', $ua)) {
+        } elseif (preg_match('/safari/i', $ua)) {
             $browser = 'Safari';
-        } elseif (preg_match('/opr|opera/i', $ua)) {
-            $browser = 'Opera';
         }
 
         return [

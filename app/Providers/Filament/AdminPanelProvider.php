@@ -6,6 +6,7 @@ use App\Filament\Admin\Widgets\AdminFulfillmentDistributionChart;
 use App\Filament\Admin\Widgets\AdminOrdersRevenueChart;
 use App\Filament\Admin\Widgets\AdminStatsOverview;
 use App\Filament\Admin\Widgets\LatestOrdersWidget;
+use App\Http\Middleware\AuditRequestContextMiddleware;
 use App\Services\Settings\StoreConfigurationService;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -67,6 +68,7 @@ class AdminPanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
+                AuditRequestContextMiddleware::class,
             ])
             ->authMiddleware([
                 Authenticate::class,

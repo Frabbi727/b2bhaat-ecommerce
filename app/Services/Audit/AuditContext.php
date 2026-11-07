@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Audit;
 
 use App\Models\User;
+use App\Services\Audit\Support\UserAgentParser;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
@@ -58,6 +59,21 @@ class AuditContext
         $this->authGuard = $authGuard;
     }
 
+    public function reset(): void
+    {
+        $this->correlationId = null;
+        $this->ipAddress = null;
+        $this->userAgent = null;
+        $this->deviceType = null;
+        $this->browser = null;
+        $this->os = null;
+        $this->requestMethod = null;
+        $this->requestUrl = null;
+        $this->routeName = null;
+        $this->actor = null;
+        $this->authGuard = null;
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -79,17 +95,62 @@ class AuditContext
             $this->routeName = $routeName;
         }
 
+        $ipAddress = $this->ipAddress ?? request()?->ip();
+        if ($this->ipAddress === null && $ipAddress !== null) {
+            $this->ipAddress = $ipAddress;
+        }
+
+        $requestMethod = $this->requestMethod ?? request()?->method();
+        if ($this->requestMethod === null && $requestMethod !== null) {
+            $this->requestMethod = $requestMethod;
+        }
+
+        $requestUrl = $this->requestUrl ?? request()?->fullUrl();
+        if ($this->requestUrl === null && $requestUrl !== null) {
+            $this->requestUrl = $requestUrl;
+        }
+
+        $rawUa = $this->userAgent ?? request()?->userAgent();
+        $userAgent = $rawUa ? Str::limit($rawUa, 500, '') : null;
+        if ($this->userAgent === null && $userAgent !== null) {
+            $this->userAgent = $userAgent;
+        }
+
+        $deviceType = $this->deviceType;
+        $browser = $this->browser;
+        $os = $this->os;
+
+        if (($deviceType === null || $browser === null || $os === null) && $rawUa !== null) {
+            $parsedUa = UserAgentParser::parse($rawUa);
+            $deviceType ??= $parsedUa['device_type'];
+            $browser ??= $parsedUa['browser'];
+            $os ??= $parsedUa['os'];
+
+            $this->deviceType ??= $deviceType;
+            $this->browser ??= $browser;
+            $this->os ??= $os;
+        }
+
+        $headerCorrelationId = request()?->header('X-Correlation-ID');
+        $correlationId = $this->correlationId
+            ?? ((is_string($headerCorrelationId) && Str::isUuid($headerCorrelationId)) ? $headerCorrelationId : null)
+            ?? (string) Str::uuid();
+
+        if ($this->correlationId === null) {
+            $this->correlationId = $correlationId;
+        }
+
         $actorRole = $actor?->role?->slug;
 
         return [
-            'correlation_id' => $this->correlationId ?: (string) Str::uuid(),
-            'ip_address' => $this->ipAddress,
-            'user_agent' => $this->userAgent,
-            'device_type' => $this->deviceType,
-            'browser' => $this->browser,
-            'os' => $this->os,
-            'request_method' => $this->requestMethod,
-            'request_url' => $this->requestUrl,
+            'correlation_id' => $correlationId,
+            'ip_address' => $ipAddress,
+            'user_agent' => $userAgent,
+            'device_type' => $deviceType,
+            'browser' => $browser,
+            'os' => $os,
+            'request_method' => $requestMethod,
+            'request_url' => $requestUrl,
             'route_name' => $routeName,
             'actor_id' => $actor?->id,
             'actor_name' => $actor?->name,

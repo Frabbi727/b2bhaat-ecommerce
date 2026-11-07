@@ -18,7 +18,11 @@ class AuditRequestContextMiddleware
 
     public function handle(Request $request, Closure $next): Response
     {
-        $correlationId = $request->header('X-Correlation-ID') ?: (string) Str::uuid();
+        $headerCorrelationId = $request->header('X-Correlation-ID');
+        $correlationId = (is_string($headerCorrelationId) && Str::isUuid($headerCorrelationId))
+            ? $headerCorrelationId
+            : (string) Str::uuid();
+
         $request->headers->set('X-Correlation-ID', $correlationId);
         $uaString = $request->userAgent();
         $parsedUa = UserAgentParser::parse($uaString);

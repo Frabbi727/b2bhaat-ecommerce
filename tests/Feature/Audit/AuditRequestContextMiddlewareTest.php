@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Audit\AuditContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class AuditRequestContextMiddlewareTest extends TestCase
@@ -33,19 +34,20 @@ class AuditRequestContextMiddlewareTest extends TestCase
         $user = User::factory()->create(['role_id' => $role->id, 'name' => 'Test Seller']);
 
         $ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+        $validUuid = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d';
 
         $response = $this->actingAs($user)
             ->withHeaders([
                 'User-Agent' => $ua,
-                'X-Correlation-ID' => 'test-correlation-uuid-1234',
+                'X-Correlation-ID' => $validUuid,
             ])
             ->getJson('/test-audit-context');
 
         $response->assertSuccessful();
-        $response->assertHeader('X-Correlation-ID', 'test-correlation-uuid-1234');
+        $response->assertHeader('X-Correlation-ID', $validUuid);
 
         $data = $response->json();
-        $this->assertEquals('test-correlation-uuid-1234', $data['correlation_id']);
+        $this->assertEquals($validUuid, $data['correlation_id']);
         $this->assertNotEmpty($data['ip_address']);
         $this->assertEquals($ua, $data['user_agent']);
         $this->assertEquals('desktop', $data['device_type']);
@@ -84,5 +86,53 @@ class AuditRequestContextMiddlewareTest extends TestCase
         $response->assertSuccessful();
         $data = $response->json();
         $this->assertLessThanOrEqual(500, strlen($data['user_agent']));
+    }
+
+    public function test_middleware_replaces_invalid_correlation_id_with_valid_uuid(): void
+    {
+        $response = $this->withHeaders(['X-Correlation-ID' => 'invalid-non-uuid-string'])
+            ->getJson('/test-audit-context');
+
+        $response->assertSuccessful();
+        $correlationHeader = $response->headers->get('X-Correlation-ID');
+        $this->assertNotNull($correlationHeader);
+        $this->assertTrue(Str::isUuid($correlationHeader));
+        $this->assertNotEquals('invalid-non-uuid-string', $correlationHeader);
+
+        $data = $response->json();
+        $this->assertEquals($correlationHeader, $data['correlation_id']);
+    }
+
+    public function test_audit_context_reset_clears_properties(): void
+    {
+        $context = app(AuditContext::class);
+        $context->initialize(
+            correlationId: (string) Str::uuid(),
+            ipAddress: '192.168.1.1',
+            userAgent: 'test-agent',
+            deviceType: 'mobile',
+            browser: 'Chrome',
+            os: 'Android',
+            requestMethod: 'POST',
+            requestUrl: 'https://example.com/test',
+            routeName: 'test.route',
+        );
+
+        $this->assertNotNull($context->correlationId);
+        $this->assertNotNull($context->ipAddress);
+
+        $context->reset();
+
+        $this->assertNull($context->correlationId);
+        $this->assertNull($context->ipAddress);
+        $this->assertNull($context->userAgent);
+        $this->assertNull($context->deviceType);
+        $this->assertNull($context->browser);
+        $this->assertNull($context->os);
+        $this->assertNull($context->requestMethod);
+        $this->assertNull($context->requestUrl);
+        $this->assertNull($context->routeName);
+        $this->assertNull($context->actor);
+        $this->assertNull($context->authGuard);
     }
 }

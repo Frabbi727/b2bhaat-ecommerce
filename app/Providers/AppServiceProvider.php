@@ -53,7 +53,7 @@ class AppServiceProvider extends ServiceProvider
         // One instance per request (and per queued job), so remembered campaign offers never go stale across requests
         $this->app->scoped(FlashSalePricing::class);
 
-        $this->app->singleton(AuditContext::class);
+        $this->app->scoped(AuditContext::class);
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Filament\Seller\Widgets\SellerRecentOrdersWidget;
 use App\Filament\Seller\Widgets\SellerRevenueChart;
 use App\Filament\Seller\Widgets\SellerStatsOverview;
 use App\Filament\Seller\Widgets\SellerStockAlertsWidget;
+use App\Http\Middleware\AuditRequestContextMiddleware;
 use App\Services\Settings\StoreConfigurationService;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -73,6 +74,7 @@ class SellerPanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
+                AuditRequestContextMiddleware::class,
             ])
             ->authMiddleware([
                 Authenticate::class,
