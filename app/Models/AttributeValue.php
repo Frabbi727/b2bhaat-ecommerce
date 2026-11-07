@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Traits\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class AttributeValue extends Model
 {
+    use Auditable;
+
     protected $fillable = ['attribute_id', 'value', 'color_code'];
 
     public function attribute(): BelongsTo

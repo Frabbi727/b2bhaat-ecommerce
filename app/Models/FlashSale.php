@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Enums\FlashSaleStatus;
 use App\Enums\FlashSaleSubmissionStatus;
 use App\Enums\SellerEligibilityType;
+use App\Models\Traits\Auditable;
 use App\Services\Promotions\FlashSalePricing;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -18,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class FlashSale extends Model
 {
+    use Auditable;
     use HasFactory;
 
     protected $fillable = [

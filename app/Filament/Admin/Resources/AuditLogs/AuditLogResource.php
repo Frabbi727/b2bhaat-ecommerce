@@ -106,6 +106,8 @@ class AuditLogResource extends Resource
                         'kyc' => 'warning',
                         'settings' => 'danger',
                         'catalog' => 'gray',
+                        'communications' => 'purple',
+                        'customer_activity' => 'teal',
                         default => 'gray',
                     })
                     ->sortable(),
@@ -168,6 +170,8 @@ class AuditLogResource extends Resource
                         'finance' => 'Finance & Escrow (finance)',
                         'sellers' => 'Sellers (sellers)',
                         'marketing' => 'Marketing & Flash Sales (marketing)',
+                        'communications' => 'Communications (Email & SMS)',
+                        'customer_activity' => 'Customer Activity & Reviews (customer_activity)',
                         'kyc' => 'KYC Verifications (kyc)',
                         'settings' => 'Settings (settings)',
                         'catalog' => 'Catalog (catalog)',
@@ -214,6 +218,8 @@ class AuditLogResource extends Resource
                                             'kyc' => 'warning',
                                             'settings' => 'danger',
                                             'catalog' => 'gray',
+                                            'communications' => 'purple',
+                                            'customer_activity' => 'teal',
                                             default => 'gray',
                                         }),
 

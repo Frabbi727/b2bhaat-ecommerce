@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\FlashSaleDiscountType;
 use App\Enums\FlashSaleSubmissionStatus;
+use App\Models\Traits\Auditable;
 use App\Services\Promotions\FlashSalePricing;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 
 class FlashSaleProduct extends Model
 {
+    use Auditable;
     use HasFactory;
 
     private const CANCELLED_FULFILLMENT_SLUG = 'cancelled';

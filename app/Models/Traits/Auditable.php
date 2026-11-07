@@ -78,23 +78,30 @@ trait Auditable
         $base = class_basename($this);
 
         return match ($base) {
-            'Product', 'ProductVariation', 'ProductPrice' => 'products',
-            'Order', 'SubOrder' => 'orders',
-            'Refund', 'WalletTransaction', 'SellerWallet' => 'finance',
-            'SellerProfile', 'SellerSubscription' => 'sellers',
-            'Coupon', 'FlashSale' => 'marketing',
-            'StoreSetting', 'SmsSetting' => 'settings',
+            'Product', 'ProductVariation', 'ProductPrice', 'ProductImage' => 'products',
+            'Order', 'SubOrder', 'OrderItem', 'ReturnRequest' => 'orders',
+            'Refund', 'WalletTransaction', 'SellerWallet', 'SellerPayment', 'SellerInvoice' => 'finance',
+            'SellerProfile', 'SellerSubscription', 'SellerPlan', 'SellerSuspensionEvent' => 'sellers',
+            'Coupon', 'CouponUsage', 'FlashSale', 'FlashSaleProduct', 'Banner' => 'marketing',
+            'StoreSetting', 'SmsSetting', 'SmsTemplate', 'EmailTemplate' => 'settings',
+            'EmailLog', 'SmsLog' => 'communications',
+            'ProductReview', 'Wishlist', 'CustomerAddress', 'RfqRequest' => 'customer_activity',
+            'Category', 'Brand', 'Unit', 'Attribute', 'AttributeValue' => 'catalog',
             default => 'catalog',
         };
     }
 
     public function getAuditRecordLabel(): ?string
     {
-        return $this->sku
+        return $this->recipient_email
+            ?? $this->recipient_phone
+            ?? $this->code
+            ?? $this->sku
             ?? $this->order_number
             ?? $this->sub_order_number
             ?? $this->title
             ?? $this->store_name
+            ?? $this->subject
             ?? $this->key
             ?? $this->name
             ?? (string) $this->getKey();

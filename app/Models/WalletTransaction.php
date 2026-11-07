@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Traits\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WalletTransaction extends Model
 {
+    use Auditable;
+
     public const TYPE_ESCROW_HOLD = 'escrow_hold';
 
     public const TYPE_ESCROW_RELEASE = 'escrow_release';

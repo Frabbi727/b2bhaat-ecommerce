@@ -22,11 +22,11 @@ class EmailLogResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-envelope';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Settings';
+    protected static UnitEnum|string|null $navigationGroup = 'Security & Audit';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 2;
 
-    protected static ?string $navigationLabel = 'Email delivery log';
+    protected static ?string $navigationLabel = 'Email Logs';
 
     protected static ?string $modelLabel = 'Email';
 
