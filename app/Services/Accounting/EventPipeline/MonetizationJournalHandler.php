@@ -11,7 +11,6 @@ use App\Models\Accounting\AccountingAccount;
 use App\Models\Accounting\AccountingJournalEntry;
 use App\Models\SellerInvoice;
 use App\Models\SellerPayment;
-use App\Services\Accounting\AccountResolverService;
 use App\Services\Accounting\JournalPostingService;
 use Illuminate\Support\Facades\Schema;
 
@@ -19,10 +18,8 @@ class MonetizationJournalHandler
 {
     public function __construct(
         protected ?JournalPostingService $journalPostingService = null,
-        protected ?AccountResolverService $accountResolver = null,
     ) {
         $this->journalPostingService ??= app(JournalPostingService::class);
-        $this->accountResolver ??= app(AccountResolverService::class);
     }
 
     /**
@@ -97,6 +94,7 @@ class MonetizationJournalHandler
         $debitAccountSlug = match ($payment->payment_method) {
             SellerPayment::METHOD_WALLET_BALANCE => 'seller_wallet_payable',
             SellerPayment::METHOD_BANK_WIRE => 'bank_operating',
+            SellerPayment::METHOD_ADMIN_WAIVER => 'promotional_discount_expense',
             default => 'gateway_clearing',
         };
 
@@ -111,6 +109,7 @@ class MonetizationJournalHandler
         $debitNarration = match ($payment->payment_method) {
             SellerPayment::METHOD_WALLET_BALANCE => "Wallet balance deduction for {$invoiceNumber}",
             SellerPayment::METHOD_BANK_WIRE => "Bank wire transfer received for {$invoiceNumber}",
+            SellerPayment::METHOD_ADMIN_WAIVER => "Platform admin waiver applied for {$invoiceNumber}",
             default => "Gateway payment ({$paymentMethod}) received for {$invoiceNumber}",
         };
 

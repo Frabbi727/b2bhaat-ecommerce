@@ -16,7 +16,7 @@ class SellerPayment extends Model
     protected static function booted(): void
     {
         static::saved(function (SellerPayment $payment): void {
-            if ($payment->status === self::STATUS_SUCCESSFUL) {
+            if ($payment->status === self::STATUS_SUCCESSFUL && ($payment->wasRecentlyCreated || $payment->wasChanged('status'))) {
                 app(MonetizationJournalHandler::class)->recordSellerPayment($payment);
             }
         });
