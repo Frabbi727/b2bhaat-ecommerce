@@ -17,14 +17,6 @@ class FilamentSellerActivityResourceTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function createApplication()
-    {
-        $_ENV['APP_BASE_PATH'] = dirname(__DIR__, 3);
-        $_SERVER['APP_BASE_PATH'] = dirname(__DIR__, 3);
-
-        return parent::createApplication();
-    }
-
     public function test_seller_sees_only_own_activities_and_no_ips(): void
     {
         $role = Role::firstOrCreate(['slug' => 'seller'], ['name' => 'Seller']);
@@ -83,6 +75,7 @@ class FilamentSellerActivityResourceTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('seller'));
 
         $this->assertFalse(SellerActivityResource::canAccess());
+        $this->get('/seller/activities')->assertForbidden();
     }
 
     public function test_seller_cannot_view_another_sellers_activity_detail(): void
@@ -161,5 +154,22 @@ class FilamentSellerActivityResourceTest extends TestCase
         $this->assertFalse(SellerActivityResource::canEdit($log));
         $this->assertFalse(SellerActivityResource::canDelete($log));
         $this->assertFalse(SellerActivityResource::canDeleteAny());
+    }
+
+    public function test_eloquent_query_fails_closed_when_unauthenticated(): void
+    {
+        auth()->logout();
+
+        AuditLog::create([
+            'seller_id' => null,
+            'module' => 'system',
+            'action' => 'cron_executed',
+            'description' => 'System maintenance run',
+            'status' => 'success',
+            'created_at' => now(),
+        ]);
+
+        $query = SellerActivityResource::getEloquentQuery();
+        $this->assertSame(0, $query->count());
     }
 }

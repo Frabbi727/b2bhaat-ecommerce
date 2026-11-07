@@ -13,8 +13,6 @@ use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\KeyValueEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
-use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -73,7 +71,23 @@ class SellerActivityResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->where('seller_id', auth()->id());
+            ->where('seller_id', auth()->id() ?? 0);
+    }
+
+    public static function getModuleBadgeColor(?string $module): string
+    {
+        return match ($module) {
+            'auth' => 'amber',
+            'products' => 'info',
+            'orders' => 'primary',
+            'finance' => 'success',
+            'sellers' => 'success',
+            'marketing' => 'info',
+            'kyc' => 'warning',
+            'settings' => 'danger',
+            'catalog' => 'gray',
+            default => 'gray',
+        };
     }
 
     public static function table(Table $table): Table
@@ -88,18 +102,7 @@ class SellerActivityResource extends Resource
 
                 TextColumn::make('module')
                     ->badge()
-                    ->color(fn (?string $state): string => match ($state) {
-                        'auth' => 'amber',
-                        'products' => 'info',
-                        'orders' => 'primary',
-                        'finance' => 'success',
-                        'sellers' => 'success',
-                        'marketing' => 'info',
-                        'kyc' => 'warning',
-                        'settings' => 'danger',
-                        'catalog' => 'gray',
-                        default => 'gray',
-                    })
+                    ->color(fn (?string $state): string => static::getModuleBadgeColor($state))
                     ->sortable(),
 
                 TextColumn::make('action')
@@ -151,67 +154,50 @@ class SellerActivityResource extends Resource
     {
         return $schema
             ->components([
-                Grid::make(['default' => 1, 'lg' => 3])
-                    ->columnSpanFull()
+                Section::make('Activity Details')
+                    ->columns(['default' => 2, 'sm' => 3])
                     ->schema([
-                        Group::make([
-                            Section::make('Activity Details')
-                                ->columns(['default' => 2, 'sm' => 3])
-                                ->schema([
-                                    TextEntry::make('created_at')
-                                        ->label('Timestamp')
-                                        ->dateTime('d M Y, H:i:s'),
+                        TextEntry::make('created_at')
+                            ->label('Timestamp')
+                            ->dateTime('d M Y, H:i:s'),
 
-                                    TextEntry::make('module')
-                                        ->badge()
-                                        ->color(fn (?string $state): string => match ($state) {
-                                            'auth' => 'amber',
-                                            'products' => 'info',
-                                            'orders' => 'primary',
-                                            'finance' => 'success',
-                                            'sellers' => 'success',
-                                            'marketing' => 'info',
-                                            'kyc' => 'warning',
-                                            'settings' => 'danger',
-                                            'catalog' => 'gray',
-                                            default => 'gray',
-                                        }),
+                        TextEntry::make('module')
+                            ->badge()
+                            ->color(fn (?string $state): string => static::getModuleBadgeColor($state)),
 
-                                    TextEntry::make('action')
-                                        ->badge()
-                                        ->color('gray'),
+                        TextEntry::make('action')
+                            ->badge()
+                            ->color('gray'),
 
-                                    TextEntry::make('record_label')
-                                        ->label('Record Label')
-                                        ->placeholder('—'),
+                        TextEntry::make('record_label')
+                            ->label('Record Label')
+                            ->placeholder('—'),
 
-                                    TextEntry::make('status')
-                                        ->badge()
-                                        ->color(fn (?string $state): string => match ($state) {
-                                            'success' => 'success',
-                                            'failed', 'blocked' => 'danger',
-                                            default => 'gray',
-                                        }),
+                        TextEntry::make('status')
+                            ->badge()
+                            ->color(fn (?string $state): string => match ($state) {
+                                'success' => 'success',
+                                'failed', 'blocked' => 'danger',
+                                default => 'gray',
+                            }),
 
-                                    TextEntry::make('description')
-                                        ->label('Description')
-                                        ->columnSpanFull()
-                                        ->placeholder('—'),
-                                ]),
-
-                            Section::make('Change Details')
-                                ->schema([
-                                    KeyValueEntry::make('old_values')
-                                        ->label('Before (Old Values)')
-                                        ->placeholder('No previous values recorded'),
-
-                                    KeyValueEntry::make('new_values')
-                                        ->label('After (New Values)')
-                                        ->placeholder('No updated values recorded'),
-                                ])
-                                ->columns(['default' => 1, 'md' => 2]),
-                        ])->columnSpanFull(),
+                        TextEntry::make('description')
+                            ->label('Description')
+                            ->columnSpanFull()
+                            ->placeholder('—'),
                     ]),
+
+                Section::make('Change Details')
+                    ->schema([
+                        KeyValueEntry::make('old_values')
+                            ->label('Before (Old Values)')
+                            ->placeholder('No previous values recorded'),
+
+                        KeyValueEntry::make('new_values')
+                            ->label('After (New Values)')
+                            ->placeholder('No updated values recorded'),
+                    ])
+                    ->columns(['default' => 1, 'md' => 2]),
             ]);
     }
 
