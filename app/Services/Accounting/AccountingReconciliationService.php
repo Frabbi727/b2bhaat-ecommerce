@@ -29,9 +29,9 @@ class AccountingReconciliationService
      *     seller_id: int
      * }
      */
-    public function verifySellerWallet(User $seller): array
+    public function verifySellerWallet(User $seller, ?SellerWallet $wallet = null): array
     {
-        $wallet = SellerWallet::where('seller_id', $seller->id)->first();
+        $wallet ??= SellerWallet::where('seller_id', $seller->id)->first();
 
         $walletBalance = round((float) ($wallet?->available_balance ?? 0.0), 2);
         $escrowWalletBalance = round((float) ($wallet?->escrow_held_balance ?? 0.0), 2);
@@ -42,13 +42,13 @@ class AccountingReconciliationService
         $discrepancy = round($walletBalance - $ledgerBalance, 2);
         $escrowDiscrepancy = round($escrowWalletBalance - $escrowLedgerBalance, 2);
 
-        $walletBalance = $walletBalance == 0.0 ? 0.00 : $walletBalance;
-        $ledgerBalance = $ledgerBalance == 0.0 ? 0.00 : $ledgerBalance;
-        $discrepancy = $discrepancy == 0.0 ? 0.00 : $discrepancy;
+        $walletBalance = $this->normalizeZero($walletBalance);
+        $ledgerBalance = $this->normalizeZero($ledgerBalance);
+        $discrepancy = $this->normalizeZero($discrepancy);
 
-        $escrowWalletBalance = $escrowWalletBalance == 0.0 ? 0.00 : $escrowWalletBalance;
-        $escrowLedgerBalance = $escrowLedgerBalance == 0.0 ? 0.00 : $escrowLedgerBalance;
-        $escrowDiscrepancy = $escrowDiscrepancy == 0.0 ? 0.00 : $escrowDiscrepancy;
+        $escrowWalletBalance = $this->normalizeZero($escrowWalletBalance);
+        $escrowLedgerBalance = $this->normalizeZero($escrowLedgerBalance);
+        $escrowDiscrepancy = $this->normalizeZero($escrowDiscrepancy);
 
         $isReconciled = ($discrepancy === 0.00 && $escrowDiscrepancy === 0.00);
 
@@ -85,19 +85,19 @@ class AccountingReconciliationService
      */
     public function verifyAllSellers(): array
     {
-        $wallets = SellerWallet::with('seller')->get();
+        $wallets = SellerWallet::with('seller')->cursor();
 
         $details = [];
         $reconciledCount = 0;
         $unreconciledCount = 0;
 
         foreach ($wallets as $wallet) {
-            $seller = $wallet->seller ?? User::find($wallet->seller_id);
+            $seller = $wallet->seller;
             if (! $seller) {
                 continue;
             }
 
-            $result = $this->verifySellerWallet($seller);
+            $result = $this->verifySellerWallet($seller, $wallet);
             $details[] = $result;
 
             if ($result['is_reconciled']) {
@@ -113,5 +113,13 @@ class AccountingReconciliationService
             'unreconciled_count' => $unreconciledCount,
             'details' => $details,
         ];
+    }
+
+    /**
+     * Normalize negative zeros (-0.0) resulting from floating-point arithmetic.
+     */
+    private function normalizeZero(float $val): float
+    {
+        return $val == 0.0 ? 0.00 : $val;
     }
 }
