@@ -21,7 +21,7 @@ class AccountingAccountsTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with('group'))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with('group')->withExists(['lines', 'children']))
             ->defaultSort('code', 'asc')
             ->columns([
                 TextColumn::make('code')
@@ -101,6 +101,20 @@ class AccountingAccountsTable
     public static function deleteAction(): DeleteAction
     {
         return DeleteAction::make()
-            ->visible(fn (AccountingAccount $record): bool => ! $record->is_system && $record->lines()->doesntExist() && $record->children()->doesntExist());
+            ->visible(function (AccountingAccount $record): bool {
+                if ($record->is_system) {
+                    return false;
+                }
+
+                $hasLines = $record->relationLoaded('lines')
+                    ? $record->lines->isNotEmpty()
+                    : (bool) ($record->lines_exists ?? $record->lines()->exists());
+
+                $hasChildren = $record->relationLoaded('children')
+                    ? $record->children->isNotEmpty()
+                    : (bool) ($record->children_exists ?? $record->children()->exists());
+
+                return ! $hasLines && ! $hasChildren;
+            });
     }
 }

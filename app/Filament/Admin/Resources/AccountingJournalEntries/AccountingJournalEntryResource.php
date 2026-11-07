@@ -35,6 +35,13 @@ class AccountingJournalEntryResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'journal_number';
 
+    public static function canAccess(): bool
+    {
+        $user = auth()->user();
+
+        return (bool) ($user?->role?->slug && in_array($user->role->slug, ['super_admin', 'admin'], true));
+    }
+
     public static function canCreate(): bool
     {
         return false;
