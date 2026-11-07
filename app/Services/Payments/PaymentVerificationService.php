@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Models\OrderStatus;
 use App\Models\OrderTrackingLog;
 use App\Models\PaymentStatus;
+use App\Services\Accounting\EventPipeline\OrderPaymentJournalHandler;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Logistics\CourierStatusService;
@@ -25,7 +26,8 @@ class PaymentVerificationService
 {
     public function __construct(
         protected EscrowLedgerService $escrowLedgerService,
-        protected StockReservationService $stockReservationService
+        protected StockReservationService $stockReservationService,
+        protected OrderPaymentJournalHandler $orderPaymentJournalHandler,
     ) {}
 
     /**
@@ -93,6 +95,8 @@ class PaymentVerificationService
             }
 
             $order->update(['payment_status_id' => PaymentStatus::where('slug', 'paid')->firstOrFail()->id]);
+
+            $this->orderPaymentJournalHandler->recordPrepaidPayment($order);
 
             foreach ($order->subOrders as $subOrder) {
                 $this->escrowLedgerService->holdInEscrow($subOrder);
