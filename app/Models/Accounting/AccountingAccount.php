@@ -27,6 +27,7 @@ class AccountingAccount extends Model
      */
     protected $fillable = [
         'group_id',
+        'account_group_id',
         'parent_id',
         'code',
         'system_slug',
@@ -42,11 +43,37 @@ class AccountingAccount extends Model
      * @var array<string, string>
      */
     protected $casts = [
+        'code' => 'string',
         'is_system' => 'boolean',
         'is_active' => 'boolean',
         'type' => AccountType::class,
         'normal_balance' => NormalBalance::class,
     ];
+
+    protected static function booted(): void
+    {
+        static::deleting(function (AccountingAccount $account): bool {
+            if ($account->is_system) {
+                return false;
+            }
+
+            if ($account->journalLines()->exists()) {
+                return false;
+            }
+
+            return true;
+        });
+    }
+
+    public function setAccountGroupIdAttribute(?int $value): void
+    {
+        $this->attributes['group_id'] = $value;
+    }
+
+    public function getAccountGroupIdAttribute(): ?int
+    {
+        return isset($this->attributes['group_id']) ? (int) $this->attributes['group_id'] : null;
+    }
 
     /**
      * @return BelongsTo<AccountingAccountGroup, $this>
@@ -54,6 +81,14 @@ class AccountingAccount extends Model
     public function group(): BelongsTo
     {
         return $this->belongsTo(AccountingAccountGroup::class, 'group_id');
+    }
+
+    /**
+     * @return BelongsTo<AccountingAccountGroup, $this>
+     */
+    public function accountGroup(): BelongsTo
+    {
+        return $this->group();
     }
 
     /**
@@ -78,5 +113,13 @@ class AccountingAccount extends Model
     public function journalLines(): HasMany
     {
         return $this->hasMany(AccountingJournalLine::class, 'account_id');
+    }
+
+    /**
+     * @return HasMany<AccountingJournalLine, $this>
+     */
+    public function lines(): HasMany
+    {
+        return $this->journalLines();
     }
 }

@@ -93,7 +93,7 @@ trait Auditable
 
     public function getAuditRecordLabel(): ?string
     {
-        return $this->recipient_email
+        $label = $this->recipient_email
             ?? $this->recipient_phone
             ?? $this->code
             ?? $this->sku
@@ -104,7 +104,9 @@ trait Auditable
             ?? $this->subject
             ?? $this->key
             ?? $this->name
-            ?? (string) $this->getKey();
+            ?? $this->getKey();
+
+        return $label !== null ? (string) $label : null;
     }
 
     public function resolveAuditSellerId(): ?int
