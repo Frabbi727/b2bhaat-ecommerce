@@ -48,6 +48,8 @@ class CustomerRefundDisbursementJournalHandler
         $customerId = $refund->order?->customer_id;
         $orderNumber = $refund->order?->order_number ?? (string) $refund->order_id;
 
+        $methodName = $refund->method ?: 'manual';
+
         $lines = [
             // Debit: customer_refund_payable (amount = $refund->amount, customerId: $customerId)
             new JournalLineData(
@@ -66,7 +68,7 @@ class CustomerRefundDisbursementJournalHandler
                 credit: $amount,
                 subOrderId: $refund->sub_order_id,
                 orderId: $refund->order_id,
-                narration: "Disbursed via {$refund->method}",
+                narration: "Disbursed via {$methodName}",
             ),
         ];
 
@@ -74,7 +76,7 @@ class CustomerRefundDisbursementJournalHandler
             entryDate: now()->toDateString(),
             financialEvent: AccountingEvent::CUSTOMER_REFUND_DISBURSED->value,
             idempotencyKey: "customer_refund_disbursed_{$refund->id}",
-            description: "Customer refund disbursed for Order #{$orderNumber} via {$refund->method}",
+            description: "Customer refund disbursed for Order #{$orderNumber} via {$methodName}",
             lines: $lines,
             referenceType: Refund::class,
             referenceId: $refund->id,
