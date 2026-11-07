@@ -109,7 +109,12 @@ class AuditLogResource extends Resource
                     ->badge()
                     ->color('gray')
                     ->description(fn (AuditLog $record): ?string => $record->description)
-                    ->searchable()
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->where(function (Builder $q) use ($search): void {
+                            $q->where('action', 'like', "%{$search}%")
+                                ->orWhere('description', 'like', "%{$search}%");
+                        });
+                    })
                     ->sortable(),
 
                 TextColumn::make('record_label')

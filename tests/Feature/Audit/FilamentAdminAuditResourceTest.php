@@ -13,11 +13,13 @@ $_SERVER['APP_BASE_PATH'] = $worktreePath;
 putenv("APP_BASE_PATH={$worktreePath}");
 
 use App\Filament\Admin\Resources\AuditLogs\AuditLogResource;
+use App\Filament\Admin\Resources\AuditLogs\Pages\ListAuditLogs;
 use App\Models\AuditLog;
 use App\Models\Role;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class FilamentAdminAuditResourceTest extends TestCase
@@ -80,5 +82,35 @@ class FilamentAdminAuditResourceTest extends TestCase
         $response = $this->get(AuditLogResource::getUrl('view', ['record' => $log]));
         $response->assertSuccessful();
         $response->assertSee('SKU-SHIRT-01');
+    }
+
+    public function test_can_search_audit_logs_by_description(): void
+    {
+        $role = Role::firstOrCreate(['slug' => 'super_admin'], ['name' => 'Super Administrator']);
+        $admin = User::factory()->create(['role_id' => $role->id]);
+
+        $matchLog = AuditLog::create([
+            'module' => 'finance',
+            'action' => 'payout_disbursed',
+            'description' => 'Target payout of ৳25,000 released',
+            'status' => 'success',
+            'created_at' => now(),
+        ]);
+
+        $otherLog = AuditLog::create([
+            'module' => 'products',
+            'action' => 'inventory_updated',
+            'description' => 'Stock adjusted to 500 units',
+            'status' => 'success',
+            'created_at' => now(),
+        ]);
+
+        $this->actingAs($admin);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::test(ListAuditLogs::class)
+            ->searchTable('Target payout')
+            ->assertCanSeeTableRecords([$matchLog])
+            ->assertCanNotSeeTableRecords([$otherLog]);
     }
 }
