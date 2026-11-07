@@ -108,11 +108,11 @@ class TrialBalancePage extends Page
         }
 
         if ($this->startDate) {
-            $linesQuery->whereDate('accounting_journal_entries.entry_date', '>=', $this->startDate);
+            $linesQuery->where('accounting_journal_entries.entry_date', '>=', $this->startDate);
         }
 
         if ($this->endDate) {
-            $linesQuery->whereDate('accounting_journal_entries.entry_date', '<=', $this->endDate);
+            $linesQuery->where('accounting_journal_entries.entry_date', '<=', $this->endDate);
         }
 
         $totals = $linesQuery
