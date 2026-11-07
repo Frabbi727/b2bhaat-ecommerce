@@ -13,6 +13,7 @@ use App\Models\SellerSubscription;
 use App\Models\SellerSuspensionEvent;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -148,7 +149,10 @@ class SellerMonetizationSchemaTest extends TestCase
 
     public function test_monetization_migration_can_be_rolled_back(): void
     {
-        $this->artisan('migrate:rollback', ['--step' => 1])->assertSuccessful();
+        $targetMigration = '2026_11_07_000001_create_seller_monetization_tables';
+        $steps = DB::table('migrations')->where('migration', '>=', $targetMigration)->count();
+
+        $this->artisan('migrate:rollback', ['--step' => $steps])->assertSuccessful();
 
         $this->assertFalse(Schema::hasTable('seller_suspension_events'));
         $this->assertFalse(Schema::hasTable('seller_payments'));
