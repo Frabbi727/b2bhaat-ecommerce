@@ -299,6 +299,8 @@ class EscrowLedgerService
     /**
      * Mark a requested payout as paid out by the platform, recording the MFS/bank TrxID.
      *
+     * @param  string  $channel  Disbursement channel ('bank', 'bkash', 'nagad', 'sslcommerz', etc.)
+     *
      * @throws Exception
      */
     public function disbursePayout(WalletTransaction $payout, string $trxId, string $channel = 'bank'): void
