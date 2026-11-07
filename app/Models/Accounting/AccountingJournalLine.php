@@ -49,27 +49,39 @@ class AccountingJournalLine extends Model
 
     protected static function booted(): void
     {
-        static::updating(function (AccountingJournalLine $line): void {
-            $status = $line->journalEntry?->status;
-            $isImmutable = $status === JournalEntryStatus::POSTED
-                || $status === JournalEntryStatus::REVERSED
-                || $status === JournalEntryStatus::POSTED->value
-                || $status === JournalEntryStatus::REVERSED->value;
+        static::creating(function (AccountingJournalLine $line): void {
+            $entry = AccountingJournalEntry::find($line->journal_entry_id) ?? $line->journalEntry;
+            $status = $entry?->status instanceof JournalEntryStatus ? $entry->status->value : (string) $entry?->status;
+            if (in_array($status, [JournalEntryStatus::POSTED->value, JournalEntryStatus::REVERSED->value], true)) {
+                $journalNumber = $entry?->journal_number ?? (string) ($line->journal_entry_id ?? 'UNKNOWN');
+                throw ImmutableJournalException::cannotModify($journalNumber);
+            }
+        });
 
-            if ($isImmutable) {
-                throw ImmutableJournalException::cannotModify($line->journalEntry->journal_number);
+        static::updating(function (AccountingJournalLine $line): void {
+            if ($line->isDirty('journal_entry_id')) {
+                $originalJournalId = $line->getOriginal('journal_entry_id');
+                $originalEntry = AccountingJournalEntry::find($originalJournalId);
+                $journalNumber = $originalEntry?->journal_number ?? (string) ($originalJournalId ?? 'UNKNOWN');
+                throw ImmutableJournalException::cannotModify($journalNumber);
+            }
+
+            $originalJournalId = $line->getOriginal('journal_entry_id') ?? $line->journal_entry_id;
+            $entry = AccountingJournalEntry::find($originalJournalId) ?? $line->journalEntry;
+            $status = $entry?->status instanceof JournalEntryStatus ? $entry->status->value : (string) $entry?->status;
+            if (in_array($status, [JournalEntryStatus::POSTED->value, JournalEntryStatus::REVERSED->value], true)) {
+                $journalNumber = $entry?->journal_number ?? (string) ($originalJournalId ?? 'UNKNOWN');
+                throw ImmutableJournalException::cannotModify($journalNumber);
             }
         });
 
         static::deleting(function (AccountingJournalLine $line): void {
-            $status = $line->journalEntry?->status;
-            $isImmutable = $status === JournalEntryStatus::POSTED
-                || $status === JournalEntryStatus::REVERSED
-                || $status === JournalEntryStatus::POSTED->value
-                || $status === JournalEntryStatus::REVERSED->value;
-
-            if ($isImmutable) {
-                throw ImmutableJournalException::cannotModify($line->journalEntry->journal_number);
+            $originalJournalId = $line->getOriginal('journal_entry_id') ?? $line->journal_entry_id;
+            $entry = AccountingJournalEntry::find($originalJournalId) ?? $line->journalEntry;
+            $status = $entry?->status instanceof JournalEntryStatus ? $entry->status->value : (string) $entry?->status;
+            if (in_array($status, [JournalEntryStatus::POSTED->value, JournalEntryStatus::REVERSED->value], true)) {
+                $journalNumber = $entry?->journal_number ?? (string) ($originalJournalId ?? 'UNKNOWN');
+                throw ImmutableJournalException::cannotModify($journalNumber);
             }
         });
     }

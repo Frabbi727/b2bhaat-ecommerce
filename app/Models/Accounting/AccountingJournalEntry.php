@@ -70,7 +70,9 @@ class AccountingJournalEntry extends Model
                 $dirtyKeys = array_keys($entry->getDirty());
                 $disallowed = array_diff($dirtyKeys, ['reversal_journal_id', 'status', 'updated_at']);
 
-                if (! empty($disallowed) || (! $entry->isDirty('reversal_journal_id') && ! $entry->isDirty('status'))) {
+                $newStatus = $entry->status instanceof JournalEntryStatus ? $entry->status : JournalEntryStatus::tryFrom((string) $entry->status);
+
+                if (! empty($disallowed) || $newStatus !== JournalEntryStatus::REVERSED || ! $entry->reversal_journal_id) {
                     throw ImmutableJournalException::cannotModify($entry->journal_number);
                 }
             }

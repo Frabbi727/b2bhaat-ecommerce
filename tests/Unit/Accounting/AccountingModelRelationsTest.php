@@ -19,15 +19,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-spl_autoload_register(static function (string $class): void {
-    if (str_starts_with($class, 'App\\Models\\Accounting\\')) {
-        $file = dirname(__DIR__, 3).'/app/Models/Accounting/'.class_basename($class).'.php';
-        if (file_exists($file)) {
-            require_once $file;
-        }
-    }
-}, true, true);
-
 class AccountingModelRelationsTest extends TestCase
 {
     use RefreshDatabase;
@@ -69,7 +60,7 @@ class AccountingModelRelationsTest extends TestCase
             'period_id' => $period->id,
             'entry_date' => '2026-11-07',
             'posting_date' => now(),
-            'status' => JournalEntryStatus::POSTED->value,
+            'status' => JournalEntryStatus::DRAFT->value,
             'financial_event' => 'manual_journal',
             'idempotency_key' => 'manual_1',
             'description' => 'Opening entry',
@@ -81,6 +72,8 @@ class AccountingModelRelationsTest extends TestCase
             'debit' => 500.00,
             'credit' => 0.00,
         ]);
+
+        $entry->update(['status' => JournalEntryStatus::POSTED->value]);
 
         $this->assertSame($group->id, $account->group->id);
         $this->assertSame($period->id, $entry->period->id);
@@ -113,7 +106,7 @@ class AccountingModelRelationsTest extends TestCase
             'period_id' => $period->id,
             'entry_date' => '2026-01-15',
             'posting_date' => now(),
-            'status' => 'posted',
+            'status' => JournalEntryStatus::DRAFT->value,
             'financial_event' => 'manual_journal',
             'idempotency_key' => 'immutable_key_1',
             'description' => 'Original description',
@@ -126,26 +119,14 @@ class AccountingModelRelationsTest extends TestCase
             'credit' => 0.00,
         ]);
 
+        $entry->update(['status' => JournalEntryStatus::POSTED->value]);
+
         $this->expectException(ImmutableJournalException::class);
         $entry->update(['description' => 'Attempted tamper']);
     }
 
     public function test_posted_journal_entry_cannot_be_deleted(): void
     {
-        $group = AccountingAccountGroup::create([
-            'name' => 'Current Assets',
-            'type' => 'asset',
-            'code_prefix' => '10',
-        ]);
-
-        $account = AccountingAccount::create([
-            'group_id' => $group->id,
-            'code' => '1010',
-            'name' => 'Cash',
-            'type' => 'asset',
-            'normal_balance' => 'debit',
-        ]);
-
         $year = AccountingFiscalYear::create(['name' => 'FY 2026', 'start_date' => '2026-01-01', 'end_date' => '2026-12-31']);
         $period = AccountingPeriod::create(['fiscal_year_id' => $year->id, 'period_number' => 1, 'name' => 'Jan 2026', 'start_date' => '2026-01-01', 'end_date' => '2026-01-31']);
 
@@ -188,7 +169,7 @@ class AccountingModelRelationsTest extends TestCase
             'period_id' => $period->id,
             'entry_date' => '2026-01-15',
             'posting_date' => now(),
-            'status' => 'posted',
+            'status' => JournalEntryStatus::DRAFT->value,
             'financial_event' => 'manual_journal',
             'idempotency_key' => 'immutable_key_3',
             'description' => 'Original description',
@@ -200,6 +181,8 @@ class AccountingModelRelationsTest extends TestCase
             'debit' => 100.00,
             'credit' => 0.00,
         ]);
+
+        $entry->update(['status' => JournalEntryStatus::POSTED->value]);
 
         try {
             $line->update(['debit' => 200.00]);
@@ -357,6 +340,117 @@ class AccountingModelRelationsTest extends TestCase
             'status' => JournalEntryStatus::REVERSED->value,
             'description' => 'Tampered description',
         ]);
+    }
+
+    public function test_reverting_posted_entry_to_draft_throws_immutable_journal_exception(): void
+    {
+        $year = AccountingFiscalYear::create(['name' => 'FY 2026', 'start_date' => '2026-01-01', 'end_date' => '2026-12-31']);
+        $period = AccountingPeriod::create(['fiscal_year_id' => $year->id, 'period_number' => 1, 'name' => 'Jan 2026', 'start_date' => '2026-01-01', 'end_date' => '2026-01-31']);
+
+        $entry = AccountingJournalEntry::create([
+            'journal_number' => 'JRN-202601-000009',
+            'period_id' => $period->id,
+            'entry_date' => '2026-01-15',
+            'posting_date' => now(),
+            'status' => JournalEntryStatus::POSTED->value,
+            'financial_event' => 'manual_journal',
+            'idempotency_key' => 'immutable_key_9',
+            'description' => 'Posted entry',
+        ]);
+
+        $this->expectException(ImmutableJournalException::class);
+        $entry->update(['status' => JournalEntryStatus::DRAFT->value]);
+    }
+
+    public function test_creating_line_on_posted_journal_entry_throws_immutable_journal_exception(): void
+    {
+        $group = AccountingAccountGroup::create([
+            'name' => 'Current Assets',
+            'type' => 'asset',
+            'code_prefix' => '10',
+        ]);
+
+        $account = AccountingAccount::create([
+            'group_id' => $group->id,
+            'code' => '1010',
+            'name' => 'Cash',
+            'type' => 'asset',
+            'normal_balance' => 'debit',
+        ]);
+
+        $year = AccountingFiscalYear::create(['name' => 'FY 2026', 'start_date' => '2026-01-01', 'end_date' => '2026-12-31']);
+        $period = AccountingPeriod::create(['fiscal_year_id' => $year->id, 'period_number' => 1, 'name' => 'Jan 2026', 'start_date' => '2026-01-01', 'end_date' => '2026-01-31']);
+
+        $entry = AccountingJournalEntry::create([
+            'journal_number' => 'JRN-202601-000010',
+            'period_id' => $period->id,
+            'entry_date' => '2026-01-15',
+            'posting_date' => now(),
+            'status' => JournalEntryStatus::POSTED->value,
+            'financial_event' => 'manual_journal',
+            'idempotency_key' => 'immutable_key_10',
+            'description' => 'Posted entry',
+        ]);
+
+        $this->expectException(ImmutableJournalException::class);
+        AccountingJournalLine::create([
+            'journal_entry_id' => $entry->id,
+            'account_id' => $account->id,
+            'debit' => 100.00,
+            'credit' => 0.00,
+        ]);
+    }
+
+    public function test_reassigning_journal_entry_id_on_line_throws_immutable_journal_exception(): void
+    {
+        $group = AccountingAccountGroup::create([
+            'name' => 'Current Assets',
+            'type' => 'asset',
+            'code_prefix' => '10',
+        ]);
+
+        $account = AccountingAccount::create([
+            'group_id' => $group->id,
+            'code' => '1010',
+            'name' => 'Cash',
+            'type' => 'asset',
+            'normal_balance' => 'debit',
+        ]);
+
+        $year = AccountingFiscalYear::create(['name' => 'FY 2026', 'start_date' => '2026-01-01', 'end_date' => '2026-12-31']);
+        $period = AccountingPeriod::create(['fiscal_year_id' => $year->id, 'period_number' => 1, 'name' => 'Jan 2026', 'start_date' => '2026-01-01', 'end_date' => '2026-01-31']);
+
+        $entry1 = AccountingJournalEntry::create([
+            'journal_number' => 'JRN-202601-000011',
+            'period_id' => $period->id,
+            'entry_date' => '2026-01-15',
+            'posting_date' => now(),
+            'status' => JournalEntryStatus::DRAFT->value,
+            'financial_event' => 'manual_journal',
+            'idempotency_key' => 'immutable_key_11',
+            'description' => 'Draft entry 1',
+        ]);
+
+        $entry2 = AccountingJournalEntry::create([
+            'journal_number' => 'JRN-202601-000012',
+            'period_id' => $period->id,
+            'entry_date' => '2026-01-15',
+            'posting_date' => now(),
+            'status' => JournalEntryStatus::DRAFT->value,
+            'financial_event' => 'manual_journal',
+            'idempotency_key' => 'immutable_key_12',
+            'description' => 'Draft entry 2',
+        ]);
+
+        $line = AccountingJournalLine::create([
+            'journal_entry_id' => $entry1->id,
+            'account_id' => $account->id,
+            'debit' => 100.00,
+            'credit' => 0.00,
+        ]);
+
+        $this->expectException(ImmutableJournalException::class);
+        $line->update(['journal_entry_id' => $entry2->id]);
     }
 
     public function test_reversed_journal_entry_cannot_be_updated_or_deleted(): void
