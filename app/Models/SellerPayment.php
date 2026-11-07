@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Services\Accounting\EventPipeline\MonetizationJournalHandler;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,6 +12,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class SellerPayment extends Model
 {
     use HasFactory;
+
+    protected static function booted(): void
+    {
+        static::saved(function (SellerPayment $payment): void {
+            if ($payment->status === self::STATUS_SUCCESSFUL) {
+                app(MonetizationJournalHandler::class)->recordSellerPayment($payment);
+            }
+        });
+    }
 
     public const STATUS_PENDING_VERIFICATION = 'pending_verification';
 
