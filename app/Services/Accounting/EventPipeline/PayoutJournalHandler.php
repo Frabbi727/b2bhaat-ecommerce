@@ -185,11 +185,11 @@ class PayoutJournalHandler
             lines: $lines,
             referenceType: WalletTransaction::class,
             referenceId: $payout->id,
-            metadata: [
+            metadata: array_filter([
                 'seller_wallet_id' => $payout->seller_wallet_id,
                 'seller_id' => $sellerId,
                 'rejection_reason' => $reason,
-            ],
+            ]),
         );
 
         return $this->journalPostingService->post($entryData);
@@ -204,16 +204,8 @@ class PayoutJournalHandler
             return false;
         }
 
-        if (AccountingAccount::where('system_slug', 'reserved_payout_payable')->doesntExist()) {
-            return false;
-        }
+        $required = array_values(array_unique(array_merge(['reserved_payout_payable'], $slugs)));
 
-        foreach ($slugs as $slug) {
-            if (AccountingAccount::where('system_slug', $slug)->doesntExist()) {
-                return false;
-            }
-        }
-
-        return true;
+        return AccountingAccount::whereIn('system_slug', $required)->count() === count($required);
     }
 }
