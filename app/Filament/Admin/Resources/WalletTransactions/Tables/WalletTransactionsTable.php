@@ -6,7 +6,6 @@ namespace App\Filament\Admin\Resources\WalletTransactions\Tables;
 
 use App\Models\WalletTransaction;
 use App\Services\Escrow\EscrowLedgerService;
-use Exception;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -112,10 +111,15 @@ class WalletTransactionsTable
                     ])
                     ->action(function (WalletTransaction $record, array $data): void {
                         $channel = (string) ($data['channel'] ?? 'bank');
+                        $channelLabel = match ($channel) {
+                            'bkash' => 'bKash',
+                            'nagad' => 'Nagad',
+                            default => 'Bank Transfer',
+                        };
 
                         try {
                             app(EscrowLedgerService::class)->disbursePayout($record, (string) $data['transaction_id'], $channel);
-                        } catch (Exception $exception) {
+                        } catch (\Throwable $exception) {
                             Notification::make()->title('Payout not disbursed')->body($exception->getMessage())->danger()->send();
 
                             return;
@@ -123,7 +127,7 @@ class WalletTransactionsTable
 
                         Notification::make()
                             ->title('Payout marked as paid')
-                            ->body("Disbursed ৳{$record->amount} via {$channel} with TrxID: {$data['transaction_id']}.")
+                            ->body("Disbursed ৳{$record->amount} via {$channelLabel} with TrxID: {$data['transaction_id']}.")
                             ->success()
                             ->send();
                     }),
@@ -145,7 +149,7 @@ class WalletTransactionsTable
                     ->action(function (WalletTransaction $record, array $data): void {
                         try {
                             app(EscrowLedgerService::class)->rejectPayout($record, (string) $data['reason']);
-                        } catch (Exception $exception) {
+                        } catch (\Throwable $exception) {
                             Notification::make()->title('Payout not rejected')->body($exception->getMessage())->danger()->send();
 
                             return;
