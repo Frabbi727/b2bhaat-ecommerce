@@ -5,21 +5,16 @@ declare(strict_types=1);
 namespace Tests\Feature\Audit;
 
 use App\Models\AuditLog;
+use App\Models\Category;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class AuditLogModelTest extends TestCase
 {
     use RefreshDatabase;
-
-    public function createApplication()
-    {
-        $_ENV['APP_BASE_PATH'] ??= dirname(__DIR__, 3);
-
-        return parent::createApplication();
-    }
 
     public function test_can_persist_audit_log_record_with_json_diffs(): void
     {
@@ -111,5 +106,38 @@ class AuditLogModelTest extends TestCase
 
         $this->assertEquals($actor->id, $log->actor->id);
         $this->assertEquals($seller->id, $log->seller->id);
+    }
+
+    public function test_audit_log_auto_populates_created_at_when_not_provided(): void
+    {
+        $log = AuditLog::create([
+            'module' => 'catalog',
+            'action' => 'category_created',
+            'description' => 'New category created',
+        ]);
+
+        $this->assertNotNull($log->created_at);
+        $this->assertInstanceOf(Carbon::class, $log->created_at);
+        $this->assertDatabaseHas('audit_logs', ['id' => $log->id]);
+    }
+
+    public function test_audit_log_has_polymorphic_auditable_relation(): void
+    {
+        $category = Category::create([
+            'name' => 'Fabrics',
+            'slug' => 'fabrics',
+            'is_active' => true,
+        ]);
+
+        $log = AuditLog::create([
+            'module' => 'catalog',
+            'action' => 'category_created',
+            'description' => 'Created category Fabrics',
+            'auditable_type' => Category::class,
+            'auditable_id' => $category->id,
+        ]);
+
+        $this->assertInstanceOf(Category::class, $log->auditable);
+        $this->assertEquals($category->id, $log->auditable->id);
     }
 }

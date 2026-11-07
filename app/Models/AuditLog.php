@@ -7,10 +7,18 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class AuditLog extends Model
 {
     public $timestamps = false;
+
+    protected static function booted(): void
+    {
+        static::creating(function (AuditLog $log): void {
+            $log->created_at ??= now();
+        });
+    }
 
     protected $fillable = [
         'correlation_id',
@@ -66,6 +74,11 @@ class AuditLog extends Model
     public function seller(): BelongsTo
     {
         return $this->belongsTo(User::class, 'seller_id');
+    }
+
+    public function auditable(): MorphTo
+    {
+        return $this->morphTo();
     }
 
     public function scopeForSeller(Builder $query, int $sellerId): Builder

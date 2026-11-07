@@ -14,7 +14,7 @@ return new class extends Migration
             $table->id();
             $table->uuid('correlation_id')->nullable()->index();
             $table->string('actor_type', 32)->default('user')->index();
-            $table->foreignId('actor_id')->nullable()->nullOnDelete()->index();
+            $table->foreignId('actor_id')->nullable()->index();
             $table->string('actor_name')->nullable();
             $table->string('actor_email')->nullable();
             $table->string('actor_role', 32)->nullable()->index();
@@ -42,7 +42,7 @@ return new class extends Migration
             $table->text('request_url')->nullable();
             $table->string('route_name')->nullable()->index();
             $table->json('metadata')->nullable();
-            $table->timestamp('created_at')->index();
+            $table->timestamp('created_at')->useCurrent()->index();
 
             $table->index(['seller_id', 'created_at'], 'idx_audit_seller_created');
             $table->index(['module', 'created_at'], 'idx_audit_module_created');
