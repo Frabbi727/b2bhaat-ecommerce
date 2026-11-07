@@ -73,8 +73,8 @@ class JournalPostingService
 
             $resolvedLines[] = [
                 'account_id' => $accountId,
-                'debit' => $line->debit,
-                'credit' => $line->credit,
+                'debit' => round($line->debit, 2),
+                'credit' => round($line->credit, 2),
                 'seller_id' => $line->sellerId,
                 'customer_id' => $line->customerId,
                 'sub_order_id' => $line->subOrderId,
@@ -141,7 +141,7 @@ class JournalPostingService
                 ]);
 
                 return $entry->load('lines');
-            });
+            }, attempts: 3);
         } catch (UniqueConstraintViolationException $e) {
             if ($data->idempotencyKey !== '') {
                 $existing = AccountingJournalEntry::where('idempotency_key', $data->idempotencyKey)
