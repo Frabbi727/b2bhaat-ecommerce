@@ -8,6 +8,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\Sms\OtpService;
 use App\Services\Sms\Support\PhoneNormalizer;
+use Illuminate\Auth\Events\Failed;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
@@ -159,6 +160,7 @@ class CustomerAuth extends Component
 
         if (! $user || ! Hash::check($this->loginPassword, $user->password)) {
             RateLimiter::hit($throttleKey, 60);
+            event(new Failed('web', $user, ['email' => $this->loginIdentifier, 'password' => '***']));
             $this->errorMessage = 'Invalid credentials. Please verify your email/phone and password.';
 
             return;

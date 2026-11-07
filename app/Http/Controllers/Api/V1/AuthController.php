@@ -7,6 +7,7 @@ use App\Models\Role;
 use App\Models\SellerProfile;
 use App\Models\SellerWallet;
 use App\Models\User;
+use Illuminate\Auth\Events\Failed;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -154,6 +155,8 @@ class AuthController extends Controller
         $user = User::with('role', 'sellerProfile')->where('email', $validated['email'])->first();
 
         if (! $user || ! $user->is_active || ! Hash::check($validated['password'], $user->password)) {
+            event(new Failed('sanctum', $user, ['email' => $validated['email'], 'password' => '***']));
+
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials do not match our records.'],
             ]);

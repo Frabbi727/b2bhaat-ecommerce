@@ -10,6 +10,7 @@ use App\Events\Promotions\FlashSaleSubmissionDecidedEvent;
 use App\Events\Sellers\SellerKycDecidedEvent;
 use App\Events\Sellers\SellerRegisteredEvent;
 use App\Events\Sellers\WholesaleKycDecidedEvent;
+use App\Listeners\Audit\AuthAuditListener;
 use App\Listeners\Finance\SendPayoutStatusEmailListener;
 use App\Listeners\Finance\SendRefundSettledEmailListener;
 use App\Listeners\Orders\SendOrderConfirmationEmailListener;
@@ -23,6 +24,9 @@ use App\Services\Audit\AuditContext;
 use App\Services\Promotions\FlashSalePricing;
 use App\Services\Sms\Contracts\SmsGatewayInterface;
 use App\Services\Sms\SmsManager;
+use Illuminate\Auth\Events\Failed;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
@@ -77,5 +81,8 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(SellerKycDecidedEvent::class, SendSellerKycDecisionEmailListener::class);
         Event::listen(WholesaleKycDecidedEvent::class, SendWholesaleDecisionEmailListener::class);
         Event::listen(FlashSaleSubmissionDecidedEvent::class, SendFlashSaleSubmissionEmailListener::class);
+        Event::listen(Login::class, [AuthAuditListener::class, 'handleLogin']);
+        Event::listen(Failed::class, [AuthAuditListener::class, 'handleFailed']);
+        Event::listen(Logout::class, [AuthAuditListener::class, 'handleLogout']);
     }
 }
