@@ -19,6 +19,7 @@ use App\Listeners\Promotions\SendFlashSaleSubmissionEmailListener;
 use App\Listeners\Sellers\SendSellerKycDecisionEmailListener;
 use App\Listeners\Sellers\SendSellerRegistrationEmailListener;
 use App\Listeners\Sellers\SendWholesaleDecisionEmailListener;
+use App\Services\Audit\AuditContext;
 use App\Services\Promotions\FlashSalePricing;
 use App\Services\Sms\Contracts\SmsGatewayInterface;
 use App\Services\Sms\SmsManager;
@@ -51,6 +52,8 @@ class AppServiceProvider extends ServiceProvider
 
         // One instance per request (and per queued job), so remembered campaign offers never go stale across requests
         $this->app->scoped(FlashSalePricing::class);
+
+        $this->app->singleton(AuditContext::class);
     }
 
     /**
