@@ -10,6 +10,7 @@ use App\Models\OrderStatus;
 use App\Models\OrderTrackingLog;
 use App\Models\PaymentStatus;
 use App\Models\SubOrder;
+use App\Services\Accounting\EventPipeline\CodDeliveryJournalHandler;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Orders\RefundRecorder;
@@ -46,7 +47,8 @@ class CourierStatusService
     public function __construct(
         protected EscrowLedgerService $escrowLedgerService,
         protected StockReservationService $stockReservationService,
-        protected RefundRecorder $refundRecorder
+        protected RefundRecorder $refundRecorder,
+        protected CodDeliveryJournalHandler $codDeliveryJournalHandler,
     ) {}
 
     /**
@@ -157,8 +159,12 @@ class CourierStatusService
         $isCod = $subOrder->order?->paymentMethod?->slug === 'cod';
         if ($isCod && $subOrder->is_self_delivered) {
             $this->escrowLedgerService->settleSelfCollectedCod($subOrder);
+            $this->codDeliveryJournalHandler->recordSelfDeliveredCod($subOrder);
         } else {
             $this->escrowLedgerService->holdInEscrow($subOrder);
+            if ($isCod) {
+                $this->codDeliveryJournalHandler->recordCourierCodDelivery($subOrder);
+            }
         }
 
         // 2. Reconcile parent order
