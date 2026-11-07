@@ -63,14 +63,15 @@ To pull the latest code, run database migrations, build frontend assets, upgrade
 
 ```bash
 cd ~/b2bhaat.com && \
-git fetch origin production && \
-git reset --hard origin/production && \
-composer install --no-dev --optimize-autoloader --no-interaction && \
-npm ci && npm run build && \
-php artisan migrate --force && \
-php artisan filament:upgrade && \
-php artisan optimize:clear && \
-php artisan optimize
+    git fetch origin production && \
+    git reset --hard origin/production && \
+    composer install --no-dev --optimize-autoloader --no-interaction && \
+    npm ci && npm run build && \
+    php artisan migrate --force && \
+    php artisan filament:upgrade && \
+    php artisan optimize:clear && \
+    php artisan optimize && \
+    php artisan queue:restart
 ```
 
 ```bash
