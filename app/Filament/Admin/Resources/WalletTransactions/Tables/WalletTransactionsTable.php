@@ -1,11 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Admin\Resources\WalletTransactions\Tables;
 
 use App\Models\WalletTransaction;
 use App\Services\Escrow\EscrowLedgerService;
 use Exception;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
@@ -92,6 +95,15 @@ class WalletTransactionsTable
                     ->modalSubmitActionLabel('Mark as paid')
                     ->visible(fn (WalletTransaction $record): bool => $record->isPendingPayout())
                     ->schema([
+                        Select::make('channel')
+                            ->label('Disbursement Channel')
+                            ->options([
+                                'bank' => 'Bank Transfer (Bank Operating Account)',
+                                'bkash' => 'bKash (bKash Clearing)',
+                                'nagad' => 'Nagad (Nagad Clearing)',
+                            ])
+                            ->default('bank')
+                            ->required(),
                         TextInput::make('transaction_id')
                             ->label('Transaction ID (TrxID)')
                             ->helperText('From the bKash, Nagad or bank transfer you just made. The seller sees it.')
@@ -99,8 +111,10 @@ class WalletTransactionsTable
                             ->required(),
                     ])
                     ->action(function (WalletTransaction $record, array $data): void {
+                        $channel = (string) ($data['channel'] ?? 'bank');
+
                         try {
-                            app(EscrowLedgerService::class)->disbursePayout($record, (string) $data['transaction_id']);
+                            app(EscrowLedgerService::class)->disbursePayout($record, (string) $data['transaction_id'], $channel);
                         } catch (Exception $exception) {
                             Notification::make()->title('Payout not disbursed')->body($exception->getMessage())->danger()->send();
 
@@ -109,7 +123,7 @@ class WalletTransactionsTable
 
                         Notification::make()
                             ->title('Payout marked as paid')
-                            ->body("Disbursed ৳{$record->amount} with TrxID: {$data['transaction_id']}.")
+                            ->body("Disbursed ৳{$record->amount} via {$channel} with TrxID: {$data['transaction_id']}.")
                             ->success()
                             ->send();
                     }),
