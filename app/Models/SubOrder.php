@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Events\Orders\ConsignmentStatusUpdatedEvent;
+use App\Models\Traits\Auditable;
 use App\Services\Sms\OrderNotificationService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,6 +14,8 @@ use Illuminate\Support\Facades\Log;
 
 class SubOrder extends Model
 {
+    use Auditable;
+
     /** The buyer's secret; never serialised (final review C1). */
     protected $hidden = [
         'handover_code',

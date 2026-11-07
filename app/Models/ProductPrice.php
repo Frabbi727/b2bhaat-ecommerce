@@ -2,12 +2,27 @@
 
 namespace App\Models;
 
+use App\Models\Traits\Auditable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProductPrice extends Model
 {
+    use Auditable;
+
+    protected static function booted(): void
+    {
+        static::creating(function (ProductPrice $price): void {
+            if (empty($price->sales_channel_id)) {
+                $price->sales_channel_id = $price->product?->sales_channel_id
+                    ?? SalesChannel::where('slug', SalesChannel::RETAIL)->value('id')
+                    ?? SalesChannel::value('id')
+                    ?? SalesChannel::create(['name' => 'Retail', 'slug' => 'retail', 'is_active' => true])->id;
+            }
+        });
+    }
+
     protected $fillable = [
         'product_id',
         'variation_id',

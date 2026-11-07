@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Traits\Auditable;
 use App\Services\Inventory\ProductCodeGenerator;
 use App\Services\Promotions\FlashSalePricing;
 use Illuminate\Database\Eloquent\Builder;
@@ -10,9 +11,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Str;
 
 class Product extends Model
 {
+    use Auditable;
+
     protected $fillable = [
         'seller_id',
         'category_id',
@@ -54,6 +58,29 @@ class Product extends Model
      */
     protected static function booted(): void
     {
+        static::creating(function (Product $product): void {
+            if (blank($product->slug) && filled($product->title)) {
+                $base = Str::slug($product->title);
+                $product->slug = $base !== '' ? $base.'-'.Str::random(6) : (string) Str::uuid();
+            }
+
+            if (empty($product->category_id)) {
+                $product->category_id = Category::value('id')
+                    ?? Category::create(['name' => 'General', 'slug' => 'general', 'is_active' => true])->id;
+            }
+
+            if (empty($product->sales_channel_id)) {
+                $product->sales_channel_id = SalesChannel::where('slug', SalesChannel::RETAIL)->value('id')
+                    ?? SalesChannel::value('id')
+                    ?? SalesChannel::create(['name' => 'Retail', 'slug' => 'retail', 'is_active' => true])->id;
+            }
+
+            if (empty($product->unit_id)) {
+                $product->unit_id = Unit::value('id')
+                    ?? Unit::create(['name' => 'Piece', 'symbol' => 'pc'])->id;
+            }
+        });
+
         // A copied product is a different item: it must not inherit the original's SKU or barcode
         static::replicating(function (Product $replica): void {
             $replica->sku = null;
