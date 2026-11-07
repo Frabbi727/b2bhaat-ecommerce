@@ -36,7 +36,7 @@ class CustomerRefundDisbursementJournalHandler
         $method = strtolower(trim((string) $refund->method));
         $creditAccountSlug = match (true) {
             in_array($method, ['bkash', 'nagad', 'sslcommerz', 'mfs'], true) => 'gateway_clearing',
-            $method === 'bank' => 'bank_operating',
+            in_array($method, ['bank', 'bank_transfer', 'bank_wire', 'wire'], true) => 'bank_operating',
             $method === 'cash' => 'cash_on_hand',
             default => 'gateway_clearing',
         };
@@ -55,6 +55,8 @@ class CustomerRefundDisbursementJournalHandler
                 debit: $amount,
                 credit: 0.00,
                 customerId: $customerId,
+                subOrderId: $refund->sub_order_id,
+                orderId: $refund->order_id,
                 narration: 'Customer refund payable disbursed',
             ),
             // Credit: $creditAccountSlug (amount = $refund->amount)
@@ -62,6 +64,8 @@ class CustomerRefundDisbursementJournalHandler
                 accountSlug: $creditAccountSlug,
                 debit: 0.00,
                 credit: $amount,
+                subOrderId: $refund->sub_order_id,
+                orderId: $refund->order_id,
                 narration: "Disbursed via {$refund->method}",
             ),
         ];

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Accounting;
 
 use App\Events\Finance\RefundSettledEvent;
+use App\Filament\Admin\Resources\Refunds\Pages\ListRefunds;
 use App\Models\Accounting\AccountingAccount;
 use App\Models\Accounting\AccountingFiscalYear;
 use App\Models\Accounting\AccountingJournalEntry;
@@ -18,8 +19,10 @@ use App\Models\User;
 use App\Services\Accounting\EventPipeline\CustomerRefundDisbursementJournalHandler;
 use Database\Seeders\AccountingChartOfAccountsSeeder;
 use Database\Seeders\SystemLookupSeeder;
+use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class CustomerRefundDisbursementJournalIntegrationTest extends TestCase
@@ -122,11 +125,15 @@ class CustomerRefundDisbursementJournalIntegrationTest extends TestCase
         $this->assertSame('customer_refund_payable', $debitLine->account->system_slug);
         $this->assertEquals(500.00, (float) $debitLine->debit);
         $this->assertSame($this->customer->id, $debitLine->customer_id);
+        $this->assertSame($this->order->id, $debitLine->order_id);
+        $this->assertSame($this->subOrder->id, $debitLine->sub_order_id);
 
         $creditLine = $entry->lines->firstWhere('credit', '>', 0);
         $this->assertNotNull($creditLine);
         $this->assertSame('gateway_clearing', $creditLine->account->system_slug);
         $this->assertEquals(500.00, (float) $creditLine->credit);
+        $this->assertSame($this->order->id, $creditLine->order_id);
+        $this->assertSame($this->subOrder->id, $creditLine->sub_order_id);
     }
 
     public function test_settle_refund_via_bank_credits_bank_operating(): void
@@ -137,7 +144,7 @@ class CustomerRefundDisbursementJournalIntegrationTest extends TestCase
             'amount' => 1200.00,
             'reason' => 'Damaged goods return',
             'status' => Refund::STATUS_PAID,
-            'method' => 'bank',
+            'method' => 'bank_wire',
             'reference' => 'BANK-TRX-999',
             'paid_at' => now(),
         ]);
@@ -306,5 +313,73 @@ class CustomerRefundDisbursementJournalIntegrationTest extends TestCase
         $this->assertNotNull($creditLine);
         $this->assertSame('gateway_clearing', $creditLine->account->system_slug);
         $this->assertEquals(600.00, (float) $creditLine->credit);
+    }
+
+    public function test_filament_admin_mark_paid_action_records_disbursement_journal_end_to_end(): void
+    {
+        $adminRole = Role::firstOrCreate(['slug' => 'super_admin'], ['name' => 'Super Admin']);
+        $admin = User::factory()->create([
+            'role_id' => $adminRole->id,
+            'is_active' => true,
+        ]);
+
+        $subOrder = SubOrder::create([
+            'parent_order_id' => $this->order->id,
+            'seller_id' => $this->seller->id,
+            'sub_order_number' => 'SUB-20261107-999',
+            'fulfillment_status_id' => 1,
+            'subtotal' => 850.00,
+            'shipping_amount' => 50.00,
+            'commission_amount' => 85.00,
+            'is_self_delivered' => false,
+        ]);
+
+        $refund = Refund::create([
+            'order_id' => $this->order->id,
+            'sub_order_id' => $subOrder->id,
+            'amount' => 850.00,
+            'reason' => 'Admin panel settlement test',
+            'status' => Refund::STATUS_PENDING,
+        ]);
+
+        $this->actingAs($admin);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::test(ListRefunds::class)
+            ->callTableAction('markPaid', $refund, [
+                'method' => 'bkash',
+                'reference' => 'TRX-REF-99',
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $refund->refresh();
+        $this->assertSame(Refund::STATUS_PAID, $refund->status);
+        $this->assertSame('bkash', $refund->method);
+        $this->assertSame('TRX-REF-99', $refund->reference);
+        $this->assertNotNull($refund->paid_at);
+
+        $entry = AccountingJournalEntry::where('idempotency_key', "customer_refund_disbursed_{$refund->id}")->first();
+        $this->assertNotNull($entry);
+        $this->assertSame('posted', $entry->status->value ?? (string) $entry->status);
+        $this->assertSame(Refund::class, $entry->reference_type);
+        $this->assertSame($refund->id, $entry->reference_id);
+
+        $entry->load('lines.account');
+        $this->assertCount(2, $entry->lines);
+
+        $debitLine = $entry->lines->firstWhere('debit', '>', 0);
+        $this->assertNotNull($debitLine);
+        $this->assertSame('customer_refund_payable', $debitLine->account->system_slug);
+        $this->assertEquals(850.00, (float) $debitLine->debit);
+        $this->assertSame($this->customer->id, $debitLine->customer_id);
+        $this->assertSame($this->order->id, $debitLine->order_id);
+        $this->assertSame($subOrder->id, $debitLine->sub_order_id);
+
+        $creditLine = $entry->lines->firstWhere('credit', '>', 0);
+        $this->assertNotNull($creditLine);
+        $this->assertSame('gateway_clearing', $creditLine->account->system_slug);
+        $this->assertEquals(850.00, (float) $creditLine->credit);
+        $this->assertSame($this->order->id, $creditLine->order_id);
+        $this->assertSame($subOrder->id, $creditLine->sub_order_id);
     }
 }

@@ -110,7 +110,7 @@ class RefundResource extends Resource
                             try {
                                 event(new RefundSettledEvent($record->fresh()));
                             } catch (\Throwable $e) {
-                                Log::warning('Refund settled email event failed: '.$e->getMessage());
+                                Log::warning('Refund settled event failed: '.$e->getMessage());
                             }
 
                             Notification::make()->title('Refund marked as paid')->success()->send();
