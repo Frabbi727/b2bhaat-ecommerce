@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Audit;
 
 use App\Models\AuditLog;
+use App\Models\Banner;
 use App\Models\Category;
 use App\Models\Coupon;
 use App\Models\EmailLog;
@@ -93,6 +94,60 @@ class ComprehensiveFullSystemAuditTest extends TestCase
         $this->assertNotNull($log, 'Audit log was not created for Coupon creation');
         $this->assertSame('marketing', $log->module);
         $this->assertSame('B2BDISCOUNT50', $log->record_label);
+    }
+
+    public function test_banner_full_lifecycle_create_update_delete_is_audited(): void
+    {
+        $this->actingAs($this->admin);
+
+        // 1. Create Banner
+        $banner = Banner::create([
+            'title' => 'Winter Clearance Mega Banner',
+            'desktop_image_url' => 'https://example.com/banner.png',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
+        $createLog = AuditLog::where('auditable_type', Banner::class)
+            ->where('auditable_id', $banner->id)
+            ->where('action', 'created')
+            ->first();
+
+        $this->assertNotNull($createLog, 'Audit log was not created for Banner creation');
+        $this->assertSame('marketing', $createLog->module);
+        $this->assertSame('Winter Clearance Mega Banner', $createLog->record_label);
+        $this->assertSame($this->admin->id, $createLog->actor_id);
+
+        // 2. Update Banner
+        $banner->update([
+            'is_active' => false,
+            'sort_order' => 99,
+        ]);
+
+        $updateLog = AuditLog::where('auditable_type', Banner::class)
+            ->where('auditable_id', $banner->id)
+            ->where('action', 'updated')
+            ->first();
+
+        $this->assertNotNull($updateLog, 'Audit log was not created for Banner update');
+        $this->assertSame('marketing', $updateLog->module);
+        $this->assertTrue((bool) $updateLog->old_values['is_active']);
+        $this->assertFalse((bool) $updateLog->new_values['is_active']);
+        $this->assertEquals(1, $updateLog->old_values['sort_order']);
+        $this->assertEquals(99, $updateLog->new_values['sort_order']);
+
+        // 3. Delete Banner
+        $bannerId = $banner->id;
+        $banner->delete();
+
+        $deleteLog = AuditLog::where('auditable_type', Banner::class)
+            ->where('auditable_id', $bannerId)
+            ->where('action', 'deleted')
+            ->first();
+
+        $this->assertNotNull($deleteLog, 'Audit log was not created for Banner deletion');
+        $this->assertSame('marketing', $deleteLog->module);
+        $this->assertSame('Winter Clearance Mega Banner', $deleteLog->record_label);
     }
 
     public function test_email_log_creation_creates_communications_audit_log(): void
