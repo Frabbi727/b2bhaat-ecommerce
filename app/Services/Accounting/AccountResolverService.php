@@ -28,6 +28,8 @@ class AccountResolverService
      */
     public function resolveBySlug(string $slug): AccountingAccount
     {
+        $slug = trim($slug);
+
         if (isset($this->bySlug[$slug])) {
             return $this->bySlug[$slug];
         }

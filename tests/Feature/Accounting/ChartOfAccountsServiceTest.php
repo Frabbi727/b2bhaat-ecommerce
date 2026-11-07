@@ -12,6 +12,7 @@ use App\Models\Accounting\AccountingAccountGroup;
 use App\Services\Accounting\AccountResolverService;
 use App\Services\Accounting\ChartOfAccountsService;
 use Database\Seeders\AccountingChartOfAccountsSeeder;
+use Database\Seeders\ProductionSeeder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
@@ -145,6 +146,50 @@ class ChartOfAccountsServiceTest extends TestCase
         $service = app(ChartOfAccountsService::class);
         $service->seedDefaultChartOfAccounts();
 
+        $this->assertGreaterThanOrEqual(19, AccountingAccount::count());
+    }
+
+    public function test_resolver_normalizes_slug_with_surrounding_whitespace(): void
+    {
+        $this->seed(AccountingChartOfAccountsSeeder::class);
+        $resolver = app(AccountResolverService::class);
+
+        $account = $resolver->resolveBySlug('   gateway_clearing   ');
+        $this->assertSame('1030', $account->code);
+    }
+
+    public function test_create_account_strictly_enforces_is_system_as_false(): void
+    {
+        $this->seed(AccountingChartOfAccountsSeeder::class);
+        $service = app(ChartOfAccountsService::class);
+        $resolver = app(AccountResolverService::class);
+
+        $parent = $resolver->resolveBySlug('bank_operating');
+
+        $account = $service->createAccount([
+            'group_id' => $parent->group_id,
+            'code' => '1022',
+            'name' => 'Custom Account With System Flag Attempt',
+            'type' => AccountType::ASSET,
+            'is_system' => true,
+        ]);
+
+        $this->assertFalse($account->is_system);
+    }
+
+    public function test_account_resolver_is_scoped_in_container(): void
+    {
+        $instance1 = app(AccountResolverService::class);
+        $instance2 = app(AccountResolverService::class);
+
+        $this->assertSame($instance1, $instance2);
+    }
+
+    public function test_production_seeder_includes_accounting_chart_of_accounts(): void
+    {
+        $this->seed(ProductionSeeder::class);
+
+        $this->assertGreaterThanOrEqual(5, AccountingAccountGroup::count());
         $this->assertGreaterThanOrEqual(19, AccountingAccount::count());
     }
 }

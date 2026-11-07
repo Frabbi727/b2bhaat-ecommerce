@@ -22,6 +22,7 @@ use App\Listeners\Sellers\SendSellerRegistrationEmailListener;
 use App\Listeners\Sellers\SendWholesaleDecisionEmailListener;
 use App\Models\AuditLog;
 use App\Policies\AuditLogPolicy;
+use App\Services\Accounting\AccountResolverService;
 use App\Services\Audit\AuditContext;
 use App\Services\Promotions\FlashSalePricing;
 use App\Services\Sms\Contracts\SmsGatewayInterface;
@@ -61,6 +62,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(FlashSalePricing::class);
 
         $this->app->scoped(AuditContext::class);
+
+        $this->app->scoped(AccountResolverService::class);
     }
 
     /**

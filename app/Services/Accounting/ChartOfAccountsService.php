@@ -52,7 +52,7 @@ class ChartOfAccountsService
             'description' => ['nullable', 'string'],
         ])->validate();
 
-        $validated['is_system'] = (bool) ($data['is_system'] ?? false);
+        $validated['is_system'] = false;
         $validated['is_active'] = (bool) ($data['is_active'] ?? true);
 
         if (! isset($validated['normal_balance'])) {
