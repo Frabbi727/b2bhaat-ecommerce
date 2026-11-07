@@ -99,10 +99,14 @@ class CodDeliveryJournalHandler
         return $this->journalPostingService->post($entryData);
     }
 
-    public function recordSelfDeliveredCod(SubOrder $subOrder): AccountingJournalEntry
+    public function recordSelfDeliveredCod(SubOrder $subOrder): ?AccountingJournalEntry
     {
         $order = $subOrder->order;
         $commission = round((float) $subOrder->commission_amount, 2);
+
+        if ($commission <= 0.0) {
+            return null;
+        }
 
         $lines = [
             new JournalLineData(

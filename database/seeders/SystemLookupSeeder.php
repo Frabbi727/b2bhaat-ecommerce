@@ -105,5 +105,8 @@ class SystemLookupSeeder extends Seeder
         foreach ($paymentMethods as $pm) {
             PaymentMethod::firstOrCreate(['slug' => $pm['slug']], $pm);
         }
+
+        // 8. Accounting Chart of Accounts
+        $this->call(AccountingChartOfAccountsSeeder::class);
     }
 }

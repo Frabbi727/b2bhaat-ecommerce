@@ -66,7 +66,7 @@ class CourierStatusService
         ?Carbon $timestamp = null
     ): void {
         DB::transaction(function () use ($subOrder, $statusSlug, $hubLocation, $title, $description, $timestamp) {
-            $subOrder = SubOrder::whereKey($subOrder->getKey())->lockForUpdate()->with('fulfillmentStatus')->firstOrFail();
+            $subOrder = SubOrder::whereKey($subOrder->getKey())->lockForUpdate()->with(['fulfillmentStatus', 'order.paymentMethod'])->firstOrFail();
             $currentSlug = $subOrder->fulfillmentStatus?->slug;
 
             if ($currentSlug === $statusSlug) {

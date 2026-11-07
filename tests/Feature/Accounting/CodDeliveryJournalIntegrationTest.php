@@ -131,6 +131,44 @@ class CodDeliveryJournalIntegrationTest extends TestCase
         $this->assertSame(100.00, $gl->getBalanceForSlug('commission_revenue'));
     }
 
+    public function test_self_delivered_cod_with_zero_commission_does_not_post_journal(): void
+    {
+        $seller = User::factory()->create();
+        $customer = User::factory()->create();
+        $codMethod = PaymentMethod::firstOrCreate(['slug' => 'cod'], ['name' => 'Cash On Delivery']);
+        $unpaid = PaymentStatus::firstOrCreate(['slug' => 'unpaid'], ['name' => 'Unpaid']);
+        $outForDelivery = FulfillmentStatus::firstOrCreate(['slug' => 'out_for_delivery'], ['name' => 'Out For Delivery']);
+
+        $order = Order::create([
+            'order_number' => 'ORD-SELF-ZERO',
+            'customer_id' => $customer->id,
+            'order_status_id' => 1,
+            'payment_status_id' => $unpaid->id,
+            'payment_method_id' => $codMethod->id,
+            'shipping_address' => ['address' => 'Dhaka'],
+            'total_amount' => 500.00,
+            'shipping_amount' => 0.00,
+            'discount_amount' => 0.00,
+        ]);
+
+        $subOrder = SubOrder::create([
+            'parent_order_id' => $order->id,
+            'seller_id' => $seller->id,
+            'sub_order_number' => 'ORD-SELF-ZERO-A',
+            'fulfillment_status_id' => $outForDelivery->id,
+            'subtotal' => 500.00,
+            'commission_amount' => 0.00,
+            'shipping_amount' => 0.00,
+            'is_self_delivered' => true,
+        ]);
+
+        $statusService = app(CourierStatusService::class);
+        $statusService->updateStatus($subOrder, 'delivered');
+
+        $journal = AccountingJournalEntry::where('financial_event', 'cod_self_delivered')->where('reference_id', $subOrder->id)->first();
+        $this->assertNull($journal);
+    }
+
     public function test_courier_cod_delivery_with_platform_discount_balances(): void
     {
         $seller = User::factory()->create();

@@ -10,6 +10,7 @@ use App\Enums\Accounting\JournalEntryStatus;
 use App\Exceptions\Accounting\ClosedPeriodException;
 use App\Exceptions\Accounting\InactiveAccountException;
 use App\Exceptions\Accounting\UnbalancedJournalException;
+use App\Models\Accounting\AccountingFiscalYear;
 use App\Models\Accounting\AccountingJournalEntry;
 use App\Models\Accounting\AccountingJournalLine;
 use App\Models\Accounting\AccountingPeriod;
@@ -49,13 +50,7 @@ class JournalPostingService
         }
 
         // 3. Resolve active accounting period
-        $period = AccountingPeriod::where('start_date', '<=', $data->entryDate)
-            ->where('end_date', '>=', $data->entryDate)
-            ->first();
-
-        if (! $period || $period->is_closed) {
-            throw ClosedPeriodException::forPeriod($period ? $period->name : $data->entryDate);
-        }
+        $period = $this->resolveActivePeriod($data->entryDate);
 
         // 4. Pre-resolve account IDs via AccountResolverService (validates accounts are active)
         $resolvedLines = [];
@@ -244,5 +239,68 @@ class JournalPostingService
 
             return $reversalEntry;
         });
+    }
+
+    /**
+     * Resolve active accounting period for an entry date.
+     * Throws ClosedPeriodException only if a period exists and is explicitly closed.
+     * Auto-provisions an active open period if none is defined for the date.
+     *
+     * @throws ClosedPeriodException
+     */
+    public function resolveActivePeriod(string $entryDate): AccountingPeriod
+    {
+        $period = AccountingPeriod::where('start_date', '<=', $entryDate)
+            ->where('end_date', '>=', $entryDate)
+            ->first();
+
+        if ($period) {
+            if ($period->is_closed) {
+                throw ClosedPeriodException::forPeriod($period->name);
+            }
+
+            return $period;
+        }
+
+        return $this->autoProvisionPeriod($entryDate);
+    }
+
+    protected function autoProvisionPeriod(string $entryDate): AccountingPeriod
+    {
+        $carbon = Carbon::parse($entryDate);
+        $month = (int) $carbon->month;
+        $year = (int) $carbon->year;
+
+        if ($month >= 7) {
+            $startYear = $year;
+            $endYear = $year + 1;
+            $periodNumber = $month - 6;
+        } else {
+            $startYear = $year - 1;
+            $endYear = $year;
+            $periodNumber = $month + 6;
+        }
+
+        $fiscalYear = AccountingFiscalYear::firstOrCreate(
+            ['name' => "FY {$startYear}-{$endYear}"],
+            [
+                'start_date' => "{$startYear}-07-01",
+                'end_date' => "{$endYear}-06-30",
+                'is_closed' => false,
+            ]
+        );
+
+        return AccountingPeriod::firstOrCreate(
+            [
+                'fiscal_year_id' => $fiscalYear->id,
+                'start_date' => $carbon->copy()->startOfMonth()->toDateString(),
+                'end_date' => $carbon->copy()->endOfMonth()->toDateString(),
+            ],
+            [
+                'period_number' => $periodNumber,
+                'name' => $carbon->format('F Y'),
+                'is_closed' => false,
+            ]
+        );
     }
 }
