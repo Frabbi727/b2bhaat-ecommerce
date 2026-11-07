@@ -204,6 +204,7 @@ class FilamentAccountingAccountResourceTest extends TestCase
         $systemAccount = AccountingAccount::where('system_slug', 'cash_on_hand')->firstOrFail();
 
         Livewire::test(EditAccountingAccount::class, ['record' => $systemAccount->getKey()])
+            ->assertFormFieldIsDisabled('account_group_id')
             ->assertFormFieldIsDisabled('code')
             ->assertFormFieldIsDisabled('type')
             ->assertFormFieldIsDisabled('normal_balance')

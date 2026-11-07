@@ -28,7 +28,8 @@ class AccountingAccountForm
                             ->relationship('accountGroup', 'name')
                             ->required()
                             ->searchable()
-                            ->preload(),
+                            ->preload()
+                            ->disabled(fn (?AccountingAccount $record) => (bool) $record?->is_system),
 
                         Select::make('type')
                             ->label('Account Type')
