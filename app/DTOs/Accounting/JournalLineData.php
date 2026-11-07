@@ -22,5 +22,17 @@ readonly class JournalLineData
         if ($this->debit < 0 || $this->credit < 0) {
             throw new InvalidArgumentException('Debit and credit amounts cannot be negative.');
         }
+
+        if ($this->accountSlug === null && $this->accountId === null) {
+            throw new InvalidArgumentException('A journal line must specify either accountSlug or accountId.');
+        }
+
+        if ($this->debit > 0 && $this->credit > 0) {
+            throw new InvalidArgumentException('A journal line cannot contain both debit and credit amounts.');
+        }
+
+        if ($this->debit <= 0.0 && $this->credit <= 0.0) {
+            throw new InvalidArgumentException('A journal line must have either a debit or credit amount greater than zero.');
+        }
     }
 }

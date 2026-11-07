@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\DTOs\Accounting;
 
 use App\Exceptions\Accounting\UnbalancedJournalException;
+use InvalidArgumentException;
 
 readonly class JournalEntryData
 {
@@ -21,7 +22,13 @@ readonly class JournalEntryData
         public ?int $referenceId = null,
         public ?int $createdByUserId = null,
         public ?array $metadata = null,
-    ) {}
+    ) {
+        foreach ($this->lines as $line) {
+            if (! $line instanceof JournalLineData) {
+                throw new InvalidArgumentException('All lines in JournalEntryData must be instances of JournalLineData.');
+            }
+        }
+    }
 
     public function totalDebit(): float
     {
@@ -52,7 +59,15 @@ readonly class JournalEntryData
 
     public function validate(): void
     {
-        if (! $this->isBalanced()) {
+        if (count($this->lines) < 2) {
+            throw new UnbalancedJournalException('Journal entry must have at least 2 lines.');
+        }
+
+        if ($this->totalDebit() <= 0.00) {
+            throw new UnbalancedJournalException('Journal entry total debit must be greater than zero.');
+        }
+
+        if (bccomp(sprintf('%.2f', $this->totalDebit()), sprintf('%.2f', $this->totalCredit()), 2) !== 0) {
             throw UnbalancedJournalException::forAmounts($this->totalDebit(), $this->totalCredit());
         }
     }

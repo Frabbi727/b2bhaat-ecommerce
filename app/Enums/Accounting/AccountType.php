@@ -11,4 +11,12 @@ enum AccountType: string
     case EQUITY = 'equity';
     case REVENUE = 'revenue';
     case EXPENSE = 'expense';
+
+    public function defaultNormalBalance(): NormalBalance
+    {
+        return match ($this) {
+            self::ASSET, self::EXPENSE => NormalBalance::DEBIT,
+            self::LIABILITY, self::EQUITY, self::REVENUE => NormalBalance::CREDIT,
+        };
+    }
 }

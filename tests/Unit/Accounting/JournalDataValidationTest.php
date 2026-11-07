@@ -36,11 +36,14 @@ class JournalDataValidationTest extends TestCase
         $this->assertTrue($data->isBalanced());
         $this->assertSame(100.00, $data->totalDebit());
         $this->assertSame(100.00, $data->totalCredit());
+
+        $data->validate();
     }
 
     public function test_unbalanced_journal_data_throws_exception(): void
     {
         $this->expectException(UnbalancedJournalException::class);
+        $this->expectExceptionMessage('Unbalanced journal entry: Total Debit (৳100.00) does not equal Total Credit (৳80.00).');
 
         $data = new JournalEntryData(
             entryDate: '2026-11-07',
@@ -53,6 +56,45 @@ class JournalDataValidationTest extends TestCase
             ]
         );
 
+        $data->validate();
+    }
+
+    public function test_journal_with_fewer_than_two_lines_throws_exception_on_validate(): void
+    {
+        $this->expectException(UnbalancedJournalException::class);
+        $this->expectExceptionMessage('Journal entry must have at least 2 lines.');
+
+        $data = new JournalEntryData(
+            entryDate: '2026-11-07',
+            financialEvent: 'order_prepaid_received',
+            idempotencyKey: 'single_line_key',
+            description: 'Single line entry',
+            lines: [
+                new JournalLineData(accountSlug: 'gateway_clearing', debit: 100.00, credit: 0.00),
+            ]
+        );
+
+        $this->assertFalse($data->isBalanced());
+        $data->validate();
+    }
+
+    public function test_journal_with_zero_or_negative_total_debit_throws_exception_on_validate(): void
+    {
+        $this->expectException(UnbalancedJournalException::class);
+        $this->expectExceptionMessage('Journal entry total debit must be greater than zero.');
+
+        $data = new JournalEntryData(
+            entryDate: '2026-11-07',
+            financialEvent: 'order_prepaid_received',
+            idempotencyKey: 'zero_debit_key',
+            description: 'Zero debit entry',
+            lines: [
+                new JournalLineData(accountSlug: 'seller_escrow_payable', debit: 0.00, credit: 50.00),
+                new JournalLineData(accountSlug: 'commission_revenue', debit: 0.00, credit: 50.00),
+            ]
+        );
+
+        $this->assertFalse($data->isBalanced());
         $data->validate();
     }
 
@@ -72,42 +114,59 @@ class JournalDataValidationTest extends TestCase
         new JournalLineData(accountSlug: 'gateway_clearing', debit: 0.00, credit: -10.00);
     }
 
-    public function test_journal_with_fewer_than_two_lines_is_not_balanced(): void
+    public function test_journal_line_must_specify_account_slug_or_id(): void
     {
-        $data = new JournalEntryData(
-            entryDate: '2026-11-07',
-            financialEvent: 'order_prepaid_received',
-            idempotencyKey: 'single_line_key',
-            description: 'Single line entry',
-            lines: [
-                new JournalLineData(accountSlug: 'gateway_clearing', debit: 100.00, credit: 100.00),
-            ]
-        );
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('A journal line must specify either accountSlug or accountId.');
 
-        $this->assertFalse($data->isBalanced());
+        new JournalLineData(accountSlug: null, accountId: null, debit: 10.00, credit: 0.00);
     }
 
-    public function test_journal_with_zero_amounts_is_not_balanced(): void
+    public function test_journal_line_accepts_account_id(): void
     {
-        $data = new JournalEntryData(
+        $line = new JournalLineData(accountId: 42, debit: 50.00, credit: 0.00);
+        $this->assertSame(42, $line->accountId);
+        $this->assertNull($line->accountSlug);
+    }
+
+    public function test_journal_line_cannot_contain_both_debit_and_credit(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('A journal line cannot contain both debit and credit amounts.');
+
+        new JournalLineData(accountSlug: 'gateway_clearing', debit: 50.00, credit: 50.00);
+    }
+
+    public function test_journal_line_cannot_have_zero_amounts_for_both_debit_and_credit(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('A journal line must have either a debit or credit amount greater than zero.');
+
+        new JournalLineData(accountSlug: 'gateway_clearing', debit: 0.00, credit: 0.00);
+    }
+
+    public function test_journal_entry_rejects_non_journal_line_instances(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('All lines in JournalEntryData must be instances of JournalLineData.');
+
+        new JournalEntryData(
             entryDate: '2026-11-07',
             financialEvent: 'order_prepaid_received',
-            idempotencyKey: 'zero_amounts_key',
-            description: 'Zero amounts entry',
+            idempotencyKey: 'test_invalid_lines',
+            description: 'Invalid lines',
             lines: [
-                new JournalLineData(accountSlug: 'gateway_clearing', debit: 0.00, credit: 0.00),
-                new JournalLineData(accountSlug: 'seller_escrow_payable', debit: 0.00, credit: 0.00),
+                new JournalLineData(accountSlug: 'gateway_clearing', debit: 50.00, credit: 0.00),
+                ['accountSlug' => 'invalid', 'debit' => 0.00, 'credit' => 50.00],
             ]
         );
-
-        $this->assertFalse($data->isBalanced());
     }
 
     public function test_domain_exceptions_factory_methods(): void
     {
         $unbalanced = UnbalancedJournalException::forAmounts(100.00, 90.00);
-        $this->assertStringContainsString('৳100', $unbalanced->getMessage());
-        $this->assertStringContainsString('৳90', $unbalanced->getMessage());
+        $this->assertStringContainsString('৳100.00', $unbalanced->getMessage());
+        $this->assertStringContainsString('৳90.00', $unbalanced->getMessage());
 
         $closed = ClosedPeriodException::forPeriod('2026-10');
         $this->assertStringContainsString("Accounting period '2026-10' is closed", $closed->getMessage());
@@ -142,5 +201,14 @@ class JournalDataValidationTest extends TestCase
         $this->assertSame('subscription_paid', AccountingEvent::SUBSCRIPTION_PAID->value);
         $this->assertSame('listing_pack_paid', AccountingEvent::LISTING_PACK_PAID->value);
         $this->assertSame('manual_journal', AccountingEvent::MANUAL_JOURNAL->value);
+    }
+
+    public function test_account_type_default_normal_balance(): void
+    {
+        $this->assertSame(NormalBalance::DEBIT, AccountType::ASSET->defaultNormalBalance());
+        $this->assertSame(NormalBalance::DEBIT, AccountType::EXPENSE->defaultNormalBalance());
+        $this->assertSame(NormalBalance::CREDIT, AccountType::LIABILITY->defaultNormalBalance());
+        $this->assertSame(NormalBalance::CREDIT, AccountType::EQUITY->defaultNormalBalance());
+        $this->assertSame(NormalBalance::CREDIT, AccountType::REVENUE->defaultNormalBalance());
     }
 }
