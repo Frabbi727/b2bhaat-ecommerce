@@ -47,14 +47,14 @@ class AccountingReconciliationService
         $discrepancy = round($walletBalance - $ledgerBalance, 2);
         $escrowDiscrepancy = round($escrowWalletBalance - $escrowLedgerBalance, 2);
 
-        $reservedLedgerBalance = $this->generalLedgerService->getBalanceForSlug('reserved_payout_payable', sellerId: $seller->id);
+        $reservedLedgerBalance = round($this->generalLedgerService->getBalanceForSlug('reserved_payout_payable', sellerId: $seller->id), 2);
         $reservedWalletBalance = $wallet
-            ? (float) WalletTransaction::where('seller_wallet_id', $wallet->id)
+            ? round((float) WalletTransaction::where('seller_wallet_id', $wallet->id)
                 ->where('transaction_type', WalletTransaction::TYPE_PAYOUT)
                 ->where('status', WalletTransaction::STATUS_REQUESTED)
-                ->sum('amount')
+                ->sum('amount'), 2)
             : 0.0;
-        $reservedDiscrepancy = $this->normalizeZero(round($reservedWalletBalance - $reservedLedgerBalance, 2));
+        $reservedDiscrepancy = round($reservedWalletBalance - $reservedLedgerBalance, 2);
 
         $walletBalance = $this->normalizeZero($walletBalance);
         $ledgerBalance = $this->normalizeZero($ledgerBalance);
@@ -66,6 +66,7 @@ class AccountingReconciliationService
 
         $reservedWalletBalance = $this->normalizeZero($reservedWalletBalance);
         $reservedLedgerBalance = $this->normalizeZero($reservedLedgerBalance);
+        $reservedDiscrepancy = $this->normalizeZero($reservedDiscrepancy);
 
         $isReconciled = ($discrepancy === 0.00 && $escrowDiscrepancy === 0.00 && $reservedDiscrepancy === 0.00);
 
@@ -96,10 +97,10 @@ class AccountingReconciliationService
      */
     public function verifyReservedPayouts(): array
     {
-        $totalPending = (float) WalletTransaction::where('transaction_type', WalletTransaction::TYPE_PAYOUT)
+        $totalPending = round((float) WalletTransaction::where('transaction_type', WalletTransaction::TYPE_PAYOUT)
             ->where('status', WalletTransaction::STATUS_REQUESTED)
-            ->sum('amount');
-        $ledgerBalance = $this->generalLedgerService->getBalanceForSlug('reserved_payout_payable');
+            ->sum('amount'), 2);
+        $ledgerBalance = round($this->generalLedgerService->getBalanceForSlug('reserved_payout_payable'), 2);
         $discrepancy = $this->normalizeZero(round($totalPending - $ledgerBalance, 2));
 
         return [
@@ -122,8 +123,8 @@ class AccountingReconciliationService
      */
     public function verifyCustomerRefundPayables(): array
     {
-        $totalPending = (float) Refund::where('status', Refund::STATUS_PENDING)->sum('amount');
-        $ledgerBalance = $this->generalLedgerService->getBalanceForSlug('customer_refund_payable');
+        $totalPending = round((float) Refund::where('status', Refund::STATUS_PENDING)->sum('amount'), 2);
+        $ledgerBalance = round($this->generalLedgerService->getBalanceForSlug('customer_refund_payable'), 2);
         $discrepancy = $this->normalizeZero(round($totalPending - $ledgerBalance, 2));
 
         return [
