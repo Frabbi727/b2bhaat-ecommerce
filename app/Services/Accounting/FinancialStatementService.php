@@ -60,8 +60,8 @@ class FinancialStatementService
                 JournalEntryStatus::POSTED->value,
                 JournalEntryStatus::REVERSED->value,
             ])
-            ->where('accounting_journal_entries.entry_date', '>=', $start)
-            ->where('accounting_journal_entries.entry_date', '<=', $end)
+            ->whereDate('accounting_journal_entries.entry_date', '>=', $start)
+            ->whereDate('accounting_journal_entries.entry_date', '<=', $end)
             ->select('accounting_journal_lines.account_id')
             ->selectRaw('COALESCE(SUM(accounting_journal_lines.debit), 0) as total_debit')
             ->selectRaw('COALESCE(SUM(accounting_journal_lines.credit), 0) as total_credit')
@@ -203,7 +203,7 @@ class FinancialStatementService
                 JournalEntryStatus::POSTED->value,
                 JournalEntryStatus::REVERSED->value,
             ])
-            ->where('accounting_journal_entries.entry_date', '<=', $asOf)
+            ->whereDate('accounting_journal_entries.entry_date', '<=', $asOf)
             ->select('accounting_journal_lines.account_id')
             ->selectRaw('COALESCE(SUM(accounting_journal_lines.debit), 0) as total_debit')
             ->selectRaw('COALESCE(SUM(accounting_journal_lines.credit), 0) as total_credit')
