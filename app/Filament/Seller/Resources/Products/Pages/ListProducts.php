@@ -51,14 +51,14 @@ class ListProducts extends ListRecords
                             ->label('Or Upload CSV File')
                             ->acceptedFileTypes(['text/csv', 'text/plain', 'application/vnd.ms-excel'])
                             ->disk('local')
-                            ->directory('temp_csv_imports'),
+                            ->directory('temp_csv_imports')
+                            ->maxSize(2048),
                     ])
                     ->action(function (array $data, StockBulkUpdateService $service) {
                         try {
                             $input = null;
                             if (! empty($data['csv_file'])) {
-                                $path = Storage::disk('local')->path($data['csv_file']);
-                                $input = $path;
+                                $input = (string) Storage::disk('local')->get($data['csv_file']);
                             } elseif (! empty($data['csv_text'])) {
                                 $input = $data['csv_text'];
                             } else {

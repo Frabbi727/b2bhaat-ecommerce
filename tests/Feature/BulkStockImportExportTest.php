@@ -127,6 +127,46 @@ class BulkStockImportExportTest extends TestCase
         $this->assertSame(600, $v2->fresh()->stock_quantity);
     }
 
+    /**
+     * SEC-2: pasted text that happens to be a file path must never make the server read that file.
+     */
+    public function test_pasted_file_path_is_treated_as_text_and_the_file_is_not_read(): void
+    {
+        $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
+        $variation = $seller->products()->firstOrFail()->variations()->firstOrFail();
+        $originalStock = $variation->stock_quantity;
+
+        $path = tempnam(sys_get_temp_dir(), 'stock');
+        file_put_contents($path, "variation_id,sku,new_stock_quantity\n{$variation->id},{$variation->sku},999\n");
+
+        $rejection = null;
+        try {
+            app(StockBulkUpdateService::class)->importCsvForSeller($seller, $path);
+        } catch (\Exception $exception) {
+            $rejection = $exception->getMessage();
+        } finally {
+            unlink($path);
+        }
+
+        $this->assertStringContainsString('Missing required identifier column', (string) $rejection);
+        $this->assertSame($originalStock, $variation->fresh()->stock_quantity);
+    }
+
+    public function test_uploaded_sheet_on_the_stock_page_still_updates_stock(): void
+    {
+        $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
+        $this->actingAs($seller);
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+        $variation = $seller->products()->firstOrFail()->variations()->firstOrFail();
+
+        $file = UploadedFile::fake()->createWithContent('stock.csv', "variation_id,sku,new_stock_quantity\n{$variation->id},{$variation->sku},321\n");
+
+        Livewire::test(ListProducts::class)
+            ->callAction('bulk_update_stock', data: ['csv_file' => $file]);
+
+        $this->assertSame(321, $variation->fresh()->stock_quantity);
+    }
+
     public function test_bulk_stock_service_enforces_multi_tenant_isolation(): void
     {
         $seller1 = User::where('email', 'seller@nailsfactory.com')->firstOrFail();

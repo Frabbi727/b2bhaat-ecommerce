@@ -84,8 +84,6 @@ class StockBulkUpdateService
     {
         if ($csvInput instanceof UploadedFile) {
             $content = file_get_contents($csvInput->getRealPath());
-        } elseif (is_string($csvInput) && file_exists($csvInput)) {
-            $content = file_get_contents($csvInput);
         } else {
             $content = (string) $csvInput;
         }
