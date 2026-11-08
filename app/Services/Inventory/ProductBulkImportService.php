@@ -12,6 +12,7 @@ use App\Models\Product;
 use App\Models\SalesChannel;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\Monetization\MonetizationEngineService;
 use Exception;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -122,6 +123,7 @@ class ProductBulkImportService
      *     examples_skipped: int,
      *     ignored_columns: array<int, string>,
      *     errors: array<int, string>,
+     *     hidden_over_limit: array<int, string>,
      *     dry_run: bool
      * }
      */
@@ -154,8 +156,14 @@ class ProductBulkImportService
             'examples_skipped' => 0,
             'ignored_columns' => $ignoredColumns,
             'errors' => [],
+            'hidden_over_limit' => [],
             'dry_run' => $dryRun,
         ];
+
+        // Products asked to be visible use up listing slots; the rest are imported as hidden drafts (MON-9)
+        $engine = app(MonetizationEngineService::class);
+        $isSuspended = $seller->sellerProfile?->monetization_status === 'suspended';
+        $slotsLeft = $engine->remainingActivationSlots($seller);
 
         // Rows sharing a title are one product, wherever they sit in the sheet
         $groups = collect($rows)
@@ -191,6 +199,15 @@ class ProductBulkImportService
                 array_push($result['errors'], ...$plan['errors']);
 
                 continue;
+            }
+
+            if ($plan['product']['is_active']) {
+                if ($isSuspended || $slotsLeft === 0) {
+                    $plan['product']['is_active'] = false;
+                    $result['hidden_over_limit'][] = $plan['product']['title'];
+                } elseif ($slotsLeft !== null) {
+                    $slotsLeft--;
+                }
             }
 
             if (! $dryRun) {

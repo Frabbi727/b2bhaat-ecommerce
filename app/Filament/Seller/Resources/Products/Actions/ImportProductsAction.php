@@ -109,7 +109,7 @@ class ImportProductsAction
     }
 
     /**
-     * @param  array{total_rows: int, products_created: int, variations_created: int, created: array<int, string>, examples_skipped: int, ignored_columns: array<int, string>, errors: array<int, string>, dry_run: bool}  $result
+     * @param  array{total_rows: int, products_created: int, variations_created: int, created: array<int, string>, examples_skipped: int, ignored_columns: array<int, string>, errors: array<int, string>, hidden_over_limit?: array<int, string>, dry_run: bool}  $result
      */
     public static function resultNotification(array $result): Notification
     {
@@ -141,6 +141,12 @@ class ImportProductsAction
             if (count($errors) > 8) {
                 $lines[] = '…and '.(count($errors) - 8).' more.';
             }
+        }
+
+        $hidden = $result['hidden_over_limit'] ?? [];
+        if ($hidden !== []) {
+            $lines[] = '<strong>'.count($hidden).' '.($result['dry_run'] ? 'would be' : 'were').' saved as hidden drafts</strong> because your plan\'s listing limit is reached or your store is suspended: '
+                .e(collect($hidden)->take(5)->implode(', ')).(count($hidden) > 5 ? ' and '.(count($hidden) - 5).' more.' : '.');
         }
 
         if ($result['ignored_columns'] !== []) {

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Seller\Resources\Products\Tables;
 
+use App\Exceptions\ListingActivationRefusedException;
 use App\Filament\Seller\Resources\Products\ProductResource;
 use App\Models\Category;
 use App\Models\Product;
@@ -125,21 +126,12 @@ class ProductsTable
                     ->tooltip(fn (Product $record): string => $record->is_active ? 'Shown on your storefront' : 'Hidden from buyers')
                     ->beforeStateUpdated(function (Product $record, $state): bool {
                         if ($state) {
-                            $seller = auth()->user();
-                            if ($seller?->sellerProfile?->monetization_status === 'suspended') {
+                            try {
+                                app(MonetizationEngineService::class)->assertCanActivate(auth()->user());
+                            } catch (ListingActivationRefusedException $refusal) {
                                 Notification::make()
-                                    ->title('Store Suspended')
-                                    ->body('You cannot activate products while your store privileges are suspended.')
-                                    ->danger()
-                                    ->send();
-
-                                return false;
-                            }
-
-                            if (! app(MonetizationEngineService::class)->canActivateMoreProducts($seller)) {
-                                Notification::make()
-                                    ->title('Listing Quota Reached')
-                                    ->body('You have reached the maximum active product quota for your plan. Upgrade your plan to activate more items.')
+                                    ->title('Product not shown')
+                                    ->body($refusal->getMessage())
                                     ->warning()
                                     ->send();
 
@@ -302,6 +294,27 @@ class ProductsTable
 
     protected static function setVisibility(Collection $records, bool $visible): void
     {
+        if ($visible) {
+            $hiddenCount = Product::query()
+                ->whereKey($records->modelKeys())
+                ->where('seller_id', auth()->id())
+                ->where('is_active', false)
+                ->count();
+
+            try {
+                app(MonetizationEngineService::class)->assertCanActivate(auth()->user(), $hiddenCount);
+            } catch (ListingActivationRefusedException $refusal) {
+                Notification::make()
+                    ->title('No products were shown')
+                    ->body($refusal->getMessage())
+                    ->warning()
+                    ->persistent()
+                    ->send();
+
+                return;
+            }
+        }
+
         $count = Product::query()
             ->whereKey($records->modelKeys())
             ->where('seller_id', auth()->id())

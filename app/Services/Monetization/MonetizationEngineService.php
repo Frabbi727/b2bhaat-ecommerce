@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Monetization;
 
+use App\Exceptions\ListingActivationRefusedException;
 use App\Models\Product;
 use App\Models\SalesChannel;
 use App\Models\SellerInvoice;
@@ -87,27 +88,53 @@ class MonetizationEngineService
      */
     public function canActivateMoreProducts(User $seller): bool
     {
+        $remaining = $this->remainingActivationSlots($seller);
+
+        return $remaining === null || $remaining > 0;
+    }
+
+    /**
+     * How many more products the seller may make visible; null means no limit applies.
+     */
+    public function remainingActivationSlots(User $seller): ?int
+    {
         if (! $this->config->isMonetizationEnabled()) {
-            return true;
-        }
-
-        $subscription = $this->getActiveSubscription($seller);
-
-        // If no subscription or plan has listing limits disabled -> unlimited
-        if (! $subscription || ! $subscription->plan || ! $subscription->plan->is_listing_limit_enabled) {
-            return true;
+            return null;
         }
 
         $limit = $this->getAllowedProductCount($seller);
         if ($limit === null) {
-            return true; // Unlimited
+            return null;
         }
 
         $currentActiveCount = Product::where('seller_id', $seller->id)
             ->where('is_active', true)
             ->count();
 
-        return $currentActiveCount < $limit;
+        return max(0, $limit - $currentActiveCount);
+    }
+
+    /**
+     * The one check every "make visible" path uses: refused while the store is suspended or when
+     * showing $count more products would pass the plan's listing limit (INV-1, INV-2, MON-9).
+     *
+     * @throws ListingActivationRefusedException
+     */
+    public function assertCanActivate(User $seller, int $count = 1): void
+    {
+        if ($count <= 0) {
+            return;
+        }
+
+        if ($seller->sellerProfile?->monetization_status === 'suspended') {
+            throw new ListingActivationRefusedException('Your store is suspended, so products cannot be shown to buyers. Settle your payment to restore it, or keep them as hidden drafts.');
+        }
+
+        $remaining = $this->remainingActivationSlots($seller);
+        if ($remaining !== null && $count > $remaining) {
+            $slots = $remaining === 1 ? '1 more product' : "{$remaining} more products";
+            throw new ListingActivationRefusedException("Your plan lets you show {$slots}, and you asked to show {$count}. Upgrade your plan or hide other products first.");
+        }
     }
 
     /**

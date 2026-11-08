@@ -2,12 +2,15 @@
 
 namespace App\Filament\Seller\Resources\Products\Pages;
 
+use App\Exceptions\ListingActivationRefusedException;
 use App\Filament\Seller\Resources\Products\ProductResource;
 use App\Filament\Seller\Resources\Products\Schemas\ProductForm;
 use App\Filament\Seller\Resources\Products\Tables\ProductsTable;
 use App\Models\Product;
+use App\Services\Monetization\MonetizationEngineService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 
 class EditProduct extends EditRecord
@@ -72,6 +75,23 @@ class EditProduct extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        /** @var Product $product */
+        $product = $this->getRecord();
+
+        if (! empty($data['is_active']) && ! $product->is_active) {
+            try {
+                app(MonetizationEngineService::class)->assertCanActivate(auth()->user());
+            } catch (ListingActivationRefusedException $refusal) {
+                Notification::make()
+                    ->title('Product not published')
+                    ->body($refusal->getMessage().' Your other changes were not saved; untick "Visible" to save them as a draft.')
+                    ->warning()
+                    ->persistent()
+                    ->send();
+                $this->halt();
+            }
+        }
+
         $data['specifications'] = ProductForm::groupsToSpecifications($data['specification_groups'] ?? null);
         unset($data['specification_groups']);
 

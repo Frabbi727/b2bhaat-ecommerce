@@ -2,6 +2,7 @@
 
 namespace App\Filament\Seller\Resources\Products\Pages;
 
+use App\Exceptions\ListingActivationRefusedException;
 use App\Filament\Seller\Resources\Products\ProductResource;
 use App\Filament\Seller\Resources\Products\Schemas\ProductForm;
 use App\Models\Product;
@@ -58,19 +59,12 @@ class CreateProduct extends CreateRecord
         $isActive = (bool) ($data['is_active'] ?? true);
 
         if ($isActive && $seller) {
-            if ($seller->sellerProfile?->monetization_status === 'suspended') {
+            try {
+                app(MonetizationEngineService::class)->assertCanActivate($seller);
+            } catch (ListingActivationRefusedException $refusal) {
                 Notification::make()
-                    ->title('Store Suspended')
-                    ->body('You cannot publish active products while your store privileges are suspended. Save as draft or settle your payment.')
-                    ->danger()
-                    ->send();
-                $this->halt();
-            }
-
-            if (! app(MonetizationEngineService::class)->canActivateMoreProducts($seller)) {
-                Notification::make()
-                    ->title('Listing Quota Reached')
-                    ->body('You have reached the maximum active product quota for your plan. Please save as draft or upgrade your plan.')
+                    ->title('Product not published')
+                    ->body($refusal->getMessage().' You can save it as a hidden draft instead.')
                     ->warning()
                     ->send();
                 $this->halt();
