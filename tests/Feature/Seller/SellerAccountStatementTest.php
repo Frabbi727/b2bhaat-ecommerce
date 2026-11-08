@@ -6,6 +6,7 @@ namespace Tests\Feature\Seller;
 
 use App\Filament\Seller\Resources\WalletTransactions\Pages\ListWalletTransactions;
 use App\Filament\Seller\Resources\WalletTransactions\WalletTransactionResource;
+use App\Filament\Seller\Resources\WalletTransactions\Widgets\SellerStatementOverviewWidget;
 use App\Models\FulfillmentStatus;
 use App\Models\Order;
 use App\Models\OrderStatus;
@@ -469,6 +470,176 @@ class SellerAccountStatementTest extends TestCase
         Livewire::test(ListWalletTransactions::class)
             ->assertSee('No transactions recorded yet')
             ->assertSee('All escrow releases, commission withholdings, and payout withdrawals will appear here automatically.');
+    }
+
+    public function test_list_wallet_transactions_renders_statement_overview_widget(): void
+    {
+        [$seller, $wallet] = $this->createSellerWithWallet(5000.00, 1500.00);
+
+        $this->actingAs($seller);
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+
+        Livewire::test(ListWalletTransactions::class)
+            ->assertSeeLivewire(SellerStatementOverviewWidget::class);
+
+        $response = $this->get('/seller/account-statement');
+        $response->assertSuccessful();
+        $response->assertSee('Account Statement');
+    }
+
+    public function test_seller_statement_overview_widget_renders_accurate_kpi_figures(): void
+    {
+        [$seller, $wallet] = $this->createSellerWithWallet(7500.50, 2300.00);
+
+        // Lifetime earnings (escrow releases)
+        WalletTransaction::create([
+            'seller_wallet_id' => $wallet->id,
+            'transaction_type' => WalletTransaction::TYPE_ESCROW_RELEASE,
+            'amount' => 10000.00,
+            'running_balance' => 10000.00,
+            'reference_note' => 'Release batch 1',
+        ]);
+        WalletTransaction::create([
+            'seller_wallet_id' => $wallet->id,
+            'transaction_type' => WalletTransaction::TYPE_ESCROW_RELEASE,
+            'amount' => 5000.00,
+            'running_balance' => 15000.00,
+            'reference_note' => 'Release batch 2',
+        ]);
+
+        // Disbursed payouts
+        WalletTransaction::create([
+            'seller_wallet_id' => $wallet->id,
+            'transaction_type' => WalletTransaction::TYPE_PAYOUT,
+            'status' => WalletTransaction::STATUS_DISBURSED,
+            'amount' => 3000.00,
+            'running_balance' => 12000.00,
+            'reference_note' => 'Disbursed payout 1',
+        ]);
+        WalletTransaction::create([
+            'seller_wallet_id' => $wallet->id,
+            'transaction_type' => WalletTransaction::TYPE_PAYOUT,
+            'status' => WalletTransaction::STATUS_DISBURSED,
+            'amount' => 1500.00,
+            'running_balance' => 10500.00,
+            'reference_note' => 'Disbursed payout 2',
+        ]);
+
+        // Requested payout (should NOT count as withdrawn)
+        WalletTransaction::create([
+            'seller_wallet_id' => $wallet->id,
+            'transaction_type' => WalletTransaction::TYPE_PAYOUT,
+            'status' => WalletTransaction::STATUS_REQUESTED,
+            'amount' => 1000.00,
+            'running_balance' => 9500.00,
+            'reference_note' => 'Pending payout',
+        ]);
+
+        // Rejected payout (should NOT count as withdrawn)
+        WalletTransaction::create([
+            'seller_wallet_id' => $wallet->id,
+            'transaction_type' => WalletTransaction::TYPE_PAYOUT,
+            'status' => WalletTransaction::STATUS_REJECTED,
+            'amount' => 500.00,
+            'running_balance' => 9500.00,
+            'reference_note' => 'Rejected payout',
+        ]);
+
+        $this->actingAs($seller);
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+
+        Livewire::test(SellerStatementOverviewWidget::class)
+            ->assertSuccessful()
+            ->assertSee('Available Balance')
+            ->assertSee('৳7,500.50')
+            ->assertSee('Ready for withdrawal')
+            ->assertSee('Escrow Held Balance')
+            ->assertSee('৳2,300.00')
+            ->assertSee('Pending delivery clearing')
+            ->assertSee('Lifetime Earnings')
+            ->assertSee('৳15,000.00')
+            ->assertSee('Total sales credited')
+            ->assertSee('Total Withdrawn')
+            ->assertSee('৳4,500.00')
+            ->assertSee('Disbursed to bank / MFS');
+    }
+
+    public function test_seller_statement_overview_widget_enforces_tenant_isolation(): void
+    {
+        [$sellerA, $walletA] = $this->createSellerWithWallet(1000.00, 200.00);
+        [$sellerB, $walletB] = $this->createSellerWithWallet(99999.00, 88888.00);
+
+        WalletTransaction::create([
+            'seller_wallet_id' => $walletA->id,
+            'transaction_type' => WalletTransaction::TYPE_ESCROW_RELEASE,
+            'amount' => 1200.00,
+            'running_balance' => 1200.00,
+            'reference_note' => 'Seller A release',
+        ]);
+        WalletTransaction::create([
+            'seller_wallet_id' => $walletA->id,
+            'transaction_type' => WalletTransaction::TYPE_PAYOUT,
+            'status' => WalletTransaction::STATUS_DISBURSED,
+            'amount' => 300.00,
+            'running_balance' => 900.00,
+            'reference_note' => 'Seller A payout',
+        ]);
+
+        WalletTransaction::create([
+            'seller_wallet_id' => $walletB->id,
+            'transaction_type' => WalletTransaction::TYPE_ESCROW_RELEASE,
+            'amount' => 77777.00,
+            'running_balance' => 77777.00,
+            'reference_note' => 'Seller B release',
+        ]);
+        WalletTransaction::create([
+            'seller_wallet_id' => $walletB->id,
+            'transaction_type' => WalletTransaction::TYPE_PAYOUT,
+            'status' => WalletTransaction::STATUS_DISBURSED,
+            'amount' => 66666.00,
+            'running_balance' => 11111.00,
+            'reference_note' => 'Seller B payout',
+        ]);
+
+        $this->actingAs($sellerA);
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+
+        Livewire::test(SellerStatementOverviewWidget::class)
+            ->assertSuccessful()
+            ->assertSee('৳1,000.00')
+            ->assertSee('৳200.00')
+            ->assertSee('৳1,200.00')
+            ->assertSee('৳300.00')
+            ->assertDontSee('৳99,999.00')
+            ->assertDontSee('৳88,888.00')
+            ->assertDontSee('৳77,777.00')
+            ->assertDontSee('৳66,666.00');
+    }
+
+    public function test_seller_statement_overview_widget_handles_seller_without_wallet(): void
+    {
+        $sellerRole = Role::where('slug', 'seller')->firstOrFail();
+        $seller = User::factory()->create([
+            'role_id' => $sellerRole->id,
+            'is_active' => true,
+        ]);
+        SellerProfile::create([
+            'user_id' => $seller->id,
+            'store_name' => 'Walletless Store',
+            'store_slug' => 'walletless-store',
+            'is_approved' => true,
+        ]);
+
+        $this->actingAs($seller);
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+
+        Livewire::test(SellerStatementOverviewWidget::class)
+            ->assertSuccessful()
+            ->assertSee('Available Balance')
+            ->assertSee('Escrow Held Balance')
+            ->assertSee('Lifetime Earnings')
+            ->assertSee('Total Withdrawn')
+            ->assertSee('৳0.00');
     }
 
     /**
