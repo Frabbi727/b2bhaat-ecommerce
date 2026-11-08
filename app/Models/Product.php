@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ProductApprovalStatus;
 use App\Models\Traits\Auditable;
 use App\Services\Inventory\ProductCodeGenerator;
 use App\Services\Promotions\FlashSalePricing;
@@ -44,6 +45,15 @@ class Product extends Model
         'was_active_before_suspension',
         'blocked_at',
         'blocked_reason',
+    ];
+
+    /**
+     * New products start as drafts; approval columns are never mass assignable.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'approval_status' => 'draft',
     ];
 
     protected $hidden = [
@@ -147,7 +157,21 @@ class Product extends Model
             'is_active' => 'boolean',
             'was_active_before_suspension' => 'boolean',
             'blocked_at' => 'datetime',
+            'approval_status' => ProductApprovalStatus::class,
+            'submitted_at' => 'datetime',
+            'approved_at' => 'datetime',
+            'rejected_at' => 'datetime',
         ];
+    }
+
+    public function changeRequests(): HasMany
+    {
+        return $this->hasMany(ProductChangeRequest::class);
+    }
+
+    public function pendingChange(): HasOne
+    {
+        return $this->hasOne(ProductChangeRequest::class)->where('status', ProductChangeRequest::STATUS_PENDING);
     }
 
     public function seller(): BelongsTo

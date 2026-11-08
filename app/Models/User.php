@@ -179,6 +179,14 @@ class User extends Authenticatable implements FilamentUser
         return $this->role?->slug === 'super_admin';
     }
 
+    /**
+     * Admins and super admins review product and price changes.
+     */
+    public function isCatalogReviewer(): bool
+    {
+        return in_array($this->role?->slug, ['super_admin', 'admin'], true);
+    }
+
     public function isSeller(): bool
     {
         return $this->role?->slug === 'seller';

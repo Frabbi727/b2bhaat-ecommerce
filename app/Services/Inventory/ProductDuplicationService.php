@@ -21,7 +21,11 @@ class ProductDuplicationService
             // Re-read the product so table aggregates (e.g. variations_sum_stock_quantity) are not copied as columns
             $source = Product::with(['images', 'prices', 'variations.attributeValues'])->findOrFail($source->getKey());
 
-            $copy = $source->replicate(['views_count', 'sales_count', 'blocked_at', 'blocked_reason']);
+            $copy = $source->replicate([
+                'views_count', 'sales_count', 'blocked_at', 'blocked_reason',
+                'approval_status', 'submitted_at', 'approved_at', 'approved_by_user_id',
+                'rejected_at', 'rejection_reason', 'reviewed_by_user_id',
+            ]);
             $copy->forceFill([
                 'title' => Str::limit($source->title, 240, '').' (copy)',
                 'slug' => $this->uniqueSlug($source->slug),

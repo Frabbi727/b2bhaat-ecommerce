@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\ProductApprovalStatus;
 use App\Models\Attribute;
 use App\Models\AttributeValue;
 use App\Models\Brand;
@@ -253,6 +254,12 @@ class DemoCatalogSeeder extends Seeder
                 'is_active' => true,
             ]
         );
+
+        // Demo products are live from the start, so they skip the review queue
+        $product->forceFill([
+            'approval_status' => ProductApprovalStatus::Approved,
+            'approved_at' => $product->approved_at ?? now(),
+        ])->save();
 
         // Product Primary Image
         ProductImage::firstOrCreate(
