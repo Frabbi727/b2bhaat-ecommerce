@@ -8,6 +8,7 @@ use App\Livewire\Storefront\CustomerRfqs;
 use App\Models\Product;
 use App\Models\RfqRequest;
 use App\Models\User;
+use App\Services\Cart\CartSessionService;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -358,5 +359,37 @@ class CustomerRfqsTest extends TestCase
         $response = $this->get(route('rfq.quotation.print', $expiredRfq->id));
         $response->assertOk();
         $response->assertSee('Expired');
+    }
+
+    public function test_accepting_rfq_redirects_to_checkout_with_locked_quoted_rate(): void
+    {
+        $rfq = RfqRequest::create([
+            'product_id' => $this->product->id,
+            'seller_id' => $this->seller->id,
+            'buyer_id' => $this->buyer->id,
+            'buyer_name' => $this->buyer->name,
+            'buyer_email' => $this->buyer->email,
+            'buyer_phone' => $this->buyer->phone,
+            'target_quantity' => 200,
+            'target_unit_price' => 80.00,
+            'seller_quoted_price' => 75.50,
+            'status' => 'quoted',
+            'destination_district' => 'Dhaka',
+            'valid_until' => now()->addDays(7),
+        ]);
+
+        $this->actingAs($this->buyer);
+
+        $response = $this->post(route('rfq.quotation.accept', $rfq->id));
+
+        $response->assertRedirect(route('checkout.index'));
+        $this->assertSame('accepted', $rfq->fresh()->status);
+
+        $cart = app(CartSessionService::class);
+        $items = $cart->getItems();
+        $this->assertNotEmpty($items);
+        $cartItem = reset($items);
+        $this->assertEquals(75.50, $cartItem['unit_price']);
+        $this->assertSame(200, $cartItem['quantity']);
     }
 }

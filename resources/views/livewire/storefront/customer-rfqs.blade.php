@@ -28,7 +28,7 @@
             wire:click="setTab('all')"
             class="px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-2 {{ $tab === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100' }}"
         >
-            <span>All</span>
+            <span>All Inquiries</span>
             <span class="px-1.5 py-0.5 rounded-full text-[10px] {{ $tab === 'all' ? 'bg-indigo-700 text-white' : 'bg-slate-200 text-slate-700' }}">{{ $counts['all'] }}</span>
         </button>
 
@@ -37,7 +37,7 @@
             wire:click="setTab('quoted')"
             class="px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-2 {{ $tab === 'quoted' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-100' }}"
         >
-            <span>Quoted</span>
+            <span>Active Quotes</span>
             <span class="px-1.5 py-0.5 rounded-full text-[10px] {{ $tab === 'quoted' ? 'bg-emerald-700 text-white' : 'bg-emerald-100 text-emerald-800' }}">{{ $counts['quoted'] }}</span>
         </button>
 
@@ -46,7 +46,7 @@
             wire:click="setTab('pending')"
             class="px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-2 {{ $tab === 'pending' ? 'bg-amber-600 text-white' : 'text-slate-600 hover:bg-slate-100' }}"
         >
-            <span>Pending</span>
+            <span>Awaiting Factory</span>
             <span class="px-1.5 py-0.5 rounded-full text-[10px] {{ $tab === 'pending' ? 'bg-amber-700 text-white' : 'bg-amber-100 text-amber-800' }}">{{ $counts['pending'] }}</span>
         </button>
 
@@ -55,7 +55,7 @@
             wire:click="setTab('accepted')"
             class="px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-2 {{ $tab === 'accepted' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100' }}"
         >
-            <span>Accepted</span>
+            <span>Accepted & Ordered</span>
             <span class="px-1.5 py-0.5 rounded-full text-[10px] {{ $tab === 'accepted' ? 'bg-indigo-700 text-white' : 'bg-slate-200 text-slate-700' }}">{{ $counts['accepted'] }}</span>
         </button>
 
