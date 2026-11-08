@@ -11,12 +11,14 @@ use App\Models\Product;
 use App\Models\RfqRequest;
 use App\Models\User;
 use App\Services\Rfq\RfqNotificationService;
+use App\Services\Sms\Support\PhoneNormalizer;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\PromotionsAndStoreSettingsSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -64,10 +66,10 @@ class RfqSmsNotificationTest extends TestCase
         $rfq = RfqRequest::where('product_id', $this->product->id)->latest('id')->firstOrFail();
 
         Queue::assertPushed(SendSmsJob::class, function (SendSmsJob $job) use ($rfq) {
-            return $job->phone === $this->seller->phone
+            return $job->phone === PhoneNormalizer::normalize($this->seller->phone)
                 && $job->purpose === 'rfq_new_inquiry'
                 && str_contains($job->message, "New Wholesale RFQ #{$rfq->id}")
-                && str_contains($job->message, $this->product->title)
+                && str_contains($job->message, Str::limit($this->product->title, 40))
                 && str_contains($job->message, '300 pcs');
         });
     }
@@ -103,11 +105,11 @@ class RfqSmsNotificationTest extends TestCase
             ->assertHasNoTableActionErrors();
 
         Queue::assertPushed(SendSmsJob::class, function (SendSmsJob $job) use ($rfq) {
-            return $job->phone === '01711223344'
+            return $job->phone === PhoneNormalizer::normalize('01711223344')
                 && $job->purpose === 'rfq_quote_sent'
                 && str_contains($job->message, "Factory has quoted your RFQ #{$rfq->id}")
-                && str_contains($job->message, $this->product->title)
-                && str_contains($job->message, '115.50')
+                && str_contains($job->message, Str::limit($this->product->title, 40))
+                && str_contains($job->message, 'BDT 115.50/pc')
                 && str_contains($job->message, route('rfq.quotation.print', $rfq->id));
         });
     }
@@ -137,11 +139,12 @@ class RfqSmsNotificationTest extends TestCase
             ->assertSessionHas('success');
 
         Queue::assertPushed(SendSmsJob::class, function (SendSmsJob $job) use ($rfq) {
-            return $job->phone === $this->seller->phone
+            return $job->phone === PhoneNormalizer::normalize($this->seller->phone)
                 && $job->purpose === 'rfq_quote_accepted'
                 && str_contains($job->message, "Buyer has accepted Quotation #{$rfq->id}")
-                && str_contains($job->message, $this->product->title)
-                && str_contains($job->message, '150 pcs');
+                && str_contains($job->message, Str::limit($this->product->title, 40))
+                && str_contains($job->message, '150 pcs')
+                && str_contains($job->message, 'proceeded to checkout');
         });
     }
 

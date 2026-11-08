@@ -7,6 +7,7 @@ namespace App\Services\Rfq;
 use App\Jobs\SendSmsJob;
 use App\Models\RfqRequest;
 use App\Services\Sms\Support\PhoneNormalizer;
+use Illuminate\Support\Str;
 
 class RfqNotificationService
 {
@@ -22,10 +23,11 @@ class RfqNotificationService
             return;
         }
 
-        $productTitle = $rfq->product?->title ?? 'Product';
+        $normalizedPhone = PhoneNormalizer::normalize($phone);
+        $productTitle = Str::limit($rfq->product?->title ?? 'Product', 40);
         $message = "B2Bhaat: New Wholesale RFQ #{$rfq->id} received for '{$productTitle}'. Qty: {$rfq->target_quantity} pcs. Please review and quote at b2bhaat.com/seller";
 
-        SendSmsJob::dispatch($phone, $message, 'rfq_new_inquiry');
+        SendSmsJob::dispatch($normalizedPhone, $message, 'rfq_new_inquiry');
     }
 
     /**
@@ -40,13 +42,14 @@ class RfqNotificationService
             return;
         }
 
-        $productTitle = $rfq->product?->title ?? 'Product';
+        $normalizedPhone = PhoneNormalizer::normalize($phone);
+        $productTitle = Str::limit($rfq->product?->title ?? 'Product', 40);
         $formattedPrice = number_format((float) $rfq->seller_quoted_price, 2);
         $quoteUrl = route('rfq.quotation.print', $rfq->id);
 
-        $message = "B2Bhaat: Factory has quoted your RFQ #{$rfq->id} for '{$productTitle}' at ৳{$formattedPrice}/pc. View quotation: {$quoteUrl}";
+        $message = "B2Bhaat: Factory has quoted your RFQ #{$rfq->id} for '{$productTitle}' at BDT {$formattedPrice}/pc. View quotation: {$quoteUrl}";
 
-        SendSmsJob::dispatch($phone, $message, 'rfq_quote_sent');
+        SendSmsJob::dispatch($normalizedPhone, $message, 'rfq_quote_sent');
     }
 
     /**
@@ -61,10 +64,11 @@ class RfqNotificationService
             return;
         }
 
-        $productTitle = $rfq->product?->title ?? 'Product';
-        $message = "B2Bhaat: Buyer has accepted Quotation #{$rfq->id} for '{$productTitle}' ({$rfq->target_quantity} pcs). Proceed to prepare dispatch.";
+        $normalizedPhone = PhoneNormalizer::normalize($phone);
+        $productTitle = Str::limit($rfq->product?->title ?? 'Product', 40);
+        $message = "B2Bhaat: Buyer has accepted Quotation #{$rfq->id} for '{$productTitle}' ({$rfq->target_quantity} pcs) and proceeded to checkout. You will be notified once order is placed.";
 
-        SendSmsJob::dispatch($phone, $message, 'rfq_quote_accepted');
+        SendSmsJob::dispatch($normalizedPhone, $message, 'rfq_quote_accepted');
     }
 
     /**
