@@ -13,6 +13,7 @@ use App\Services\Accounting\EventPipeline\EscrowReleaseJournalHandler;
 use App\Services\Accounting\EventPipeline\PayoutJournalHandler;
 use App\Services\Accounting\EventPipeline\RefundJournalHandler;
 use App\Services\Settings\StoreConfigurationService;
+use DomainException;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -37,6 +38,10 @@ class EscrowLedgerService
      */
     public function holdInEscrow(SubOrder $subOrder): WalletTransaction
     {
+        if ($subOrder->fulfillmentStatus()->value('slug') === 'cancelled') {
+            throw new DomainException("Consignment #{$subOrder->sub_order_number} was cancelled, so no money is held for the seller.");
+        }
+
         return DB::transaction(function () use ($subOrder) {
             $wallet = $this->lockWallet($subOrder->seller_id, createIfMissing: true);
 

@@ -11,14 +11,19 @@ use App\Models\FulfillmentStatus;
 use App\Models\Order;
 use App\Models\PaymentMethod;
 use App\Models\Product;
+use App\Models\Refund;
 use App\Models\SalesChannel;
 use App\Models\User;
 use App\Models\WalletTransaction;
 use App\Services\Cart\CartSessionService;
+use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Logistics\CourierStatusService;
+use App\Services\Orders\OrderDisputeService;
+use App\Services\Payments\PaymentVerificationService;
 use App\Services\Settings\StoreConfigurationService;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\SystemLookupSeeder;
+use DomainException;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -184,5 +189,41 @@ class PaymentVerificationTest extends TestCase
         app(CourierStatusService::class)->updateStatus($subOrder->fresh(), 'delivered');
 
         $this->assertSame('awaiting_verification', $order->fresh()->paymentStatus->slug);
+    }
+
+    /**
+     * PAY-1: a buyer cancels while the bKash payment is still being checked. Once the admin confirms the
+     * money arrived, the buyer is owed a refund and no seller escrow is held for the cancelled consignment.
+     */
+    public function test_verifying_payment_after_buyer_cancelled_records_a_refund_and_holds_no_escrow(): void
+    {
+        $order = $this->bkashOrder();
+        $subOrder = $order->subOrders->firstOrFail();
+
+        app(OrderDisputeService::class)->cancelSubOrder($subOrder, 'Changed my mind');
+        $this->assertSame(0, Refund::where('sub_order_id', $subOrder->id)->count(), 'nothing is owed before the money is confirmed');
+
+        app(PaymentVerificationService::class)->markVerified($order);
+
+        $this->assertSame('paid', $order->fresh()->paymentStatus->slug);
+        $refund = Refund::where('sub_order_id', $subOrder->id)->first();
+        $this->assertNotNull($refund);
+        $this->assertSame(round($subOrder->fresh()->paidAmount(), 2), round((float) $refund->amount, 2));
+        $this->assertFalse(WalletTransaction::where('sub_order_id', $subOrder->id)->exists());
+        $this->assertSame('cancelled', $subOrder->fresh()->fulfillmentStatus->slug);
+    }
+
+    public function test_escrow_is_never_held_for_a_cancelled_consignment(): void
+    {
+        $subOrder = $this->bkashOrder()->subOrders->firstOrFail();
+        $subOrder->update(['fulfillment_status_id' => FulfillmentStatus::where('slug', 'cancelled')->value('id')]);
+
+        $this->expectException(DomainException::class);
+
+        try {
+            app(EscrowLedgerService::class)->holdInEscrow($subOrder->fresh());
+        } finally {
+            $this->assertFalse(WalletTransaction::where('sub_order_id', $subOrder->id)->exists());
+        }
     }
 }

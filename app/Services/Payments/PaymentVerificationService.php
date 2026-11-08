@@ -14,6 +14,7 @@ use App\Services\Accounting\EventPipeline\OrderPaymentJournalHandler;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Logistics\CourierStatusService;
+use App\Services\Orders\RefundRecorder;
 use App\Services\Sms\OrderNotificationService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,7 @@ class PaymentVerificationService
         protected EscrowLedgerService $escrowLedgerService,
         protected StockReservationService $stockReservationService,
         protected OrderPaymentJournalHandler $orderPaymentJournalHandler,
+        protected RefundRecorder $refundRecorder,
     ) {}
 
     /**
@@ -98,7 +100,15 @@ class PaymentVerificationService
 
             $this->orderPaymentJournalHandler->recordPrepaidPayment($order);
 
-            foreach ($order->subOrders as $subOrder) {
+            // A consignment the buyer cancelled while we were checking the payment: the money arrived, so we owe it
+            // back instead of holding it for the seller (PAY-1).
+            foreach ($order->subOrders()->with('fulfillmentStatus')->get() as $subOrder) {
+                if ($subOrder->fulfillmentStatus?->slug === 'cancelled') {
+                    $this->refundRecorder->recordIfPaid($subOrder, 'Cancelled before the payment was verified');
+
+                    continue;
+                }
+
                 $this->escrowLedgerService->holdInEscrow($subOrder);
             }
 
