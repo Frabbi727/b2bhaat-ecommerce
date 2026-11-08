@@ -59,6 +59,14 @@
                     <span class="px-4 py-2 rounded-xl bg-rose-100 text-rose-800 font-bold text-xs border border-rose-200 flex items-center gap-1.5">
                         ⚠ Quotation Expired
                     </span>
+                @elseif ($rfq->status === 'accepted')
+                    <span class="px-4 py-2 rounded-xl bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-200 flex items-center gap-1.5">
+                        ✓ Quotation Accepted & Ordered
+                    </span>
+                @elseif ($rfq->status === 'rejected')
+                    <span class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs border border-slate-300 flex items-center gap-1.5">
+                        ✕ Quotation Declined
+                    </span>
                 @endif
             @endif
             <button 

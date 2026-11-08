@@ -8,6 +8,7 @@ use App\Models\RfqRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -18,6 +19,7 @@ class CustomerRfqs extends Component
 
     public string $tab = 'all';
 
+    #[Locked]
     public ?int $declineRfqId = null;
 
     public string $declineReason = '';
@@ -117,6 +119,12 @@ class CustomerRfqs extends Component
         $userEmail = $user?->email ? strtolower($user->email) : null;
 
         $userScope = function ($query) use ($userId, $userEmail) {
+            if (! $userId) {
+                $query->whereRaw('1 = 0');
+
+                return;
+            }
+
             $query->where(function ($sub) use ($userId, $userEmail) {
                 $sub->where('buyer_id', $userId);
                 if ($userEmail) {
@@ -176,15 +184,10 @@ class CustomerRfqs extends Component
 
         $rfqs = $rfqsQuery->latest('id')->paginate(10);
 
-        $decliningRfq = $this->declineRfqId
-            ? RfqRequest::with('product')->whereKey($this->declineRfqId)->first()
-            : null;
-
         return view('livewire.storefront.customer-rfqs', [
             'rfqs' => $rfqs,
             'counts' => $counts,
             'user' => $user,
-            'decliningRfq' => $decliningRfq,
         ]);
     }
 }

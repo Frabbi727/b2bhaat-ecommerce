@@ -295,8 +295,15 @@
 
     <!-- Decline Confirmation Modal -->
     @if ($declineRfqId)
-        <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200">
+        <div 
+            x-data
+            @keydown.escape.window="$wire.closeDeclineModal()"
+            class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+            <div 
+                @click.outside="$wire.closeDeclineModal()"
+                class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200"
+            >
                 <div class="flex items-center justify-between border-b border-slate-100 pb-3">
                     <h3 class="text-sm font-bold text-slate-900">Decline Quotation #QT-RFQ-{{ $declineRfqId }}</h3>
                     <button type="button" wire:click="closeDeclineModal" class="text-slate-400 hover:text-slate-600 cursor-pointer">
