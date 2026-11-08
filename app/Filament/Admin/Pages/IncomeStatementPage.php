@@ -53,29 +53,17 @@ class IncomeStatementPage extends Page
     {
         $this->preset = $preset;
 
-        match ($preset) {
-            'month' => (function (): void {
-                $this->startDate = Carbon::now()->startOfMonth()->toDateString();
-                $this->endDate = Carbon::now()->endOfMonth()->toDateString();
-            })(),
-            'last_month' => (function (): void {
-                $this->startDate = Carbon::now()->subMonthNoOverflow()->startOfMonth()->toDateString();
-                $this->endDate = Carbon::now()->subMonthNoOverflow()->endOfMonth()->toDateString();
-            })(),
-            'quarter' => (function (): void {
-                $this->startDate = Carbon::now()->startOfQuarter()->toDateString();
-                $this->endDate = Carbon::now()->endOfQuarter()->toDateString();
-            })(),
-            'year' => (function (): void {
-                $this->startDate = Carbon::now()->startOfYear()->toDateString();
-                $this->endDate = Carbon::now()->endOfYear()->toDateString();
-            })(),
-            default => (function (): void {
-                $this->startDate = null;
-                $this->endDate = null;
-                $this->preset = 'all';
-            })(),
+        [$this->startDate, $this->endDate] = match ($preset) {
+            'month' => [Carbon::now()->startOfMonth()->toDateString(), Carbon::now()->endOfMonth()->toDateString()],
+            'last_month' => [Carbon::now()->subMonthNoOverflow()->startOfMonth()->toDateString(), Carbon::now()->subMonthNoOverflow()->endOfMonth()->toDateString()],
+            'quarter' => [Carbon::now()->startOfQuarter()->toDateString(), Carbon::now()->endOfQuarter()->toDateString()],
+            'year' => [Carbon::now()->startOfYear()->toDateString(), Carbon::now()->endOfYear()->toDateString()],
+            default => [null, null],
         };
+
+        if (! in_array($preset, ['month', 'last_month', 'quarter', 'year', 'all'], true)) {
+            $this->preset = 'all';
+        }
     }
 
     public function updatedStartDate(): void

@@ -39,27 +39,34 @@ class FinancialStatementService
      */
     public function getIncomeStatement(?string $startDate = null, ?string $endDate = null): array
     {
-        try {
-            $start = ! empty($startDate)
-                ? Carbon::parse($startDate)->toDateString()
-                : now()->startOfMonth()->toDateString();
-        } catch (\Throwable) {
-            $start = now()->startOfMonth()->toDateString();
+        $start = null;
+        if (! empty($startDate)) {
+            try {
+                $start = Carbon::parse($startDate)->toDateString();
+            } catch (\Throwable) {
+                $start = null;
+            }
         }
 
-        try {
-            $end = ! empty($endDate)
-                ? Carbon::parse($endDate)->toDateString()
-                : now()->endOfMonth()->toDateString();
-        } catch (\Throwable) {
-            $end = now()->endOfMonth()->toDateString();
+        $end = null;
+        if (! empty($endDate)) {
+            try {
+                $end = Carbon::parse($endDate)->toDateString();
+            } catch (\Throwable) {
+                $end = null;
+            }
         }
 
-        if ($start > $end) {
+        if ($start !== null && $end !== null && $start > $end) {
             [$start, $end] = [$end, $start];
         }
 
-        $periodLabel = Carbon::parse($start)->format('M d, Y').' - '.Carbon::parse($end)->format('M d, Y');
+        $periodLabel = match (true) {
+            $start !== null && $end !== null => Carbon::parse($start)->format('M d, Y').' - '.Carbon::parse($end)->format('M d, Y'),
+            $start !== null => 'From '.Carbon::parse($start)->format('M d, Y'),
+            $end !== null => 'Up to '.Carbon::parse($end)->format('M d, Y'),
+            default => 'All Time',
+        };
 
         /** @var Collection<int, object{account_id: int, total_debit: string, total_credit: string}> $totals */
         $totals = DB::table('accounting_journal_lines')
@@ -68,8 +75,8 @@ class FinancialStatementService
                 JournalEntryStatus::POSTED->value,
                 JournalEntryStatus::REVERSED->value,
             ])
-            ->whereDate('accounting_journal_entries.entry_date', '>=', $start)
-            ->whereDate('accounting_journal_entries.entry_date', '<=', $end)
+            ->when($start !== null, fn ($q) => $q->whereDate('accounting_journal_entries.entry_date', '>=', $start))
+            ->when($end !== null, fn ($q) => $q->whereDate('accounting_journal_entries.entry_date', '<=', $end))
             ->select('accounting_journal_lines.account_id')
             ->selectRaw('COALESCE(SUM(accounting_journal_lines.debit), 0) as total_debit')
             ->selectRaw('COALESCE(SUM(accounting_journal_lines.credit), 0) as total_credit')

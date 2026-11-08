@@ -180,6 +180,32 @@ class IncomeStatementPageTest extends TestCase
         $this->assertNull($component->get('preset'));
     }
 
+    public function test_income_statement_page_all_time_preset_aggregates_historical_entries_outside_current_month(): void
+    {
+        $this->actingAs($this->admin);
+
+        // Historical revenue 6 months ago
+        $this->postingService->post(new JournalEntryData(
+            entryDate: Carbon::now()->subMonths(6)->toDateString(),
+            financialEvent: AccountingEvent::ESCROW_RELEASED->value,
+            idempotencyKey: 'test_inc_hist_rev_1',
+            description: 'Historical platform commission fee',
+            lines: [
+                new JournalLineData(accountSlug: 'seller_escrow_payable', debit: 5000.00, credit: 0.00),
+                new JournalLineData(accountSlug: 'commission_revenue', debit: 0.00, credit: 5000.00),
+            ],
+        ));
+
+        // When viewing default month, historical entry is not visible
+        $component = Livewire::test(IncomeStatementPage::class);
+        $this->assertEquals(0.00, $component->instance()->getStatementData()['revenues']['total']);
+
+        // When switching to 'all', historical entry is aggregated
+        $component->call('setPreset', 'all');
+        $this->assertEquals(5000.00, $component->instance()->getStatementData()['revenues']['total']);
+        $this->assertEquals('All Time', $component->instance()->getStatementData()['period_label']);
+    }
+
     public function test_income_statement_page_exports_valid_csv_stream(): void
     {
         $currentMonthDate = Carbon::now()->startOfMonth()->addDays(1)->toDateString();
