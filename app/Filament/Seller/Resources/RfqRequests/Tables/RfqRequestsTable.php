@@ -128,9 +128,11 @@ class RfqRequestsTable
                             'status' => 'quoted',
                         ]);
 
+                        $formattedPrice = number_format((float) $data['seller_quoted_price'], 2);
+
                         Notification::make()
                             ->title('Quotation Dispatched')
-                            ->body("Your custom quote of ৳{$data['seller_quoted_price']}/unit has been recorded.")
+                            ->body("Your custom quote of ৳{$formattedPrice}/unit has been recorded.")
                             ->success()
                             ->send();
                     }),
@@ -143,6 +145,7 @@ class RfqRequestsTable
                     ->form([
                         Select::make('reason_preset')
                             ->label('Decline Reason')
+                            ->live()
                             ->options([
                                 'capacity' => 'Factory production capacity is full',
                                 'moq' => 'Target quantity is below our minimum batch run',
