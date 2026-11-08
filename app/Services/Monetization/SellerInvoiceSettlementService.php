@@ -120,6 +120,35 @@ class SellerInvoiceSettlementService
     }
 
     /**
+     * Record a payment an admin received outside the platform (bKash, Nagad, bank, waiver) against an
+     * unpaid bill, then give the seller what the bill was for.
+     *
+     * @param  array{payment_method: string, amount: float|int|string, transaction_reference: string, notes?: string|null}  $payment
+     */
+    public function recordOfflinePayment(User $seller, int $invoiceId, array $payment, User $admin): SellerInvoice
+    {
+        return DB::transaction(function () use ($seller, $invoiceId, $payment, $admin): SellerInvoice {
+            $invoice = $this->lockUnpaidInvoice($seller, $invoiceId);
+
+            SellerPayment::create([
+                'invoice_id' => $invoice->id,
+                'seller_id' => $seller->id,
+                'amount' => (float) $payment['amount'],
+                'payment_method' => $payment['payment_method'],
+                'transaction_reference' => $payment['transaction_reference'],
+                'status' => SellerPayment::STATUS_SUCCESSFUL,
+                'verified_by_user_id' => $admin->id,
+                'verified_at' => now(),
+                'notes' => $payment['notes'] ?? null,
+            ]);
+
+            $this->applyPaidInvoice($invoice, $seller, $admin);
+
+            return $invoice;
+        });
+    }
+
+    /**
      * Mark an unpaid invoice paid (payment already recorded elsewhere, or nothing to pay) and apply it.
      */
     public function settleUnpaidInvoice(int $invoiceId, User $seller, ?User $actor = null): SellerInvoice

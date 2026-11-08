@@ -199,6 +199,29 @@ class SellerInvoiceSettlementTest extends TestCase
         $this->assertSame($this->proPlan->id, $live->first()->plan_id);
     }
 
+    public function test_wallet_payment_during_grace_returns_the_store_to_active(): void
+    {
+        $this->subscription->update(['status' => 'grace_period', 'ends_at' => now()->subDay(), 'grace_period_ends_at' => now()->addDays(2)]);
+        $this->profile->update(['monetization_status' => 'grace_period']);
+
+        $this->service()->payFromWallet($this->seller, $this->renewalInvoice()->id);
+
+        $this->assertSame('active', $this->profile->fresh()->monetization_status);
+        $this->assertSame('active', $this->subscription->fresh()->status);
+        $this->assertTrue($this->subscription->fresh()->ends_at->greaterThan(now()->addDays(29)));
+    }
+
+    public function test_auto_renewal_run_twice_charges_the_wallet_once(): void
+    {
+        $this->subscription->update(['ends_at' => now()->addDay(), 'auto_renew' => true]);
+
+        $this->artisan('monetization:process-renewals')->assertSuccessful();
+        $this->artisan('monetization:process-renewals')->assertSuccessful();
+
+        $this->assertSame(4500.0, (float) SellerWallet::where('seller_id', $this->seller->id)->value('available_balance'));
+        $this->assertSame(1, SellerPayment::where('seller_id', $this->seller->id)->count());
+    }
+
     /**
      * @param  array<string, mixed>  $overrides
      */

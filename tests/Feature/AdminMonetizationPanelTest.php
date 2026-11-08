@@ -174,4 +174,62 @@ class AdminMonetizationPanelTest extends TestCase
             'status' => 'successful',
         ]);
     }
+
+    /**
+     * MON-1: a seller who pays during the grace period is back to normal, and gets the paid period.
+     */
+    public function test_offline_payment_during_grace_returns_the_store_to_active_and_renews(): void
+    {
+        $this->actingAs($this->admin);
+        $this->subscription->update(['status' => 'grace_period', 'ends_at' => now()->subDay(), 'grace_period_ends_at' => now()->addDays(2)]);
+        $this->profile->update(['monetization_status' => 'grace_period']);
+        $invoice = SellerInvoice::create([
+            'invoice_number' => 'SINV-GRACE-1',
+            'seller_id' => $this->seller->id,
+            'subscription_id' => $this->subscription->id,
+            'invoice_type' => 'subscription_fee',
+            'subtotal' => 499.00,
+            'total_amount' => 499.00,
+            'status' => 'unpaid',
+            'due_date' => now()->toDateString(),
+        ]);
+
+        Livewire::test(ListSellerMonetizations::class)
+            ->callTableAction('recordOfflinePayment', $this->profile, [
+                'payment_method' => 'nagad',
+                'amount' => 499.00,
+                'transaction_reference' => 'NAGAD-GRACE-1',
+            ]);
+
+        $this->assertSame('paid', $invoice->fresh()->status);
+        $this->assertSame('active', $this->profile->fresh()->monetization_status);
+        $subscription = $this->subscription->fresh();
+        $this->assertSame('active', $subscription->status);
+        $this->assertNull($subscription->grace_period_ends_at);
+        $this->assertTrue($subscription->ends_at->greaterThan(now()->addDays(25)));
+    }
+
+    public function test_offline_payment_without_an_unpaid_bill_records_nothing(): void
+    {
+        $this->actingAs($this->admin);
+
+        Livewire::test(ListSellerMonetizations::class)
+            ->callTableAction('recordOfflinePayment', $this->profile, [
+                'payment_method' => 'bkash',
+                'amount' => 499.00,
+                'transaction_reference' => 'BKASH-NOBILL',
+            ]);
+
+        $this->assertDatabaseMissing('seller_payments', ['transaction_reference' => 'BKASH-NOBILL']);
+    }
+
+    public function test_extend_grace_is_not_offered_for_a_seller_who_is_up_to_date(): void
+    {
+        $this->actingAs($this->admin);
+
+        Livewire::test(ListSellerMonetizations::class)
+            ->assertTableActionHidden('extendGrace', $this->profile);
+
+        $this->assertSame('active', $this->profile->fresh()->monetization_status);
+    }
 }

@@ -6,11 +6,12 @@ namespace App\Filament\Admin\Resources\SellerMonetization;
 
 use App\Filament\Admin\Resources\SellerMonetization\Pages\ListSellerMonetizations;
 use App\Models\SellerInvoice;
-use App\Models\SellerPayment;
 use App\Models\SellerProfile;
 use App\Models\SellerSubscription;
 use App\Services\Monetization\MonetizationSuspensionService;
+use App\Services\Monetization\SellerInvoiceSettlementService;
 use BackedEnum;
+use DomainException;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\Select;
@@ -167,32 +168,32 @@ class SellerMonetizationResource extends Resource
                                 ->maxLength(500),
                         ])
                         ->action(function (SellerProfile $record, array $data): void {
-                            $invoice = SellerInvoice::where('seller_id', $record->user_id)
+                            $seller = $record->user;
+                            if (! $seller) {
+                                return;
+                            }
+
+                            $invoice = SellerInvoice::where('seller_id', $seller->id)
                                 ->where('status', SellerInvoice::STATUS_UNPAID)
                                 ->latest('id')
                                 ->first();
 
-                            if ($invoice) {
-                                SellerPayment::create([
-                                    'invoice_id' => $invoice->id,
-                                    'seller_id' => $record->user_id,
-                                    'amount' => (float) $data['amount'],
-                                    'payment_method' => $data['payment_method'],
-                                    'transaction_reference' => $data['transaction_reference'],
-                                    'status' => SellerPayment::STATUS_SUCCESSFUL,
-                                    'verified_by_user_id' => auth()->id(),
-                                    'verified_at' => now(),
-                                    'notes' => $data['notes'] ?? null,
-                                ]);
+                            if (! $invoice) {
+                                Notification::make()
+                                    ->title('No unpaid bill')
+                                    ->body('This seller has no unpaid bill, so nothing was recorded.')
+                                    ->warning()
+                                    ->send();
 
-                                $invoice->update([
-                                    'status' => SellerInvoice::STATUS_PAID,
-                                    'paid_at' => now(),
-                                ]);
+                                return;
                             }
 
-                            if ($record->monetization_status === 'suspended' && $record->user) {
-                                app(MonetizationSuspensionService::class)->restoreSeller($record->user, auth()->user());
+                            try {
+                                app(SellerInvoiceSettlementService::class)->recordOfflinePayment($seller, $invoice->id, $data, auth()->user());
+                            } catch (DomainException $exception) {
+                                Notification::make()->title('Payment not recorded')->body($exception->getMessage())->danger()->send();
+
+                                return;
                             }
 
                             Notification::make()->title('Offline payment recorded and seller account updated')->success()->send();
@@ -208,6 +209,7 @@ class SellerMonetizationResource extends Resource
                                 ->default(3)
                                 ->required(),
                         ])
+                        ->visible(fn (SellerProfile $record): bool => $record->monetization_status === 'grace_period')
                         ->action(function (SellerProfile $record, array $data): void {
                             $sub = $record->user?->activeSellerSubscription;
                             if ($sub) {

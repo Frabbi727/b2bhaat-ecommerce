@@ -5,15 +5,13 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Models\SellerInvoice;
-use App\Models\SellerPayment;
 use App\Models\SellerSubscription;
-use App\Models\SellerWallet;
-use App\Models\WalletTransaction;
 use App\Services\Monetization\MonetizationSuspensionService;
+use App\Services\Monetization\SellerInvoiceSettlementService;
 use App\Services\Settings\StoreConfigurationService;
 use App\Services\Sms\OrderNotificationService;
+use DomainException;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class MonetizationProcessRenewalsCommand extends Command
@@ -88,40 +86,18 @@ class MonetizationProcessRenewalsCommand extends Command
             // If auto-renew with wallet balance is enabled and seller has sufficient funds
             $wallet = $seller->sellerWallet;
             if ($subscription->auto_renew && $config->isWalletAutoRenewAllowed() && $wallet && (float) $wallet->available_balance >= (float) $invoice->total_amount) {
-                DB::transaction(function () use ($wallet, $invoice, $subscription, $seller): void {
-                    $lockedWallet = SellerWallet::where('id', $wallet->id)->lockForUpdate()->firstOrFail();
-                    $lockedWallet->decrement('available_balance', (float) $invoice->total_amount);
+                try {
+                    app(SellerInvoiceSettlementService::class)->payFromWallet(
+                        $seller,
+                        $invoice->id,
+                        'AUTO-WALLET',
+                        "Auto-renewed subscription for Invoice #{$invoice->invoice_number}"
+                    );
+                } catch (DomainException) {
+                    $notifications->sendSubscriptionRenewalReminder($seller, $subscription, $invoice);
 
-                    WalletTransaction::create([
-                        'seller_wallet_id' => $lockedWallet->id,
-                        'transaction_type' => 'subscription_payment',
-                        'status' => 'disbursed',
-                        'amount' => (float) $invoice->total_amount,
-                        'running_balance' => (float) $lockedWallet->available_balance,
-                        'reference_note' => "Auto-renewed subscription for Invoice #{$invoice->invoice_number}",
-                    ]);
-
-                    SellerPayment::create([
-                        'invoice_id' => $invoice->id,
-                        'seller_id' => $seller->id,
-                        'amount' => (float) $invoice->total_amount,
-                        'payment_method' => SellerPayment::METHOD_WALLET_BALANCE,
-                        'transaction_reference' => "AUTO-WALLET-{$lockedWallet->id}-".time(),
-                        'status' => SellerPayment::STATUS_SUCCESSFUL,
-                        'verified_at' => now(),
-                    ]);
-
-                    $invoice->update([
-                        'status' => SellerInvoice::STATUS_PAID,
-                        'paid_at' => now(),
-                    ]);
-
-                    $cycleDays = $subscription->plan?->billing_cycle_days ?: 30;
-                    $subscription->update([
-                        'ends_at' => $subscription->ends_at->addDays($cycleDays),
-                        'status' => SellerSubscription::STATUS_ACTIVE,
-                    ]);
-                });
+                    continue;
+                }
 
                 $notifications->sendSubscriptionRenewalReminder($seller, $subscription, $invoice);
                 $processedCount++;
