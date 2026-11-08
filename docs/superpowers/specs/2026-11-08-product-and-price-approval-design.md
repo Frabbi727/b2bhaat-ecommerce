@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-08
 - **Issue:** INV-8, Wave 1 (`documents/audit-2026-11/ISSUE_REGISTER.md`)
-- **Status:** draft for owner approval
+- **Status:** draft for owner approval. The owner answered the open questions on 2026-11-08; see §11
 
 ## 1. Intent
 
@@ -22,6 +22,9 @@ Speed still matters for sellers. Stock changes must stay instant, and a seller m
 | Stock | **Instant.** Never reviewed |
 | A seller edits again while a change is waiting | **Supersede.** The newest proposal replaces the older pending one |
 | Reviewers | **Admin**: roles `super_admin` and `admin`, the same two roles that can open the existing admin *Products* page |
+| Other edits to an approved product | **Instant**: title, descriptions, photos, specifications, variations, stock and cost price. **Exception: a category change waits for approval**, like a price change |
+| When a new product enters the queue | When the seller turns "Visible" on (publishes). Hidden drafts are never queued |
+| Products already live on deploy day | Treated as already approved. Admins can spot-check older listings using the review filter and "Hide from shop" |
 
 ### Goals
 - No buyer-facing path can show an unapproved product or charge an unapproved price.
@@ -30,7 +33,7 @@ Speed still matters for sellers. Stock changes must stay instant, and a seller m
 - Every submission, decision and supersede is audited and kept forever.
 
 ### Non-goals
-- Reviewing stock, variations' stock, photos, descriptions or other content of an approved product. See §11, question 1.
+- Reviewing stock, photos, descriptions, specifications, variations or other content of an approved product (owner decision). Only price, compare-at price, sales channel and **category** changes are reviewed.
 - RFQ quotations, which are negotiated per buyer, and flash-sale offer prices, which are already approved per campaign.
 - Admin editing a seller's price ("approve with changes"). An admin approves or rejects; the seller fixes and resubmits.
 - Several reviewers or a maker-checker for approvals.
@@ -84,7 +87,7 @@ approved ──(never goes back)                                 (later edits us
 
 ### 3.2 Price change request: a new table, for approved products only
 
-When a seller saves an **approved** product and the pricing differs from the live pricing, the live rows are not touched. Instead the system stores a **proposal**: the full new price set plus the compare-at price.
+When a seller saves an **approved** product and its pricing, sales channel or category differs from the live values, the live values are not touched. Instead the system stores a **proposal**: the full new price set plus the compare-at price, plus the new channel and/or category if they changed. A category-only change is a request with the prices unchanged. In the UI these are called "changes waiting for approval"; in code, a *product change request*.
 
 | `status` | Meaning |
 |---|---|
@@ -99,6 +102,8 @@ There is at most **one `pending` request per product**, enforced by the database
 "Pricing" covers:
 - every `product_prices` row for the product: channel, min qty, max qty, unit price, and the variation if set;
 - `products.regular_price`.
+
+It also covers `products.sales_channel_id` and `products.category_id` when they change.
 
 It does **not** cover `buy_price`, which is private and saved instantly as today.
 
@@ -122,7 +127,7 @@ All changes are additive. The migrations are safe on PostgreSQL production and n
 
 **Backfill, in the same migration.** Every existing product becomes `approval_status = 'approved'`, with `approved_at = created_at` and `approved_by_user_id = null`. This grandfathers the current catalog, so nothing that is live today disappears on deploy. Rows are updated in chunks of 1,000. The `down()` drops the columns. Index: `(approval_status, submitted_at)` for the queue.
 
-### 4.2 New table `product_price_change_requests`
+### 4.2 New table `product_change_requests`
 
 | Column | Type | Notes |
 |---|---|---|
@@ -132,7 +137,10 @@ All changes are additive. The migrations are safe on PostgreSQL production and n
 | `status` | `string(20)`, indexed | §3.2 |
 | `proposed_prices` | `jsonb` (json on SQLite) | List of `{sales_channel_id, variation_id\|null, min_quantity, max_quantity\|null, unit_price}`, normalised (§6.2) |
 | `proposed_regular_price` | `decimal(12,2)`, nullable | |
-| `proposed_sales_channel_id` | `foreignId` → sales_channels, nullable | Set only when the seller also changed the product's channel (§7, case 13) |
+| `proposed_sales_channel_id` | `foreignId` → sales_channels, nullable | Set only when the seller changed the product's channel (§7, case 13) |
+| `proposed_category_id` | `foreignId` → categories, nullable | Set only when the seller changed the category (§7, case 18) |
+| `base_sales_channel_id` | `foreignId` → sales_channels | Live channel at submission |
+| `base_category_id` | `foreignId` → categories | Live category at submission |
 | `base_prices` | `jsonb` | The live price set when the seller submitted, same shape |
 | `base_regular_price` | `decimal(12,2)`, nullable | |
 | `base_fingerprint` | `string(64)` | SHA-256 of the normalised live pricing at submission |
@@ -149,7 +157,7 @@ Indexes:
 - `(product_id, status)`;
 - `(seller_id, status)`.
 
-**One pending request per product.** A partial unique index: `CREATE UNIQUE INDEX product_price_change_requests_one_pending ON product_price_change_requests (product_id) WHERE status = 'pending'`. PostgreSQL and SQLite both support it; use `DB::statement` with a driver check if needed.
+**One pending request per product.** A partial unique index: `CREATE UNIQUE INDEX product_change_requests_one_pending ON product_change_requests (product_id) WHERE status = 'pending'`. PostgreSQL and SQLite both support it; use `DB::statement` with a driver check if needed.
 
 Rows are **never deleted** by application code. There is no delete action in any UI, and the model has no delete policy.
 
@@ -164,7 +172,7 @@ Create it with `php artisan make:notifications-table` (Laravel's standard table)
 - Leave them **out of `$fillable`**, so seller form data can never set them. Only `ProductApprovalService` writes them, through `forceFill`.
 - Relations: `priceChangeRequests()` and `pendingPriceChange()`, a `hasOne` with status `pending`.
 
-**`ProductPriceChangeRequest`:**
+**`ProductChangeRequest`:**
 - Uses `Auditable` with `$auditModule = 'approvals'`.
 - Casts the JSON columns to `array`.
 - Relations: `product`, `seller`, `submittedBy`, `reviewedBy`, `supersededBy`.
@@ -194,17 +202,17 @@ This is the only class that changes approval state. Every public method runs in 
 | `withdrawProduct(Product, User $seller)` | seller turns Visible off while pending | `pending_review` → `draft` |
 | `approveProduct(Product, User $admin, string $expectedVersion)` | admin | Requires `pending_review`. Checks the version (§6.3), sets `approved`, `approved_at` (only if null), `approved_by_user_id` and `reviewed_by_user_id`. Re-runs listing rules (§6.4). Notifies the seller |
 | `rejectProduct(Product, User $admin, string $reason, string $expectedVersion)` | admin | Requires `pending_review`. Reason 10–1000 chars. Sets `rejected` and notifies the seller |
-| `proposePriceChange(Product, User $seller, array $prices, ?float $regularPrice, ?string $note)` | seller edit of an approved product | Normalises and validates (§6.2). If equal to live pricing, returns null and creates nothing. Otherwise supersedes any pending request (status `superseded`, `superseded_by_id` = new id) and creates the new `pending` request with base snapshot and fingerprint. Notifies admins once per product per hour, so supersedes don't spam |
-| `withdrawPriceChange(ProductPriceChangeRequest, User $seller)` | seller | `pending` → `withdrawn` |
-| `approvePriceChange(ProductPriceChangeRequest, User $admin)` | admin | Requires `pending`. Locks the product, then **recomputes the live fingerprint and requires it to equal `base_fingerprint`** (§7, case 6). Re-validates the proposal. Deletes the product's `product_prices` rows, inserts the proposed set and sets `regular_price`. Marks `approved` with the reviewer and time. Flushes `FlashSalePricing` caches. Notifies the seller |
-| `rejectPriceChange(ProductPriceChangeRequest, User $admin, string $reason)` | admin | `pending` → `rejected` with the reason. Notifies the seller |
+| `proposePriceChange(Product, User $seller, array $prices, ?float $regularPrice, ?int $salesChannelId, ?int $categoryId, ?string $note)` | seller edit of an approved product | Normalises and validates (§6.2). If prices, channel and category all equal the live values, returns null and creates nothing. Otherwise supersedes any pending request (status `superseded`, `superseded_by_id` = new id) and creates the new `pending` request with base snapshot and fingerprint. Notifies admins once per product per hour, so supersedes don't spam |
+| `withdrawPriceChange(ProductChangeRequest, User $seller)` | seller | `pending` → `withdrawn` |
+| `approvePriceChange(ProductChangeRequest, User $admin)` | admin | Requires `pending`. Locks the product, then **recomputes the live fingerprint and requires it to equal `base_fingerprint`** (§7, case 6). Re-validates the proposal. Deletes the product's `product_prices` rows, inserts the proposed set, sets `regular_price`, and sets `sales_channel_id` / `category_id` when proposed (the category must still be active). Marks `approved` with the reviewer and time. Flushes `FlashSalePricing` caches. Notifies the seller |
+| `rejectPriceChange(ProductChangeRequest, User $admin, string $reason)` | admin | `pending` → `rejected` with the reason. Notifies the seller |
 
 - **Failures.** A wrong state or a stale version throws `App\Exceptions\ApprovalConflictException`, a `DomainException` with a plain-language message. Pages catch it and show a notification.
 - **Authorisation.** Checked inside the service (§9) as well as in the UI.
 
 ### 6.2 Normalising and validating a price set
 - Normalised form: sort by `sales_channel_id`, then `variation_id` (null first), then `min_quantity`. Cast money to strings with 2 decimals, integers to int, and an empty max to null.
-- The fingerprint is the SHA-256 of the JSON of the normalised set plus the compare-at price.
+- The fingerprint is the SHA-256 of the JSON of the normalised set plus the compare-at price, the sales channel and the category.
 - Validation reuses the form's existing rules:
   - `ProductForm::pricesMatchChannelRule`: tiers match the product's channel;
   - `unit_price` ≥ 0.01; `min_quantity` ≥ 1; `max_quantity` null or ≥ min;
@@ -231,7 +239,7 @@ This is the only class that changes approval state. Every public method runs in 
 | `CreateProduct`, **Publish** | Create with `approval_status = draft`, then `submitProduct()`. Success message: "Sent for review. Buyers will see it once an admin approves it." |
 | `CreateProduct`, **Save as hidden draft** | Stays `draft` |
 | `EditProduct`, product not approved | Prices save directly as today. If `is_active` is on and the status is `draft` or `rejected`, call `submitProduct()`. If `is_active` is turned off while `pending_review`, call `withdrawProduct()` |
-| `EditProduct`, product approved | The `prices` repeater and `regular_price` must **not** write to the live tables. Make the pricing fields' relationship saving conditional (skip when approved), then in `afterSave` call `proposePriceChange()` with the submitted values. Every other field (title, photos, stock, variations, cost price) saves instantly as today. Notification: "Changes saved. Your new prices are waiting for approval; buyers still pay the current prices." |
+| `EditProduct`, product approved | The `prices` repeater, `regular_price`, `sales_channel_id` and `category_id` must **not** write to the live values (strip the two ids from the saved data in `mutateFormDataBeforeSave`). Make the pricing fields' relationship saving conditional (skip when approved), then in `afterSave` call `proposePriceChange()` with the submitted values. Every other field (title, photos, stock, variations, cost price) saves instantly as today. Notification: "Changes saved. Your new prices are waiting for approval; buyers still pay the current prices." |
 | `ProductsTable` toggle and bulk **Show** | Turning on an unapproved product calls `submitProduct()`. Bulk Show on a mix: approved products go live; the others are sent for review. The notification counts both |
 | `ProductDuplicationService::duplicate()` | The copy is `draft` (approval fields not copied). The replicate exclusions list gains the approval columns |
 | `ProductBulkImportService` | New products: rows with `visible = yes` are created and submitted (`pending_review`); others are `draft`. The import summary says "N products sent for review" |
@@ -271,6 +279,8 @@ This is the only class that changes approval state. Every public method runs in 
 | 15 | Admin account removed | Reviewer FKs `nullOnDelete`; the audit rows keep the name |
 | 16 | A very large price set (many variation tiers) | Proposal JSON capped at 200 rows, enforced by the validator |
 | 17 | Old pending requests | Nothing expires automatically. The queue sorts oldest first and shows each item's age |
+| 18 | Seller moves an approved product to another category | Held like a price change: the product stays in its current category, and its current prices keep working, until an admin approves. A category change and a price change made together form one request |
+| 19 | Category deactivated while a request proposes it | Approval is refused with "That category is no longer available"; the seller picks another |
 
 ## 8. User interface
 
@@ -284,7 +294,7 @@ This is the only class that changes approval state. Every public method runs in 
 - **Edit page.**
   - The subheading shows the state: "Waiting for review since 3 Nov", "Rejected: <reason>", or "Live".
   - For an approved product with a pending price change, show a callout above Pricing:
-    - "Waiting for approval: new prices (submitted 2 h ago)";
+    - "Waiting for approval: new prices / new category (submitted 2 h ago)";
     - a compact table of old and new prices per tier, with the compare-at price;
     - an optional note field;
     - a **Withdraw** button;
@@ -305,7 +315,7 @@ This is the only class that changes approval state. Every public method runs in 
      - The review view shows:
        - an old-against-new table per tier;
        - the compare-at change;
-       - the channel change (case 13);
+       - the channel change (case 13) and the category change (case 18), old against new;
        - the seller's note;
        - live or upcoming flash campaigns for the product, with offer prices;
        - recent price history (the last 5 approved requests).
@@ -314,6 +324,8 @@ This is the only class that changes approval state. Every public method runs in 
 - The existing **Products** moderation page gains a "Review" column and filter.
 - Every decision shows a Filament notification. On a conflict (§7, cases 1 and 5) the notification explains what happened and the row refreshes.
 
+- **Spot-checking the existing catalog.** The admin Products page filter "Approved on deploy (never reviewed)" lists products whose `approved_by_user_id` is null. Admins can open them and use "Hide from shop" on anything bad. No automatic hiding.
+
 ### 8.3 Wording rules
 - Use plain language: "Waiting for review", "Approved", "Not approved".
 - Never use internal words such as "pending_review", "superseded" or "fingerprint". A superseded request reads "Replaced by a newer price".
@@ -321,7 +333,7 @@ This is the only class that changes approval state. Every public method runs in 
 
 ## 9. Security
 - **Policies.**
-  - `ProductPriceChangeRequestPolicy`:
+  - `ProductChangeRequestPolicy`:
     - `viewAny`: admin roles, or a seller (scoped to their own);
     - `view`: admin roles, or the seller who owns it;
     - `review`: `super_admin` or `admin`;
@@ -341,7 +353,7 @@ This is the only class that changes approval state. Every public method runs in 
 
 ## 10. Audit logging
 - New audit module **`approvals`**, added to `config/audit.php` `protected_modules`.
-- `ProductPriceChangeRequest` is `Auditable`, so creation and every status change are logged with old and new values.
+- `ProductChangeRequest` is `Auditable`, so creation and every status change are logged with old and new values.
 - `ProductApprovalService` writes explicit audit events through `AuditService::record` with `module = 'approvals'`:
 
   | `action` | When | `metadata` |
@@ -359,16 +371,16 @@ This is the only class that changes approval state. Every public method runs in 
 - The actor comes from the logged-in user; the seller ID is set for seller filtering.
 - Writes are synchronous (`sync: true`), because these are business decisions.
 
-## 11. Questions for the owner (answers change what gets built)
+## 11. Owner answers (2026-11-08)
 
-1. **Content edits on approved products.** Do title, description, photos, category and variation changes on an already approved product go live instantly, as designed here, or do any of them need approval too? The earlier decision named only "new products and price changes".
-2. **When a new product is reviewed.** Designed: only once the seller turns "Visible" on (publish). Hidden drafts are not sent to admins. Is that right, or should every saved product go to the queue?
-3. **Existing catalog.** Designed: everything live today is treated as already approved on deploy. Alternatively, all current products could go into the queue, which would hide them until reviewed.
+1. **Other edits to approved products.** Title, descriptions, photos, specifications and variations go live instantly. **A category change waits for approval**, like a price change, because moving an approved product into a category it doesn't belong in is the main bait-and-switch risk. Category changes are rare, so this adds little admin work.
+2. **When a new product enters the queue.** When the seller turns "Visible" on (publish). Hidden drafts are never queued.
+3. **Products already live.** Treated as already approved on deploy, so the shop never empties. Admins can spot-check them through the "Approved on deploy (never reviewed)" filter (§8.2) and hide anything bad.
 
 ## 12. Decided by the designer (check while reading)
 - Pending products with Visible on count toward the listing limit (§6.4).
 - Proposals equal to live prices withdraw any pending request (§7, case 3).
-- A channel change on an approved product waits with the price change (§7, case 13).
+- A channel change on an approved product waits with the price change (§7, case 13). A category change does too (owner decision, case 18).
 - No automatic expiry of pending items (§7, case 17).
 - Admin bell plus seller bell and email; no SMS (§6.6).
 - Bulk approve for new products only (§8.2).
@@ -378,7 +390,7 @@ This is the only class that changes approval state. Every public method runs in 
 ## 13. Tests (PHPUnit feature tests; factories and seeders as in the existing suite)
 
 **Database and migration**
-- The migration backfills existing products as `approved` with `approved_at = created_at`. Running `down()` then `up()` is clean.
+- The migration backfills existing products as `approved` with `approved_at = created_at` and `approved_by_user_id` null; the admin "never reviewed" filter lists them. Running `down()` then `up()` is clean.
 - The partial unique index refuses a second `pending` request for the same product.
 
 **Buyer visibility** (`ProductApprovalVisibilityTest`)
@@ -402,6 +414,8 @@ This is the only class that changes approval state. Every public method runs in 
 - An edit back to the live prices withdraws the pending request.
 - Withdraw works only for the owner and only while pending.
 - A channel change on an approved product is held with the price change (case 13).
+- A category-only change on an approved product creates a request, and the product stays in its old category until approved (case 18). Title, photo and variation edits create no request.
+- Approval is refused when the proposed category was deactivated (case 19).
 - The rate limit refuses the 31st proposal in an hour.
 - Stock sheet import while a request is pending updates stock instantly.
 
