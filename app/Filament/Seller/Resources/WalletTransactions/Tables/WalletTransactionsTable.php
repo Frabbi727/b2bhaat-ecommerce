@@ -1,0 +1,194 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Filament\Seller\Resources\WalletTransactions\Tables;
+
+use App\Models\WalletTransaction;
+use Filament\Forms\Components\DatePicker;
+use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+
+class WalletTransactionsTable
+{
+    public static function configure(Table $table): Table
+    {
+        return $table
+            ->defaultSort('created_at', 'desc')
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['subOrder', 'wallet']))
+            ->columns([
+                TextColumn::make('created_at')
+                    ->label('Date & Time')
+                    ->dateTime('d M Y, h:i A')
+                    ->sortable(),
+
+                TextColumn::make('transaction_type')
+                    ->label('Type')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state): string => self::typeLabel($state))
+                    ->color(fn (string $state): string => match ($state) {
+                        WalletTransaction::TYPE_ESCROW_RELEASE,
+                        WalletTransaction::TYPE_PAYOUT_REVERSAL => 'success',
+                        WalletTransaction::TYPE_ESCROW_HOLD,
+                        WalletTransaction::TYPE_ESCROW_HOLD_ADJUSTMENT => 'warning',
+                        WalletTransaction::TYPE_PAYOUT => 'info',
+                        WalletTransaction::TYPE_RETURN_REVERSAL,
+                        WalletTransaction::TYPE_ESCROW_REFUND => 'danger',
+                        WalletTransaction::TYPE_COD_SELF_COLLECTED,
+                        WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL => 'gray',
+                        default => 'gray',
+                    }),
+
+                TextColumn::make('reference_note')
+                    ->label('Reference / Details')
+                    ->wrap()
+                    ->description(fn (WalletTransaction $record): ?string => $record->subOrder ? 'Package #'.$record->subOrder->sub_order_number : null)
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->where(
+                        fn (Builder $q) => $q
+                            ->where('reference_note', 'like', "%{$search}%")
+                            ->orWhereHas('subOrder', fn (Builder $sq) => $sq->where('sub_order_number', 'like', "%{$search}%"))
+                    )),
+
+                TextColumn::make('amount')
+                    ->label('Amount')
+                    ->fontFamily('mono')
+                    ->weight('bold')
+                    ->sortable()
+                    ->formatStateUsing(fn (WalletTransaction $record): string => self::formatSignedAmount($record))
+                    ->color(fn (WalletTransaction $record): string => self::amountColor($record)),
+
+                TextColumn::make('running_balance')
+                    ->label('Running Balance')
+                    ->fontFamily('mono')
+                    ->formatStateUsing(fn ($state): string => '৳'.number_format((float) $state, 2))
+                    ->sortable(),
+
+                TextColumn::make('status')
+                    ->label('Payout Status')
+                    ->badge()
+                    ->placeholder('—')
+                    ->formatStateUsing(fn (?string $state): ?string => match ($state) {
+                        WalletTransaction::STATUS_REQUESTED => 'Waiting to be paid',
+                        WalletTransaction::STATUS_DISBURSED => 'Paid',
+                        WalletTransaction::STATUS_REJECTED => 'Rejected',
+                        default => null,
+                    })
+                    ->color(fn (?string $state): string => match ($state) {
+                        WalletTransaction::STATUS_REQUESTED => 'warning',
+                        WalletTransaction::STATUS_DISBURSED => 'success',
+                        WalletTransaction::STATUS_REJECTED => 'danger',
+                        default => 'gray',
+                    }),
+            ])
+            ->filters([
+                Filter::make('created_at')
+                    ->schema([
+                        DatePicker::make('from')->label('From date'),
+                        DatePicker::make('until')->label('Until date'),
+                    ])
+                    ->columns(2)
+                    ->query(fn (Builder $query, array $data): Builder => $query
+                        ->when($data['from'] ?? null, fn (Builder $q, $date) => $q->whereDate('created_at', '>=', $date))
+                        ->when($data['until'] ?? null, fn (Builder $q, $date) => $q->whereDate('created_at', '<=', $date))),
+
+                SelectFilter::make('transaction_type')
+                    ->label('Transaction Type')
+                    ->options([
+                        WalletTransaction::TYPE_ESCROW_RELEASE => 'Escrow Released',
+                        WalletTransaction::TYPE_ESCROW_HOLD => 'Held in Escrow',
+                        WalletTransaction::TYPE_PAYOUT => 'Payout Withdrawal',
+                        WalletTransaction::TYPE_PAYOUT_REVERSAL => 'Payout Refunded',
+                        WalletTransaction::TYPE_RETURN_REVERSAL => 'Return / Refund Reversal',
+                        WalletTransaction::TYPE_ESCROW_REFUND => 'Escrow Refund',
+                        WalletTransaction::TYPE_COD_SELF_COLLECTED => 'COD Adjustment',
+                    ]),
+
+                SelectFilter::make('status')
+                    ->label('Payout Status')
+                    ->options([
+                        WalletTransaction::STATUS_REQUESTED => 'Waiting to be paid',
+                        WalletTransaction::STATUS_DISBURSED => 'Paid',
+                        WalletTransaction::STATUS_REJECTED => 'Rejected',
+                    ]),
+            ])
+            ->emptyStateIcon(Heroicon::OutlinedDocumentText)
+            ->emptyStateHeading('No transactions recorded yet')
+            ->emptyStateDescription('All escrow releases, commission withholdings, and payout withdrawals will appear here automatically.');
+    }
+
+    public static function typeLabel(string $type): string
+    {
+        return match ($type) {
+            WalletTransaction::TYPE_ESCROW_RELEASE => 'Escrow Released',
+            WalletTransaction::TYPE_ESCROW_HOLD,
+            WalletTransaction::TYPE_ESCROW_HOLD_ADJUSTMENT => 'Held in Escrow',
+            WalletTransaction::TYPE_PAYOUT => 'Payout Withdrawal',
+            WalletTransaction::TYPE_PAYOUT_REVERSAL => 'Payout Refunded',
+            WalletTransaction::TYPE_RETURN_REVERSAL,
+            WalletTransaction::TYPE_ESCROW_REFUND => 'Return / Refund Reversal',
+            WalletTransaction::TYPE_COD_SELF_COLLECTED,
+            WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL => 'COD Adjustment',
+            default => str($type)->headline()->toString(),
+        };
+    }
+
+    public static function formatSignedAmount(WalletTransaction $record): string
+    {
+        $amount = number_format(abs((float) $record->amount), 2);
+
+        if (in_array($record->transaction_type, [
+            WalletTransaction::TYPE_ESCROW_RELEASE,
+            WalletTransaction::TYPE_PAYOUT_REVERSAL,
+            WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL,
+        ], true)) {
+            return '+৳'.$amount;
+        }
+
+        if (in_array($record->transaction_type, [
+            WalletTransaction::TYPE_PAYOUT,
+            WalletTransaction::TYPE_RETURN_REVERSAL,
+            WalletTransaction::TYPE_COD_SELF_COLLECTED,
+            WalletTransaction::TYPE_ESCROW_REFUND,
+        ], true)) {
+            return '-৳'.$amount;
+        }
+
+        return '৳'.$amount;
+    }
+
+    public static function amountColor(WalletTransaction $record): string
+    {
+        if (in_array($record->transaction_type, [
+            WalletTransaction::TYPE_ESCROW_RELEASE,
+            WalletTransaction::TYPE_PAYOUT_REVERSAL,
+            WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL,
+        ], true)) {
+            return 'success';
+        }
+
+        if (in_array($record->transaction_type, [
+            WalletTransaction::TYPE_PAYOUT,
+            WalletTransaction::TYPE_RETURN_REVERSAL,
+            WalletTransaction::TYPE_ESCROW_REFUND,
+        ], true)) {
+            return 'danger';
+        }
+
+        if ($record->transaction_type === WalletTransaction::TYPE_COD_SELF_COLLECTED) {
+            return 'gray';
+        }
+
+        if (in_array($record->transaction_type, [
+            WalletTransaction::TYPE_ESCROW_HOLD,
+            WalletTransaction::TYPE_ESCROW_HOLD_ADJUSTMENT,
+        ], true)) {
+            return 'warning';
+        }
+
+        return 'gray';
+    }
+}
