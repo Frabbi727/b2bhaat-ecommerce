@@ -163,6 +163,7 @@
                             </div>
                             <div class="py-1">
                                 <a href="{{ route('customer.orders') }}" class="block px-3 py-1.5 text-slate-700 hover:bg-slate-50">My Orders & Receipts</a>
+                                <a href="{{ route('customer.rfqs') }}" class="block px-3 py-1.5 text-slate-700 hover:bg-slate-50">My Quotations & RFQs</a>
                                 <a href="{{ route('customer.addresses') }}" class="block px-3 py-1.5 text-slate-700 hover:bg-slate-50">Saved Delivery Addresses</a>
                                 <a href="{{ route('customer.wishlist') }}" class="block px-3 py-1.5 text-slate-700 hover:bg-slate-50">Saved Wishlist</a>
                             </div>

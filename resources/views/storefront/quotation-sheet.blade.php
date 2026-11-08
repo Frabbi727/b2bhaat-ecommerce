@@ -35,15 +35,31 @@
         </a>
         <div class="flex items-center gap-3">
             @if ($rfq->seller_quoted_price && auth()->check() && (auth()->id() === $rfq->buyer_id || strtolower((string) auth()->user()->email) === strtolower((string) $rfq->buyer_email)))
-                <form action="{{ route('rfq.quotation.accept', $rfq->id) }}" method="POST" class="inline">
-                    @csrf
-                    <button 
-                        type="submit" 
-                        class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-sm flex items-center gap-2 cursor-pointer"
-                    >
-                        <span>✓ Accept Quote & Order (৳{{ number_format((float) $rfq->seller_quoted_price, 2) }}/unit)</span>
-                    </button>
-                </form>
+                @if ($rfq->canBeAccepted())
+                    <form action="{{ route('rfq.quotation.accept', $rfq->id) }}" method="POST" class="inline">
+                        @csrf
+                        <button 
+                            type="submit" 
+                            class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-sm flex items-center gap-2 cursor-pointer"
+                        >
+                            <span>✓ Accept Quote & Order (৳{{ number_format((float) $rfq->seller_quoted_price, 2) }}/unit)</span>
+                        </button>
+                    </form>
+                    <form action="{{ route('rfq.quotation.decline', $rfq->id) }}" method="POST" class="inline">
+                        @csrf
+                        <button 
+                            type="submit" 
+                            class="px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs border border-rose-200 transition shadow-sm flex items-center gap-1.5 cursor-pointer"
+                            onclick="return confirm('Are you sure you want to decline this quote?')"
+                        >
+                            <span>✕ Decline Quote</span>
+                        </button>
+                    </form>
+                @elseif ($rfq->isExpired())
+                    <span class="px-4 py-2 rounded-xl bg-rose-100 text-rose-800 font-bold text-xs border border-rose-200 flex items-center gap-1.5">
+                        ⚠ Quotation Expired
+                    </span>
+                @endif
             @endif
             <button 
                 onclick="window.print()" 
@@ -56,6 +72,15 @@
             </button>
         </div>
     </div>
+
+    @if ($rfq->isExpired())
+        <div class="no-print w-full max-w-4xl mb-4 bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-2xl flex items-center gap-3">
+            <svg class="w-5 h-5 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            <div class="text-xs">
+                <strong class="font-bold">Quotation Expired:</strong> This commercial quotation has expired and can no longer be accepted.
+            </div>
+        </div>
+    @endif
 
     <!-- Official Pro-Forma Quotation Sheet -->
     <div class="quotation-sheet w-full max-w-4xl bg-white border border-slate-300 shadow-xl p-8 sm:p-10 text-slate-900 text-xs flex flex-col justify-between space-y-6">
@@ -88,7 +113,17 @@
                     </div>
                     <div class="font-mono text-[12px] font-bold text-indigo-700">Ref: QT-RFQ-{{ str_pad($rfq->id, 6, '0', STR_PAD_LEFT) }}</div>
                     <div class="text-[11px] text-slate-600">Issue Date: <strong>{{ $rfq->updated_at->format('d M, Y') }}</strong></div>
-                    <div class="text-[11px] text-slate-500">Valid Until: {{ $rfq->updated_at->addDays(14)->format('d M, Y') }}</div>
+                    <div class="text-[11px] text-slate-500">
+                        Valid Until: 
+                        @if ($rfq->valid_until)
+                            <strong class="{{ $rfq->isExpired() ? 'text-rose-600 font-bold' : '' }}">{{ $rfq->valid_until->format('d M, Y') }}</strong>
+                            @if ($rfq->isExpired())
+                                <span class="text-rose-600 font-semibold">(Expired)</span>
+                            @endif
+                        @else
+                            <strong>{{ $rfq->updated_at->addDays(14)->format('d M, Y') }}</strong>
+                        @endif
+                    </div>
                 </div>
             </div>
         </div>
@@ -159,6 +194,9 @@
         <div class="p-4 rounded-xl border border-slate-200 space-y-2 bg-slate-50/70">
             <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Production Lead Times & Quotation Terms:</span>
             <p class="text-[11px] text-slate-700 leading-relaxed font-medium">
+                @if ($rfq->dispatch_days)
+                    <strong class="text-slate-900">Estimated Dispatch:</strong> Ready within {{ $rfq->dispatch_days }} working days following escrow confirmation.<br>
+                @endif
                 {{ $rfq->seller_notes ?: 'Factory dispatches within 5-7 working days following escrow confirmation. Transit managed via Steadfast / RedX logistics network.' }}
             </p>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-[10px] text-slate-500 border-t border-slate-200/80">

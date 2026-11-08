@@ -12,6 +12,7 @@ use App\Livewire\Storefront\CheckoutComponent;
 use App\Livewire\Storefront\CustomerAddresses;
 use App\Livewire\Storefront\CustomerAuth;
 use App\Livewire\Storefront\CustomerOrders;
+use App\Livewire\Storefront\CustomerRfqs;
 use App\Livewire\Storefront\CustomerWishlist;
 use App\Livewire\Storefront\FlashSaleIndex;
 use App\Livewire\Storefront\FlashSaleShow;
@@ -47,6 +48,7 @@ Route::middleware('throttle:public-lookup')->group(function () {
     Route::get('/invoice/{token}', [InvoiceController::class, 'showByToken'])->name('order.invoice.token');
 });
 Route::get('/my-orders', CustomerOrders::class)->name('customer.orders')->middleware('auth');
+Route::get('/my-rfqs', CustomerRfqs::class)->name('customer.rfqs')->middleware('auth');
 Route::get('/my-addresses', CustomerAddresses::class)->name('customer.addresses')->middleware('auth');
 Route::get('/my-wishlist', CustomerWishlist::class)->name('customer.wishlist')->middleware('auth');
 Route::get('/wholesale/upgrade', WholesaleUpgrade::class)->name('wholesale.upgrade');
