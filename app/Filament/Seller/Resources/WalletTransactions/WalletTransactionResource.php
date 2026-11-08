@@ -35,7 +35,10 @@ class WalletTransactionResource extends Resource
 
     public static function canAccess(): bool
     {
-        return (bool) (auth()->user()?->role?->slug === 'seller');
+        /** @var User|null $user */
+        $user = auth()->user();
+
+        return (bool) ($user && $user->isSeller() && ($user->sellerProfile?->is_approved ?? false));
     }
 
     public static function canCreate(): bool
