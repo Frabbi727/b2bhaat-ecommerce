@@ -6,6 +6,7 @@ namespace App\Filament\Seller\Resources\WalletTransactions;
 
 use App\Filament\Seller\Resources\WalletTransactions\Pages\ListWalletTransactions;
 use App\Filament\Seller\Resources\WalletTransactions\Tables\WalletTransactionsTable;
+use App\Models\User;
 use App\Models\WalletTransaction;
 use BackedEnum;
 use Filament\Resources\Resource;

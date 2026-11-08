@@ -71,6 +71,28 @@ class SellerAccountStatementTest extends TestCase
         $response->assertForbidden();
     }
 
+    public function test_unapproved_seller_cannot_access_seller_account_statement_page(): void
+    {
+        $sellerRole = Role::where('slug', 'seller')->firstOrFail();
+        $seller = User::factory()->create([
+            'role_id' => $sellerRole->id,
+            'is_active' => true,
+        ]);
+
+        SellerProfile::create([
+            'user_id' => $seller->id,
+            'store_name' => 'Unapproved Store',
+            'store_slug' => 'unapproved-store',
+            'is_approved' => false,
+        ]);
+
+        $this->actingAs($seller);
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+
+        $response = $this->get('/seller/account-statement');
+        $response->assertForbidden();
+    }
+
     public function test_multi_tenant_isolation_seller_cannot_see_other_seller_transactions(): void
     {
         $sellerRole = Role::where('slug', 'seller')->firstOrFail();
@@ -319,13 +341,45 @@ class SellerAccountStatementTest extends TestCase
             'reference_note' => 'Payout Transaction',
         ]);
 
+        $txHoldAdj = WalletTransaction::create([
+            'seller_wallet_id' => $wallet->id,
+            'transaction_type' => WalletTransaction::TYPE_ESCROW_HOLD_ADJUSTMENT,
+            'amount' => 120.00,
+            'running_balance' => 600.00,
+            'reference_note' => 'Hold Adjustment Delivery Fee',
+        ]);
+
         $this->actingAs($seller);
         Filament::setCurrentPanel(Filament::getPanel('seller'));
 
         Livewire::test(ListWalletTransactions::class)
             ->filterTable('transaction_type', WalletTransaction::TYPE_ESCROW_RELEASE)
             ->assertCanSeeTableRecords([$txRelease])
-            ->assertCanNotSeeTableRecords([$txPayout]);
+            ->assertCanNotSeeTableRecords([$txPayout, $txHoldAdj])
+            ->filterTable('transaction_type', WalletTransaction::TYPE_ESCROW_HOLD)
+            ->assertCanSeeTableRecords([$txHoldAdj])
+            ->assertCanNotSeeTableRecords([$txRelease, $txPayout]);
+    }
+
+    public function test_statement_table_formats_negative_running_balance_and_escrow_refund_badge(): void
+    {
+        [$seller, $wallet] = $this->createSellerWithWallet();
+
+        $txRefund = WalletTransaction::create([
+            'seller_wallet_id' => $wallet->id,
+            'transaction_type' => WalletTransaction::TYPE_ESCROW_REFUND,
+            'amount' => 250.00,
+            'running_balance' => -50.00,
+            'reference_note' => 'Consignment Cancelled Refund',
+        ]);
+
+        $this->actingAs($seller);
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+
+        Livewire::test(ListWalletTransactions::class)
+            ->assertCanSeeTableRecords([$txRefund])
+            ->assertSee('Escrow Refund')
+            ->assertSee('-৳50.00');
     }
 
     public function test_statement_table_filters_by_payout_status(): void

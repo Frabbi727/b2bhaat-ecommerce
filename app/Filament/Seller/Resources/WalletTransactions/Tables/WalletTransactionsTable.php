@@ -64,7 +64,11 @@ class WalletTransactionsTable
                 TextColumn::make('running_balance')
                     ->label('Running Balance')
                     ->fontFamily('mono')
-                    ->formatStateUsing(fn ($state): string => '৳'.number_format((float) $state, 2))
+                    ->formatStateUsing(function ($state): string {
+                        $val = (float) $state;
+
+                        return $val < 0 ? '-৳'.number_format(abs($val), 2) : '৳'.number_format($val, 2);
+                    })
                     ->sortable(),
 
                 TextColumn::make('status')
@@ -105,7 +109,25 @@ class WalletTransactionsTable
                         WalletTransaction::TYPE_RETURN_REVERSAL => 'Return / Refund Reversal',
                         WalletTransaction::TYPE_ESCROW_REFUND => 'Escrow Refund',
                         WalletTransaction::TYPE_COD_SELF_COLLECTED => 'COD Adjustment',
-                    ]),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+                        if (! $value) {
+                            return $query;
+                        }
+
+                        return match ($value) {
+                            WalletTransaction::TYPE_ESCROW_HOLD => $query->whereIn('transaction_type', [
+                                WalletTransaction::TYPE_ESCROW_HOLD,
+                                WalletTransaction::TYPE_ESCROW_HOLD_ADJUSTMENT,
+                            ]),
+                            WalletTransaction::TYPE_COD_SELF_COLLECTED => $query->whereIn('transaction_type', [
+                                WalletTransaction::TYPE_COD_SELF_COLLECTED,
+                                WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL,
+                            ]),
+                            default => $query->where('transaction_type', $value),
+                        };
+                    }),
 
                 SelectFilter::make('status')
                     ->label('Payout Status')
@@ -128,8 +150,8 @@ class WalletTransactionsTable
             WalletTransaction::TYPE_ESCROW_HOLD_ADJUSTMENT => 'Held in Escrow',
             WalletTransaction::TYPE_PAYOUT => 'Payout Withdrawal',
             WalletTransaction::TYPE_PAYOUT_REVERSAL => 'Payout Refunded',
-            WalletTransaction::TYPE_RETURN_REVERSAL,
-            WalletTransaction::TYPE_ESCROW_REFUND => 'Return / Refund Reversal',
+            WalletTransaction::TYPE_RETURN_REVERSAL => 'Return / Refund Reversal',
+            WalletTransaction::TYPE_ESCROW_REFUND => 'Escrow Refund',
             WalletTransaction::TYPE_COD_SELF_COLLECTED,
             WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL => 'COD Adjustment',
             default => str($type)->headline()->toString(),
