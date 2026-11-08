@@ -237,7 +237,7 @@ class RfqLifecycleTest extends TestCase
 
         $response->assertRedirect('/rfq/'.$rfq->id.'/quotation');
         $this->assertSame('rejected', $rfq->fresh()->status);
-        $this->assertSame('buyer', $rfq->fresh()->rejected_by);
+        $this->assertSame('admin', $rfq->fresh()->rejected_by);
     }
 
     public function test_cannot_decline_already_accepted_quotation(): void

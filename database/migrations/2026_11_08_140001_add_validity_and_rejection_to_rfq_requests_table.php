@@ -14,7 +14,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('rfq_requests', function (Blueprint $table) {
-            $table->timestamp('valid_until')->nullable()->after('seller_notes');
+            $table->timestamp('valid_until')->nullable()->index()->after('seller_notes');
             $table->unsignedInteger('dispatch_days')->nullable()->after('valid_until');
             $table->string('rejected_by', 32)->nullable()->after('dispatch_days');
             $table->text('rejection_reason')->nullable()->after('rejected_by');

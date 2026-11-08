@@ -127,15 +127,19 @@ class QuotationController extends Controller
             'rejection_reason' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        if (! in_array($rfq->status, ['pending', 'quoted'], true)) {
+        $rejectedBy = ($user->isSuperAdmin() && ! $isBuyer) ? 'admin' : 'buyer';
+
+        $affected = RfqRequest::whereKey($rfq->id)
+            ->whereIn('status', ['pending', 'quoted'])
+            ->update([
+                'status' => 'rejected',
+                'rejected_by' => $rejectedBy,
+                'rejection_reason' => $request->input('rejection_reason'),
+            ]);
+
+        if ($affected === 0) {
             return redirect()->back()->with('error', 'This quotation can no longer be declined.');
         }
-
-        $rfq->update([
-            'status' => 'rejected',
-            'rejected_by' => 'buyer',
-            'rejection_reason' => $request->input('rejection_reason'),
-        ]);
 
         return redirect()->back()->with(
             'success',
