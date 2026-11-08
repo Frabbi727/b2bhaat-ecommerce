@@ -15,12 +15,14 @@ use App\Models\Refund;
 use App\Models\SalesChannel;
 use App\Models\User;
 use App\Models\WalletTransaction;
+use App\Services\Accounting\GeneralLedgerService;
 use App\Services\Cart\CartSessionService;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Logistics\CourierStatusService;
 use App\Services\Orders\OrderDisputeService;
 use App\Services\Payments\PaymentVerificationService;
 use App\Services\Settings\StoreConfigurationService;
+use Database\Seeders\AccountingChartOfAccountsSeeder;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use DomainException;
@@ -211,6 +213,22 @@ class PaymentVerificationTest extends TestCase
         $this->assertSame(round($subOrder->fresh()->paidAmount(), 2), round((float) $refund->amount, 2));
         $this->assertFalse(WalletTransaction::where('sub_order_id', $subOrder->id)->exists());
         $this->assertSame('cancelled', $subOrder->fresh()->fulfillmentStatus->slug);
+    }
+
+    public function test_books_owe_the_cancelled_part_to_the_buyer_not_the_seller(): void
+    {
+        $this->seed(AccountingChartOfAccountsSeeder::class);
+        $order = $this->bkashOrder();
+        $subOrder = $order->subOrders->firstOrFail();
+        app(OrderDisputeService::class)->cancelSubOrder($subOrder, 'Changed my mind');
+
+        app(PaymentVerificationService::class)->markVerified($order);
+
+        $ledger = app(GeneralLedgerService::class);
+        $this->assertSame(0.0, $ledger->getBalanceForSlug('seller_escrow_payable', sellerId: $subOrder->seller_id));
+        $this->assertSame(0.0, $ledger->getBalanceForSlug('commission_revenue'));
+        $this->assertSame(0.0, $ledger->getBalanceForSlug('shipping_service_revenue'));
+        $this->assertSame(round($subOrder->fresh()->paidAmount(), 2), $ledger->getBalanceForSlug('customer_refund_payable'));
     }
 
     public function test_escrow_is_never_held_for_a_cancelled_consignment(): void

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Monetization;
 
 use App\Models\Product;
+use App\Models\SellerInvoice;
 use App\Models\SellerSubscription;
 use App\Models\SellerSuspensionEvent;
 use App\Models\User;
@@ -58,22 +59,44 @@ class MonetizationSuspensionService
     }
 
     /**
-     * After a bill is paid, put the store back to normal: a suspended store gets its products back,
-     * and a store in its grace period simply returns to active (MON-1).
+     * After a bill is paid, put the store back to normal (MON-1): a store in its grace period returns to
+     * active, and a store suspended *for non-payment* gets its products back. Nothing changes while another
+     * subscription bill is still unpaid, and a suspension an admin imposed is only lifted by an admin.
      */
     public function restoreAfterPayment(User $seller, ?User $actor = null): void
     {
         $status = $seller->sellerProfile()->value('monetization_status');
 
-        if ($status === 'suspended') {
-            $this->restoreSeller($seller, $actor);
+        if (! in_array($status, ['suspended', 'grace_period'], true)) {
+            return;
+        }
 
+        $stillOwesSubscription = SellerInvoice::where('seller_id', $seller->id)
+            ->where('invoice_type', SellerInvoice::TYPE_SUBSCRIPTION_FEE)
+            ->where('status', SellerInvoice::STATUS_UNPAID)
+            ->whereHas('subscription', fn ($query) => $query->where('status', '!=', SellerSubscription::STATUS_PAYMENT_DUE))
+            ->exists();
+
+        if ($stillOwesSubscription) {
             return;
         }
 
         if ($status === 'grace_period') {
             $seller->sellerProfile()->update(['monetization_status' => 'active']);
+
+            return;
         }
+
+        $openSuspension = SellerSuspensionEvent::where('seller_id', $seller->id)
+            ->whereNull('restored_at')
+            ->latest('id')
+            ->first();
+
+        if ($openSuspension && $openSuspension->trigger_type !== SellerSuspensionEvent::TRIGGER_AUTOMATED_BILLING) {
+            return;
+        }
+
+        $this->restoreSeller($seller, $actor);
     }
 
     /**

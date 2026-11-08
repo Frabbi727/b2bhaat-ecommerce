@@ -13,6 +13,7 @@ use App\Models\SellerProfile;
 use App\Models\SellerSubscription;
 use App\Models\SellerWallet;
 use App\Models\User;
+use App\Services\Monetization\MonetizationSuspensionService;
 use App\Services\Monetization\SellerInvoiceSettlementService;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -220,6 +221,53 @@ class SellerInvoiceSettlementTest extends TestCase
 
         $this->assertSame(4500.0, (float) SellerWallet::where('seller_id', $this->seller->id)->value('available_balance'));
         $this->assertSame(1, SellerPayment::where('seller_id', $this->seller->id)->count());
+    }
+
+    public function test_a_free_plan_switch_does_not_lift_a_suspension_an_admin_imposed(): void
+    {
+        $admin = User::factory()->create(['role_id' => Role::firstOrCreate(['slug' => 'super_admin'], ['name' => 'Super Admin'])->id]);
+        app(MonetizationSuspensionService::class)->suspendSeller($this->seller, 'Counterfeit goods', $admin);
+        $free = SellerPlan::create(['name' => 'Free', 'slug' => 'free', 'subscription_price' => 0, 'max_active_products' => 3, 'is_active' => true]);
+
+        $this->service()->startPlanChange($this->seller, $free->id);
+
+        $this->assertSame('suspended', $this->profile->fresh()->monetization_status);
+    }
+
+    public function test_paying_a_side_bill_does_not_lift_suspension_while_the_renewal_is_unpaid(): void
+    {
+        $this->renewalInvoice();
+        app(MonetizationSuspensionService::class)->suspendSeller($this->seller, 'Renewal not paid');
+
+        $this->service()->payFromWallet($this->seller, $this->renewalInvoice(['invoice_type' => SellerInvoice::TYPE_LISTING_PACK, 'total_amount' => 100, 'subtotal' => 100])->id);
+
+        $this->assertSame('suspended', $this->profile->fresh()->monetization_status);
+    }
+
+    public function test_old_plan_bill_is_voided_when_the_plan_change_is_paid_and_cannot_revive_it(): void
+    {
+        $oldRenewal = $this->renewalInvoice();
+        $change = $this->service()->startPlanChange($this->seller, $this->proPlan->id);
+        $this->service()->payFromWallet($this->seller, $change->id);
+
+        $this->assertSame('void', $oldRenewal->fresh()->status);
+
+        $this->expectException(DomainException::class);
+        $this->service()->payFromWallet($this->seller, $oldRenewal->id);
+    }
+
+    public function test_an_ended_plan_cannot_be_renewed_even_with_an_unpaid_bill(): void
+    {
+        $this->subscription->update(['status' => SellerSubscription::STATUS_EXPIRED]);
+        $invoice = $this->renewalInvoice();
+
+        try {
+            $this->service()->payFromWallet($this->seller, $invoice->id);
+            $this->fail('renewing an ended plan should be refused');
+        } catch (DomainException) {
+            $this->assertSame('unpaid', $invoice->fresh()->status);
+            $this->assertSame(5000.0, (float) SellerWallet::where('seller_id', $this->seller->id)->value('available_balance'));
+        }
     }
 
     /**

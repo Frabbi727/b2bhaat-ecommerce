@@ -11,6 +11,7 @@ use App\Models\OrderStatus;
 use App\Models\OrderTrackingLog;
 use App\Models\PaymentStatus;
 use App\Services\Accounting\EventPipeline\OrderPaymentJournalHandler;
+use App\Services\Accounting\EventPipeline\RefundJournalHandler;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Logistics\CourierStatusService;
@@ -30,6 +31,7 @@ class PaymentVerificationService
         protected StockReservationService $stockReservationService,
         protected OrderPaymentJournalHandler $orderPaymentJournalHandler,
         protected RefundRecorder $refundRecorder,
+        protected RefundJournalHandler $refundJournalHandler,
     ) {}
 
     /**
@@ -102,9 +104,13 @@ class PaymentVerificationService
 
             // A consignment the buyer cancelled while we were checking the payment: the money arrived, so we owe it
             // back instead of holding it for the seller (PAY-1).
-            foreach ($order->subOrders()->with('fulfillmentStatus')->get() as $subOrder) {
+            // Sub-orders are locked so a buyer cancelling at this moment waits for us, then sees the order as paid.
+            foreach ($order->subOrders()->with('fulfillmentStatus')->lockForUpdate()->get() as $subOrder) {
                 if ($subOrder->fulfillmentStatus?->slug === 'cancelled') {
-                    $this->refundRecorder->recordIfPaid($subOrder, 'Cancelled before the payment was verified');
+                    $reason = 'Cancelled before the payment was verified';
+                    $this->refundRecorder->recordIfPaid($subOrder, $reason);
+                    // Take the cancelled part back out of seller escrow, commission and shipping, and owe it to the buyer.
+                    $this->refundJournalHandler->recordPrepaidCancellationRefund($subOrder, 0.0, $reason);
 
                     continue;
                 }

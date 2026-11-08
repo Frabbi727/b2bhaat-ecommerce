@@ -40,6 +40,8 @@ class SellerInvoiceSettlementService
         }
 
         $invoice = DB::transaction(function () use ($seller, $plan): SellerInvoice {
+            // One plan change at a time per seller, even from two open tabs.
+            User::whereKey($seller->id)->lockForUpdate()->first();
             $this->withdrawUnpaidPlanChanges($seller);
 
             $pendingSubscription = SellerSubscription::create([
@@ -236,6 +238,10 @@ class SellerInvoiceSettlementService
             return;
         }
 
+        if (in_array($subscription->status, [SellerSubscription::STATUS_EXPIRED, SellerSubscription::STATUS_CANCELLED], true)) {
+            throw new DomainException("Bill #{$invoice->invoice_number} is for a plan that has already ended. Nothing was charged.");
+        }
+
         // Renewal: add the paid cycle on top of any days the seller still has left.
         $periodStart = $subscription->ends_at && $subscription->ends_at->isFuture() ? $subscription->ends_at : now();
         $subscription->update([
@@ -259,6 +265,11 @@ class SellerInvoiceSettlementService
             ->when($exceptSubscriptionId, fn ($query) => $query->whereKeyNot($exceptSubscriptionId))
             ->get()
             ->each(function (SellerSubscription $subscription): void {
+                // The plan is closed, so its unpaid renewal bill is no longer owed.
+                SellerInvoice::where('subscription_id', $subscription->id)
+                    ->where('status', SellerInvoice::STATUS_UNPAID)
+                    ->update(['status' => SellerInvoice::STATUS_VOID]);
+
                 $subscription->update([
                     'status' => SellerSubscription::STATUS_EXPIRED,
                     'ends_at' => $subscription->ends_at && $subscription->ends_at->isPast() ? $subscription->ends_at : now(),
