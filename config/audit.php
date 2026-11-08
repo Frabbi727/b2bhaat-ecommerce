@@ -21,6 +21,7 @@ return [
 
     'protected_modules' => [
         'accounting',
+        'approvals',
         'audit',
         'auth',
         'finance',
