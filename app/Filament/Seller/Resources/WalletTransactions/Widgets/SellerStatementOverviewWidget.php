@@ -11,6 +11,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class SellerStatementOverviewWidget extends StatsOverviewWidget
 {
+    protected array|int|null $columns = 4;
+
     /**
      * @return array<int, Stat>
      */
