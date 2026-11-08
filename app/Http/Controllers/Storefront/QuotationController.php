@@ -73,6 +73,10 @@ class QuotationController extends Controller
             abort(403, 'Only the prospective buyer can accept this custom quotation.');
         }
 
+        if ($rfq->isExpired()) {
+            return redirect()->back()->with('error', 'This quotation has expired and can no longer be accepted.');
+        }
+
         if (empty($rfq->seller_quoted_price)) {
             return redirect()->back()->with('error', 'This RFQ has not yet received an official quotation from the seller.');
         }
@@ -96,6 +100,46 @@ class QuotationController extends Controller
         return redirect()->route('checkout.index')->with(
             'success',
             "Quotation #QT-RFQ-{$rfq->id} accepted! Added {$rfq->target_quantity}x units at the agreed factory rate of ৳".number_format((float) $rfq->seller_quoted_price, 2).'.'
+        );
+    }
+
+    /**
+     * Decline an open commercial quotation.
+     */
+    public function decline(Request $request, int $id): RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            abort(401, 'Please log in to decline commercial quotations.');
+        }
+
+        $rfq = RfqRequest::findOrFail($id);
+
+        $isBuyer = $rfq->buyer_id === $user->id
+            || ($rfq->buyer_email && strtolower($rfq->buyer_email) === strtolower((string) $user->email));
+
+        if (! $isBuyer && ! $user->isSuperAdmin()) {
+            abort(403, 'Unauthorized');
+        }
+
+        $request->validate([
+            'rejection_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        if (! in_array($rfq->status, ['pending', 'quoted'], true)) {
+            return redirect()->back()->with('error', 'This quotation can no longer be declined.');
+        }
+
+        $rfq->update([
+            'status' => 'rejected',
+            'rejected_by' => 'buyer',
+            'rejection_reason' => $request->input('rejection_reason'),
+        ]);
+
+        return redirect()->back()->with(
+            'success',
+            'Quotation #QT-RFQ-'.$rfq->id.' has been declined.'
         );
     }
 }

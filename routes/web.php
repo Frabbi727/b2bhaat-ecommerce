@@ -54,6 +54,7 @@ Route::get('/become-a-seller', BecomeSeller::class)->name('seller.register');
 Route::get('/order/{order_number}/invoice', [InvoiceController::class, 'show'])->name('order.invoice')->middleware('auth');
 Route::get('/rfq/{id}/quotation', [QuotationController::class, 'show'])->name('rfq.quotation.print')->middleware(['web', 'auth']);
 Route::post('/rfq/{id}/accept-order', [QuotationController::class, 'acceptAndAddToCart'])->name('rfq.quotation.accept')->middleware(['web', 'auth']);
+Route::post('/rfq/{id}/decline', [QuotationController::class, 'decline'])->name('rfq.quotation.decline')->middleware(['web', 'auth']);
 Route::get('/seller/sub-order/{sub_order_number}/shipping-label', [ShippingLabelController::class, 'show'])->name('seller.sub_order.label')->middleware(['web', 'auth']);
 Route::get('/seller/sub-order/{sub_order_number}/challan', [ShippingLabelController::class, 'showChallan'])->name('seller.sub_order.challan')->middleware(['web', 'auth']);
 Route::get('/seller/wallet/statement', [WalletStatementController::class, 'showStatement'])->name('seller.wallet.statement.print')->middleware(['web', 'auth']);

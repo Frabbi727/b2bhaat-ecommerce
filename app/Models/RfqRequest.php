@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use App\Models\Traits\Auditable;
@@ -25,6 +27,10 @@ class RfqRequest extends Model
         'status',
         'seller_quoted_price',
         'seller_notes',
+        'valid_until',
+        'dispatch_days',
+        'rejected_by',
+        'rejection_reason',
     ];
 
     protected function casts(): array
@@ -33,7 +39,19 @@ class RfqRequest extends Model
             'target_quantity' => 'integer',
             'target_unit_price' => 'decimal:2',
             'seller_quoted_price' => 'decimal:2',
+            'valid_until' => 'datetime',
+            'dispatch_days' => 'integer',
         ];
+    }
+
+    public function isExpired(): bool
+    {
+        return $this->valid_until !== null && now()->isAfter($this->valid_until);
+    }
+
+    public function canBeAccepted(): bool
+    {
+        return $this->status === 'quoted' && ! $this->isExpired();
     }
 
     public function product(): BelongsTo
