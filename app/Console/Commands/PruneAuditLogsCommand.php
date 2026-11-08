@@ -5,8 +5,14 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Models\AuditLog;
+use App\Services\Audit\AuditService;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Builder;
 
+/**
+ * Removes routine audit entries past the retention window. Money, accounting, sign-in, billing and settings
+ * history (config `audit.protected_modules`) is never removed, and every run leaves its own audit entry (AUD-1).
+ */
 class PruneAuditLogsCommand extends Command
 {
     /**
@@ -15,7 +21,7 @@ class PruneAuditLogsCommand extends Command
      * @var string
      */
     protected $signature = 'audit:prune
-                            {--days=180 : Number of days of audit logs to retain}
+                            {--days= : Number of days of routine audit logs to retain (default: config audit.retention_days)}
                             {--force : Force deletion without confirmation}';
 
     /**
@@ -25,9 +31,9 @@ class PruneAuditLogsCommand extends Command
      */
     protected $description = 'Prune historical audit logs older than the specified retention window';
 
-    public function handle(): int
+    public function handle(AuditService $auditService): int
     {
-        $days = (int) $this->option('days');
+        $days = (int) ($this->option('days') ?? config('audit.retention_days', 180));
         if ($days <= 0) {
             $this->error('The --days option must be a positive integer.');
 
@@ -35,7 +41,12 @@ class PruneAuditLogsCommand extends Command
         }
 
         $cutoff = now()->subDays($days);
-        $count = AuditLog::query()->where('created_at', '<', $cutoff)->count();
+        /** @var list<string> $protectedModules */
+        $protectedModules = config('audit.protected_modules', []);
+        $prunable = fn (): Builder => AuditLog::query()
+            ->where('created_at', '<', $cutoff)
+            ->where(fn (Builder $query) => $query->whereNotIn('module', $protectedModules)->orWhereNull('module'));
+        $count = $prunable()->count();
 
         if ($count === 0) {
             $this->info("No audit logs older than {$days} days ({$cutoff->toDateTimeString()}) found.");
@@ -49,9 +60,23 @@ class PruneAuditLogsCommand extends Command
             return self::SUCCESS;
         }
 
-        $deleted = AuditLog::query()->where('created_at', '<', $cutoff)->delete();
+        $deleted = $prunable()->delete();
 
-        $this->info("Successfully pruned {$deleted} audit log record(s) older than {$days} days.");
+        $auditService->record([
+            'module' => 'audit',
+            'action' => 'pruned',
+            'description' => "Removed {$deleted} routine audit log entries older than {$days} days",
+            'status' => 'success',
+            'metadata' => [
+                'deleted' => $deleted,
+                'retention_days' => $days,
+                'cutoff' => $cutoff->toDateTimeString(),
+                'protected_modules' => $protectedModules,
+            ],
+            'sync' => true,
+        ]);
+
+        $this->info("Successfully pruned {$deleted} routine audit log record(s) older than {$days} days. Protected history was kept.");
 
         return self::SUCCESS;
     }

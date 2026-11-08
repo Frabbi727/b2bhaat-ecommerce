@@ -30,4 +30,4 @@ Schedule::command('monetization:check-grace-periods')->dailyAt('01:00')->without
 Schedule::command('monetization:enforce-suspensions')->hourly()->withoutOverlapping()->onOneServer();
 
 // Automatically prune historical audit logs older than retention period (default 180 days)
-Schedule::command('audit:prune --days=180 --force')->dailyAt('03:30')->withoutOverlapping()->onOneServer();
+Schedule::command('audit:prune --force')->dailyAt('03:30')->withoutOverlapping()->onOneServer();

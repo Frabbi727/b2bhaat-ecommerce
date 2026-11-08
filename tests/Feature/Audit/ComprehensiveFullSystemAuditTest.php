@@ -213,17 +213,17 @@ class ComprehensiveFullSystemAuditTest extends TestCase
     {
         // 1. Create a 200-day old audit record
         $oldLog = AuditLog::create([
-            'module' => 'orders',
+            'module' => 'products',
             'action' => 'created',
-            'description' => 'Ancient order',
+            'description' => 'Ancient product edit',
             'created_at' => now()->subDays(200),
         ]);
 
         // 2. Create a fresh today record
         $recentLog = AuditLog::create([
-            'module' => 'orders',
+            'module' => 'products',
             'action' => 'created',
-            'description' => 'Recent order',
+            'description' => 'Recent product edit',
             'created_at' => now()->subDays(10),
         ]);
 
@@ -235,5 +235,38 @@ class ComprehensiveFullSystemAuditTest extends TestCase
         $this->assertSame(0, $exitCode);
         $this->assertDatabaseMissing('audit_logs', ['id' => $oldLog->id]);
         $this->assertDatabaseHas('audit_logs', ['id' => $recentLog->id]);
+    }
+
+    /**
+     * AUD-1: money, accounting, sign-in and billing history must survive the nightly prune.
+     */
+    public function test_prune_keeps_protected_history_and_logs_its_own_run(): void
+    {
+        $kept = [];
+        foreach (['finance', 'accounting', 'auth', 'sellers', 'orders', 'monetization', 'payment'] as $module) {
+            $kept[] = AuditLog::create([
+                'module' => $module,
+                'action' => 'updated',
+                'description' => "Old {$module} record",
+                'created_at' => now()->subDays(400),
+            ])->id;
+        }
+        $routine = AuditLog::create([
+            'module' => 'marketing',
+            'action' => 'updated',
+            'description' => 'Old banner edit',
+            'created_at' => now()->subDays(400),
+        ]);
+
+        Artisan::call('audit:prune', ['--force' => true]);
+
+        foreach ($kept as $id) {
+            $this->assertDatabaseHas('audit_logs', ['id' => $id]);
+        }
+        $this->assertDatabaseMissing('audit_logs', ['id' => $routine->id]);
+
+        $runLog = AuditLog::where('module', 'audit')->where('action', 'pruned')->first();
+        $this->assertNotNull($runLog);
+        $this->assertSame(1, $runLog->metadata['deleted']);
     }
 }
