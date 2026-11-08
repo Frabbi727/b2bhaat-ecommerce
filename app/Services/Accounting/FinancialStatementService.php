@@ -39,8 +39,15 @@ class FinancialStatementService
      */
     public function getIncomeStatement(?string $startDate = null, ?string $endDate = null): array
     {
+        $isAllTime = ($startDate === 'all' || $startDate === 'all-time');
+
+        if (! $isAllTime && empty($startDate) && empty($endDate)) {
+            $startDate = now()->startOfMonth()->toDateString();
+            $endDate = now()->endOfMonth()->toDateString();
+        }
+
         $start = null;
-        if (! empty($startDate)) {
+        if (! $isAllTime && ! empty($startDate)) {
             try {
                 $start = Carbon::parse($startDate)->toDateString();
             } catch (\Throwable) {
@@ -49,7 +56,7 @@ class FinancialStatementService
         }
 
         $end = null;
-        if (! empty($endDate)) {
+        if (! $isAllTime && ! empty($endDate)) {
             try {
                 $end = Carbon::parse($endDate)->toDateString();
             } catch (\Throwable) {
@@ -62,6 +69,7 @@ class FinancialStatementService
         }
 
         $periodLabel = match (true) {
+            $isAllTime => 'All Time',
             $start !== null && $end !== null => Carbon::parse($start)->format('M d, Y').' - '.Carbon::parse($end)->format('M d, Y'),
             $start !== null => 'From '.Carbon::parse($start)->format('M d, Y'),
             $end !== null => 'Up to '.Carbon::parse($end)->format('M d, Y'),
@@ -75,8 +83,8 @@ class FinancialStatementService
                 JournalEntryStatus::POSTED->value,
                 JournalEntryStatus::REVERSED->value,
             ])
-            ->when($start !== null, fn ($q) => $q->whereDate('accounting_journal_entries.entry_date', '>=', $start))
-            ->when($end !== null, fn ($q) => $q->whereDate('accounting_journal_entries.entry_date', '<=', $end))
+            ->when(! $isAllTime && $start !== null, fn ($q) => $q->whereDate('accounting_journal_entries.entry_date', '>=', $start))
+            ->when(! $isAllTime && $end !== null, fn ($q) => $q->whereDate('accounting_journal_entries.entry_date', '<=', $end))
             ->select('accounting_journal_lines.account_id')
             ->selectRaw('COALESCE(SUM(accounting_journal_lines.debit), 0) as total_debit')
             ->selectRaw('COALESCE(SUM(accounting_journal_lines.credit), 0) as total_credit')

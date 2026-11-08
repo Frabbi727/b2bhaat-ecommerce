@@ -100,6 +100,10 @@ class IncomeStatementPage extends Page
      */
     public function getStatementData(): array
     {
+        if ($this->preset === 'all') {
+            return app(FinancialStatementService::class)->getIncomeStatement('all');
+        }
+
         return app(FinancialStatementService::class)->getIncomeStatement($this->startDate, $this->endDate);
     }
 
