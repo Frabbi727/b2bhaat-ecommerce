@@ -58,6 +58,25 @@ class MonetizationSuspensionService
     }
 
     /**
+     * After a bill is paid, put the store back to normal: a suspended store gets its products back,
+     * and a store in its grace period simply returns to active (MON-1).
+     */
+    public function restoreAfterPayment(User $seller, ?User $actor = null): void
+    {
+        $status = $seller->sellerProfile()->value('monetization_status');
+
+        if ($status === 'suspended') {
+            $this->restoreSeller($seller, $actor);
+
+            return;
+        }
+
+        if ($status === 'grace_period') {
+            $seller->sellerProfile()->update(['monetization_status' => 'active']);
+        }
+    }
+
+    /**
      * Safely restore seller products that were previously active and are not blocked by admin moderation.
      *
      * @return array<int> IDs of restored products
