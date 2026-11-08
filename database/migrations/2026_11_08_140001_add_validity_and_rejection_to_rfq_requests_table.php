@@ -27,6 +27,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('rfq_requests', function (Blueprint $table) {
+            $table->dropIndex(['valid_until']);
             $table->dropColumn([
                 'valid_until',
                 'dispatch_days',
