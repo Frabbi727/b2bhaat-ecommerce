@@ -50,27 +50,18 @@ class BalanceSheetPage extends Page
     {
         $this->preset = $preset;
 
-        match ($preset) {
-            'today' => (function (): void {
-                $this->asOfDate = Carbon::now()->toDateString();
-            })(),
-            'month' => (function (): void {
-                $this->asOfDate = Carbon::now()->endOfMonth()->toDateString();
-            })(),
-            'last_month' => (function (): void {
-                $this->asOfDate = Carbon::now()->subMonthNoOverflow()->endOfMonth()->toDateString();
-            })(),
-            'quarter' => (function (): void {
-                $this->asOfDate = Carbon::now()->endOfQuarter()->toDateString();
-            })(),
-            'year' => (function (): void {
-                $this->asOfDate = Carbon::now()->endOfYear()->toDateString();
-            })(),
-            default => (function (): void {
-                $this->asOfDate = Carbon::now()->toDateString();
-                $this->preset = 'today';
-            })(),
+        $this->asOfDate = match ($preset) {
+            'today' => Carbon::now()->toDateString(),
+            'month' => Carbon::now()->endOfMonth()->toDateString(),
+            'last_month' => Carbon::now()->subMonthNoOverflow()->endOfMonth()->toDateString(),
+            'quarter' => Carbon::now()->endOfQuarter()->toDateString(),
+            'year' => Carbon::now()->endOfYear()->toDateString(),
+            default => Carbon::now()->toDateString(),
         };
+
+        if (! in_array($preset, ['today', 'month', 'last_month', 'quarter', 'year'], true)) {
+            $this->preset = 'today';
+        }
     }
 
     public function updatedAsOfDate(): void

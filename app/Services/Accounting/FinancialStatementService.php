@@ -39,13 +39,21 @@ class FinancialStatementService
      */
     public function getIncomeStatement(?string $startDate = null, ?string $endDate = null): array
     {
-        $start = ! empty($startDate)
-            ? Carbon::parse($startDate)->toDateString()
-            : now()->startOfMonth()->toDateString();
+        try {
+            $start = ! empty($startDate)
+                ? Carbon::parse($startDate)->toDateString()
+                : now()->startOfMonth()->toDateString();
+        } catch (\Throwable) {
+            $start = now()->startOfMonth()->toDateString();
+        }
 
-        $end = ! empty($endDate)
-            ? Carbon::parse($endDate)->toDateString()
-            : now()->endOfMonth()->toDateString();
+        try {
+            $end = ! empty($endDate)
+                ? Carbon::parse($endDate)->toDateString()
+                : now()->endOfMonth()->toDateString();
+        } catch (\Throwable) {
+            $end = now()->endOfMonth()->toDateString();
+        }
 
         if ($start > $end) {
             [$start, $end] = [$end, $start];
@@ -190,9 +198,13 @@ class FinancialStatementService
      */
     public function getBalanceSheet(?string $asOfDate = null): array
     {
-        $asOf = ! empty($asOfDate)
-            ? Carbon::parse($asOfDate)->toDateString()
-            : now()->toDateString();
+        try {
+            $asOf = ! empty($asOfDate)
+                ? Carbon::parse($asOfDate)->toDateString()
+                : now()->toDateString();
+        } catch (\Throwable) {
+            $asOf = now()->toDateString();
+        }
 
         $formattedAsOfDate = Carbon::parse($asOf)->format('M d, Y');
 
