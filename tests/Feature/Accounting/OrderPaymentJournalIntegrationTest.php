@@ -77,7 +77,8 @@ class OrderPaymentJournalIntegrationTest extends TestCase
         $this->assertSame(1000.00, $gl->getBalanceForSlug('gateway_clearing'));
         $this->assertSame(810.00, $gl->getBalanceForSlug('seller_escrow_payable', sellerId: $seller->id));
         $this->assertSame(90.00, $gl->getBalanceForSlug('commission_revenue'));
-        $this->assertSame(-100.00, $gl->getBalanceForSlug('courier_delivery_expense'));
+        $this->assertSame(100.00, $gl->getBalanceForSlug('shipping_service_revenue'));
+        $this->assertSame(0.00, $gl->getBalanceForSlug('courier_delivery_expense'));
     }
 
     public function test_payment_verification_with_platform_discount_balances(): void
@@ -166,7 +167,7 @@ class OrderPaymentJournalIntegrationTest extends TestCase
         // 810 net earnings + 100 self-delivered shipping = 910
         $this->assertSame(910.00, $gl->getBalanceForSlug('seller_escrow_payable', sellerId: $seller->id));
         $this->assertSame(90.00, $gl->getBalanceForSlug('commission_revenue'));
-        $this->assertSame(0.00, $gl->getBalanceForSlug('courier_delivery_expense'));
+        $this->assertSame(0.00, $gl->getBalanceForSlug('shipping_service_revenue'));
     }
 
     public function test_multi_vendor_order_posts_balanced_journal_across_multiple_sellers(): void
@@ -228,7 +229,8 @@ class OrderPaymentJournalIntegrationTest extends TestCase
         $this->assertSame(900.00, $gl->getBalanceForSlug('seller_escrow_payable', sellerId: $sellerA->id));
         $this->assertSame(820.00, $gl->getBalanceForSlug('seller_escrow_payable', sellerId: $sellerB->id));
         $this->assertSame(180.00, $gl->getBalanceForSlug('commission_revenue'));
-        $this->assertSame(-100.00, $gl->getBalanceForSlug('courier_delivery_expense'));
+        $this->assertSame(100.00, $gl->getBalanceForSlug('shipping_service_revenue'));
+        $this->assertSame(0.00, $gl->getBalanceForSlug('courier_delivery_expense'));
     }
 
     public function test_record_prepaid_payment_is_idempotent(): void

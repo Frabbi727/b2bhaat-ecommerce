@@ -18,4 +18,5 @@ enum AccountingEvent: string
     case PAYOUT_DISBURSED = 'payout_disbursed';
     case PAYOUT_REJECTED = 'payout_rejected';
     case CUSTOMER_REFUND_DISBURSED = 'customer_refund_disbursed';
+    case SHIPPING_RECLASSIFIED = 'shipping_reclassified';
 }

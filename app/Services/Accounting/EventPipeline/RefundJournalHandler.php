@@ -60,16 +60,16 @@ class RefundJournalHandler
             );
         }
 
-        // 3. Debit Courier Delivery Expense (reversing non-self-delivered courier allocation)
+        // 3. Debit Shipping Revenue (the platform no longer earns the courier shipping fee)
         $shipping = round((float) $subOrder->shipping_amount, 2);
         if (! $subOrder->is_self_delivered && $shipping > 0.0) {
             $lines[] = new JournalLineData(
-                accountSlug: 'courier_delivery_expense',
+                accountSlug: 'shipping_service_revenue',
                 debit: $shipping,
                 credit: 0.00,
                 subOrderId: $subOrder->id,
                 orderId: $orderId,
-                narration: "Reverse courier delivery fee for cancelled Sub-Order #{$subOrder->sub_order_number}",
+                narration: "Reverse shipping revenue for cancelled Sub-Order #{$subOrder->sub_order_number}",
             );
         }
 
@@ -192,16 +192,16 @@ class RefundJournalHandler
                 );
             }
 
-            // 3. Debit Courier Delivery Expense (if non-self-delivered)
+            // 3. Debit Shipping Revenue (if the platform's courier carried it)
             $shipping = round((float) $subOrder->shipping_amount, 2);
             if (! $subOrder->is_self_delivered && $shipping > 0.0) {
                 $lines[] = new JournalLineData(
-                    accountSlug: 'courier_delivery_expense',
+                    accountSlug: 'shipping_service_revenue',
                     debit: $shipping,
                     credit: 0.00,
                     subOrderId: $subOrder->id,
                     orderId: $orderId,
-                    narration: "Reverse courier delivery fee for returned Sub-Order #{$subOrder->sub_order_number}",
+                    narration: "Reverse shipping revenue for returned Sub-Order #{$subOrder->sub_order_number}",
                 );
             }
 

@@ -77,12 +77,12 @@ class CodDeliveryJournalHandler
         $shipping = round((float) $subOrder->shipping_amount, 2);
         if ($shipping > 0.0) {
             $lines[] = new JournalLineData(
-                accountSlug: 'courier_delivery_expense',
+                accountSlug: 'shipping_service_revenue',
                 debit: 0.00,
                 credit: $shipping,
                 subOrderId: $subOrder->id,
                 orderId: $order?->id,
-                narration: "Courier shipping fee allocated for Sub-Order #{$subOrder->sub_order_number}",
+                narration: "Shipping fee earned by the platform for Sub-Order #{$subOrder->sub_order_number}",
             );
         }
 

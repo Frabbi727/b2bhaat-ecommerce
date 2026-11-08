@@ -279,8 +279,8 @@ class EscrowAndRefundJournalIntegrationTest extends TestCase
         $this->assertSame(0.00, $gl->getBalanceForSlug('promotional_discount_expense'));
         // Commission revenue reversed down to 0
         $this->assertSame(0.00, $gl->getBalanceForSlug('commission_revenue'));
-        // Courier delivery expense reversed down to 0
-        $this->assertSame(0.00, $gl->getBalanceForSlug('courier_delivery_expense'));
+        // Shipping revenue reversed down to 0
+        $this->assertSame(0.00, $gl->getBalanceForSlug('shipping_service_revenue'));
         // Customer refund payable equals exactly what the customer paid: 900
         $this->assertSame(900.00, $gl->getBalanceForSlug('customer_refund_payable'));
     }

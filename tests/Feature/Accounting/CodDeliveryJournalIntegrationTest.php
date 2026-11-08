@@ -81,7 +81,8 @@ class CodDeliveryJournalIntegrationTest extends TestCase
         $this->assertSame(500.00, $gl->getBalanceForSlug('courier_cod_receivable'));
         $this->assertSame(405.00, $gl->getBalanceForSlug('seller_escrow_payable', sellerId: $seller->id));
         $this->assertSame(45.00, $gl->getBalanceForSlug('commission_revenue'));
-        $this->assertSame(-50.00, $gl->getBalanceForSlug('courier_delivery_expense'));
+        $this->assertSame(50.00, $gl->getBalanceForSlug('shipping_service_revenue'));
+        $this->assertSame(0.00, $gl->getBalanceForSlug('courier_delivery_expense'));
     }
 
     public function test_self_delivered_cod_charges_seller_commission_journal(): void
@@ -216,7 +217,8 @@ class CodDeliveryJournalIntegrationTest extends TestCase
         // Net earnings = 1000 - 100 = 900
         $this->assertSame(900.00, $gl->getBalanceForSlug('seller_escrow_payable', sellerId: $seller->id));
         $this->assertSame(100.00, $gl->getBalanceForSlug('commission_revenue'));
-        $this->assertSame(-50.00, $gl->getBalanceForSlug('courier_delivery_expense'));
+        $this->assertSame(50.00, $gl->getBalanceForSlug('shipping_service_revenue'));
+        $this->assertSame(0.00, $gl->getBalanceForSlug('courier_delivery_expense'));
     }
 
     public function test_courier_cod_delivery_is_idempotent(): void
