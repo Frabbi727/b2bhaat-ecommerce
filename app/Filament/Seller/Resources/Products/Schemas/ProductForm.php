@@ -8,6 +8,7 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\SalesChannel;
 use App\Models\Unit;
+use App\Services\Catalog\PriceSet;
 use Closure;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
@@ -462,18 +463,14 @@ class ProductForm
     public static function pricesMatchChannelRule(mixed $productChannelId): Closure
     {
         return function (string $attribute, mixed $value, Closure $fail) use ($productChannelId): void {
-            $slugs = SalesChannel::pluck('slug', 'id');
-            $productChannel = $slugs[(int) $productChannelId] ?? null;
-            $priceChannels = collect(is_array($value) ? $value : [])
-                ->map(fn (mixed $row): ?string => is_array($row) ? ($slugs[(int) ($row['sales_channel_id'] ?? 0)] ?? null) : null)
-                ->filter();
+            $productChannel = SalesChannel::find((int) $productChannelId);
 
-            if (in_array($productChannel, [SalesChannel::RETAIL, SalesChannel::BOTH], true) && ! $priceChannels->contains(SalesChannel::RETAIL)) {
-                $fail('Add a Retail price: shoppers need a price to buy this product.');
+            if ($productChannel === null) {
+                return;
             }
 
-            if (in_array($productChannel, [SalesChannel::WHOLESALE, SalesChannel::BOTH], true) && ! $priceChannels->contains(SalesChannel::WHOLESALE)) {
-                $fail('Add at least one Wholesale price tier for business buyers.');
+            foreach (PriceSet::fromInput(is_array($value) ? $value : [], null)->validate($productChannel) as $message) {
+                $fail($message);
             }
         };
     }
