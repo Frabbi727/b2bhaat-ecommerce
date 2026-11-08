@@ -25,5 +25,7 @@ return [
         'length' => (int) env('SMS_OTP_LENGTH', 6),
         'cooldown_seconds' => (int) env('SMS_OTP_COOLDOWN_SECONDS', 60),
         'max_attempts' => (int) env('SMS_OTP_MAX_ATTEMPTS', 5),
+        'max_per_ip_per_hour' => (int) env('SMS_OTP_MAX_PER_IP_PER_HOUR', 10),
+        'max_per_phone_per_day' => (int) env('SMS_OTP_MAX_PER_PHONE_PER_DAY', 10),
     ],
 ];

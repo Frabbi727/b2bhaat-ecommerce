@@ -200,32 +200,22 @@ class CustomerAuth extends Component
         $normalized = PhoneNormalizer::normalize($this->otpPhone);
         $user = User::wherePhone($normalized)->first();
 
-        if (! $user) {
-            $this->errorMessage = 'No customer account found with this phone number. Please register first.';
+        /*
+         * The reply is identical whether or not a customer account exists, so the form cannot be used
+         * to discover which numbers are registered; panel accounts never get a login code (SEC-7).
+         */
+        if ($user && $user->is_active && self::mayUseOtpLogin($user)) {
+            $result = $otpService->sendOtp($normalized, 'login');
 
-            return;
-        }
+            if (! $result['success']) {
+                $this->errorMessage = self::otpSendFailureMessage($result);
 
-        if (! $user->is_active) {
-            $this->errorMessage = 'This account is deactivated. Please contact support.';
-
-            return;
-        }
-
-        $result = $otpService->sendOtp($normalized, 'login');
-
-        if (! $result['success']) {
-            if ($result['error'] === 'COOLDOWN_ACTIVE') {
-                $this->errorMessage = "Please wait {$result['seconds_remaining']} seconds before requesting a new OTP.";
-            } else {
-                $this->errorMessage = 'Failed to dispatch OTP. Please try again.';
+                return;
             }
-
-            return;
         }
 
         $this->loginStep = 'otp';
-        $this->successMessage = "We've sent a 6-digit verification code to {$this->otpPhone}.";
+        $this->successMessage = "If {$this->otpPhone} belongs to a customer account, we've sent it a 6-digit code. New here? Create an account instead.";
     }
 
     public function verifyLoginOtp(OtpService $otpService): void
@@ -254,7 +244,13 @@ class CustomerAuth extends Component
             return;
         }
 
-        $user = User::wherePhone($normalized)->firstOrFail();
+        $user = User::wherePhone($normalized)->first();
+
+        if (! $user || ! $user->is_active || ! self::mayUseOtpLogin($user)) {
+            $this->errorMessage = 'Invalid OTP verification code. Please check and try again.';
+
+            return;
+        }
 
         Auth::login($user, $this->remember);
         if (request()->hasSession()) {
@@ -264,6 +260,26 @@ class CustomerAuth extends Component
         session()->flash('success', "Welcome back, {$user->name}!");
 
         $this->redirectIntended(route('customer.orders'));
+    }
+
+    /**
+     * Only shoppers may sign in with an SMS code; admin and seller accounts use their password (SEC-7).
+     */
+    private static function mayUseOtpLogin(User $user): bool
+    {
+        return ! $user->isSuperAdmin() && ! $user->isSeller();
+    }
+
+    /**
+     * @param  array{success: bool, error?: string, seconds_remaining?: int}  $result
+     */
+    private static function otpSendFailureMessage(array $result): string
+    {
+        return match ($result['error'] ?? null) {
+            'COOLDOWN_ACTIVE' => "Please wait {$result['seconds_remaining']} seconds before requesting a new OTP.",
+            'RATE_LIMITED' => 'Too many codes have been requested. Please try again later.',
+            default => 'Failed to dispatch OTP. Please try again.',
+        };
     }
 
     public function register(OtpService $otpService): void
@@ -305,11 +321,7 @@ class CustomerAuth extends Component
         $result = $otpService->sendOtp($this->registerPhone, 'registration');
 
         if (! $result['success']) {
-            if ($result['error'] === 'COOLDOWN_ACTIVE') {
-                $this->errorMessage = "Please wait {$result['seconds_remaining']} seconds before requesting a new code.";
-            } else {
-                $this->errorMessage = 'Unable to send OTP at this moment. Please try again.';
-            }
+            $this->errorMessage = self::otpSendFailureMessage($result);
 
             return;
         }
@@ -381,14 +393,20 @@ class CustomerAuth extends Component
             return;
         }
 
+        if ($purpose === 'login') {
+            $user = User::wherePhone(PhoneNormalizer::normalize($phone))->first();
+
+            if (! $user || ! $user->is_active || ! self::mayUseOtpLogin($user)) {
+                $this->successMessage = 'A new verification code has been dispatched to your mobile.';
+
+                return;
+            }
+        }
+
         $result = $otpService->sendOtp($phone, $purpose);
 
         if (! $result['success']) {
-            if ($result['error'] === 'COOLDOWN_ACTIVE') {
-                $this->errorMessage = "Please wait {$result['seconds_remaining']}s before resending.";
-            } else {
-                $this->errorMessage = 'Unable to resend OTP. Please try again.';
-            }
+            $this->errorMessage = self::otpSendFailureMessage($result);
 
             return;
         }

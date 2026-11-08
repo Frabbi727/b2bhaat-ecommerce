@@ -10,6 +10,7 @@ use App\Models\SmsSetting;
 use App\Services\Sms\Contracts\SmsGatewayInterface;
 use App\Services\Sms\Support\PhoneNormalizer;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\RateLimiter;
 
 class OtpService
 {
@@ -43,6 +44,22 @@ class OtpService
                 'seconds_remaining' => (int) max(1, $secondsRemaining),
             ];
         }
+
+        // 1b. Cap codes per network address and per phone per day, so the form cannot be used to send SMS in bulk (SEC-7)
+        $ipKey = 'otp-ip:'.(request()?->ip() ?? 'cli');
+        $phoneDayKey = 'otp-phone-day:'.$normalized;
+        $perIpPerHour = (int) config('sms.otp.max_per_ip_per_hour', 10);
+        $perPhonePerDay = (int) config('sms.otp.max_per_phone_per_day', 10);
+
+        if (RateLimiter::tooManyAttempts($ipKey, $perIpPerHour) || RateLimiter::tooManyAttempts($phoneDayKey, $perPhonePerDay)) {
+            return [
+                'success' => false,
+                'error' => 'RATE_LIMITED',
+            ];
+        }
+
+        RateLimiter::hit($ipKey, 3600);
+        RateLimiter::hit($phoneDayKey, 86400);
 
         // 2. Invalidate previous active unverified OTPs for this phone + purpose
         Otp::where('phone', $normalized)
