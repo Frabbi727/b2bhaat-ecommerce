@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Seller\Resources\RfqRequests\Tables;
 
 use App\Models\RfqRequest;
+use App\Services\Rfq\RfqNotificationService;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
@@ -127,6 +128,8 @@ class RfqRequestsTable
                             'dispatch_days' => (int) $data['dispatch_days'],
                             'status' => 'quoted',
                         ]);
+
+                        app(RfqNotificationService::class)->notifyBuyerOfQuotation($record);
 
                         $formattedPrice = number_format((float) $data['seller_quoted_price'], 2);
 

@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\RfqRequest;
 use App\Models\SalesChannel;
 use App\Services\Cart\CartSessionService;
+use App\Services\Rfq\RfqNotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -86,6 +87,9 @@ class QuotationController extends Controller
         if ($accepted === 0) {
             return redirect()->back()->with('error', 'This quotation is no longer open for acceptance.');
         }
+
+        $rfq->refresh();
+        app(RfqNotificationService::class)->notifySellerOfAcceptedQuote($rfq);
 
         // 2. Add item to cart with locked wholesale quotation unit price
         $cart = app(CartSessionService::class);

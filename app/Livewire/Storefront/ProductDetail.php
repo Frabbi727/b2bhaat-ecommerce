@@ -10,6 +10,7 @@ use App\Models\SalesChannel;
 use App\Models\Wishlist;
 use App\Services\Cart\CartSessionService;
 use App\Services\Promotions\FlashSalePricing;
+use App\Services\Rfq\RfqNotificationService;
 use App\Services\Settings\StoreConfigurationService;
 use Exception;
 use Illuminate\Database\Eloquent\Builder;
@@ -361,7 +362,7 @@ class ProductDetail extends Component
             'rfqTargetQuantity.min' => 'Target quantity must be at least 1 unit.',
         ]);
 
-        RfqRequest::create([
+        $rfq = RfqRequest::create([
             'product_id' => $this->product->id,
             'seller_id' => $this->product->seller_id,
             'buyer_id' => auth()->id(),
@@ -375,6 +376,8 @@ class ProductDetail extends Component
             'specifications' => $this->rfqSpecifications,
             'status' => 'pending',
         ]);
+
+        app(RfqNotificationService::class)->notifySellerOfNewInquiry($rfq);
 
         $this->rfqSuccess = true;
     }
