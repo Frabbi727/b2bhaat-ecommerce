@@ -47,6 +47,10 @@ class FinancialStatementService
             ? Carbon::parse($endDate)->toDateString()
             : now()->endOfMonth()->toDateString();
 
+        if ($start > $end) {
+            [$start, $end] = [$end, $start];
+        }
+
         $periodLabel = Carbon::parse($start)->format('M d, Y').' - '.Carbon::parse($end)->format('M d, Y');
 
         /** @var Collection<int, object{account_id: int, total_debit: string, total_credit: string}> $totals */
