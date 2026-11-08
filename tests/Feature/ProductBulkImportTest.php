@@ -142,6 +142,8 @@ class ProductBulkImportTest extends TestCase
         $this->assertSame('350.00', $product->retailPrice->unit_price);
         $this->assertSame([[50, 99, '110.00'], [100, 249, '95.00'], [250, null, '85.00']], $product->wholesalePrices->map(fn ($p) => [$p->min_quantity, $p->max_quantity, $p->unit_price])->all());
 
+        $this->approveProducts($product);
+
         $this->assertTrue(Product::listable()->whereKey($product->id)->exists(), 'An imported product with a retail price shows on the storefront');
     }
 

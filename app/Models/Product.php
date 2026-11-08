@@ -287,6 +287,7 @@ class Product extends Model
     public function scopeSellable(Builder $query): Builder
     {
         return $query->where($query->qualifyColumn('is_active'), true)
+            ->where($query->qualifyColumn('approval_status'), ProductApprovalStatus::Approved->value)
             ->whereNull($query->qualifyColumn('blocked_at'))
             ->whereHas('seller', fn (Builder $seller) => $seller->where('is_active', true)
                 ->whereHas('sellerProfile', fn (Builder $profile) => $profile->where('is_approved', true)

@@ -179,6 +179,7 @@ class PromotionsAndBusinessLogicTest extends TestCase
             'buy_price' => 60000.00,
             'is_active' => true,
         ]);
+        $this->approveProducts($product);
 
         // Retail price
         ProductPrice::create([
@@ -239,6 +240,7 @@ class PromotionsAndBusinessLogicTest extends TestCase
             'buy_price' => 500.00,
             'is_active' => true,
         ]);
+        $this->approveProducts($product);
 
         ProductPrice::create([
             'product_id' => $product->id,

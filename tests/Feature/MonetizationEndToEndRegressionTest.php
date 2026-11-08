@@ -80,6 +80,7 @@ class MonetizationEndToEndRegressionTest extends TestCase
             'regular_price' => 4500.00,
             'is_active' => true,
         ]);
+        $this->approveProducts($p1);
         $v1 = $p1->ensureDefaultVariation();
         $v1->update(['stock_quantity' => 50]);
         ProductPrice::create([
@@ -99,6 +100,7 @@ class MonetizationEndToEndRegressionTest extends TestCase
             'regular_price' => 800.00,
             'is_active' => true,
         ]);
+        $this->approveProducts($p2);
         $v2 = $p2->ensureDefaultVariation();
         $v2->update(['stock_quantity' => 100]);
         ProductPrice::create([
@@ -118,6 +120,7 @@ class MonetizationEndToEndRegressionTest extends TestCase
             'regular_price' => 1200.00,
             'is_active' => false,
         ]);
+        $this->approveProducts($pDraft);
 
         $this->assertEquals(2, Product::sellable()->where('seller_id', $seller->id)->count());
 

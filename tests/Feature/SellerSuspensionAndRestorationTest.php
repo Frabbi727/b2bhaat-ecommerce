@@ -84,6 +84,7 @@ class SellerSuspensionAndRestorationTest extends TestCase
                 'regular_price' => 1200.00,
                 'is_active' => true,
             ]);
+            $this->approveProducts(end($activeProducts));
         }
 
         $inactiveProduct = Product::create([
@@ -96,6 +97,7 @@ class SellerSuspensionAndRestorationTest extends TestCase
             'regular_price' => 1500.00,
             'is_active' => false,
         ]);
+        $this->approveProducts($inactiveProduct);
 
         $this->assertEquals(3, Product::sellable()->where('seller_id', $this->seller->id)->count());
 
@@ -132,6 +134,7 @@ class SellerSuspensionAndRestorationTest extends TestCase
             'regular_price' => 500.00,
             'is_active' => true,
         ]);
+        $this->approveProducts($p1);
 
         // Product 2: Active before suspension, but blocked by admin moderation
         $p2 = Product::create([
@@ -146,6 +149,7 @@ class SellerSuspensionAndRestorationTest extends TestCase
             'blocked_at' => now()->subDay(),
             'blocked_reason' => 'Trademark violation',
         ]);
+        $this->approveProducts($p2);
 
         // Product 3: Inactive before suspension (seller turned it off)
         $p3 = Product::create([
@@ -158,6 +162,7 @@ class SellerSuspensionAndRestorationTest extends TestCase
             'regular_price' => 300.00,
             'is_active' => false,
         ]);
+        $this->approveProducts($p3);
 
         $suspensionService = app(MonetizationSuspensionService::class);
         $suspensionService->suspendSeller($this->seller, 'Overdue payment', null);

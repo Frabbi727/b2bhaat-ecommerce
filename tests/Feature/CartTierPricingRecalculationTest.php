@@ -58,6 +58,7 @@ class CartTierPricingRecalculationTest extends TestCase
             'is_active' => true,
             'is_approved' => true,
         ]);
+        $this->approveProducts($this->product);
 
         // Tier 1: 1 - 99 pcs @ 100 Tk
         ProductPrice::create([

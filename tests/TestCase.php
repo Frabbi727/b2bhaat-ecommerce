@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use App\Models\Product;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Testing\TestResponse;
 
@@ -25,5 +26,15 @@ abstract class TestCase extends BaseTestCase
             'HTTP_ACCEPT' => 'application/json',
             'HTTP_X_COURIER_SIGNATURE' => $signature,
         ], $body);
+    }
+
+    /**
+     * Mark products approved so buyers can see and order them (approval_status is not mass assignable).
+     */
+    protected function approveProducts(Product ...$products): void
+    {
+        foreach ($products as $product) {
+            $product->forceFill(['approval_status' => 'approved', 'approved_at' => now()])->save();
+        }
     }
 }

@@ -6,6 +6,7 @@ namespace Database\Seeders;
 
 use App\Enums\FlashSaleDiscountType;
 use App\Enums\FlashSaleStatus;
+use App\Enums\ProductApprovalStatus;
 use App\Models\Attribute;
 use App\Models\AttributeValue;
 use App\Models\Banner;
@@ -291,6 +292,12 @@ class PromotionsAndStoreSettingsSeeder extends Seeder
             ]
         );
 
+        // Demo products are live from the start, so they skip the review queue
+        $tvProduct->forceFill([
+            'approval_status' => ProductApprovalStatus::Approved,
+            'approved_at' => $tvProduct->approved_at ?? now(),
+        ])->save();
+
         // TV Images
         $tvImages = [
             ['url' => 'https://images.unsplash.com/photo-1593784991095-a205069470b6?auto=format&fit=crop&w=1000&q=80', 'order' => 1, 'primary' => true],
@@ -433,6 +440,12 @@ class PromotionsAndStoreSettingsSeeder extends Seeder
             ]
         );
 
+        // Demo products are live from the start, so they skip the review queue
+        $audioProduct->forceFill([
+            'approval_status' => ProductApprovalStatus::Approved,
+            'approved_at' => $audioProduct->approved_at ?? now(),
+        ])->save();
+
         ProductImage::updateOrCreate(
             ['product_id' => $audioProduct->id, 'sort_order' => 1],
             ['image_url' => 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=1000&q=80', 'is_primary' => true]
@@ -515,6 +528,12 @@ class PromotionsAndStoreSettingsSeeder extends Seeder
                 'is_active' => true,
             ]
         );
+
+        // Demo products are live from the start, so they skip the review queue
+        $phoneProduct->forceFill([
+            'approval_status' => ProductApprovalStatus::Approved,
+            'approved_at' => $phoneProduct->approved_at ?? now(),
+        ])->save();
 
         ProductImage::updateOrCreate(
             ['product_id' => $phoneProduct->id, 'sort_order' => 1],

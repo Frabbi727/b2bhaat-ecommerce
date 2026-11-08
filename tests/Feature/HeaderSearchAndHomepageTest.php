@@ -67,6 +67,7 @@ class HeaderSearchAndHomepageTest extends TestCase
             'buy_price' => 70000.00,
             'is_active' => true,
         ]);
+        $this->approveProducts($product);
 
         ProductPrice::create([
             'product_id' => $product->id,
@@ -118,6 +119,7 @@ class HeaderSearchAndHomepageTest extends TestCase
             'buy_price' => 30000.00,
             'is_active' => true,
         ]));
+        $this->approveProducts($phone);
         FlashSaleProduct::factory()->create([
             'flash_sale_id' => FlashSale::factory()->live()->create()->id,
             'product_id' => $phone->id,
@@ -159,6 +161,7 @@ class HeaderSearchAndHomepageTest extends TestCase
             'buy_price' => 50.00,
             'is_active' => true,
         ]));
+        $this->approveProducts($itemA);
         ProductPrice::create([
             'product_id' => $itemA->id,
             'sales_channel_id' => $channel->id,
@@ -177,6 +180,7 @@ class HeaderSearchAndHomepageTest extends TestCase
             'buy_price' => 500.00,
             'is_active' => true,
         ]));
+        $this->approveProducts($itemB);
         ProductPrice::create([
             'product_id' => $itemB->id,
             'sales_channel_id' => $channel->id,
@@ -227,6 +231,7 @@ class HeaderSearchAndHomepageTest extends TestCase
             'warranty_period' => '1 Year Official Warranty',
             'is_active' => true,
         ]);
+        $this->approveProducts($product);
 
         ProductPrice::create([
             'product_id' => $product->id,

@@ -86,6 +86,7 @@ class ProductDetailPickabooStandardTest extends TestCase
             ],
             'is_active' => true,
         ]);
+        $this->approveProducts($product);
 
         ProductImage::create([
             'product_id' => $product->id,
@@ -166,6 +167,7 @@ class ProductDetailPickabooStandardTest extends TestCase
             'buy_price' => 25000.00,
             'is_active' => true,
         ]);
+        $this->approveProducts($product);
 
         ProductPrice::create([
             'product_id' => $product->id,
@@ -222,6 +224,7 @@ class ProductDetailPickabooStandardTest extends TestCase
             'is_active' => true,
             'has_variations' => true, // has an explicit variation below
         ]);
+        $this->approveProducts($main);
         ProductPrice::create([
             'product_id' => $main->id,
             'sales_channel_id' => $channel->id,
@@ -247,6 +250,7 @@ class ProductDetailPickabooStandardTest extends TestCase
             'buy_price' => 500.00,
             'is_active' => true,
         ]);
+        $this->approveProducts($accessory);
         ProductPrice::create([
             'product_id' => $accessory->id,
             'sales_channel_id' => $channel->id,

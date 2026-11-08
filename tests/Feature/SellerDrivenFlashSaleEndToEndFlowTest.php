@@ -87,6 +87,7 @@ class SellerDrivenFlashSaleEndToEndFlowTest extends TestCase
             'has_variations' => true,
             'is_active' => true,
         ]);
+        $this->approveProducts($productA);
 
         $variationA = ProductVariation::create([
             'product_id' => $productA->id,
@@ -124,6 +125,7 @@ class SellerDrivenFlashSaleEndToEndFlowTest extends TestCase
             'has_variations' => true,
             'is_active' => true,
         ]);
+        $this->approveProducts($productB);
 
         $variationB = ProductVariation::create([
             'product_id' => $productB->id,
@@ -473,6 +475,7 @@ class SellerDrivenFlashSaleEndToEndFlowTest extends TestCase
             'has_variations' => true,
             'is_active' => true,
         ]);
+        $this->approveProducts($productA);
         $variationA = ProductVariation::create([
             'product_id' => $productA->id,
             'sku' => 'VAR-A',
@@ -500,6 +503,7 @@ class SellerDrivenFlashSaleEndToEndFlowTest extends TestCase
             'has_variations' => true,
             'is_active' => true,
         ]);
+        $this->approveProducts($productB);
         $variationB = ProductVariation::create([
             'product_id' => $productB->id,
             'sku' => 'VAR-B',

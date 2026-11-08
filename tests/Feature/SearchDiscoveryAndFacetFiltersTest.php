@@ -68,6 +68,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'is_active' => true,
             'status' => 'published',
         ]));
+        $this->approveProducts($product);
 
         ProductVariation::create([
             'product_id' => $product->id,
@@ -123,6 +124,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'is_active' => true,
             'status' => 'published',
         ]));
+        $this->approveProducts($inStockProduct);
 
         ProductVariation::create([
             'product_id' => $inStockProduct->id,
@@ -145,6 +147,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'is_active' => true,
             'status' => 'published',
         ]));
+        $this->approveProducts($outOfStockProduct);
 
         ProductVariation::create([
             'product_id' => $outOfStockProduct->id,
@@ -200,6 +203,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'is_active' => true,
             'status' => 'published',
         ]));
+        $this->approveProducts($approvedProduct);
 
         // Unapproved seller
         $unapprovedSeller = User::create([
@@ -227,6 +231,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'is_active' => true,
             'status' => 'published',
         ]));
+        $this->approveProducts($unapprovedProduct);
 
         Livewire::test(ProductCatalog::class)
             ->set('search', 'Supplier')
@@ -272,6 +277,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'is_active' => true,
             'status' => 'published',
         ]));
+        $this->approveProducts($product);
 
         // Filtering by parent category ID MUST retrieve the child category's product
         Livewire::test(ProductCatalog::class)
@@ -306,6 +312,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'is_active' => true,
             'status' => 'published',
         ]));
+        $this->approveProducts($budgetProduct);
 
         $midProduct = $this->withRetailPrice(Product::create([
             'seller_id' => $seller->id,
@@ -320,6 +327,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'is_active' => true,
             'status' => 'published',
         ]));
+        $this->approveProducts($midProduct);
 
         $premiumProduct = $this->withRetailPrice(Product::create([
             'seller_id' => $seller->id,
@@ -334,6 +342,7 @@ class SearchDiscoveryAndFacetFiltersTest extends TestCase
             'is_active' => true,
             'status' => 'published',
         ]));
+        $this->approveProducts($premiumProduct);
 
         // Filter min = 1000, max = 5000
         Livewire::test(ProductCatalog::class)
