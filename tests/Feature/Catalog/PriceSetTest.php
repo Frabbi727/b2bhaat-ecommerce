@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Catalog;
 
+use App\Filament\Seller\Resources\Products\Schemas\ProductForm;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductPrice;
@@ -211,5 +212,49 @@ class PriceSetTest extends TestCase
         $this->assertCount(2, $set->rows());
         $this->assertSame($variation->id, $set->rows()[1]['variation_id']);
         $this->assertSame('90.00', $set->regularPrice());
+    }
+
+    public function test_boundary_sharing_a_quantity_overlaps_but_adjacent_does_not(): void
+    {
+        $overlap = PriceSet::fromInput([$this->row($this->wholesale, 1, 10), $this->row($this->wholesale, 10, 20)], null)->validate($this->wholesale);
+        $adjacent = PriceSet::fromInput([$this->row($this->wholesale, 1, 10), $this->row($this->wholesale, 11, 20)], null)->validate($this->wholesale);
+
+        $this->assertSame(['Price tiers 1–10 and 10–20 overlap. Each quantity must fall in one tier only.'], $overlap);
+        $this->assertSame([], $adjacent);
+    }
+
+    public function test_two_open_ended_tiers_overlap(): void
+    {
+        $errors = PriceSet::fromInput([$this->row($this->wholesale, 10, null), $this->row($this->wholesale, 50, null)], null)->validate($this->wholesale);
+
+        $this->assertSame(['Price tiers 10+ and 50+ overlap. Each quantity must fall in one tier only.'], $errors);
+    }
+
+    public function test_same_range_in_different_channels_does_not_overlap(): void
+    {
+        $errors = PriceSet::fromInput([$this->row($this->retail, 1, 10), $this->row($this->wholesale, 1, 10)], null)->validate($this->both);
+
+        $this->assertSame([], $errors);
+    }
+
+    public function test_form_shaped_input_is_valid(): void
+    {
+        $errors = PriceSet::fromInput([
+            ['sales_channel_id' => (string) $this->retail->id, 'min_quantity' => '1', 'max_quantity' => '', 'unit_price' => '50'],
+        ], null)->validate($this->retail);
+
+        $this->assertSame([], $errors);
+    }
+
+    public function test_form_rule_reports_missing_retail_row_verbatim(): void
+    {
+        $rule = ProductForm::pricesMatchChannelRule($this->retail->id);
+        $messages = [];
+
+        $rule('prices', [$this->row($this->wholesale, 50, null)], function (string $message) use (&$messages): void {
+            $messages[] = $message;
+        });
+
+        $this->assertSame(['Add a Retail price: shoppers need a price to buy this product.'], $messages);
     }
 }
