@@ -158,6 +158,16 @@ class WalletTransactionsTable
         };
     }
 
+    public static function statusLabel(?string $status): string
+    {
+        return match ($status) {
+            WalletTransaction::STATUS_REQUESTED => 'Waiting to be paid',
+            WalletTransaction::STATUS_DISBURSED => 'Paid',
+            WalletTransaction::STATUS_REJECTED => 'Rejected',
+            default => '—',
+        };
+    }
+
     public static function formatSignedAmount(WalletTransaction $record): string
     {
         $amount = number_format(abs((float) $record->amount), 2);

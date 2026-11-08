@@ -20,8 +20,10 @@ use App\Models\User;
 use App\Models\WalletTransaction;
 use Database\Seeders\SystemLookupSeeder;
 use Filament\Facades\Filament;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Tests\TestCase;
 
 class SellerAccountStatementTest extends TestCase
@@ -640,6 +642,152 @@ class SellerAccountStatementTest extends TestCase
             ->assertSee('Lifetime Earnings')
             ->assertSee('Total Withdrawn')
             ->assertSee('৳0.00');
+    }
+
+    public function test_list_wallet_transactions_has_print_and_export_header_actions(): void
+    {
+        [$seller] = $this->createSellerWithWallet();
+
+        $this->actingAs($seller);
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+
+        $component = Livewire::test(ListWalletTransactions::class)
+            ->assertActionVisible('printStatement')
+            ->assertActionVisible('exportCsv');
+
+        /** @var ListWalletTransactions $page */
+        $page = $component->instance();
+        $actions = collect($page->getHeaderActions())->keyBy(fn ($action) => $action->getName());
+
+        $this->assertTrue($actions->has('printStatement'), 'Print Statement action not found in header actions.');
+        $this->assertTrue($actions->has('exportCsv'), 'Export CSV action not found in header actions.');
+
+        $printAction = $actions->get('printStatement');
+        $this->assertSame('Print Statement', $printAction->getLabel());
+        $this->assertSame(Heroicon::OutlinedPrinter, $printAction->getIcon());
+        $this->assertSame('primary', $printAction->getColor());
+        $this->assertSame(route('seller.wallet.statement.print'), $printAction->getUrl());
+        $this->assertTrue($printAction->shouldOpenUrlInNewTab());
+
+        $exportAction = $actions->get('exportCsv');
+        $this->assertSame('Export CSV', $exportAction->getLabel());
+        $this->assertSame(Heroicon::OutlinedArrowDownTray, $exportAction->getIcon());
+        $this->assertSame('gray', $exportAction->getColor());
+    }
+
+    public function test_seller_can_export_statement_csv(): void
+    {
+        [$seller, , $profile] = $this->createSellerWithWallet();
+
+        $this->actingAs($seller);
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+
+        $component = Livewire::test(ListWalletTransactions::class)
+            ->assertActionVisible('printStatement')
+            ->assertActionVisible('exportCsv');
+
+        /** @var ListWalletTransactions $page */
+        $page = $component->instance();
+        $response = $page->exportCsv();
+
+        $this->assertInstanceOf(StreamedResponse::class, $response);
+        $this->assertStringContainsString('text/csv', (string) $response->headers->get('Content-Type'));
+        $this->assertStringContainsString(
+            "statement-{$profile->store_slug}-",
+            (string) $response->headers->get('Content-Disposition')
+        );
+        $this->assertStringEndsWith('.csv', (string) $response->headers->get('Content-Disposition'));
+
+        // Also test calling exportCsv via Livewire action
+        $component->callAction('exportCsv');
+    }
+
+    public function test_seller_csv_export_contains_merchant_data_and_enforces_tenant_isolation(): void
+    {
+        [$sellerA, $walletA, $profileA] = $this->createSellerWithWallet(5000.00, 1200.00);
+        $sellerA->update([
+            'trade_license_number' => 'TRD-SELLER-A-999',
+            'phone' => '01711000111',
+        ]);
+        $subOrderA = $this->createSubOrder($sellerA, 'PKG-SELLER-A-001');
+
+        WalletTransaction::create([
+            'seller_wallet_id' => $walletA->id,
+            'sub_order_id' => $subOrderA->id,
+            'transaction_type' => WalletTransaction::TYPE_ESCROW_RELEASE,
+            'status' => null,
+            'amount' => 5000.00,
+            'running_balance' => 5000.00,
+            'reference_note' => 'Confidential Note Seller A Only',
+            'created_at' => now(),
+        ]);
+
+        [$sellerB, $walletB, $profileB] = $this->createSellerWithWallet(8000.00, 0.00);
+        $sellerB->update([
+            'trade_license_number' => 'TRD-SELLER-B-888',
+            'phone' => '01822000222',
+        ]);
+        $subOrderB = $this->createSubOrder($sellerB, 'PKG-SELLER-B-002');
+
+        WalletTransaction::create([
+            'seller_wallet_id' => $walletB->id,
+            'sub_order_id' => $subOrderB->id,
+            'transaction_type' => WalletTransaction::TYPE_ESCROW_RELEASE,
+            'status' => null,
+            'amount' => 8000.00,
+            'running_balance' => 8000.00,
+            'reference_note' => 'Secret Note Seller B Data',
+            'created_at' => now(),
+        ]);
+
+        $this->actingAs($sellerA);
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+
+        $component = Livewire::test(ListWalletTransactions::class)
+            ->assertActionVisible('printStatement')
+            ->assertActionVisible('exportCsv');
+
+        /** @var ListWalletTransactions $page */
+        $page = $component->instance();
+        $response = $page->exportCsv();
+
+        $this->assertInstanceOf(StreamedResponse::class, $response);
+
+        ob_start();
+        $response->sendContent();
+        $content = (string) ob_get_clean();
+
+        // Metadata headers
+        $this->assertStringContainsString('B2Bhaat Marketplace — Merchant Account Statement', $content);
+        $this->assertStringContainsString($profileA->store_name, $content);
+        $this->assertStringContainsString('01711000111', $content);
+        $this->assertStringContainsString('TRD-SELLER-A-999', $content);
+        $this->assertStringContainsString('Available Balance (BDT):', $content);
+        $this->assertStringContainsString('5,000.00', $content);
+        $this->assertStringContainsString('Escrow Held (BDT):', $content);
+        $this->assertStringContainsString('1,200.00', $content);
+
+        // Column headers
+        $this->assertStringContainsString('Transaction ID', $content);
+        $this->assertStringContainsString('Date & Time', $content);
+        $this->assertStringContainsString('Type', $content);
+        $this->assertStringContainsString('Sub-Order #', $content);
+        $this->assertStringContainsString('Amount (BDT)', $content);
+        $this->assertStringContainsString('Running Balance (BDT)', $content);
+        $this->assertStringContainsString('Status', $content);
+        $this->assertStringContainsString('Reference Note', $content);
+
+        // Seller A transactions
+        $this->assertStringContainsString('Confidential Note Seller A Only', $content);
+        $this->assertStringContainsString('PKG-SELLER-A-001', $content);
+        $this->assertStringContainsString('Escrow Released', $content);
+
+        // Strict tenant isolation - Seller B data MUST NOT exist
+        $this->assertStringNotContainsString('Secret Note Seller B Data', $content);
+        $this->assertStringNotContainsString('PKG-SELLER-B-002', $content);
+        $this->assertStringNotContainsString($profileB->store_name, $content);
+        $this->assertStringNotContainsString('TRD-SELLER-B-888', $content);
+        $this->assertStringNotContainsString('01822000222', $content);
     }
 
     /**
