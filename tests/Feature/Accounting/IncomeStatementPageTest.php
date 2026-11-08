@@ -114,6 +114,30 @@ class IncomeStatementPageTest extends TestCase
         $component->assertSee('5020');
     }
 
+    public function test_income_statement_page_renders_net_loss_state_when_expenses_exceed_revenues(): void
+    {
+        $this->actingAs($this->admin);
+
+        // Post expense greater than revenue
+        $this->postingService->post(new JournalEntryData(
+            entryDate: Carbon::now()->startOfMonth()->addDays(2)->toDateString(),
+            financialEvent: AccountingEvent::ORDER_PREPAID_RECEIVED->value,
+            idempotencyKey: 'test_inc_page_loss_1',
+            description: 'Large Gateway Expense',
+            lines: [
+                new JournalLineData(accountSlug: 'gateway_fee_expense', debit: 3000.00, credit: 0.00),
+                new JournalLineData(accountSlug: 'bank_operating', debit: 0.00, credit: 3000.00),
+            ],
+        ));
+
+        $component = Livewire::test(IncomeStatementPage::class);
+
+        $component->assertSuccessful();
+        $component->assertSee('Net Loss');
+        $component->assertSee('-৳3,000.00');
+        $component->assertSee('0.00%');
+    }
+
     public function test_income_statement_page_presets_update_date_boundaries(): void
     {
         $component = Livewire::test(IncomeStatementPage::class);

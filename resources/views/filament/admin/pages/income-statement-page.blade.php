@@ -10,7 +10,9 @@
         @media print {
             .fi-sidebar,
             .fi-topbar,
+            .fi-header,
             .fi-page-header,
+            .fi-page-header-main-ctn,
             .print\:hidden {
                 display: none !important;
             }
