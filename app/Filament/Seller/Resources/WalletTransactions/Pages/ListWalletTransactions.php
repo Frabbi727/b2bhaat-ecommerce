@@ -56,11 +56,6 @@ class ListWalletTransactions extends ListRecords
             ['available_balance' => 0.00, 'escrow_held_balance' => 0.00]
         );
 
-        $transactions = $wallet->transactions()
-            ->with('subOrder')
-            ->latest('created_at')
-            ->get();
-
         $storeSlug = $seller->sellerProfile?->store_slug ?? 'merchant';
         $filename = "statement-{$storeSlug}-".now()->format('Ymd-His').'.csv';
 
@@ -72,7 +67,7 @@ class ListWalletTransactions extends ListRecords
             'Expires' => '0',
         ];
 
-        return response()->streamDownload(function () use ($transactions, $seller, $wallet): void {
+        return response()->streamDownload(function () use ($seller, $wallet): void {
             $handle = fopen('php://output', 'w');
             if ($handle === false) {
                 return;
@@ -100,7 +95,7 @@ class ListWalletTransactions extends ListRecords
                 'Reference Note',
             ]);
 
-            foreach ($transactions as $txn) {
+            foreach ($wallet->transactions()->with('subOrder')->latest('created_at')->orderByDesc('id')->cursor() as $txn) {
                 fputcsv($handle, [
                     'TXN-'.str_pad((string) $txn->id, 6, '0', STR_PAD_LEFT),
                     $txn->created_at?->format('Y-m-d H:i:s') ?? 'N/A',

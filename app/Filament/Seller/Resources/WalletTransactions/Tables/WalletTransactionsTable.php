@@ -75,12 +75,7 @@ class WalletTransactionsTable
                     ->label('Payout Status')
                     ->badge()
                     ->placeholder('—')
-                    ->formatStateUsing(fn (?string $state): ?string => match ($state) {
-                        WalletTransaction::STATUS_REQUESTED => 'Waiting to be paid',
-                        WalletTransaction::STATUS_DISBURSED => 'Paid',
-                        WalletTransaction::STATUS_REJECTED => 'Rejected',
-                        default => null,
-                    })
+                    ->formatStateUsing(fn (?string $state): ?string => $state ? self::statusLabel($state) : null)
                     ->color(fn (?string $state): string => match ($state) {
                         WalletTransaction::STATUS_REQUESTED => 'warning',
                         WalletTransaction::STATUS_DISBURSED => 'success',
