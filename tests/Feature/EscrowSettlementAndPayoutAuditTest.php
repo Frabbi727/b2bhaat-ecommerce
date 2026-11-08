@@ -386,6 +386,7 @@ class EscrowSettlementAndPayoutAuditTest extends TestCase
             'regular_price' => 2000.00,
             'is_active' => true,
         ]);
+        $this->approveProducts($productB);
         $variationB = ProductVariation::create([
             'product_id' => $productB->id,
             'sku' => 'MVS-SPEAKER-01',

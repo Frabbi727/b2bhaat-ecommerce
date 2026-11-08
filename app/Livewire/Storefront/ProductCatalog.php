@@ -95,7 +95,7 @@ class ProductCatalog extends Component
             'wholesalePrice',
             'prices',
             'variations.attributeValues.attribute',
-        ])->find($productId);
+        ])->sellable()->find($productId);
 
         if (! $this->quickViewProduct) {
             $this->errorMessage = 'Product not found.';

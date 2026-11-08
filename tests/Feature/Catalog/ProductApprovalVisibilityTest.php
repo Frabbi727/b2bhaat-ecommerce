@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Catalog;
 
 use App\Livewire\Storefront\CheckoutComponent;
+use App\Livewire\Storefront\ProductCatalog;
+use App\Livewire\Storefront\ProductDetail;
 use App\Models\Category;
 use App\Models\Order;
 use App\Models\PaymentMethod;
@@ -15,8 +17,10 @@ use App\Models\SellerProfile;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\Cart\CartSessionService;
+use App\Services\Orders\OrderSplitterService;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\SystemLookupSeeder;
+use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -175,5 +179,58 @@ class ProductApprovalVisibilityTest extends TestCase
 
         $this->getJson('/api/v1/catalog/products/'.$approved->slug)->assertOk();
         $this->getJson('/api/v1/catalog/products/'.$pending->slug)->assertNotFound();
+    }
+
+    public function test_quick_view_refuses_an_unapproved_product(): void
+    {
+        $pending = $this->product('Quick Pending', 'pending_review');
+
+        Livewire::test(ProductCatalog::class)
+            ->call('openQuickView', $pending->id)
+            ->assertSet('quickViewProduct', null)
+            ->assertSet('showQuickView', false)
+            ->assertSet('errorMessage', 'Product not found.');
+    }
+
+    public function test_bundle_with_an_unapproved_secondary_product_adds_nothing(): void
+    {
+        $main = $this->product('Bundle Main');
+        $secondary = $this->product('Bundle Pending', 'pending_review');
+        $main->variations()->update(['stock_quantity' => 10, 'is_active' => true]);
+        $cart = app(CartSessionService::class);
+        $cart->clear();
+
+        Livewire::test(ProductDetail::class, ['slug' => $main->slug])
+            ->set('selectedVariationId', $main->variations()->firstOrFail()->id)
+            ->call('addBundleToCart', $secondary->id)
+            ->assertNotDispatched('cartUpdated');
+
+        $this->assertSame(0, $cart->getItemCount());
+    }
+
+    public function test_order_splitter_refuses_a_product_that_is_not_approved(): void
+    {
+        $customer = User::where('email', 'customer@retail.com')->firstOrFail();
+        $pending = $this->product('Split Pending', 'pending_review');
+        $ordersBefore = Order::count();
+
+        try {
+            app(OrderSplitterService::class)->createAndSplitOrder($customer, [
+                'payment_method_id' => PaymentMethod::where('slug', 'cod')->value('id'),
+                'shipping_address' => ['recipient_name' => 'X', 'street' => 'Y', 'phone' => '01700000000'],
+                'items' => [[
+                    'product_id' => $pending->id,
+                    'variation_id' => $pending->variations()->firstOrFail()->id,
+                    'sales_channel_id' => $this->retail->id,
+                    'quantity' => 1,
+                    'unit_price' => 500.00,
+                ]],
+            ]);
+            $this->fail('Expected a DomainException.');
+        } catch (DomainException $e) {
+            $this->assertSame('Some items in your cart are no longer available.', $e->getMessage());
+        }
+
+        $this->assertSame($ordersBefore, Order::count());
     }
 }

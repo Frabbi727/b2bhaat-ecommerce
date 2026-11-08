@@ -262,6 +262,7 @@ class MonetizationEngineServiceTest extends TestCase
             'regular_price' => 500.00,
             'is_active' => true,
         ]);
+        $this->approveProducts($product);
 
         $variation = $product->ensureDefaultVariation();
         $variation->update(['stock_quantity' => 500]);

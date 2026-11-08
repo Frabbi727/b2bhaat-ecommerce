@@ -68,6 +68,7 @@ class OrderSplitterTest extends TestCase
             'has_variations' => true,
             'is_active' => true,
         ]);
+        $this->approveProducts($product2);
         $variation2 = ProductVariation::create([
             'product_id' => $product2->id,
             'sku' => 'LIP-RED-01',

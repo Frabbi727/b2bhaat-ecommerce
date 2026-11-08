@@ -47,6 +47,12 @@ class OrderSplitterService
     public function createAndSplitOrder(User $customer, array $data): Order
     {
         return DB::transaction(function () use ($customer, $data) {
+            // Only approved, live products may be ordered, even if the cart was filled earlier
+            $orderedProductIds = collect($data['items'])->pluck('product_id')->unique()->filter()->values();
+            if (Product::query()->sellable()->whereIn('id', $orderedProductIds)->count() !== $orderedProductIds->count()) {
+                throw new \DomainException('Some items in your cart are no longer available.');
+            }
+
             // Flash-priced lines are checked and their offers locked before anything is written
             $this->flashSaleAllocationService->claim($customer, $data['items']);
 

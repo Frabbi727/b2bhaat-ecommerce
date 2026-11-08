@@ -145,7 +145,7 @@ class ProductDetail extends Component
     {
         $this->resetMessages();
 
-        $secondary = Product::with(['retailPrice', 'variations', 'seller.sellerProfile'])->find($secondaryProductId);
+        $secondary = Product::with(['retailPrice', 'variations', 'seller.sellerProfile'])->sellable()->find($secondaryProductId);
         if (! $secondary) {
             $this->errorMessage = 'Bundle product not found.';
 
