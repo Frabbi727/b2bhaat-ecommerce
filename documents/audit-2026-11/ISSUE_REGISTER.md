@@ -121,7 +121,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | INV-10 | Importer creates global attributes | Only use existing attributes |
 | SEC-8 | Tracking tokens never expire | Expiry or rotation |
 | SEC-9 | Sellers can see other sellers' lines on a shared invoice | Scope the invoice view | Fixed (718f8cd) |
-| SEC-10 | Sensitive fields are mass-assignable | Tighten `$fillable` |
+| SEC-10 | Sensitive fields are mass-assignable | Tighten `$fillable` | Fixed (a2e60e1). Product `blocked_at`, `blocked_reason`, `views_count`, `sales_count`, `was_active_before_suspension` removed from `$fillable`. Reviewed and left as is: User role/approval, SellerProfile approval/billing and wallet balances. Every write to them uses an explicit validated array, and Filament forms drop fields that aren't in the form (now tested) |
 | PERF-2 | Dashboard queries | Aggregate queries |
 | PERF-3 | N+1 queries | Eager loading |
 | PERF-4 | Job failure handling | `failed()` handlers and retries |

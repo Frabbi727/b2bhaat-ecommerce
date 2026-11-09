@@ -249,3 +249,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## SEC-9 (seller invoice scope)
 - Code and Blade only. Run `php artisan view:clear` (part of the normal deploy).
+
+## SEC-10 (mass assignment)
+- Code only. Any custom script that sets `blocked_at`, `blocked_reason`, `views_count`, `sales_count` or `was_active_before_suspension` with `update()`/`create()` must use `forceFill()` (or a query-builder update).
