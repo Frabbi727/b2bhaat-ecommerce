@@ -96,6 +96,35 @@ class ApprovalSchemaTest extends TestCase
         $this->assertSame($updatedAt, DB::table('products')->where('id', $product->id)->value('updated_at'));
     }
 
+    public function test_the_backfill_migration_skips_a_database_where_approval_is_already_live(): void
+    {
+        $pending = $this->product();
+        $draft = $this->product();
+        DB::table('products')->update(['approval_status' => 'draft', 'approved_at' => null]);
+        DB::table('products')->where('id', $pending->id)->update(['approval_status' => 'pending_review']);
+
+        (require database_path('migrations/2026_11_08_153557_backfill_product_approval_status.php'))->up();
+
+        $this->assertSame('pending_review', DB::table('products')->where('id', $pending->id)->value('approval_status'));
+        $this->assertSame('draft', DB::table('products')->where('id', $draft->id)->value('approval_status'));
+        $this->assertNull(DB::table('products')->where('id', $draft->id)->value('approved_at'));
+    }
+
+    public function test_the_backfill_migration_approves_a_catalog_that_is_all_draft(): void
+    {
+        $first = $this->product();
+        $second = $this->product();
+        DB::table('products')->update(['approval_status' => 'draft', 'approved_at' => null]);
+
+        (require database_path('migrations/2026_11_08_153557_backfill_product_approval_status.php'))->up();
+
+        foreach ([$first, $second] as $product) {
+            $fresh = Product::findOrFail($product->id);
+            $this->assertSame(ProductApprovalStatus::Approved, $fresh->approval_status);
+            $this->assertTrue($fresh->created_at->equalTo($fresh->approved_at));
+        }
+    }
+
     public function test_the_backfill_runs_on_its_own_outside_a_transaction_right_after_the_columns(): void
     {
         $migrations = collect(glob(database_path('migrations/2026_11_08_*.php')))->map(fn (string $path): string => basename($path, '.php'))->values();

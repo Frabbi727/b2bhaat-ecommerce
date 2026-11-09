@@ -58,7 +58,7 @@
 ## Steps
 
 1. **Back up the production database** first. The backfill rewrites every row of `products`.
-2. **Preview the migrations:** `php artisan migrate --pretend`. Expect exactly the four files above. If an environment already ran an earlier build of this branch, `153554` shows as done and only `153557` is new; there it would approve every product again, including ones waiting for review. On such an environment, mark it as run instead (insert `2026_11_08_153557_backfill_product_approval_status` into `migrations`) rather than running it.
+2. **Preview the migrations:** `php artisan migrate --pretend`. Expect exactly the four files above. If an environment already ran an earlier build of this branch, `153554` shows as done and only `153557` is new. That is safe: `153557` guards itself and skips the backfill when any product is already not `draft` or has an `approved_at`, because that means the backfill already ran or approvals are live there. On a fresh database every row is still `draft` right after `153554`, so the backfill runs. No manual step is needed.
 3. **Deploy and migrate:** `php artisan migrate`. The backfill (`153557`) marks every existing product `approved` with `approved_at = created_at`. It runs in chunks of 1000 products, so a large catalog is safe, but it still takes a moment on a very large table. Do it at a quiet time.
 4. **Start or restart the queue worker** (`php artisan queue:restart`). Decision mails to sellers go through the queue, so without a worker sellers get the in-panel bell message but no email.
 5. **Announce to sellers before the deploy**, in the seller panel and by email:

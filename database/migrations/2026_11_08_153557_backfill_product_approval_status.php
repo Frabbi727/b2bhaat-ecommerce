@@ -11,9 +11,24 @@ return new class extends Migration
 {
     public $withinTransaction = false;
 
+    /**
+     * Self-guarding: any product that is no longer draft, or has an approval date, means the backfill already ran or
+     * the approval flow is live here, so nothing is touched. Right after the column migration every row is draft.
+     */
     public function up(): void
     {
+        if (self::approvalAlreadyLive()) {
+            return;
+        }
+
         self::backfill();
+    }
+
+    public static function approvalAlreadyLive(): bool
+    {
+        return DB::table('products')
+            ->where(fn ($query) => $query->where('approval_status', '!=', 'draft')->orWhereNotNull('approved_at'))
+            ->exists();
     }
 
     /**

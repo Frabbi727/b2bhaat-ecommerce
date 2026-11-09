@@ -35,11 +35,11 @@ Each fix was test-first: the new test was run against the old code and failed, t
 
 # Testing Report: INV-8 product and price approval
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1204 tests, 1204 passed, 5918 assertions** (2026-11-09, branch `feat/product-approval`, after the final-review fixes in 595e5a4). The INV-8 files below add 168 of these tests; the final-review fixes added 15 tests in all, 4 of them in existing files of other features.
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1206 tests, 1206 passed, 5925 assertions** (2026-11-09, branch `feat/product-approval`, after the final-review fixes and the self-guarding backfill). The INV-8 files below add 170 of these tests; the final-review fixes added 17 tests in all, 4 of them in existing files of other features.
 
 | Test file | Tests | What is proven |
 |---|---|---|
-| `tests/Feature/Catalog/ApprovalSchemaTest.php` | 7 | Columns, table and defaults; the backfill marks existing products approved at their creation date and leaves `updated_at` alone; it runs in its own migration after the columns, outside a transaction, with a no-op `down()` |
+| `tests/Feature/Catalog/ApprovalSchemaTest.php` | 9 | Columns, table and defaults; the backfill marks existing products approved at their creation date and leaves `updated_at` alone; it runs in its own migration after the columns, outside a transaction, with a no-op `down()`; it skips a database where any product is already not draft or has an approval date, and approves an all-draft catalog |
 | `tests/Feature/Catalog/PriceSetTest.php` | 18 | Equal prices give equal fingerprints; ordering, rounding and limit edge cases |
 | `tests/Feature/Catalog/ProductApprovalLifecycleTest.php` | 20 | Submit, withdraw, approve and reject a new product; audit entries; notifications; a failing notification keeps the decision |
 | `tests/Feature/Catalog/ProductApprovalVisibilityTest.php` | 10 | Buyers see only approved products in listings, search (including header search), quick view, bundles and order splitting |

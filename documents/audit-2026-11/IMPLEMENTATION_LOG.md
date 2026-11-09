@@ -43,6 +43,7 @@ New products and price changes now wait for admin approval. No production comman
 | 10 | 06e9ef4 | A refused listing activation (plan limit or suspended store) now saves nothing, prices included. Before, the prices were already saved while the message said they were not |
 | 11 | e6f5eb3 | Approval security tests and these documents |
 | 12 | 595e5a4 | Final-review fixes. Flash-sale pages show approved products only, the seller picker offers only approved products, and joining a sale refuses an unapproved one. The approve and not-approve modals show the product under review and pin its version when they open; the Review slide-over has Approve and Not approve in its footer. The wishlist refuses unapproved products and shows "No longer available" with no details for them. Sellers see "B2Bhaat team" as the reviewer. The listing guard reads visibility from the database. The backfill moved to its own migration (`153557`), run outside a transaction |
+| 13 | see git log | The backfill migration guards itself: it does nothing when any product is already not draft or has an approval date, so an already-migrated database is never re-approved |
 
 ## Behaviour changes the owner should know about
 
