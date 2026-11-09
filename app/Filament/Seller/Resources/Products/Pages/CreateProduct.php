@@ -6,16 +6,21 @@ use App\Exceptions\ListingActivationRefusedException;
 use App\Filament\Seller\Resources\Products\ProductResource;
 use App\Filament\Seller\Resources\Products\Schemas\ProductForm;
 use App\Models\Product;
+use App\Services\Catalog\ProductApprovalService;
 use App\Services\Monetization\MonetizationEngineService;
+use DomainException;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
+use Illuminate\Auth\Access\AuthorizationException;
 
 class CreateProduct extends CreateRecord
 {
     protected static string $resource = ProductResource::class;
 
     protected static bool $canCreateAnother = false;
+
+    protected bool $sentForReview = false;
 
     public function getTitle(): string
     {
@@ -24,7 +29,7 @@ class CreateProduct extends CreateRecord
 
     public function getSubheading(): ?string
     {
-        return 'Fields marked * are required. You can save a hidden draft and finish it later.';
+        return 'Fields marked * are required. New products appear in the shop after our team approves them.';
     }
 
     /**
@@ -34,7 +39,7 @@ class CreateProduct extends CreateRecord
     {
         return [
             $this->getCreateFormAction()
-                ->label('Publish product'),
+                ->label('Send for review'),
 
             $this->saveDraftAction(),
 
@@ -90,11 +95,41 @@ class CreateProduct extends CreateRecord
         }
 
         $product->syncPrimaryImageFlag();
+
+        if ($product->is_active) {
+            $this->sendForReview($product);
+        }
+    }
+
+    protected function sendForReview(Product $product): void
+    {
+        try {
+            app(ProductApprovalService::class)->submitProduct($product, auth()->user());
+            $this->sentForReview = true;
+        } catch (DomainException|AuthorizationException $e) {
+            Notification::make()
+                ->title('Could not send for review')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    protected function getCreatedNotification(): ?Notification
+    {
+        if ($this->sentForReview) {
+            return Notification::make()
+                ->success()
+                ->title('Sent for review')
+                ->body('Buyers will see it once an admin approves it.');
+        }
+
+        return parent::getCreatedNotification();
     }
 
     protected function getCreatedNotificationTitle(): ?string
     {
-        return $this->getRecord()->is_active ? 'Product published' : 'Draft saved. It stays hidden until you turn on “Visible on storefront”.';
+        return 'Draft saved. It stays hidden until you turn on “Visible on storefront”.';
     }
 
     protected function getRedirectUrl(): string

@@ -2,14 +2,17 @@
 
 namespace App\Filament\Seller\Resources\Products\Tables;
 
+use App\Enums\ProductApprovalStatus;
 use App\Exceptions\ListingActivationRefusedException;
 use App\Filament\Seller\Resources\Products\ProductResource;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\SalesChannel;
+use App\Services\Catalog\ProductApprovalService;
 use App\Services\Inventory\ProductDuplicationService;
 use App\Services\Monetization\MonetizationEngineService;
 use App\Services\Settings\StoreConfigurationService;
+use DomainException;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
@@ -26,6 +29,7 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -140,6 +144,9 @@ class ProductsTable
                         }
 
                         return true;
+                    })
+                    ->afterStateUpdated(function (Product $record, $state): void {
+                        self::syncApprovalWithVisibility($record, (bool) $state);
                     }),
 
                 TextColumn::make('updated_at')
@@ -315,15 +322,96 @@ class ProductsTable
             }
         }
 
-        $count = Product::query()
+        $products = Product::query()
             ->whereKey($records->modelKeys())
             ->where('seller_id', auth()->id())
-            ->update(['is_active' => $visible]);
+            ->get();
 
+        $changed = 0;
+        $sent = 0;
+        $failed = 0;
+
+        /** @var Product $product */
+        foreach ($products as $product) {
+            $product->update(['is_active' => $visible]);
+            $changed++;
+
+            if (! $visible) {
+                if ($product->approval_status === ProductApprovalStatus::PendingReview && ! self::withdraw($product)) {
+                    $failed++;
+                }
+
+                continue;
+            }
+
+            if ($product->approval_status === ProductApprovalStatus::Draft || $product->approval_status === ProductApprovalStatus::Rejected) {
+                if (self::submit($product)) {
+                    $sent++;
+                } else {
+                    $failed++;
+                }
+            }
+        }
+
+        if (! $visible) {
+            Notification::make()->title("{$changed} product(s) hidden")->success()->send();
+
+            return;
+        }
+
+        $shown = $changed - $sent;
         Notification::make()
-            ->title($visible ? "{$count} product(s) now visible" : "{$count} product(s) hidden")
+            ->title("{$shown} shown, {$sent} sent for review")
+            ->body($failed > 0 ? "{$failed} could not be sent for review. Open them to try again." : null)
             ->success()
             ->send();
+    }
+
+    /**
+     * Keeps the review state in step with the Visible switch: showing a draft or rejected product sends it
+     * for review, hiding a product that is waiting for review withdraws it.
+     */
+    protected static function syncApprovalWithVisibility(Product $product, bool $visible): void
+    {
+        $status = $product->approval_status;
+
+        if ($visible && ($status === ProductApprovalStatus::Draft || $status === ProductApprovalStatus::Rejected)) {
+            if (self::submit($product)) {
+                Notification::make()
+                    ->title('Sent for review')
+                    ->body('Buyers will see it once an admin approves it.')
+                    ->success()
+                    ->send();
+            }
+        } elseif (! $visible && $status === ProductApprovalStatus::PendingReview) {
+            self::withdraw($product);
+        }
+    }
+
+    protected static function submit(Product $product): bool
+    {
+        try {
+            app(ProductApprovalService::class)->submitProduct($product, auth()->user());
+
+            return true;
+        } catch (DomainException|AuthorizationException $e) {
+            Notification::make()->title('Could not send for review')->body($e->getMessage())->danger()->send();
+
+            return false;
+        }
+    }
+
+    protected static function withdraw(Product $product): bool
+    {
+        try {
+            app(ProductApprovalService::class)->withdrawProduct($product, auth()->user());
+
+            return true;
+        } catch (DomainException|AuthorizationException $e) {
+            Notification::make()->title('Could not withdraw from review')->body($e->getMessage())->danger()->send();
+
+            return false;
+        }
     }
 
     protected static function deleteOrHide(Collection $records): void

@@ -260,7 +260,7 @@ class SellerProductManagementTest extends TestCase
     {
         $this->get('/seller')->assertSuccessful()->assertSee('Sales')->assertSee('Catalog');
         $this->get('/seller/products')->assertSuccessful()->assertSee('Add product');
-        $this->get('/seller/products/create')->assertSuccessful()->assertSee('Publish product')->assertSee('Save as hidden draft');
+        $this->get('/seller/products/create')->assertSuccessful()->assertSee('Send for review')->assertSee('Save as hidden draft');
         $this->get("/seller/products/{$this->nails->id}/edit")->assertSuccessful()->assertSee('Save changes');
         $this->get('/seller/sub-orders')->assertSuccessful();
     }

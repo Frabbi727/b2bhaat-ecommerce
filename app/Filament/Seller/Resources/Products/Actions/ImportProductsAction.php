@@ -109,7 +109,7 @@ class ImportProductsAction
     }
 
     /**
-     * @param  array{total_rows: int, products_created: int, variations_created: int, created: array<int, string>, examples_skipped: int, ignored_columns: array<int, string>, errors: array<int, string>, hidden_over_limit?: array<int, string>, dry_run: bool}  $result
+     * @param  array{total_rows: int, products_created: int, variations_created: int, created: array<int, string>, sent_for_review?: array<int, string>, examples_skipped: int, ignored_columns: array<int, string>, errors: array<int, string>, hidden_over_limit?: array<int, string>, dry_run: bool}  $result
      */
     public static function resultNotification(array $result): Notification
     {
@@ -141,6 +141,11 @@ class ImportProductsAction
             if (count($errors) > 8) {
                 $lines[] = '…and '.(count($errors) - 8).' more.';
             }
+        }
+
+        $sentForReview = $result['sent_for_review'] ?? [];
+        if ($sentForReview !== []) {
+            $lines[] = '<strong>'.count($sentForReview).' sent for review.</strong> Buyers will see them once an admin approves them.';
         }
 
         $hidden = $result['hidden_over_limit'] ?? [];

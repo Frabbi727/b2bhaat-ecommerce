@@ -12,8 +12,11 @@ use App\Models\Product;
 use App\Models\SalesChannel;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\Catalog\ProductApprovalService;
 use App\Services\Monetization\MonetizationEngineService;
+use DomainException;
 use Exception;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -120,6 +123,7 @@ class ProductBulkImportService
      *     products_created: int,
      *     variations_created: int,
      *     created: array<int, string>,
+     *     sent_for_review: array<int, string>,
      *     examples_skipped: int,
      *     ignored_columns: array<int, string>,
      *     errors: array<int, string>,
@@ -153,6 +157,7 @@ class ProductBulkImportService
             'products_created' => 0,
             'variations_created' => 0,
             'created' => [],
+            'sent_for_review' => [],
             'examples_skipped' => 0,
             'ignored_columns' => $ignoredColumns,
             'errors' => [],
@@ -211,7 +216,16 @@ class ProductBulkImportService
             }
 
             if (! $dryRun) {
-                DB::transaction(fn () => $this->createProduct($seller, $plan['product']));
+                $product = DB::transaction(fn () => $this->createProduct($seller, $plan['product']));
+
+                if ($plan['product']['is_active']) {
+                    try {
+                        app(ProductApprovalService::class)->submitProduct($product, $seller);
+                        $result['sent_for_review'][] = $plan['product']['title'];
+                    } catch (DomainException|AuthorizationException $e) {
+                        report($e);
+                    }
+                }
             }
 
             $existingTitles->put($key, true);
