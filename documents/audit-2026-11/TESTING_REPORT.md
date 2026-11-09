@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1443 tests, 1434 passed, 9 skipped, 6598 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1446 tests, 1437 passed, 9 skipped, 6613 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -104,6 +104,7 @@ The existing tests of other features were touched only to give their test produc
 | ORD-2 | `tests/Feature/ParcelDispatchRulesTest.php` (4) | A cancelled parcel can't be handed to a courier, start a self-delivery or book a pickup, and keeps no tracking number or handover code; an unverified bKash order can't start a self-delivery even when called directly; a COD parcel is handed over with its status, tracking number and log. All four failed on the old code. `CourierBookingAndChallanTest` now books from an unfulfilled parcel (it used to move a shipped parcel back to processing) and expects the shared refusal message |
 | ORD-3, ORD-4 | `tests/Feature/CheckoutAtomicityTest.php` (2) | When another buyer uses the coupon's last use while this order is being written, the order is refused with a coupon message, and no order, coupon use or stock change remains (failed on the old code: the order was placed and the coupon went past its limit). A seller suspended after the cart was filled gets no order (passed on the old code; ORD-4 was already handled) |
 | FS-1, INV-7 | `tests/Feature/FlashUnitReleaseTest.php` (3) | An expired unpaid reservation returns its 2 flash units, and running the job twice doesn't return them again; a parcel returned by the courier returns its units; an approved return returns its units. All three failed on the old code |
+| FS-2 | `tests/Feature/FlashSaleApprovalConflictTest.php` (3) | Overlapping offer refused with a notice; bulk skips the clash and approves the rest; non-overlapping offer approved |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 

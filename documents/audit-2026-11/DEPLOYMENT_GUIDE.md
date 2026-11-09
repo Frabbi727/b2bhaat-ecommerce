@@ -236,3 +236,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## FS-1 / INV-7 flash units
 - **Code only, no migration.** Units already lost to earlier returns or expiries are not recalculated.
+
+## FS-2 (flash-sale approval conflicts)
+- Code only, no migration. Admins now see "Cannot approve this offer" when a product already runs in another live campaign over the same dates.
