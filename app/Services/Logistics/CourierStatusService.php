@@ -6,6 +6,7 @@ namespace App\Services\Logistics;
 
 use App\Exceptions\InvalidStatusTransitionException;
 use App\Models\FulfillmentStatus;
+use App\Models\Order;
 use App\Models\OrderTrackingLog;
 use App\Models\PaymentStatus;
 use App\Models\SubOrder;
@@ -69,6 +70,9 @@ class CourierStatusService
         ?Carbon $timestamp = null
     ): void {
         DB::transaction(function () use ($subOrder, $statusSlug, $hubLocation, $title, $description, $timestamp) {
+            // Order before parcel, as everywhere else (Wave 1 review M-1).
+            Order::whereKey($subOrder->parent_order_id)->lockForUpdate()->first();
+
             $subOrder = SubOrder::whereKey($subOrder->getKey())->lockForUpdate()->with(['fulfillmentStatus', 'order.paymentMethod'])->firstOrFail();
             $currentSlug = $subOrder->fulfillmentStatus?->slug;
 

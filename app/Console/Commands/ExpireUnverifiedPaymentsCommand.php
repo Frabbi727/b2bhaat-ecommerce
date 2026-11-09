@@ -12,6 +12,7 @@ use App\Services\Payments\PaymentVerificationService;
 use App\Services\Settings\StoreConfigurationService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Notification;
+use Throwable;
 
 /**
  * PAY-2: reminds admins about bKash/Nagad payments nobody has checked, and cancels the ones left unchecked past
@@ -36,12 +37,21 @@ class ExpireUnverifiedPaymentsCommand extends Command
         $timeoutHours = max($config->getMfsVerificationTimeoutHours(), $reminderHours + 1);
 
         $expired = 0;
+        $failed = [];
+
+        // Paged by id, not offset: each expiry takes the order out of the result, which would make offset pages skip
+        // orders (Wave 1 review M-2). One failing order is reported and the rest still expire (M-1).
         Order::where('payment_status_id', $awaitingId)
             ->where('created_at', '<=', now()->subHours($timeoutHours))
-            ->orderBy('id')
-            ->each(function (Order $order) use ($verification, $timeoutHours, &$expired): void {
-                if ($verification->expireUnverified($order, $timeoutHours)) {
-                    $expired++;
+            ->lazyById(200)
+            ->each(function (Order $order) use ($verification, $timeoutHours, &$expired, &$failed): void {
+                try {
+                    if ($verification->expireUnverified($order, $timeoutHours)) {
+                        $expired++;
+                    }
+                } catch (Throwable $exception) {
+                    report($exception);
+                    $failed[] = $order->order_number;
                 }
             });
 
@@ -62,6 +72,12 @@ class ExpireUnverifiedPaymentsCommand extends Command
         }
 
         $this->info("{$toRemind->count()} payment(s) reminded, {$expired} order(s) cancelled as payment not confirmed.");
+
+        if ($failed !== []) {
+            $this->error(count($failed).' order(s) could not be cancelled and will be tried again next run: '.implode(', ', $failed));
+
+            return self::FAILURE;
+        }
 
         return self::SUCCESS;
     }

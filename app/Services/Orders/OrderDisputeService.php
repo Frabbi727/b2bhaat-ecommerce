@@ -48,6 +48,10 @@ class OrderDisputeService
         }
 
         DB::transaction(function () use ($subOrder, $reason) {
+            // Order before parcel, the same order payment verification and expiry lock in, so they can't deadlock
+            // (Wave 1 review M-1).
+            Order::whereKey($subOrder->parent_order_id)->lockForUpdate()->first();
+
             // Re-read under a row lock: a concurrent cancel, delivery or return must not be cancelled again (final review I7)
             $subOrder = SubOrder::whereKey($subOrder->id)->lockForUpdate()->with('fulfillmentStatus', 'items')->firstOrFail();
             $currentSlug = $subOrder->fulfillmentStatus?->slug;
@@ -123,6 +127,8 @@ class OrderDisputeService
     public function cancelFullOrder(Order $order, string $reason = 'Cancelled by buyer'): array
     {
         return DB::transaction(function () use ($order, $reason): array {
+            Order::whereKey($order->getKey())->lockForUpdate()->first();
+
             $parcels = $order->subOrders()->with('fulfillmentStatus')->get();
             $cancellable = $parcels->filter(fn (SubOrder $subOrder): bool => in_array($subOrder->fulfillmentStatus?->slug, ['unfulfilled', 'processing'], true));
             $kept = $parcels->filter(fn (SubOrder $subOrder): bool => $subOrder->fulfillmentStatus?->slug !== 'cancelled')->count() - $cancellable->count();
