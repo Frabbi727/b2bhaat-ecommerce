@@ -26,7 +26,7 @@ This page compares what B2Bhaat promises sellers and buyers with what the code d
 | Cancelling a paid order refunds the buyer | Cancelling during bKash/Nagad verification recorded no refund, and escrow was held for the seller | Fixed (9e07404) |
 | Unverified MFS orders expire | They wait forever and hold stock | Wave 1, PAY-2 |
 | A TrxID pays for one order only | The same TrxID can be reused | Wave 1, PAY-3 |
-| Order status reflects its consignments | Admin can edit it freely; a full cancel overrides shipped parts | Wave 1, ORD-1 |
+| Order status reflects its consignments | Fixed: status follows the parcels; full cancel keeps shipped parcels | Wave 1, ORD-1 (fixed) |
 | Partial refunds | Whole consignment only | Wave 2, PAY-4 |
 
 ## Catalog and inventory

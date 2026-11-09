@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1367 tests, 1360 passed, 7 skipped, 6314 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1374 tests, 1367 passed, 7 skipped, 6317 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -84,6 +84,7 @@ The existing tests of other features were touched only to give their test produc
 | MON-10, ACC-10 | `tests/Feature/SellerBillingPeriodKeyTest.php` (4) | The renewal bill carries its period key and running the command twice raises one bill; a period already paid is not billed again; the database refuses a second bill with the same key; a plan-change bill is keyed to its new subscription. All four failed on the old code |
 | PAY-2 | `tests/Feature/UnverifiedPaymentTimeoutTest.php` (7) | A 13-hour-old unchecked payment reminds admins exactly once and cancels nothing; a 73-hour-old one is cancelled as Not Confirmed, its consignment cancelled, stock returned, TrxID kept, and the buyer SMS queued; a 2-hour-old one is left alone; an order verified in the meantime is not cancelled; the limit follows the store setting; expiry and rejection both free flash-sale units (rejection failed this on the old code) |
 | PAY-3, SEC-5 | `tests/Feature/MfsTransactionIdUniqueTest.php` (5) | An order stores its TrxID cleaned up (spaces removed, upper case); a TrxID already used is refused at checkout in any letter case and no order is created; the same TrxID on Nagad is allowed after bKash; the database refuses a second order with the same TrxID; cash-on-delivery orders need no TrxID. All five failed on the old code |
+| ORD-1 | `tests/Feature/OrderStatusFromConsignmentsTest.php` (7) | Full cancel of a partly shipped order cancels only the waiting parcel and leaves the order open; full cancel is refused when every parcel has shipped; one parcel cancelled and the other delivered completes the order; one delivered and one returned completes it; cancelling every parcel of a paid order cancels and refunds it; a wrongly cancelled order with parcels on the way reopens as Processing; the admin has no edit page or Change status action. Six failed on the old code; the paid-refund case already worked and still does. `FinancialRecordRetentionTest` now checks that the order edit page is gone instead of checking its locked fields |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 

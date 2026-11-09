@@ -176,3 +176,8 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 - **Migration:** `2026_11_09_135916_add_mfs_transaction_columns_to_orders_table.php` adds `orders.mfs_gateway` and `orders.mfs_transaction_id` (unique together) and fills them from each order's saved TrxID. It changes nothing else. It reads every order once, so on a large table run it at a quiet time.
 - **Watch the output:** if it prints "PAY-3: N order(s) reuse a TrxID…", the listed orders used a TrxID that an earlier order had already used. Check each one against the bKash/Nagad statement; a paid order may need a refund, or the TrxID may have been a typo.
 - **Rollback:** `php artisan migrate:rollback --step=1` drops the two columns and the index; orders are kept.
+
+## ORD-1 order status from parcels
+- **Code only, no migration.** Existing orders are not changed on deploy; each is corrected the next time one of its parcels changes.
+- **To find orders the old rule left wrong:** `SELECT o.order_number FROM orders o JOIN order_statuses s ON s.id = o.order_status_id WHERE s.slug = 'cancelled' AND EXISTS (SELECT 1 FROM sub_orders so JOIN fulfillment_statuses f ON f.id = so.fulfillment_status_id WHERE so.parent_order_id = o.id AND f.slug NOT IN ('cancelled', 'returned'));` (cancelled orders with a parcel still open or delivered).
+- **Bookmarks:** links to `/admin/orders/{id}/edit` now show 404; use the order page.
