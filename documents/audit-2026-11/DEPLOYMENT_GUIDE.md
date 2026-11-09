@@ -128,3 +128,8 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 ## UX-ACC-1 manual journals
 - **Code only.** After deploy, **Accounting → Journal Entries** shows **New manual journal**.
 - **Time zone:** the journal date can't be in the future by the server's clock. While the app runs on UTC (see PERF-5), between midnight and 6 am Dhaka time the server's date is still the previous day, so a journal dated today (Dhaka) is refused as a future date. Use the previous day's date, or post after 6 am.
+
+## ACC-7 courier and gateway settlements
+- **Migration:** `2026_11_09_091139_add_courier_settlement_to_sub_orders_table.php` adds two empty columns to `sub_orders` (`courier_settled_at`, `courier_settlement_journal_id`). It changes no data.
+- **Before first use:** every COD parcel delivered before this deploy shows as waiting for courier payment, including ones the courier already paid. The accountant should record those past payments with **Courier remittance**, dated when each was received, so the receivable starts out right. Likewise, past bKash or Nagad cash-outs need **Gateway transfer** entries before the gateway balance can be trusted.
+- **Rollback:** `php artisan migrate:rollback --step=1` drops the two columns. Any settlement journals already posted stay in the books, because posted journals are permanent (ACC-9); reverse them with manual journals if needed.

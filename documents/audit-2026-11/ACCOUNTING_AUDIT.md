@@ -37,7 +37,7 @@ Tests prove three things: the trial balance stays balanced, real courier bills s
 
 > **Not yet run on production.** Take a backup, run it with `--dry-run`, review the output, then run it. See DEPLOYMENT_GUIDE.
 
-**Still open (ACC-7).** The real courier cost is not booked yet. Until it is, shipping revenue is gross, and courier invoices should be entered as manual expense journals.
+**Courier cost (ACC-7, fixed).** Courier charges deducted from a COD payment are booked as `courier_delivery_expense` when the remittance is recorded. Charges billed separately, for example on prepaid parcels, are entered as a manual expense journal.
 
 ## Related fixes in Wave 0
 
@@ -52,7 +52,7 @@ Tests prove three things: the trial balance stays balanced, real courier bills s
 | ACC-4 | Self-delivery escrow top-up has no journal | Post the top-up |
 | ACC-5 | Reversing a system journal does not undo wallets or payouts | Allow reversal of manual journals only |
 | ACC-6 | Handlers silently skip posting when an account is missing | Throw and roll back |
-| ACC-7 | Courier COD receivable and gateway clearing are never settled; gateway fees are never booked | Settlement actions |
+| ACC-7 | Courier COD receivable and gateway clearing are never settled; gateway fees are never booked | **Fixed (78b7ef4):** courier remittance and gateway transfer actions |
 | ACC-8 | Admin waiver books subscription revenue | Post net zero |
 | ACC-9 | No DB-level balance or immutability constraints | PostgreSQL CHECK constraints and triggers |
 | ACC-11 | Commission booked at payment **(owner: book on delivery)** | Deferred commission liability |

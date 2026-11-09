@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1308 tests, 1301 passed, 7 skipped, 6099 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1321 tests, 1314 passed, 7 skipped, 6163 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -73,6 +73,7 @@ The existing tests of other features were touched only to give their test produc
 | ACC-5 | `tests/Feature/Accounting/FilamentAccountingJournalEntryResourceTest.php` (1 new) | Reverse is hidden for a system journal on the list and the view page; the existing tests still reverse manual journals |
 | INV-8b | `tests/Feature/DatabaseNotificationsQueryTest.php` (1) | The notification bell's query runs. It failed on PostgreSQL before the fix and passes after; an existing notification row converts to JSON intact |
 | UX-ACC-1 | `tests/Feature/Accounting/ManualJournalEntryTest.php` (8) | A balanced journal posts as a manual journal by the admin, with its reference and an audit entry, and can be reversed; unbalanced lines, a two-sided line, a missing confirmation, an inactive account, a closed period and a future date are refused with nothing posted; a seller can't open the journal pages |
+| ACC-7 | `tests/Feature/Accounting/SettlementServiceTest.php` (9), `SettlementActionsTest.php` (4) | Unsettled delivered courier COD parcels are listed with their amounts, filtered by courier; a remittance clears the receivable, books bank and courier charges, marks the parcels and writes an audit entry; amounts that don't add up, a parcel settled twice, and a self-delivered or unknown parcel are refused with nothing changed; a gateway transfer clears the gateway account and books the fee; a transfer larger than the books show, a fee as large as the transfer, and a non-bank, non-cash deposit account are refused; both buttons work from the journal list and need the confirmation tick |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
@@ -85,3 +86,5 @@ The existing tests of other features were touched only to give their test produc
 **Known test limit:** most accounting tests are written for SQLite. On PostgreSQL, 34 fail before reaching any journal code because their setup hard-codes `order_status_id = 1` (ids drift between tests there), and 11 deliberately insert unbalanced or already-posted journals, which the ACC-9 guards now refuse. This predates Wave 1 except for those 11, which show the guards working.
 
 **Browser check (UX-ACC-1, INV-8b):** on a throwaway seeded PostgreSQL copy served on port 8001 (local database untouched, copy deleted afterwards): the journal page loads with the notification bell; the slide-over shows live totals ("Off by ৳100.00"); an unbalanced submit shows the balance message under the lines; a balanced one posts, appears as a Manual Journal with a Reverse link, and writes the audit entry.
+
+**PostgreSQL and browser check (ACC-7):** both test files pass on a throwaway PostgreSQL database with the ACC-9 guards on, and the migration rolls back and re-runs. On a throwaway seeded copy with two COD parcels delivered through the normal flow, the remittance form listed the courier and both parcels, showed the collected total live (৳2,120.00), and recorded ৳2,050 received plus ৳70 charges. Afterwards the receivable was 0, the bank ৳2,050 and courier expense ৳70, and total debits equalled total credits. The copy was deleted. The same check found UX-ACC-6 (icons at full page width on the custom report pages), which predates this work.

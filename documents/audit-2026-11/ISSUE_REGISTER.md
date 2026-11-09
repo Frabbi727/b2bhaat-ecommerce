@@ -62,7 +62,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | ACC-4 | Accounting | Self-delivery escrow top-up has no journal (`EscrowLedgerService.php:58-62`) | Post the top-up | ACC-1 | Open |
 | ACC-5 | Accounting | Reversing a system journal leaves wallets and payouts unchanged (`AccountingJournalEntriesTable.php:103-150`) | Allow reversal only for manual journals; system events reverse through their own business action | – | **Fixed (390a0ed)** |
 | ACC-6 | Accounting | Handlers `return null` silently when an account is missing (`PayoutJournalHandler.php:34` etc.) | Throw; the business action rolls back | – | **Fixed (7869d3c)** |
-| ACC-7 | Accounting | `courier_cod_receivable` and `gateway_clearing` are never settled; gateway fees are never booked | Courier remittance and gateway settlement actions; fee expense; courier payable | UX-ACC-1 | Open |
+| ACC-7 | Accounting | `courier_cod_receivable` and `gateway_clearing` are never settled; gateway fees are never booked | Courier remittance and gateway settlement actions; fee expense; courier payable | UX-ACC-1 | **Fixed (78b7ef4)** |
 | ACC-8 | Accounting | Admin waiver books fake subscription revenue (`MonetizationJournalHandler.php:97`) | Post no entry for a waiver, or post net zero | MON-7 | Open |
 | ACC-9 | Accounting | No DB constraints for balance or immutability; lines cascade on delete | PostgreSQL CHECK constraints and triggers; restrict delete | – | **Fixed (29d8f78)** |
 | ACC-11 | Accounting | Commission booked as income at payment, before delivery (`OrderPaymentJournalHandler.php:68-79`) | **Owner decision:** defer until delivery or escrow release (deferred commission liability) | ACC-9 | Open |
@@ -100,6 +100,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | ACC-19 | Seller statement totals wrong | Base it on the ledger |
 | AUD-5 to AUD-9 | No named finance events; no system actor; URL tokens and TrxIDs not redacted; sellers see raw diffs; admin filters and export missing | Per finding |
 | UX-ACC-2 / UX-ACC-3 | Reverse action is unsafe; payout TrxID not unique; no maker-checker | Confirmations; uniqueness |
+| UX-ACC-6 | Found while testing ACC-7. On the Trial Balance and Financial Reconciliation pages (and likely the other custom report pages), icons render at full page width. The custom Blade views use Tailwind classes, but the admin panel has no compiled theme that includes them (`resources/views/filament/admin/pages/*.blade.php`, no `viteTheme` in `AdminPanelProvider`). Unchanged from `production` | Add a Filament admin theme that scans these views, or rewrite them with Filament components |
 | INV-6, 9, 10 | Price-tier validation; sellers can self-feature; importer creates global attributes | Per finding |
 | SEC-8 to SEC-10 | Tracking tokens never expire; sellers can see other sellers' invoice lines; sensitive mass-assignable fields | Per finding |
 | PERF-2 to PERF-5 | Dashboard queries; N+1; job failure handling; **APP_TIMEZONE not set (UTC)** | Per finding |
