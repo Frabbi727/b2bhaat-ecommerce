@@ -48,6 +48,8 @@ class FlashSaleSubmissionService
                 throw new FlashSaleSubmissionException('You can only submit your own products.');
             }
 
+            self::assertSellerNotSuspended($seller);
+
             if ($product->approval_status !== ProductApprovalStatus::Approved) {
                 throw new DomainException('Only approved products can join a flash sale.');
             }
@@ -178,6 +180,8 @@ class FlashSaleSubmissionService
                 throw new FlashSaleSubmissionException('You can only update your own submissions.');
             }
 
+            self::assertSellerNotSuspended($seller);
+
             if (! in_array($submission->status, [FlashSaleSubmissionStatus::Pending, FlashSaleSubmissionStatus::RevisionRequested], true)) {
                 throw new FlashSaleSubmissionException('Only pending or revision-requested submissions can be edited.');
             }
@@ -273,5 +277,17 @@ class FlashSaleSubmissionService
         ]);
 
         return $submission->fresh();
+    }
+
+    /**
+     * MON-12: a suspended store can't promote products it can't show.
+     *
+     * @throws FlashSaleSubmissionException
+     */
+    private static function assertSellerNotSuspended(User $seller): void
+    {
+        if ($seller->sellerProfile?->monetization_status === 'suspended') {
+            throw new FlashSaleSubmissionException('Your store is suspended, so it can\'t join flash sales. Settle your payment to restore it.');
+        }
     }
 }

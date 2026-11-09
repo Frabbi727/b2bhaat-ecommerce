@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Escrow;
 
 use App\Events\Finance\PayoutStatusUpdatedEvent;
+use App\Models\SellerInvoice;
 use App\Models\SellerWallet;
 use App\Models\SubOrder;
 use App\Models\User;
@@ -278,6 +279,22 @@ class EscrowLedgerService
             $wallet = SellerWallet::where('seller_id', $seller->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            // MON-12: an overdue marketplace bill is paid before money leaves the platform.
+            $overdue = SellerInvoice::where('seller_id', $seller->id)
+                ->where('status', SellerInvoice::STATUS_UNPAID)
+                ->whereDate('due_date', '<', now()->toDateString())
+                ->orderBy('due_date')
+                ->first();
+
+            if ($overdue) {
+                throw new DomainException(sprintf(
+                    'Bill %s for ৳%s was due on %s and is still unpaid. Pay it on Subscription & Billing (you can pay from your balance), then request your payout.',
+                    $overdue->invoice_number,
+                    number_format((float) $overdue->total_amount, 2),
+                    $overdue->due_date->format('d M Y'),
+                ));
+            }
 
             if ((float) $wallet->available_balance <= 0 || $wallet->available_balance < $amount) {
                 throw new Exception("Insufficient available balance. Requested: {$amount}, Available: {$wallet->available_balance}");
