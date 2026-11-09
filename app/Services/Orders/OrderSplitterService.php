@@ -8,6 +8,7 @@ use App\Models\OrderItem;
 use App\Models\OrderStatus;
 use App\Models\PaymentStatus;
 use App\Models\Product;
+use App\Models\ProductVariation;
 use App\Models\SalesChannel;
 use App\Models\SubOrder;
 use App\Models\User;
@@ -44,6 +45,37 @@ class OrderSplitterService
      *     }>
      * } $data
      */
+    /**
+     * @param  array<int, array{product_id: int, variation_id: ?int}>  $items
+     *
+     * @throws \DomainException
+     */
+    private function assertOptionsStillSold(array $items): void
+    {
+        $variationIds = collect($items)->pluck('variation_id')->filter()->unique()->values();
+        if ($variationIds->isEmpty()) {
+            return;
+        }
+
+        $variations = ProductVariation::with('product')->whereIn('id', $variationIds)->get()->keyBy('id');
+
+        foreach ($items as $item) {
+            if (empty($item['variation_id'])) {
+                continue;
+            }
+
+            $variation = $variations->get((int) $item['variation_id']);
+
+            if (! $variation || (int) $variation->product_id !== (int) $item['product_id']) {
+                throw new \DomainException('An option in your cart is no longer sold. Remove it from your cart to continue.');
+            }
+
+            if ($variation->product?->has_variations && ! $variation->is_active) {
+                throw new \DomainException("Option {$variation->sku} is no longer sold. Remove it from your cart to continue.");
+            }
+        }
+    }
+
     public function createAndSplitOrder(User $customer, array $data): Order
     {
         return DB::transaction(function () use ($customer, $data) {
@@ -67,6 +99,9 @@ class OrderSplitterService
                 $storeName = $vacationProducts->first()->seller?->sellerProfile?->store_name ?? 'A merchant';
                 throw new \Exception("Cannot place order: {$storeName} is currently on vacation mode.");
             }
+
+            // INV-5: every option must still belong to its product and be on sale, even if the cart was filled earlier
+            $this->assertOptionsStillSold($data['items']);
 
             // 1. Reserve stock atomically
             $reservationItems = [];

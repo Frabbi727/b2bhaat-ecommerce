@@ -5,8 +5,10 @@ namespace App\Services\Cart;
 use App\Models\Coupon;
 use App\Models\Product;
 use App\Models\ProductPrice;
+use App\Models\ProductVariation;
 use App\Models\SalesChannel;
 use App\Services\Promotions\FlashSalePricing;
+use DomainException;
 use Exception;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Session;
@@ -58,6 +60,14 @@ class CartSessionService
             throw new Exception("Wholesale minimum order quantity is {$moq}. You requested {$lotTotal}.");
         }
 
+        // INV-5: check every option first, so a lot with one switched-off option adds nothing
+        $product = Product::with('variations')->find($productId);
+        if ($product) {
+            foreach (array_keys($variationQuantities) as $variationId) {
+                $this->assertSellableOption($product, (int) $variationId);
+            }
+        }
+
         foreach ($variationQuantities as $variationId => $qty) {
             $this->putItem($productId, (int) $variationId, SalesChannel::WHOLESALE, $qty, null, enforceLotMoq: false);
         }
@@ -68,6 +78,31 @@ class CartSessionService
     /**
      * @throws Exception
      */
+    /**
+     * INV-5: the option must belong to the product and, on a product with options, still be switched on (Sellable).
+     * A simple product's hidden default option has no Sellable switch, so it is not checked.
+     *
+     * @throws DomainException
+     */
+    private function assertSellableOption(Product $product, ?int $variationId): ?ProductVariation
+    {
+        if ($variationId === null) {
+            return null;
+        }
+
+        $variation = $product->variations->firstWhere('id', $variationId);
+
+        if (! $variation) {
+            throw new DomainException('This option is not part of this product.');
+        }
+
+        if ($product->has_variations && ! $variation->is_active) {
+            throw new DomainException("Option {$variation->sku} is no longer sold. Please choose another option.");
+        }
+
+        return $variation;
+    }
+
     private function putItem(int $productId, ?int $variationId, string $channelSlug, int $quantity, ?float $overrideUnitPrice, bool $enforceLotMoq): void
     {
         $product = Product::with(['prices.salesChannel', 'variations.attributeValues.attribute', 'seller.sellerProfile'])
@@ -92,7 +127,7 @@ class CartSessionService
             }
         }
 
-        $variation = $variationId ? $product->variations->firstWhere('id', $variationId) : null;
+        $variation = $this->assertSellableOption($product, $variationId);
 
         // Fetch channel-specific price tiers
         $channelPrices = $product->prices
