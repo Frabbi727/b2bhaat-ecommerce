@@ -255,6 +255,26 @@ class SellerProductEditApprovalTest extends TestCase
         $this->assertTrue($product->is_active);
     }
 
+    public function test_a_refused_activation_saves_nothing_including_prices(): void
+    {
+        $undo = Repeater::fake();
+        $product = $this->product('draft', active: false);
+        $this->seller->sellerProfile->update(['monetization_status' => 'suspended']);
+
+        $this->edit($product)
+            ->fillForm(['is_active' => true, 'title' => 'Renamed', 'prices' => [$this->retailTier(321)]])
+            ->call('save')
+            ->assertNotified('Product not published');
+
+        $product->refresh();
+        $this->assertSame('Edit Me', $product->title);
+        $this->assertFalse($product->is_active);
+        $this->assertSame(ProductApprovalStatus::Draft, $product->approval_status);
+        $this->assertSame('400.00', $product->prices()->sole()->unit_price);
+
+        $undo();
+    }
+
     public function test_unapproved_products_save_prices_directly_with_no_request(): void
     {
         $undo = Repeater::fake();

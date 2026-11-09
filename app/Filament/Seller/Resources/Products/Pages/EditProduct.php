@@ -114,23 +114,6 @@ class EditProduct extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        /** @var Product $product */
-        $product = $this->getRecord();
-
-        if (! empty($data['is_active']) && ! $product->is_active) {
-            try {
-                app(MonetizationEngineService::class)->assertCanActivate(auth()->user());
-            } catch (ListingActivationRefusedException $refusal) {
-                Notification::make()
-                    ->title('Product not published')
-                    ->body($refusal->getMessage().' Your other changes were not saved; untick "Visible" to save them as a draft.')
-                    ->warning()
-                    ->persistent()
-                    ->send();
-                $this->halt();
-            }
-        }
-
         $data['specifications'] = ProductForm::groupsToSpecifications($data['specification_groups'] ?? null);
         unset($data['specification_groups']);
 
@@ -151,6 +134,28 @@ class EditProduct extends EditRecord
         $this->beginSave();
     }
 
+    /**
+     * Runs from `beforeSave`, before Filament writes the prices repeater, so a refused activation saves nothing.
+     */
+    protected function assertListingMayBecomeVisible(Product $product): void
+    {
+        if (empty($this->data['is_active']) || $product->is_active) {
+            return;
+        }
+
+        try {
+            app(MonetizationEngineService::class)->assertCanActivate(auth()->user());
+        } catch (ListingActivationRefusedException $refusal) {
+            Notification::make()
+                ->title('Product not published')
+                ->body($refusal->getMessage().' Nothing was saved; untick "Visible" to save your changes as a draft.')
+                ->warning()
+                ->persistent()
+                ->send();
+            $this->halt();
+        }
+    }
+
     protected function beginSave(): void
     {
         /** @var Product $product */
@@ -159,6 +164,8 @@ class EditProduct extends EditRecord
         $this->savedNotificationTitle = null;
         $this->savedNotificationBody = null;
         $this->submittedPricing = null;
+
+        $this->assertListingMayBecomeVisible($product);
 
         // Decided from the database, never from form data: a stale page must not leak prices live
         $product->refresh();
