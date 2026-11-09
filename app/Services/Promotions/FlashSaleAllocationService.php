@@ -7,6 +7,7 @@ namespace App\Services\Promotions;
 use App\Enums\FlashSaleSubmissionStatus;
 use App\Exceptions\FlashSaleUnavailableException;
 use App\Models\FlashSaleProduct;
+use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\User;
 
@@ -64,6 +65,30 @@ class FlashSaleAllocationService
             }
 
             $offer->increment('units_sold', $quantity);
+        }
+    }
+
+    /**
+     * FS-1 / INV-7: give back the flash-sale units these order lines claimed, because their sale was undone
+     * (cancelled, payment rejected or expired, reservation expired, returned). Offers are locked in id order. The
+     * caller makes sure each parcel is undone once (status rules or a locked re-check).
+     *
+     * @param  iterable<OrderItem>  $orderItems
+     */
+    public function release(iterable $orderItems): void
+    {
+        $units = [];
+        foreach ($orderItems as $item) {
+            if ($item->flash_sale_product_id) {
+                $units[(int) $item->flash_sale_product_id] = ($units[(int) $item->flash_sale_product_id] ?? 0) + (int) $item->quantity;
+            }
+        }
+
+        ksort($units);
+
+        foreach ($units as $offerId => $quantity) {
+            $offer = FlashSaleProduct::whereKey($offerId)->lockForUpdate()->first();
+            $offer?->update(['units_sold' => max(0, (int) $offer->units_sold - $quantity)]);
         }
     }
 }

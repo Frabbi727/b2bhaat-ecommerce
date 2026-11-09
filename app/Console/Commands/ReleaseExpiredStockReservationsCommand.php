@@ -10,6 +10,8 @@ use App\Models\OrderStatus;
 use App\Models\OrderTrackingLog;
 use App\Models\PaymentStatus;
 use App\Services\Inventory\StockReservationService;
+use App\Services\Logistics\CourierStatusService;
+use App\Services\Promotions\FlashSaleAllocationService;
 use App\Services\Settings\StoreConfigurationService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -36,7 +38,8 @@ class ReleaseExpiredStockReservationsCommand extends Command
      */
     public function handle(
         StockReservationService $stockService,
-        StoreConfigurationService $configService
+        StoreConfigurationService $configService,
+        FlashSaleAllocationService $flashSales,
     ): int {
         $minutesOption = $this->option('minutes');
         $ttlMinutes = ($minutesOption !== null && $minutesOption !== '')
@@ -56,27 +59,40 @@ class ReleaseExpiredStockReservationsCommand extends Command
             return self::FAILURE;
         }
 
-        // Query pending unpaid orders created before threshold
-        $expiredOrders = Order::where('order_status_id', $pendingOrderStatus->id)
+        $orderIds = Order::where('order_status_id', $pendingOrderStatus->id)
             ->where('payment_status_id', $unpaidPaymentStatus->id)
             ->where('created_at', '<=', $thresholdTime)
-            ->with(['subOrders.items.variation'])
-            ->get();
+            ->orderBy('id')
+            ->pluck('id');
 
         $cancelledOrdersCount = 0;
         $totalItemsRestored = 0;
 
-        foreach ($expiredOrders as $order) {
+        foreach ($orderIds as $orderId) {
             DB::transaction(function () use (
-                $order,
+                $orderId,
                 $stockService,
+                $flashSales,
+                $pendingOrderStatus,
+                $unpaidPaymentStatus,
                 $cancelledOrderStatus,
                 $cancelledFulfillmentStatus,
                 $ttlMinutes,
                 &$cancelledOrdersCount,
                 &$totalItemsRestored
-            ) {
-                foreach ($order->subOrders as $subOrder) {
+            ): void {
+                // Locked and checked again, so a second run (or a payment arriving meanwhile) never releases twice
+                // (FS-1 / INV-7).
+                $order = Order::whereKey($orderId)->lockForUpdate()->first();
+                if (! $order || $order->order_status_id !== $pendingOrderStatus->id || $order->payment_status_id !== $unpaidPaymentStatus->id) {
+                    return;
+                }
+
+                foreach ($order->subOrders()->with(['fulfillmentStatus', 'items'])->lockForUpdate()->get() as $subOrder) {
+                    if (! CourierStatusService::canTransition($subOrder->fulfillmentStatus?->slug, 'cancelled')) {
+                        continue;
+                    }
+
                     $stockItems = [];
                     foreach ($subOrder->items as $item) {
                         if ($item->variation_id) {
@@ -91,6 +107,7 @@ class ReleaseExpiredStockReservationsCommand extends Command
                     if (! empty($stockItems)) {
                         $stockService->releaseStock($stockItems);
                     }
+                    $flashSales->release($subOrder->items);
 
                     $subOrder->update([
                         'fulfillment_status_id' => $cancelledFulfillmentStatus->id,

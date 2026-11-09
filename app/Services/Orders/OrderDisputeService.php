@@ -2,7 +2,6 @@
 
 namespace App\Services\Orders;
 
-use App\Models\FlashSaleProduct;
 use App\Models\FulfillmentStatus;
 use App\Models\Order;
 use App\Models\OrderTrackingLog;
@@ -12,6 +11,7 @@ use App\Models\User;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Logistics\CourierStatusService;
+use App\Services\Promotions\FlashSaleAllocationService;
 use App\Services\Settings\StoreConfigurationService;
 use Exception;
 use Illuminate\Support\Facades\DB;
@@ -76,16 +76,8 @@ class OrderDisputeService
                         'quantity' => $item->quantity,
                     ];
                 }
-
-                if ($item->flash_sale_product_id) {
-                    $offer = FlashSaleProduct::whereKey($item->flash_sale_product_id)->lockForUpdate()->first();
-                    if ($offer) {
-                        $offer->update([
-                            'units_sold' => max(0, (int) $offer->units_sold - (int) $item->quantity),
-                        ]);
-                    }
-                }
             }
+            app(FlashSaleAllocationService::class)->release($subOrder->items);
 
             if (! empty($stockItems)) {
                 $this->stockReservationService->releaseStock($stockItems);
@@ -264,6 +256,7 @@ class OrderDisputeService
                     if (! empty($stockItems)) {
                         $this->stockReservationService->releaseStock($stockItems);
                     }
+                    app(FlashSaleAllocationService::class)->release($returnRequest->subOrder->items);
 
                     // 3. Create tracking timeline log
                     OrderTrackingLog::create([

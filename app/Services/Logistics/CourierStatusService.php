@@ -16,6 +16,7 @@ use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Orders\OrderStatusReconciler;
 use App\Services\Orders\RefundRecorder;
+use App\Services\Promotions\FlashSaleAllocationService;
 use Carbon\Carbon;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -171,6 +172,7 @@ class CourierStatusService
         if (! empty($stockItems)) {
             $this->stockReservationService->releaseStock($stockItems);
         }
+        app(FlashSaleAllocationService::class)->release($subOrder->items);
 
         // 2. Undo the seller side: refund the hold, or reverse an already released credit
         $this->escrowLedgerService->reverseReturnedSubOrder($subOrder, 'Returned to origin (RTO) by courier service');

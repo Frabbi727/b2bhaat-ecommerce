@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services\Payments;
 
 use App\Listeners\Orders\SendSellerNewConsignmentEmailListener;
-use App\Models\FlashSaleProduct;
 use App\Models\FulfillmentStatus;
 use App\Models\Order;
 use App\Models\OrderStatus;
@@ -18,6 +17,7 @@ use App\Services\Inventory\StockReservationService;
 use App\Services\Logistics\CourierStatusService;
 use App\Services\Orders\OrderStatusReconciler;
 use App\Services\Orders\RefundRecorder;
+use App\Services\Promotions\FlashSaleAllocationService;
 use App\Services\Sms\OrderNotificationService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -139,12 +139,7 @@ class PaymentVerificationService
             }
 
             // The flash-sale units this order claimed are free for other buyers again.
-            foreach ($subOrder->items->filter(fn ($item) => $item->flash_sale_product_id) as $item) {
-                $offer = FlashSaleProduct::whereKey($item->flash_sale_product_id)->lockForUpdate()->first();
-                if ($offer) {
-                    $offer->update(['units_sold' => max(0, (int) $offer->units_sold - (int) $item->quantity)]);
-                }
-            }
+            app(FlashSaleAllocationService::class)->release($subOrder->items);
 
             $subOrder->update(['fulfillment_status_id' => $cancelled->id]);
 
