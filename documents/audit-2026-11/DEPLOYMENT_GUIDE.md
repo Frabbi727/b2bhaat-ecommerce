@@ -217,3 +217,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## M-1, M-2 lock order and expiry run
 - **Code only, no migration.** `payments:expire-unverified` can now exit with a failure while still expiring the other orders; watch the scheduler log for "could not be cancelled" and the order numbers it lists.
+
+## M-7 interrupted index builds
+- **No new migration;** the PERF-1 migration changed before release. If it stops part-way on production, run `php artisan migrate --force` again: half-built indexes are dropped and rebuilt, still concurrently.
