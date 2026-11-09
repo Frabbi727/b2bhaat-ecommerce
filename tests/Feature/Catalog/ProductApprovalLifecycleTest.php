@@ -6,6 +6,7 @@ namespace Tests\Feature\Catalog;
 
 use App\Enums\ProductApprovalStatus;
 use App\Exceptions\ApprovalConflictException;
+use App\Filament\Seller\Resources\Products\ProductResource;
 use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Product;
@@ -20,6 +21,7 @@ use App\Services\Catalog\ProductApprovalService;
 use Database\Seeders\SystemLookupSeeder;
 use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
@@ -322,5 +324,60 @@ class ProductApprovalLifecycleTest extends TestCase
         Artisan::call('audit:prune', ['--force' => true]);
 
         $this->assertDatabaseHas('audit_logs', ['id' => $old->id]);
+    }
+
+    public function test_a_failing_admin_notification_does_not_undo_the_submission(): void
+    {
+        Notification::shouldReceive('send')->once()->andThrow(new \RuntimeException('mail down'));
+        $product = $this->product();
+
+        $submitted = $this->service->submitProduct($product, $this->seller);
+
+        $this->assertSame(ProductApprovalStatus::PendingReview, $product->fresh()->approval_status);
+        $this->assertSame(ProductApprovalStatus::PendingReview, $submitted->approval_status);
+        $this->assertFalse(Cache::has("approval-notify:{$product->id}"));
+    }
+
+    public function test_a_failing_seller_notification_does_not_undo_the_decision(): void
+    {
+        Notification::shouldReceive('send')->once()->andThrow(new \RuntimeException('mail down'));
+        $product = $this->product('pending_review');
+
+        $this->service->approveProduct($product, $this->admin, $this->service->versionOf($product));
+
+        $this->assertSame(ProductApprovalStatus::Approved, $product->fresh()->approval_status);
+    }
+
+    public function test_decision_mail_links_to_the_seller_edit_page(): void
+    {
+        $product = $this->product('pending_review');
+        $mail = (new ProductReviewDecided($product, false, 'Photos are too blurry.'))->toMail($this->seller);
+
+        $this->assertStringContainsString(
+            ProductResource::getUrl('edit', ['record' => $product], panel: 'seller'),
+            $mail->actionUrl,
+        );
+    }
+
+    public function test_decision_notification_is_queued(): void
+    {
+        $this->assertInstanceOf(ShouldQueue::class, new ProductReviewDecided($this->product(), true));
+    }
+
+    public function test_reject_with_a_stale_version_is_refused(): void
+    {
+        $product = $this->product('pending_review');
+        $version = $this->service->versionOf($product);
+        $this->travel(1)->seconds();
+        $product->touch();
+
+        try {
+            $this->service->rejectProduct($product->fresh(), $this->admin, 'Photos are too blurry.', $version);
+            $this->fail('Expected a conflict.');
+        } catch (ApprovalConflictException $e) {
+            $this->assertSame('This product was changed by the seller after you opened it. Please review the latest version.', $e->getMessage());
+        }
+
+        $this->assertSame(ProductApprovalStatus::PendingReview, $product->fresh()->approval_status);
     }
 }

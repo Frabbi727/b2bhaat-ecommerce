@@ -16,6 +16,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Throwable;
 
 /**
  * The only class that changes a product's approval state (spec §6.1).
@@ -32,6 +33,7 @@ class ProductApprovalService
 
     /**
      * The version a reviewer captures when opening a product; precise enough to notice edits within a second.
+     * Callers must take the version from a freshly loaded row, never from a stale in-memory model.
      */
     public function versionOf(Product $product): string
     {
@@ -45,6 +47,7 @@ class ProductApprovalService
 
         $locked = DB::transaction(function () use ($product, $seller, &$notifyAdmins): Product {
             $locked = $this->lock($product);
+            $this->assertOwner($locked, $seller);
             $status = $locked->approval_status;
 
             if ($status === ProductApprovalStatus::PendingReview || $status === ProductApprovalStatus::Approved) {
@@ -67,7 +70,13 @@ class ProductApprovalService
         if ($notifyAdmins && Cache::add("approval-notify:{$locked->id}", true, 3600)) {
             $reviewers = User::query()->whereHas('role', fn ($q) => $q->whereIn('slug', ['super_admin', 'admin']))
                 ->where('is_active', true)->get();
-            Notification::send($reviewers, new ProductSubmittedForReview($locked));
+
+            try {
+                Notification::send($reviewers, new ProductSubmittedForReview($locked));
+            } catch (Throwable $e) {
+                Cache::forget("approval-notify:{$locked->id}");
+                report($e);
+            }
         }
 
         return $locked;
@@ -79,6 +88,7 @@ class ProductApprovalService
 
         return DB::transaction(function () use ($product, $seller): Product {
             $locked = $this->lock($product);
+            $this->assertOwner($locked, $seller);
             $this->assertWaiting($locked);
 
             $locked->forceFill(['approval_status' => ProductApprovalStatus::Draft])->save();
@@ -208,8 +218,14 @@ class ProductApprovalService
     {
         $seller = User::query()->find($product->seller_id);
 
-        if ($seller !== null) {
+        if ($seller === null) {
+            return;
+        }
+
+        try {
             Notification::send($seller, new ProductReviewDecided($product, $approved, $reason));
+        } catch (Throwable $e) {
+            report($e);
         }
     }
 }
