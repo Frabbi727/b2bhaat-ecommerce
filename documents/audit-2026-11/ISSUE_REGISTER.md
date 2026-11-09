@@ -66,7 +66,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | ACC-8 | Accounting | Admin waiver books fake subscription revenue (`MonetizationJournalHandler.php:97`) | Post no entry for a waiver, or post net zero | MON-7 | Open |
 | ACC-9 | Accounting | No DB constraints for balance or immutability; lines cascade on delete | PostgreSQL CHECK constraints and triggers; restrict delete | – | **Fixed (29d8f78)** |
 | ACC-11 | Accounting | Commission booked as income at payment, before delivery (`OrderPaymentJournalHandler.php:68-79`) | **Owner decision:** defer until delivery or escrow release (deferred commission liability) | ACC-9 | Open |
-| UX-ACC-1 | Accounting UI | No manual journal entry | Balanced manual journal form with confirmation and audit | ACC-9 | Open |
+| UX-ACC-1 | Accounting UI | No manual journal entry | Balanced manual journal form with confirmation and audit | ACC-9 | **Fixed (217be0a)** |
 | AUD-2 | Audit | Audit rows can be updated or deleted (`AuditLog.php`) | Model guards plus a PostgreSQL trigger | – | **Fixed (f05a94c)** |
 | AUD-3 | Audit | Audit failures are swallowed and can abort the PostgreSQL transaction (`AuditService.php:52-56`) | Savepoint or after-commit write; failures reported | – | **Fixed (f05a94c)** |
 | AUD-4 | Audit | Not logged: user role/password changes, invoices, payments, KYC, exports, query-builder writes | Make those models Auditable plus explicit events | AUD-3 | Open |
@@ -74,6 +74,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | INV-4 | Inventory | Ordered variations can be deleted (`order_items.variation_id` nullOnDelete) | Block delete, or deactivate instead | – | Open |
 | INV-5 | Inventory | Inactive variation is still sold through wholesale (`CartSessionService::putItem`) | Check `is_active` in the cart and in reservation | – | Open |
 | INV-8 | Inventory | Products go live on save | **Owner decision:** every new product and every price change waits for admin approval (status, queue, notifications) | INV-1 | **Fixed (5ba25b2..06e9ef4)** |
+| INV-8b | Notifications | Found while testing UX-ACC-1. The `notifications` table added for INV-8 stores `data` as text, so on PostgreSQL the panels' notification bell query (`data->>'format'`) fails and every admin and seller page returns 500 (`2026_11_08_153556_create_notifications_table.php`). SQLite tests could not see it | Convert `data` to JSON on PostgreSQL | INV-8 | **Fixed (e215b9e)** |
 | SEC-6 | Security | Livewire tracking and OTP actions are not throttled | `RateLimiter` inside the actions | SEC-7 | Open |
 | PERF-1 | Performance | No indexes on hot foreign keys or status columns on PostgreSQL | Index migration | – | **Fixed (f0a554d)** |
 

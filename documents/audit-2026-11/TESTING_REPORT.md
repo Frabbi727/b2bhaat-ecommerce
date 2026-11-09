@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1299 tests, 1292 passed, 7 skipped, 6030 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1308 tests, 1301 passed, 7 skipped, 6099 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -71,6 +71,8 @@ The existing tests of other features were touched only to give their test produc
 | ACC-6 | `tests/Feature/Accounting/MissingAccountFailsLoudlyTest.php` (2), 3 handler tests updated | A payout with a missing account is refused and the wallet and wallet history are unchanged; with the full chart it works. The old "returns null when unseeded" tests now expect the refusal |
 | ACC-9 | `tests/Feature/Accounting/JournalDatabaseGuardsTest.php` (9) | An entry with lines can't be deleted (every database). On PostgreSQL: posted lines can't be deleted or changed, a posted entry can't be edited, no line can be added to it, a negative or two-sided line is refused, an unbalanced draft can't be posted, and reversal still works |
 | ACC-5 | `tests/Feature/Accounting/FilamentAccountingJournalEntryResourceTest.php` (1 new) | Reverse is hidden for a system journal on the list and the view page; the existing tests still reverse manual journals |
+| INV-8b | `tests/Feature/DatabaseNotificationsQueryTest.php` (1) | The notification bell's query runs. It failed on PostgreSQL before the fix and passes after; an existing notification row converts to JSON intact |
+| UX-ACC-1 | `tests/Feature/Accounting/ManualJournalEntryTest.php` (8) | A balanced journal posts as a manual journal by the admin, with its reference and an audit entry, and can be reversed; unbalanced lines, a two-sided line, a missing confirmation, an inactive account, a closed period and a future date are refused with nothing posted; a seller can't open the journal pages |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
@@ -81,3 +83,5 @@ The existing tests of other features were touched only to give their test produc
 **Existing tests changed (ACC-6):** seven billing and finance test classes now seed the chart of accounts in `setUp`, because their billing payments now need the accounts the journals use. No assertion was relaxed.
 
 **Known test limit:** most accounting tests are written for SQLite. On PostgreSQL, 34 fail before reaching any journal code because their setup hard-codes `order_status_id = 1` (ids drift between tests there), and 11 deliberately insert unbalanced or already-posted journals, which the ACC-9 guards now refuse. This predates Wave 1 except for those 11, which show the guards working.
+
+**Browser check (UX-ACC-1, INV-8b):** on a throwaway seeded PostgreSQL copy served on port 8001 (local database untouched, copy deleted afterwards): the journal page loads with the notification bell; the slide-over shows live totals ("Off by ৳100.00"); an unbalanced submit shows the balance message under the lines; a balanced one posts, appears as a Manual Journal with a Reverse link, and writes the audit entry.

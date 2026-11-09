@@ -119,3 +119,12 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## ACC-5 reverse button
 - **Code only.** After deploy, the Reverse button appears only on manual journals.
+
+## INV-8b notifications column (must ship with INV-8)
+- **Migration:** `2026_11_09_082101_change_notifications_data_to_json.php` converts `notifications.data` to JSON on PostgreSQL. It takes a moment and keeps every row.
+- **Why it matters:** without it, every admin and seller page fails with a 500 on PostgreSQL once INV-8 is deployed. Do not deploy `fix/audit-wave-0` on its own unless this fix is added to it.
+- **Rollback:** `php artisan migrate:rollback --step=1` turns the column back into text (the bell breaks again).
+
+## UX-ACC-1 manual journals
+- **Code only.** After deploy, **Accounting → Journal Entries** shows **New manual journal**.
+- **Time zone:** the journal date can't be in the future by the server's clock. While the app runs on UTC (see PERF-5), between midnight and 6 am Dhaka time "today" in Dhaka is still "tomorrow" to the server, so pick the previous day or wait.
