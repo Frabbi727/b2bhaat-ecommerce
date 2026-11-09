@@ -11,6 +11,7 @@ use App\Models\OrderTrackingLog;
 use App\Models\PaymentStatus;
 use App\Models\SubOrder;
 use App\Services\Accounting\EventPipeline\CodDeliveryJournalHandler;
+use App\Services\Accounting\EventPipeline\CommissionRecognitionJournalHandler;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Orders\RefundRecorder;
@@ -49,6 +50,7 @@ class CourierStatusService
         protected StockReservationService $stockReservationService,
         protected RefundRecorder $refundRecorder,
         protected CodDeliveryJournalHandler $codDeliveryJournalHandler,
+        protected CommissionRecognitionJournalHandler $commissionRecognitionJournalHandler,
     ) {}
 
     /**
@@ -164,6 +166,9 @@ class CourierStatusService
             $this->escrowLedgerService->holdInEscrow($subOrder);
             if ($isCod) {
                 $this->codDeliveryJournalHandler->recordCourierCodDelivery($subOrder);
+            } else {
+                // Prepaid: the commission held since payment is earned now that the parcel is delivered (ACC-11).
+                $this->commissionRecognitionJournalHandler->recordCommissionEarned($subOrder);
             }
         }
 

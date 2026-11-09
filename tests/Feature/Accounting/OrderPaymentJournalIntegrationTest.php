@@ -76,7 +76,7 @@ class OrderPaymentJournalIntegrationTest extends TestCase
         $gl = app(GeneralLedgerService::class);
         $this->assertSame(1000.00, $gl->getBalanceForSlug('gateway_clearing'));
         $this->assertSame(810.00, $gl->getBalanceForSlug('seller_escrow_payable', sellerId: $seller->id));
-        $this->assertSame(90.00, $gl->getBalanceForSlug('commission_revenue'));
+        $this->assertSame(90.00, $gl->getBalanceForSlug('deferred_commission_revenue')); // ACC-11: earned on delivery
         $this->assertSame(100.00, $gl->getBalanceForSlug('shipping_service_revenue'));
         $this->assertSame(0.00, $gl->getBalanceForSlug('courier_delivery_expense'));
     }
@@ -120,7 +120,7 @@ class OrderPaymentJournalIntegrationTest extends TestCase
         $this->assertSame(900.00, $gl->getBalanceForSlug('gateway_clearing'));
         $this->assertSame(100.00, $gl->getBalanceForSlug('promotional_discount_expense'));
         $this->assertSame(900.00, $gl->getBalanceForSlug('seller_escrow_payable', sellerId: $seller->id));
-        $this->assertSame(100.00, $gl->getBalanceForSlug('commission_revenue'));
+        $this->assertSame(100.00, $gl->getBalanceForSlug('deferred_commission_revenue')); // ACC-11: earned on delivery
     }
 
     public function test_payment_verification_with_self_delivered_order_credits_shipping_to_seller_escrow(): void
@@ -166,7 +166,7 @@ class OrderPaymentJournalIntegrationTest extends TestCase
         $this->assertSame(1000.00, $gl->getBalanceForSlug('gateway_clearing'));
         // 810 net earnings + 100 self-delivered shipping = 910
         $this->assertSame(910.00, $gl->getBalanceForSlug('seller_escrow_payable', sellerId: $seller->id));
-        $this->assertSame(90.00, $gl->getBalanceForSlug('commission_revenue'));
+        $this->assertSame(90.00, $gl->getBalanceForSlug('deferred_commission_revenue')); // ACC-11: earned on delivery
         $this->assertSame(0.00, $gl->getBalanceForSlug('shipping_service_revenue'));
     }
 
@@ -228,7 +228,7 @@ class OrderPaymentJournalIntegrationTest extends TestCase
         $this->assertSame(2000.00, $gl->getBalanceForSlug('gateway_clearing'));
         $this->assertSame(900.00, $gl->getBalanceForSlug('seller_escrow_payable', sellerId: $sellerA->id));
         $this->assertSame(820.00, $gl->getBalanceForSlug('seller_escrow_payable', sellerId: $sellerB->id));
-        $this->assertSame(180.00, $gl->getBalanceForSlug('commission_revenue'));
+        $this->assertSame(180.00, $gl->getBalanceForSlug('deferred_commission_revenue')); // ACC-11: earned on delivery
         $this->assertSame(100.00, $gl->getBalanceForSlug('shipping_service_revenue'));
         $this->assertSame(0.00, $gl->getBalanceForSlug('courier_delivery_expense'));
     }
@@ -317,6 +317,6 @@ class OrderPaymentJournalIntegrationTest extends TestCase
         $this->assertSame(0.00, $gl->getBalanceForSlug('gateway_clearing'));
         $this->assertSame(500.00, $gl->getBalanceForSlug('promotional_discount_expense'));
         $this->assertSame(450.00, $gl->getBalanceForSlug('seller_escrow_payable', sellerId: $seller->id));
-        $this->assertSame(50.00, $gl->getBalanceForSlug('commission_revenue'));
+        $this->assertSame(50.00, $gl->getBalanceForSlug('deferred_commission_revenue')); // ACC-11: earned on delivery
     }
 }

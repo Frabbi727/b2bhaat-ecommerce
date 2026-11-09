@@ -161,6 +161,15 @@ class AccountingChartOfAccountsSeeder extends Seeder
                 'normal_balance' => NormalBalance::CREDIT,
                 'description' => 'VAT and withholding tax collected payable to authorities',
             ],
+            [
+                'group_prefix' => '20',
+                'code' => '2070',
+                'system_slug' => 'deferred_commission_revenue',
+                'name' => 'Deferred Commission Revenue',
+                'type' => AccountType::LIABILITY,
+                'normal_balance' => NormalBalance::CREDIT,
+                'description' => 'Commission on paid orders not yet delivered; becomes income on delivery',
+            ],
 
             // 30: Equity & Capital
             [

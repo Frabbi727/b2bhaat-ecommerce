@@ -16,6 +16,7 @@ class RefundJournalHandler
 {
     public function __construct(
         protected JournalPostingService $journalPostingService,
+        protected CommissionRecognitionJournalHandler $commissionRecognition,
     ) {}
 
     /**
@@ -46,19 +47,13 @@ class RefundJournalHandler
             );
         }
 
-        // 2. Debit Platform Commission Revenue (reversing unearned platform commission)
-        $commission = round((float) $subOrder->commission_amount, 2);
-        if ($commission > 0.0) {
-            $lines[] = new JournalLineData(
-                accountSlug: 'commission_revenue',
-                debit: $commission,
-                credit: 0.00,
-                sellerId: $subOrder->seller_id,
-                subOrderId: $subOrder->id,
-                orderId: $orderId,
-                narration: "Reverse commission revenue for cancelled Sub-Order #{$subOrder->sub_order_number}",
-            );
-        }
+        // 2. Reverse the commission: from the deferred account while not yet earned, otherwise from income (ACC-11)
+        array_push($lines, ...$this->commissionRecognition->commissionReversalLines(
+            $subOrder,
+            (float) $subOrder->commission_amount,
+            $orderId,
+            "Reverse commission for cancelled Sub-Order #{$subOrder->sub_order_number}",
+        ));
 
         // 3. Debit Shipping Revenue (the platform no longer earns the courier shipping fee)
         $shipping = round((float) $subOrder->shipping_amount, 2);
@@ -178,19 +173,13 @@ class RefundJournalHandler
                 );
             }
 
-            // 2. Debit Platform Commission Revenue (reversing commission earned)
-            $commission = round((float) $subOrder->commission_amount, 2);
-            if ($commission > 0.0) {
-                $lines[] = new JournalLineData(
-                    accountSlug: 'commission_revenue',
-                    debit: $commission,
-                    credit: 0.00,
-                    sellerId: $subOrder->seller_id,
-                    subOrderId: $subOrder->id,
-                    orderId: $orderId,
-                    narration: "Reverse platform commission for returned Sub-Order #{$subOrder->sub_order_number}",
-                );
-            }
+            // 2. Reverse the commission: from income once earned, or the deferred account if it never moved (ACC-11)
+            array_push($lines, ...$this->commissionRecognition->commissionReversalLines(
+                $subOrder,
+                (float) $subOrder->commission_amount,
+                $orderId,
+                "Reverse platform commission for returned Sub-Order #{$subOrder->sub_order_number}",
+            ));
 
             // 3. Debit Shipping Revenue (if the platform's courier carried it)
             $shipping = round((float) $subOrder->shipping_amount, 2);

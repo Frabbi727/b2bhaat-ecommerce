@@ -47,7 +47,7 @@ class OrderPaymentJournalHandler
             );
         }
 
-        // 3. Credit Seller Escrow, Platform Commission, and Delivery Clearing for each sub-order
+        // 3. Credit Seller Escrow, Deferred Commission, and Shipping for each sub-order
         $order->loadMissing('subOrders');
         foreach ($order->subOrders as $subOrder) {
             // Net payable to seller held in escrow
@@ -64,17 +64,17 @@ class OrderPaymentJournalHandler
                 );
             }
 
-            // Earned platform commission
+            // Platform commission: not earned until the parcel is delivered (ACC-11)
             $commissionAmount = round((float) $subOrder->commission_amount, 2);
             if ($commissionAmount > 0.0) {
                 $lines[] = new JournalLineData(
-                    accountSlug: 'commission_revenue',
+                    accountSlug: CommissionRecognitionJournalHandler::DEFERRED_ACCOUNT,
                     debit: 0.00,
                     credit: $commissionAmount,
                     sellerId: $subOrder->seller_id,
                     subOrderId: $subOrder->id,
                     orderId: $order->id,
-                    narration: "Commission revenue for Sub-Order #{$subOrder->sub_order_number}",
+                    narration: "Commission held until delivery for Sub-Order #{$subOrder->sub_order_number}",
                 );
             }
 
