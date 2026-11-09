@@ -156,6 +156,25 @@
             <!-- Financial Calculation Table -->
             <div class="flex justify-end pt-4">
                 <div class="w-80 space-y-2 text-xs border-t border-slate-200 pt-4">
+                    @if ($sellerScoped ?? false)
+                        @php
+                            $packageSubtotal = (float) $order->subOrders->sum('subtotal');
+                            $packageShipping = (float) $order->subOrders->sum('shipping_amount');
+                        @endphp
+                        <div class="flex justify-between text-slate-600">
+                            <span>Your Items Subtotal:</span>
+                            <span class="font-mono font-bold text-slate-900">৳{{ number_format($packageSubtotal, 2) }}</span>
+                        </div>
+                        <div class="flex justify-between text-slate-600">
+                            <span>Delivery / Freight:</span>
+                            <span class="font-mono font-bold text-slate-800">৳{{ number_format($packageShipping, 2) }}</span>
+                        </div>
+                        <div class="border-t border-slate-900 pt-2 flex justify-between items-baseline text-sm">
+                            <span class="font-black text-slate-900">Your Packages Total:</span>
+                            <span class="font-black text-indigo-600 text-lg font-mono">৳{{ number_format($packageSubtotal + $packageShipping, 2) }}</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400">This copy shows only your packages. Order-wide discounts are not included.</p>
+                    @else
                     @php
                         $rawSubtotal = $order->subOrders->sum('subtotal');
                     @endphp
@@ -183,6 +202,7 @@
                         <span class="font-black text-slate-900">Total Payable:</span>
                         <span class="font-black text-indigo-600 text-lg font-mono">৳{{ number_format($order->total_amount, 2) }}</span>
                     </div>
+                    @endif
                 </div>
             </div>
 
