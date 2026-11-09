@@ -5,9 +5,7 @@ namespace App\Services\Orders;
 use App\Models\FlashSaleProduct;
 use App\Models\FulfillmentStatus;
 use App\Models\Order;
-use App\Models\OrderStatus;
 use App\Models\OrderTrackingLog;
-use App\Models\PaymentStatus;
 use App\Models\ReturnRequest;
 use App\Models\SubOrder;
 use App\Models\User;
@@ -23,7 +21,8 @@ class OrderDisputeService
     public function __construct(
         protected StockReservationService $stockReservationService,
         protected EscrowLedgerService $escrowLedgerService,
-        protected RefundRecorder $refundRecorder
+        protected RefundRecorder $refundRecorder,
+        protected OrderStatusReconciler $statusReconciler,
     ) {}
 
     /**
@@ -106,46 +105,39 @@ class OrderDisputeService
                 'logged_at' => now(),
             ]);
 
-            // 5. Reconcile parent order: if all sub-orders are cancelled, mark parent order cancelled & refunded
-            $parentOrder = $subOrder->order;
-            if ($parentOrder) {
-                $allCancelled = $parentOrder->subOrders()
-                    ->where('fulfillment_status_id', '!=', $cancelledFulfillment->id)
-                    ->doesntExist();
-
-                if ($allCancelled) {
-                    $cancelledOrderStatus = OrderStatus::where('slug', 'cancelled')->first();
-                    if ($cancelledOrderStatus) {
-                        $parentOrder->update(['order_status_id' => $cancelledOrderStatus->id]);
-                    }
-
-                    $refundedPaymentStatus = PaymentStatus::where('slug', 'refunded')->first();
-                    if ($refundedPaymentStatus && $parentOrder->paymentStatus?->slug === 'paid') {
-                        $parentOrder->update(['payment_status_id' => $refundedPaymentStatus->id]);
-                    }
-                }
+            // 5. The order's status follows its parcels (ORD-1)
+            if ($subOrder->order) {
+                $this->statusReconciler->reconcile($subOrder->order);
             }
         });
     }
 
     /**
-     * Cancel complete parent order.
+     * Cancel every parcel of the order that has not left the seller yet. Parcels already on their way are kept (the
+     * buyer can request a return after delivery), and the order's status then follows its parcels (ORD-1).
      *
-     * @throws Exception
+     * @return array{cancelled: int, kept: int}
+     *
+     * @throws Exception when no parcel can be cancelled any more
      */
-    public function cancelFullOrder(Order $order, string $reason = 'Cancelled by buyer'): void
+    public function cancelFullOrder(Order $order, string $reason = 'Cancelled by buyer'): array
     {
-        DB::transaction(function () use ($order, $reason) {
-            foreach ($order->subOrders as $subOrder) {
-                if (in_array($subOrder->fulfillmentStatus?->slug, ['unfulfilled', 'processing'])) {
-                    $this->cancelSubOrder($subOrder, $reason);
-                }
+        return DB::transaction(function () use ($order, $reason): array {
+            $parcels = $order->subOrders()->with('fulfillmentStatus')->get();
+            $cancellable = $parcels->filter(fn (SubOrder $subOrder): bool => in_array($subOrder->fulfillmentStatus?->slug, ['unfulfilled', 'processing'], true));
+            $kept = $parcels->filter(fn (SubOrder $subOrder): bool => $subOrder->fulfillmentStatus?->slug !== 'cancelled')->count() - $cancellable->count();
+
+            if ($cancellable->isEmpty()) {
+                throw new Exception("Order #{$order->order_number} cannot be cancelled: everything in it is already on its way, delivered or cancelled. You can request a return after delivery.");
             }
 
-            $cancelledOrderStatus = OrderStatus::where('slug', 'cancelled')->first();
-            if ($cancelledOrderStatus) {
-                $order->update(['order_status_id' => $cancelledOrderStatus->id]);
+            foreach ($cancellable as $subOrder) {
+                $this->cancelSubOrder($subOrder, $reason);
             }
+
+            $this->statusReconciler->reconcile($order);
+
+            return ['cancelled' => $cancellable->count(), 'kept' => $kept];
         });
     }
 
@@ -277,27 +269,9 @@ class OrderDisputeService
                         'logged_at' => now(),
                     ]);
 
-                    // 4. Reconcile parent order if all sibling consignments are returned or cancelled
-                    $parentOrder = $returnRequest->subOrder->order;
-                    if ($parentOrder) {
-                        $terminalSlugs = ['returned', 'cancelled'];
-                        $terminalIds = FulfillmentStatus::whereIn('slug', $terminalSlugs)->pluck('id');
-
-                        $allTerminal = $parentOrder->subOrders()
-                            ->whereNotIn('fulfillment_status_id', $terminalIds)
-                            ->doesntExist();
-
-                        if ($allTerminal) {
-                            $cancelledStatus = OrderStatus::where('slug', 'cancelled')->first();
-                            if ($cancelledStatus) {
-                                $parentOrder->update(['order_status_id' => $cancelledStatus->id]);
-                            }
-
-                            $refundedPaymentStatus = PaymentStatus::where('slug', 'refunded')->first();
-                            if ($refundedPaymentStatus && $parentOrder->paymentStatus?->slug === 'paid') {
-                                $parentOrder->update(['payment_status_id' => $refundedPaymentStatus->id]);
-                            }
-                        }
+                    // 4. The order's status follows its parcels (ORD-1)
+                    if ($returnRequest->subOrder->order) {
+                        $this->statusReconciler->reconcile($returnRequest->subOrder->order);
                     }
                 }
             }

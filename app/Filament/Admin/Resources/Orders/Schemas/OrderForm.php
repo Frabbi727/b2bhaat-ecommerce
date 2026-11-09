@@ -8,8 +8,8 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 /**
- * Only the order status can be changed here. Money, payment and customer details are shown for reference and
- * locked: they change only through payment verification, refunds and the sellers' fulfilment.
+ * Everything here is locked. The order status follows its parcels (ORD-1); money, payment and customer details change
+ * only through payment verification, refunds and the sellers' fulfilment. There is no edit page for orders.
  */
 class OrderForm
 {
@@ -18,13 +18,13 @@ class OrderForm
         return $schema
             ->components([
                 Section::make('Order status')
-                    ->description('Sellers update each parcel themselves; change the overall status only to correct it.')
+                    ->description('Set automatically from the parcels: cancelled when all are cancelled or returned, completed when all are finished and at least one was delivered.')
                     ->schema([
                         Select::make('order_status_id')
                             ->label('Status')
                             ->relationship('orderStatus', 'name')
-                            ->native(false)
-                            ->required(),
+                            ->disabled()
+                            ->dehydrated(false),
                     ]),
 
                 Section::make('Order details')

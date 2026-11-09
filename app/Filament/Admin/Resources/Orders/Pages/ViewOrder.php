@@ -5,7 +5,6 @@ namespace App\Filament\Admin\Resources\Orders\Pages;
 use App\Filament\Admin\Resources\Orders\OrderResource;
 use App\Filament\Admin\Resources\Orders\Tables\OrdersTable;
 use Filament\Actions\ActionGroup;
-use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
 
 class ViewOrder extends ViewRecord
@@ -22,7 +21,6 @@ class ViewOrder extends ViewRecord
         return [
             OrdersTable::verifyPaymentAction(),
             ActionGroup::make([
-                EditAction::make()->label('Change status'),
                 OrdersTable::invoiceAction(),
                 OrdersTable::resendInvoiceSmsAction(),
                 OrdersTable::rejectPaymentAction(),

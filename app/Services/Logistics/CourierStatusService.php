@@ -6,7 +6,6 @@ namespace App\Services\Logistics;
 
 use App\Exceptions\InvalidStatusTransitionException;
 use App\Models\FulfillmentStatus;
-use App\Models\OrderStatus;
 use App\Models\OrderTrackingLog;
 use App\Models\PaymentStatus;
 use App\Models\SubOrder;
@@ -14,6 +13,7 @@ use App\Services\Accounting\EventPipeline\CodDeliveryJournalHandler;
 use App\Services\Accounting\EventPipeline\CommissionRecognitionJournalHandler;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Inventory\StockReservationService;
+use App\Services\Orders\OrderStatusReconciler;
 use App\Services\Orders\RefundRecorder;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -51,6 +51,7 @@ class CourierStatusService
         protected RefundRecorder $refundRecorder,
         protected CodDeliveryJournalHandler $codDeliveryJournalHandler,
         protected CommissionRecognitionJournalHandler $commissionRecognitionJournalHandler,
+        protected OrderStatusReconciler $statusReconciler,
     ) {}
 
     /**
@@ -129,27 +130,9 @@ class CourierStatusService
         // 3. A paid buyer is owed this consignment back (final review I3); before the parent flips to "refunded"
         $this->refundRecorder->recordIfPaid($subOrder, 'Returned to origin (RTO) by courier service');
 
-        // 3. Reconcile parent order if all sub-orders are returned/cancelled
-        $parentOrder = $subOrder->order;
-        if ($parentOrder) {
-            $terminalSlugs = ['returned', 'cancelled'];
-            $terminalIds = FulfillmentStatus::whereIn('slug', $terminalSlugs)->pluck('id');
-
-            $allTerminal = $parentOrder->subOrders()
-                ->whereNotIn('fulfillment_status_id', $terminalIds)
-                ->doesntExist();
-
-            if ($allTerminal) {
-                $cancelledStatus = OrderStatus::where('slug', 'cancelled')->first();
-                if ($cancelledStatus) {
-                    $parentOrder->update(['order_status_id' => $cancelledStatus->id]);
-                }
-
-                $refundedPaymentStatus = PaymentStatus::where('slug', 'refunded')->first();
-                if ($refundedPaymentStatus && $parentOrder->paymentStatus?->slug === 'paid') {
-                    $parentOrder->update(['payment_status_id' => $refundedPaymentStatus->id]);
-                }
-            }
+        // 4. The order's status follows its parcels (ORD-1)
+        if ($subOrder->order) {
+            $this->statusReconciler->reconcile($subOrder->order);
         }
     }
 
@@ -182,18 +165,8 @@ class CourierStatusService
                 $parentOrder->update(['payment_status_id' => $paidStatus->id]);
             }
 
-            // Check if ALL sibling sub-orders are delivered
-            $deliveredStatusId = FulfillmentStatus::where('slug', 'delivered')->value('id');
-            $allDelivered = $parentOrder->subOrders()
-                ->where('fulfillment_status_id', '!=', $deliveredStatusId)
-                ->doesntExist();
-
-            if ($allDelivered) {
-                $completedOrderStatus = OrderStatus::where('slug', 'completed')->first();
-                if ($completedOrderStatus) {
-                    $parentOrder->update(['order_status_id' => $completedOrderStatus->id]);
-                }
-            }
+            // The order's status follows its parcels (ORD-1)
+            $this->statusReconciler->reconcile($parentOrder);
         }
     }
 }

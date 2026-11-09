@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Filament\Admin\Resources\Orders\Pages\EditOrder;
+use App\Filament\Admin\Resources\Orders\OrderResource;
 use App\Filament\Admin\Resources\Orders\Pages\ListOrders;
 use App\Filament\Admin\Resources\Orders\Pages\ViewOrder;
 use App\Filament\Admin\Resources\Users\Pages\EditUser;
@@ -52,7 +52,7 @@ class FinancialRecordRetentionTest extends TestCase
             ->assertActionDoesNotExist(TestAction::make('delete')->table($order))
             ->assertActionDoesNotExist(TestAction::make('delete')->table()->bulk());
 
-        Livewire::test(EditOrder::class, ['record' => $order->getRouteKey()])
+        Livewire::test(ViewOrder::class, ['record' => $order->getRouteKey()])
             ->assertActionDoesNotExist('delete');
 
         $this->assertFalse($this->admin->can('delete', $order));
@@ -86,12 +86,9 @@ class FinancialRecordRetentionTest extends TestCase
         $originalTotal = (float) $order->total_amount;
         $originalPaymentStatus = $order->payment_status_id;
 
-        Livewire::test(EditOrder::class, ['record' => $order->getRouteKey()])
-            ->assertFormFieldIsDisabled('total_amount')
-            ->assertFormFieldIsDisabled('payment_status_id')
-            ->assertFormFieldIsDisabled('customer_id')
-            ->fillForm(['total_amount' => 1.00])
-            ->call('save');
+        // ORD-1: orders have no edit page at all; money, payment and status change only through their own flows.
+        $this->assertFalse(OrderResource::hasPage('edit'));
+        $this->get('/admin/orders/'.$order->getRouteKey().'/edit')->assertNotFound();
 
         $this->assertEquals($originalTotal, (float) $order->fresh()->total_amount);
         $this->assertSame($originalPaymentStatus, $order->fresh()->payment_status_id);

@@ -2,7 +2,6 @@
 
 namespace App\Filament\Admin\Resources\Orders;
 
-use App\Filament\Admin\Resources\Orders\Pages\EditOrder;
 use App\Filament\Admin\Resources\Orders\Pages\ListOrders;
 use App\Filament\Admin\Resources\Orders\Pages\ViewOrder;
 use App\Filament\Admin\Resources\Orders\Schemas\OrderForm;
@@ -55,7 +54,6 @@ class OrderResource extends Resource
         return [
             'index' => ListOrders::route('/'),
             'view' => ViewOrder::route('/{record}'),
-            'edit' => EditOrder::route('/{record}/edit'),
         ];
     }
 }

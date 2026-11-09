@@ -175,8 +175,10 @@ class OrderTracking extends Component
         }
 
         try {
-            $disputeService->cancelFullOrder($this->order, 'Customer requested cancellation via tracking portal');
-            $this->actionFeedback = 'Your order has been cancelled and reserved items restored to inventory.';
+            $result = $disputeService->cancelFullOrder($this->order, 'Customer requested cancellation via tracking portal');
+            $this->actionFeedback = $result['kept'] > 0
+                ? "{$result['cancelled']} parcel(s) cancelled. {$result['kept']} parcel(s) already on the way could not be cancelled; you can request a return after delivery."
+                : 'Your order has been cancelled and reserved items restored to inventory.';
             $this->searchOrder();
         } catch (Exception $e) {
             $this->actionError = $e->getMessage();
