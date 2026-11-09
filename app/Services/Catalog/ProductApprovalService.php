@@ -46,6 +46,10 @@ class ProductApprovalService
 
     public const RATE_LIMIT_MESSAGE = "You've sent many price changes in the last hour. Please wait a little and try again.";
 
+    public const FOREIGN_ROWS_MESSAGE = 'Some price rows point to an option or sales channel that does not belong to this product.';
+
+    public const CHANNEL_UNAVAILABLE_MESSAGE = 'That sales channel is no longer available';
+
     public const MAX_CHANGES_PER_HOUR = 30;
 
     public const REASON_MESSAGE = 'Please give a reason of at least 10 characters so the seller knows what to fix.';
@@ -181,14 +185,14 @@ class ProductApprovalService
         $this->assertOwner($product, $seller);
         $this->assertApproved($product);
 
-        $limiterKey = "price-change:{$seller->id}";
+        $limiterKey = "product-change:{$seller->id}";
         if (RateLimiter::tooManyAttempts($limiterKey, self::MAX_CHANGES_PER_HOUR)) {
             throw new DomainException(self::RATE_LIMIT_MESSAGE);
         }
 
-        $channel = SalesChannel::query()->find($salesChannelId);
+        $channel = SalesChannel::query()->whereKey($salesChannelId)->where('is_active', true)->first();
         if ($channel === null) {
-            throw new DomainException('Please choose a sales channel.');
+            throw new DomainException(self::CHANNEL_UNAVAILABLE_MESSAGE);
         }
 
         $errors = $prices->validate($channel);
@@ -206,6 +210,10 @@ class ProductApprovalService
 
             if ($categoryId !== $locked->category_id && ! $this->categoryIsActive($categoryId)) {
                 throw new DomainException(self::CATEGORY_UNAVAILABLE_MESSAGE);
+            }
+
+            if (! $this->rowIdsBelongTo($prices, $locked)) {
+                throw new DomainException(self::FOREIGN_ROWS_MESSAGE);
             }
 
             $live = PriceSet::fromProduct($locked);
@@ -314,6 +322,7 @@ class ProductApprovalService
             $product = Product::query()->whereKey($request->product_id)->lockForUpdate()->firstOrFail();
             $locked = ProductChangeRequest::query()->whereKey($request->getKey())->lockForUpdate()->firstOrFail();
             $this->assertChangePending($locked);
+            $this->assertApproved($product);
 
             $live = PriceSet::fromProduct($product);
             if (! hash_equals($locked->base_fingerprint, $live->fingerprint($product->sales_channel_id, $product->category_id))) {
@@ -336,8 +345,16 @@ class ProductApprovalService
             $categoryId = $locked->proposed_category_id ?? $product->category_id;
             $proposed = PriceSet::fromInput($locked->proposed_prices, $locked->proposed_regular_price);
 
-            $channel = SalesChannel::query()->find($channelId);
-            $errors = $channel === null ? ['That sales channel is no longer available.'] : $proposed->validate($channel);
+            $channel = SalesChannel::query()->whereKey($channelId)->where('is_active', true)->first();
+            if ($channel === null) {
+                throw new ApprovalConflictException(self::CHANNEL_UNAVAILABLE_MESSAGE);
+            }
+
+            if (! $this->rowIdsBelongTo($proposed, $product)) {
+                throw new ApprovalConflictException(self::FOREIGN_ROWS_MESSAGE);
+            }
+
+            $errors = $proposed->validate($channel);
             if ($errors !== []) {
                 throw new ApprovalConflictException(implode(' ', $errors));
             }
@@ -427,6 +444,26 @@ class ProductApprovalService
         throw new ApprovalConflictException(
             $request->status === ProductChangeRequest::STATUS_SUPERSEDED ? self::SUPERSEDED_MESSAGE : self::CHANGE_WRONG_STATE_MESSAGE
         );
+    }
+
+    /**
+     * Every variation in the rows must be this product's, and every row's sales channel must exist.
+     */
+    private function rowIdsBelongTo(PriceSet $prices, Product $product): bool
+    {
+        $rows = collect($prices->rows());
+
+        $variationIds = $rows->pluck('variation_id')->filter(fn ($id) => $id !== null)->unique();
+        if ($variationIds->isNotEmpty()) {
+            $own = $product->variations()->pluck('id');
+            if ($variationIds->diff($own)->isNotEmpty()) {
+                return false;
+            }
+        }
+
+        $channelIds = $rows->pluck('sales_channel_id')->unique();
+
+        return SalesChannel::query()->whereIn('id', $channelIds)->count() === $channelIds->count();
     }
 
     private function categoryIsActive(int $categoryId): bool

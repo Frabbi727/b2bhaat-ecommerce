@@ -184,6 +184,7 @@ class ProductChangeRequestServiceTest extends TestCase
         $this->assertNull($result);
         $this->assertSame(ProductChangeRequest::STATUS_WITHDRAWN, $first->fresh()->status);
         $this->assertSame(1, ProductChangeRequest::count());
+        $this->assertSame(1, AuditLog::where('module', 'approvals')->where('action', 'price_change_withdrawn')->count());
     }
 
     public function test_equal_proposal_without_pending_creates_nothing_and_is_not_counted(): void
@@ -192,7 +193,7 @@ class ProductChangeRequestServiceTest extends TestCase
 
         $this->assertNull($this->propose($product, $this->retailSet(400)));
         $this->assertSame(0, ProductChangeRequest::count());
-        $this->assertSame(0, RateLimiter::attempts("price-change:{$this->seller->id}"));
+        $this->assertSame(0, RateLimiter::attempts("product-change:{$this->seller->id}"));
     }
 
     public function test_buy_price_is_not_part_of_a_change(): void
@@ -269,12 +270,13 @@ class ProductChangeRequestServiceTest extends TestCase
     {
         $product = $this->product();
         $variation = $product->ensureDefaultVariation();
+        $product->prices()->create(['sales_channel_id' => $this->retail->id, 'variation_id' => $variation->id, 'min_quantity' => 1, 'unit_price' => 380]);
         $set = PriceSet::fromInput([
             $this->row($this->retail, 1, null, 450),
             $this->row($this->retail, 1, null, 380, $variation->id),
         ], 650);
 
-        $request = $this->propose($product, $set);
+        $request = $this->propose($product->fresh(), $set);
         $applied = $this->service->approveChange($request, $this->admin);
 
         $this->assertSame(ProductChangeRequest::STATUS_APPROVED, $applied->status);
@@ -283,8 +285,80 @@ class ProductChangeRequestServiceTest extends TestCase
         $this->assertSame(2, $product->prices()->count());
         $this->assertTrue(PriceSet::fromProduct($product->fresh())->equals($set));
         $this->assertSame('650.00', $product->fresh()->regular_price);
-        $this->assertSame($variation->id, $product->prices()->whereNotNull('variation_id')->value('variation_id'));
+        $kept = $product->prices()->where('variation_id', $variation->id)->firstOrFail();
+        $this->assertSame('380.00', $kept->unit_price);
+        $this->assertSame('450.00', $product->prices()->whereNull('variation_id')->firstOrFail()->unit_price);
         Notification::assertSentTo($this->seller, ProductChangeDecided::class, fn ($n) => $n->approved === true);
+    }
+
+    public function test_foreign_variation_is_refused_on_propose(): void
+    {
+        $product = $this->product();
+        $foreign = $this->product()->ensureDefaultVariation();
+        $set = PriceSet::fromInput([$this->row($this->retail, 1, null, 450), $this->row($this->retail, 1, null, 300, $foreign->id)], 500);
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage(ProductApprovalService::FOREIGN_ROWS_MESSAGE);
+
+        $this->propose($product, $set);
+    }
+
+    public function test_unknown_sales_channel_is_refused_on_propose(): void
+    {
+        $product = $this->product();
+        $set = PriceSet::fromInput([$this->row($this->retail, 1, null, 450), ['sales_channel_id' => 999999, 'min_quantity' => 1, 'unit_price' => 5]], 500);
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage(ProductApprovalService::FOREIGN_ROWS_MESSAGE);
+
+        $this->propose($product, $set);
+    }
+
+    public function test_variation_deleted_after_proposal_blocks_approval(): void
+    {
+        $product = $this->product();
+        $variation = $product->variations()->create(['sku' => 'EXTRA-'.uniqid(), 'stock_quantity' => 0, 'buy_price' => 0, 'is_active' => true]);
+        $set = PriceSet::fromInput([$this->row($this->retail, 1, null, 450), $this->row($this->retail, 1, null, 300, $variation->id)], 500);
+        $request = $this->propose($product, $set);
+        $variation->delete();
+
+        try {
+            $this->service->approveChange($request, $this->admin);
+            $this->fail('Proposal with a deleted variation was approved.');
+        } catch (ApprovalConflictException $e) {
+            $this->assertSame(ProductApprovalService::FOREIGN_ROWS_MESSAGE, $e->getMessage());
+        }
+
+        $this->assertSame(ProductChangeRequest::STATUS_PENDING, $request->fresh()->status);
+        $this->assertSame('400.00', $this->livePrices($product)[0]['unit_price']);
+        $this->assertCount(1, $this->livePrices($product));
+    }
+
+    public function test_inactive_sales_channel_is_refused(): void
+    {
+        $product = $this->product();
+        $this->both->update(['is_active' => false]);
+        $set = PriceSet::fromInput([$this->row($this->retail, 1, null, 400), $this->row($this->wholesale, 50, null, 300)], 500);
+
+        try {
+            $this->propose($product, $set, channel: $this->both->id);
+            $this->fail('Inactive channel accepted.');
+        } catch (DomainException $e) {
+            $this->assertSame('That sales channel is no longer available', $e->getMessage());
+        }
+
+        $this->both->update(['is_active' => true]);
+        $request = $this->propose($product, $set, channel: $this->both->id);
+        $this->both->update(['is_active' => false]);
+
+        try {
+            $this->service->approveChange($request, $this->admin);
+            $this->fail('Inactive channel applied.');
+        } catch (ApprovalConflictException $e) {
+            $this->assertSame('That sales channel is no longer available', $e->getMessage());
+        }
+
+        $this->assertSame(ProductChangeRequest::STATUS_PENDING, $request->fresh()->status);
     }
 
     public function test_approving_a_superseded_or_withdrawn_request_is_refused(): void
@@ -331,6 +405,32 @@ class ProductChangeRequestServiceTest extends TestCase
         $this->assertSame('Prices changed since this was submitted; please submit again', $fresh->rejection_reason);
         $this->assertSame('410.00', $this->livePrices($product)[0]['unit_price']);
         $this->assertSame(1, AuditLog::where('action', 'price_change_conflict')->count());
+    }
+
+    public function test_category_or_channel_drift_rejects_with_system_reason(): void
+    {
+        $silk = Category::create(['name' => 'Silk', 'slug' => 'silk', 'is_active' => true]);
+
+        foreach (['category', 'channel'] as $drift) {
+            $product = $this->product();
+            $request = $this->propose($product, $this->retailSet(450));
+            if ($drift === 'category') {
+                $product->forceFill(['category_id' => $silk->id])->save();
+            } else {
+                $product->forceFill(['sales_channel_id' => $this->both->id])->save();
+            }
+
+            try {
+                $this->service->approveChange($request, $this->admin);
+                $this->fail("Request approved after {$drift} drift.");
+            } catch (ApprovalConflictException $e) {
+                $this->assertSame('Prices changed since this was submitted; please submit again', $e->getMessage());
+            }
+
+            $this->assertSame(ProductChangeRequest::STATUS_REJECTED, $request->fresh()->status, $drift);
+            $this->assertSame('Prices changed since this was submitted; please submit again', $request->fresh()->rejection_reason);
+            $this->assertSame('400.00', $this->livePrices($product)[0]['unit_price']);
+        }
     }
 
     public function test_now_invalid_proposal_is_refused_on_approval(): void
