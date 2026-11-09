@@ -99,6 +99,39 @@ class FlashSaleLifecycleService
         });
     }
 
+    /**
+     * FS-2: approve a seller's offer only if the product isn't already in another campaign over the same window.
+     * The campaign row, then the product row, is locked so two approvals can't both pass the check.
+     *
+     * @throws InvalidStatusTransitionException
+     */
+    public function approveSubmission(FlashSaleProduct $submission, ?int $reviewerId = null): FlashSaleProduct
+    {
+        $this->transition($submission->flashSale, function (FlashSale $locked) use ($submission, $reviewerId): void {
+            if (in_array($locked->effectiveStatus(), [FlashSaleStatus::Ended, FlashSaleStatus::Cancelled], true)) {
+                throw new InvalidStatusTransitionException('This campaign is over, so offers can no longer be approved.');
+            }
+
+            $item = FlashSaleProduct::query()->where('flash_sale_id', $locked->id)->lockForUpdate()->findOrFail($submission->id);
+            $approvable = [FlashSaleSubmissionStatus::Pending, FlashSaleSubmissionStatus::RevisionRequested, FlashSaleSubmissionStatus::Rejected];
+            if (! in_array($item->status, $approvable, true)) {
+                throw new InvalidStatusTransitionException('Only pending, revision-requested or rejected offers can be approved.');
+            }
+
+            $this->lockProducts([$item->product_id]);
+            $this->assertNoConflicts($this->conflicts->conflictsForWindow($locked->id, $locked->starts_at, $locked->ends_at, [$item->product_id]));
+
+            $item->update([
+                'status' => FlashSaleSubmissionStatus::Approved,
+                'rejection_reason' => null,
+                'reviewed_by' => $reviewerId,
+                'reviewed_at' => now(),
+            ]);
+        });
+
+        return $submission->fresh();
+    }
+
     public function startNow(FlashSale $sale): FlashSale
     {
         return $this->transition($sale, function (FlashSale $locked): void {

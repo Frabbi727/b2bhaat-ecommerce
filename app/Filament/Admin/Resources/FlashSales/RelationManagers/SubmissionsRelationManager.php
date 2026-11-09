@@ -7,7 +7,9 @@ namespace App\Filament\Admin\Resources\FlashSales\RelationManagers;
 use App\Enums\FlashSaleDiscountType;
 use App\Enums\FlashSaleSubmissionStatus;
 use App\Events\Promotions\FlashSaleSubmissionDecidedEvent;
+use App\Exceptions\InvalidStatusTransitionException;
 use App\Models\FlashSaleProduct;
+use App\Services\Promotions\FlashSaleLifecycleService;
 use App\Services\Promotions\FlashSaleSubmissionService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -106,12 +108,17 @@ class SubmissionsRelationManager extends RelationManager
                     ->color('success')
                     ->visible(fn (FlashSaleProduct $record): bool => in_array($record->status, [FlashSaleSubmissionStatus::Pending, FlashSaleSubmissionStatus::RevisionRequested, FlashSaleSubmissionStatus::Rejected], true))
                     ->action(function (FlashSaleProduct $record): void {
-                        $record->update([
-                            'status' => FlashSaleSubmissionStatus::Approved,
-                            'rejection_reason' => null,
-                            'reviewed_by' => auth()->id(),
-                            'reviewed_at' => now(),
-                        ]);
+                        try {
+                            app(FlashSaleLifecycleService::class)->approveSubmission($record, auth()->id());
+                        } catch (InvalidStatusTransitionException $e) {
+                            Notification::make()
+                                ->title('Cannot approve this offer')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
 
                         try {
                             event(new FlashSaleSubmissionDecidedEvent($record->fresh(), 'approved'));
@@ -193,21 +200,22 @@ class SubmissionsRelationManager extends RelationManager
                         ->modalDescription('Are you sure you want to approve the selected pending/rejected seller submissions?')
                         ->action(function (Collection $records): void {
                             $approvedCount = 0;
+                            $skipped = [];
                             $records
                                 ->filter(fn (FlashSaleProduct $record): bool => in_array($record->status, [FlashSaleSubmissionStatus::Pending, FlashSaleSubmissionStatus::RevisionRequested, FlashSaleSubmissionStatus::Rejected], true))
-                                ->each(function (FlashSaleProduct $record) use (&$approvedCount): void {
-                                    $record->update([
-                                        'status' => FlashSaleSubmissionStatus::Approved,
-                                        'rejection_reason' => null,
-                                        'reviewed_by' => auth()->id(),
-                                        'reviewed_at' => now(),
-                                    ]);
-                                    $approvedCount++;
+                                ->each(function (FlashSaleProduct $record) use (&$approvedCount, &$skipped): void {
+                                    try {
+                                        app(FlashSaleLifecycleService::class)->approveSubmission($record, auth()->id());
+                                        $approvedCount++;
+                                    } catch (InvalidStatusTransitionException $e) {
+                                        $skipped[] = $e->getMessage();
+                                    }
                                 });
 
                             Notification::make()
                                 ->title("{$approvedCount} submission(s) approved")
-                                ->success()
+                                ->body($skipped === [] ? null : count($skipped).' not approved: '.implode(' ', array_unique($skipped)))
+                                ->{$skipped === [] ? 'success' : 'warning'}()
                                 ->send();
                         })
                         ->deselectRecordsAfterCompletion(),
