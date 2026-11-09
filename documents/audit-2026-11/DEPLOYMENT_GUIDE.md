@@ -239,3 +239,7 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## FS-2 (flash-sale approval conflicts)
 - Code only, no migration. Admins now see "Cannot approve this offer" when a product already runs in another live campaign over the same dates.
+
+## ACC-13 (journal number counter)
+- **Migration:** creates `accounting_journal_sequences` (new empty table, additive, no lock on existing tables). No backfill: each month's row is created on first posting from the highest existing number.
+- Rollback: `php artisan migrate:rollback --step=1` drops the table; the old code ignores it.

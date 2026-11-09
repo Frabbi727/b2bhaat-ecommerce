@@ -101,7 +101,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | FS-2 | Admin approve bypasses the conflict checker | Approve through the service | Fixed (719e111) |
 | ACC-2 | Mock gateway marks orders paid with no journal (local/testing only) | Post the journal; never seed it as active |
 | ACC-12 | No subscription deferral; any tax amount unbalances posting | **Needs legal/tax validation** |
-| ACC-13 | Journal-number race rolls back the business action | Sequence table or retry on collision |
+| ACC-13 | Journal-number race rolls back the business action | Sequence table or retry on collision | Fixed (13b48c2) |
 | ACC-14 | Entry date is always now(); no period close | Event dates; close-period UI |
 | ACC-15 | Float maths; precision mismatch (12,2 vs 14,2) | bcmath / integer poisha helper |
 | ACC-16 | Trial balance check can never fail; date-range labelled "As of" | Opening balances; check per account |
