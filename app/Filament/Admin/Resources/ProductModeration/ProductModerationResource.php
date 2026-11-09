@@ -92,7 +92,7 @@ class ProductModerationResource extends Resource
                             ->maxLength(500),
                     ])
                     ->action(function (Product $record, array $data): void {
-                        $record->update(['blocked_at' => now(), 'blocked_reason' => $data['blocked_reason']]);
+                        $record->forceFill(['blocked_at' => now(), 'blocked_reason' => $data['blocked_reason']])->save();
 
                         Notification::make()->title('Product hidden from the shop')->success()->send();
                     }),
@@ -103,7 +103,7 @@ class ProductModerationResource extends Resource
                     ->requiresConfirmation()
                     ->visible(fn (Product $record): bool => $record->blocked_at !== null)
                     ->action(function (Product $record): void {
-                        $record->update(['blocked_at' => null, 'blocked_reason' => null]);
+                        $record->forceFill(['blocked_at' => null, 'blocked_reason' => null])->save();
 
                         Notification::make()->title('Product can be shown in the shop again')->success()->send();
                     }),

@@ -247,10 +247,10 @@ class AuditableTraitTest extends TestCase
         $this->assertSame(0, $initialUpdateCount);
 
         // Updating only ignored attributes (views_count, sales_count)
-        $product->update([
+        $product->forceFill([
             'views_count' => 99,
             'sales_count' => 12,
-        ]);
+        ])->save();
 
         $afterIgnoredUpdateCount = AuditLog::where('auditable_type', Product::class)
             ->where('auditable_id', $product->id)

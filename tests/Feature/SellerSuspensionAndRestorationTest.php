@@ -146,9 +146,8 @@ class SellerSuspensionAndRestorationTest extends TestCase
             'slug' => 'counterfeit-wallet',
             'regular_price' => 500.00,
             'is_active' => true,
-            'blocked_at' => now()->subDay(),
-            'blocked_reason' => 'Trademark violation',
         ]);
+        $p2->forceFill(['blocked_at' => now()->subDay(), 'blocked_reason' => 'Trademark violation'])->save();
         $this->approveProducts($p2);
 
         // Product 3: Inactive before suspension (seller turned it off)
