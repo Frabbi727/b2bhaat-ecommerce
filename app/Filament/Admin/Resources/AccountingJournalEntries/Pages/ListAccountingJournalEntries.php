@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\AccountingJournalEntries\Pages;
 
 use App\Filament\Admin\Resources\AccountingJournalEntries\AccountingJournalEntryResource;
+use App\Filament\Admin\Resources\AccountingJournalEntries\Actions\CreateManualJournalAction;
 use Filament\Resources\Pages\ListRecords;
 
 class ListAccountingJournalEntries extends ListRecords
@@ -14,7 +15,8 @@ class ListAccountingJournalEntries extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            // Creation is disabled because journal entries originate strictly from business pipelines or reversals
+            // Business events post their own journals; admins add manual journals here (UX-ACC-1).
+            CreateManualJournalAction::make(),
         ];
     }
 }
