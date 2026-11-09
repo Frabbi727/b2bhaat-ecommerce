@@ -26,7 +26,6 @@ use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
-use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -51,7 +50,6 @@ class SellerApprovalScreensTest extends TestCase
         $this->seed(SystemLookupSeeder::class);
         NotificationFacade::fake();
         Cache::flush();
-        RateLimiter::clear('product-change:'.($this->seller->id ?? 0));
 
         $this->seller = $this->makeSeller('screens-store');
         User::factory()->create([
@@ -286,5 +284,62 @@ class SellerApprovalScreensTest extends TestCase
         $this->assertSame('Blurry photos', $review['reason']);
         $this->assertSame($request->id, $change['request_id']);
         $this->assertStringContainsString('Live Shirt', $review['body'].$review['title']);
+    }
+
+    public function test_a_rejection_reason_is_escaped_in_the_subheading_and_the_rejected_change_callout(): void
+    {
+        $raw = '<script>alert(1)</script>';
+        $escaped = '&lt;script&gt;alert(1)&lt;/script&gt;';
+
+        $rejected = $this->product('Rejected Shirt', ProductApprovalStatus::Rejected, active: false);
+        $rejected->forceFill(['rejection_reason' => $raw, 'rejected_at' => now()])->save();
+        $this->edit($rejected)->assertDontSee($raw, false)->assertSee($escaped, false);
+
+        $live = $this->product('Live Shirt');
+        $request = $this->propose($live, 120);
+        app(ProductApprovalService::class)->rejectChange($request, User::query()->whereHas('role', fn ($q) => $q->where('slug', 'admin'))->firstOrFail(), $raw.' bad');
+        $this->edit($live)->assertDontSee($raw, false)->assertSee($escaped, false);
+    }
+
+    public function test_the_callout_marks_added_and_removed_tiers(): void
+    {
+        $added = $this->product('Added Tier');
+        app(ProductApprovalService::class)->proposeChange($added, $this->seller, PriceSet::fromInput([
+            ['sales_channel_id' => $this->retail->id, 'variation_id' => null, 'unit_price' => 110, 'min_quantity' => 1, 'max_quantity' => 9],
+            ['sales_channel_id' => $this->retail->id, 'variation_id' => null, 'unit_price' => 100, 'min_quantity' => 10, 'max_quantity' => null],
+        ], 500), $added->sales_channel_id, $added->category_id, null);
+        $this->edit($added)->assertSee('৳100.00')->assertSee('new');
+
+        $removed = $this->product('Removed Tier');
+        $removed->prices()->update(['max_quantity' => 9]);
+        $removed->prices()->create(['sales_channel_id' => $this->retail->id, 'min_quantity' => 10, 'unit_price' => 100]);
+        app(ProductApprovalService::class)->proposeChange($removed->fresh(), $this->seller, PriceSet::fromInput([
+            ['sales_channel_id' => $this->retail->id, 'variation_id' => null, 'unit_price' => 110, 'min_quantity' => 1, 'max_quantity' => null],
+        ], 500), $removed->sales_channel_id, $removed->category_id, null);
+        $this->edit($removed)->assertSee('removed')->assertSee('৳100.00');
+    }
+
+    public function test_the_callout_shows_a_channel_change(): void
+    {
+        $both = SalesChannel::firstOrCreate(['slug' => SalesChannel::BOTH], ['name' => 'Both', 'is_active' => true]);
+        $product = $this->product('Channel Shirt');
+        $wholesale = SalesChannel::firstOrCreate(['slug' => SalesChannel::WHOLESALE], ['name' => 'Wholesale', 'is_active' => true]);
+        app(ProductApprovalService::class)->proposeChange($product, $this->seller, PriceSet::fromInput([
+            ['sales_channel_id' => $this->retail->id, 'variation_id' => null, 'unit_price' => 110, 'min_quantity' => 1, 'max_quantity' => null],
+            ['sales_channel_id' => $wholesale->id, 'variation_id' => null, 'unit_price' => 90, 'min_quantity' => 10, 'max_quantity' => null],
+        ], 500), $both->id, $product->category_id, null);
+
+        $this->edit($product)->assertSee('Channel: Retail Only (B2C) → Hybrid Dual Channel (Both)');
+    }
+
+    public function test_the_visible_toggle_tooltip_is_truthful_for_unapproved_products(): void
+    {
+        $this->product('Waiting Shirt', ProductApprovalStatus::PendingReview);
+        $this->product('Draft Shirt', ProductApprovalStatus::Draft, active: false);
+
+        Livewire::test(ListProducts::class)
+            ->assertSee('Waiting for review. Buyers will see it once approved.')
+            ->assertSee('Turning this on sends it for review')
+            ->assertDontSee('Shown on your storefront');
     }
 }

@@ -141,7 +141,8 @@ class ProductsTable
                 ToggleColumn::make('is_active')
                     ->label('Visible')
                     ->tooltip(fn (Product $record): string => match (true) {
-                        $record->approval_status !== ProductApprovalStatus::Approved && ! $record->is_active => 'Turning this on sends it for review',
+                        $record->approval_status === ProductApprovalStatus::PendingReview && $record->is_active => 'Waiting for review. Buyers will see it once approved.',
+                        $record->approval_status !== ProductApprovalStatus::Approved => 'Turning this on sends it for review',
                         $record->is_active => 'Shown on your storefront',
                         default => 'Hidden from buyers',
                     })

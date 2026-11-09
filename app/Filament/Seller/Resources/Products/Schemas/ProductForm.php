@@ -88,25 +88,34 @@ class ProductForm
     {
         $waiting = fn (?Product $record): ?ProductChangeRequest => $record?->exists ? $record->pendingChange : null;
 
-        $rejectedChange = function (?Product $record, ?Component $component): ?ProductChangeRequest {
+        // Looked up once per render: the callout's visibility and description both ask for it
+        $lookups = [];
+
+        $rejectedChange = function (?Product $record, ?Component $component) use (&$lookups): ?ProductChangeRequest {
             if (! $record?->exists || $record->pendingChange !== null) {
                 return null;
             }
 
-            $latestRejected = $record->changeRequests()
-                ->where('status', ProductChangeRequest::STATUS_REJECTED)
-                ->latest('reviewed_at')
-                ->latest('id')
-                ->first();
+            $lookups[$record->getKey()] ??= (function () use ($record): array {
+                $latestRejected = $record->changeRequests()
+                    ->where('status', ProductChangeRequest::STATUS_REJECTED)
+                    ->latest('reviewed_at')
+                    ->latest('id')
+                    ->first();
+
+                $decidedAfter = $latestRejected !== null && $record->changeRequests()
+                    ->where('status', ProductChangeRequest::STATUS_APPROVED)
+                    ->where('reviewed_at', '>', $latestRejected->reviewed_at ?? $latestRejected->updated_at)
+                    ->exists();
+
+                return [$latestRejected, $decidedAfter];
+            })();
+
+            [$latestRejected, $decidedAfter] = $lookups[$record->getKey()];
 
             if ($latestRejected === null) {
                 return null;
             }
-
-            $decidedAfter = $record->changeRequests()
-                ->where('status', ProductChangeRequest::STATUS_APPROVED)
-                ->where('reviewed_at', '>', $latestRejected->reviewed_at ?? $latestRejected->updated_at)
-                ->exists();
 
             $livewire = $component?->getLivewire();
             $dismissed = $livewire instanceof EditProduct && $livewire->dismissedRejectedChangeId === $latestRejected->id;
@@ -127,8 +136,8 @@ class ProductForm
                 ->warning()
                 ->description(fn (?Product $record): Htmlable => new HtmlString(
                     ($waiting($record) === null ? '' : ChangeRequestSummary::body($waiting($record))->toHtml())
-                    .'<p class="mt-3 text-sm">Buyers still pay the current prices shown below.</p>'
-                    .'<p class="mt-1 text-sm">Saving different prices replaces this request with a new one.</p>'
+                    .'<span class="mt-3 block text-sm">Buyers still pay the current prices shown below.</span>'
+                    .'<span class="mt-1 block text-sm">Saving different prices replaces this request with a new one.</span>'
                 ))
                 ->visible(fn (?Product $record): bool => $waiting($record) !== null)
                 ->actions([
@@ -151,8 +160,8 @@ class ProductForm
                 ->key('rejectedChangeCallout')
                 ->danger()
                 ->description(fn (?Product $record, Callout $component) => new HtmlString(
-                    '<p>'.e((string) $rejectedChange($record, $component)?->rejection_reason).'</p>'
-                    .'<p class="mt-1 text-sm">Your current prices are unchanged. Edit and save to send a new proposal.</p>'
+                    '<span class="block">'.e((string) $rejectedChange($record, $component)?->rejection_reason).'</span>'
+                    .'<span class="mt-1 block text-sm">Your current prices are unchanged. Edit and save to send a new proposal.</span>'
                 ))
                 ->visible(fn (?Product $record, Callout $component): bool => $rejectedChange($record, $component) !== null)
                 ->controlActions([
