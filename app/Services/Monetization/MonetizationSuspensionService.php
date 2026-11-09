@@ -46,7 +46,7 @@ class MonetizationSuspensionService
             Product::where('seller_id', $seller->id)->update(['is_active' => false]);
 
             // 3. Update seller profile monetization status
-            $seller->sellerProfile()->update(['monetization_status' => 'suspended']);
+            $seller->sellerProfile?->update(['monetization_status' => 'suspended']);
 
             // 4. Update subscription status if exists
             $subscription = $this->monetizationEngine->getActiveSubscription($seller);
@@ -82,7 +82,7 @@ class MonetizationSuspensionService
         }
 
         if ($status === 'grace_period') {
-            $seller->sellerProfile()->update(['monetization_status' => 'active']);
+            $seller->sellerProfile?->update(['monetization_status' => 'active']);
 
             return;
         }
@@ -149,7 +149,7 @@ class MonetizationSuspensionService
             Product::where('seller_id', $seller->id)->update(['was_active_before_suspension' => false]);
 
             // 3. Update seller profile monetization status
-            $seller->sellerProfile()->update(['monetization_status' => 'active']);
+            $seller->sellerProfile?->update(['monetization_status' => 'active']);
 
             // 5. Update event audit log
             if ($lastEvent) {

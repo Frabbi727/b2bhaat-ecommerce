@@ -89,6 +89,8 @@ class QuotationController extends Controller
         }
 
         $rfq->refresh();
+        // The guarded update above skips model events, so record the acceptance explicitly (AUD-4)
+        $rfq->recordAuditActivity('updated', ['status' => 'quoted'], ['status' => 'accepted']);
         app(RfqNotificationService::class)->notifySellerOfAcceptedQuote($rfq);
 
         // 2. Add item to cart with locked wholesale quotation unit price

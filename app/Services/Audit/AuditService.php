@@ -25,6 +25,23 @@ class AuditService
     ) {}
 
     /**
+     * AUD-4: a downloaded report or statement leaves a finance audit entry naming the file and who took it.
+     */
+    public function recordExport(string $report, string $filename, ?int $sellerId = null): ?AuditLog
+    {
+        return $this->record([
+            'module' => 'finance',
+            'action' => 'exported',
+            'description' => "Downloaded {$report} ({$filename})",
+            'record_label' => $report,
+            'seller_id' => $sellerId,
+            'status' => 'success',
+            'metadata' => ['report' => $report, 'filename' => $filename],
+            'sync' => true,
+        ]);
+    }
+
+    /**
      * Writes one audit entry. Never throws (AUD-3):
      * - A synchronous write runs in its own savepoint, so a failed insert can't abort the caller's PostgreSQL
      *   transaction, and the failure is reported to the error tracker rather than only logged.

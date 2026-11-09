@@ -8,6 +8,7 @@ use App\Models\SellerWallet;
 use App\Models\User;
 use App\Services\Accounting\AccountingReconciliationService;
 use App\Services\Accounting\GeneralLedgerService;
+use App\Services\Audit\AuditService;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
@@ -134,6 +135,8 @@ class FinancialReconciliationPage extends Page
         $sellersData = $this->getSellersAuditData();
         $dateLabel = Carbon::now()->format('Y-m-d');
         $filename = "financial-reconciliation-audit-{$dateLabel}.csv";
+
+        \app(AuditService::class)->recordExport('financial reconciliation report', $filename, null);
 
         return response()->streamDownload(function () use ($metrics, $sellersData): void {
             $handle = fopen('php://output', 'w');

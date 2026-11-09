@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Seller;
 use App\Http\Controllers\Controller;
 use App\Models\SellerWallet;
 use App\Models\User;
+use App\Services\Audit\AuditService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -79,6 +80,8 @@ class WalletStatementController extends Controller
             'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
             'Expires' => '0',
         ];
+
+        \app(AuditService::class)->recordExport('wallet ledger statement', $filename, auth()->id());
 
         return response()->streamDownload(function () use ($transactions, $seller, $wallet) {
             $handle = fopen('php://output', 'w');

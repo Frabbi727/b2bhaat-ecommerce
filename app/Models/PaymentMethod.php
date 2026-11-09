@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Traits\Auditable;
 use App\Services\Settings\StoreConfigurationService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -9,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PaymentMethod extends Model
 {
+    use Auditable;
+
     /** Gateways that are configured in the database but have no integration yet (owner decision D8). */
     public const NOT_INTEGRATED = ['sslcommerz'];
 

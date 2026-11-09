@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Traits\Auditable;
 use App\Services\Sms\OrderNotificationService;
 use App\Services\Sms\Support\PhoneNormalizer;
 use Filament\Models\Contracts\FilamentUser;
@@ -20,7 +21,13 @@ use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable implements FilamentUser
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    use Auditable, HasApiTokens, HasFactory, Notifiable;
+
+    /** AUD-4: account changes (role, password, active, wholesale approval) are security records, kept and written at once. */
+    protected string $auditModule = 'auth';
+
+    /** @var list<string> The remember-me token changes on every sign-in and sign-out; sign-ins are logged separately. */
+    protected array $auditIgnoredAttributes = ['remember_token'];
 
     protected $fillable = [
         'role_id',

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Pages;
 
 use App\Services\Accounting\FinancialStatementService;
+use App\Services\Audit\AuditService;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Actions\Action;
@@ -108,6 +109,8 @@ class BalanceSheetPage extends Page
     {
         $data = $this->getStatementData();
         $filename = 'balance-sheet-'.($this->asOfDate ?? Carbon::now()->toDateString()).'.csv';
+
+        \app(AuditService::class)->recordExport('balance sheet', $filename, null);
 
         return response()->streamDownload(function () use ($data): void {
             $handle = fopen('php://output', 'w');

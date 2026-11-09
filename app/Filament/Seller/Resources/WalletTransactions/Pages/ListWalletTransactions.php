@@ -9,6 +9,7 @@ use App\Filament\Seller\Resources\WalletTransactions\WalletTransactionResource;
 use App\Filament\Seller\Resources\WalletTransactions\Widgets\SellerStatementOverviewWidget;
 use App\Models\SellerWallet;
 use App\Models\User;
+use App\Services\Audit\AuditService;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Support\Icons\Heroicon;
@@ -66,6 +67,8 @@ class ListWalletTransactions extends ListRecords
             'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
             'Expires' => '0',
         ];
+
+        \app(AuditService::class)->recordExport('wallet statement', $filename, auth()->id());
 
         return response()->streamDownload(function () use ($seller, $wallet): void {
             $handle = fopen('php://output', 'w');

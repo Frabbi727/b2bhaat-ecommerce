@@ -57,6 +57,11 @@ class AuditRedactor
         return $redacted;
     }
 
+    public function isSensitiveKey(string $key): bool
+    {
+        return $this->isBlacklisted($key);
+    }
+
     protected function isBlacklisted(string $key): bool
     {
         $normalized = strtolower(str_replace(['-', '_'], '', $key));

@@ -361,10 +361,13 @@ class SellerInvoiceSettlementService
             return;
         }
 
+        // One by one, so each voided bill and cancelled subscription leaves an audit entry (AUD-4)
         SellerInvoice::whereIn('subscription_id', $pendingIds)
             ->where('status', SellerInvoice::STATUS_UNPAID)
-            ->update(['status' => SellerInvoice::STATUS_VOID]);
+            ->get()
+            ->each(fn (SellerInvoice $invoice) => $invoice->update(['status' => SellerInvoice::STATUS_VOID]));
 
-        SellerSubscription::whereIn('id', $pendingIds)->update(['status' => SellerSubscription::STATUS_CANCELLED]);
+        SellerSubscription::whereIn('id', $pendingIds)->get()
+            ->each(fn (SellerSubscription $subscription) => $subscription->update(['status' => SellerSubscription::STATUS_CANCELLED]));
     }
 }

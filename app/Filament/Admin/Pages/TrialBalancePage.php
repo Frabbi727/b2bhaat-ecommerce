@@ -8,6 +8,7 @@ use App\Enums\Accounting\AccountType;
 use App\Enums\Accounting\JournalEntryStatus;
 use App\Models\Accounting\AccountingAccount;
 use App\Models\Accounting\AccountingPeriod;
+use App\Services\Audit\AuditService;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Pages\Page;
@@ -153,6 +154,8 @@ class TrialBalancePage extends Page
         $data = $this->getTrialBalanceData();
         $dateLabel = $this->endDate ? Carbon::parse($this->endDate)->format('Y-m-d') : 'all-time';
         $filename = "trial-balance-{$dateLabel}.csv";
+
+        \app(AuditService::class)->recordExport('trial balance', $filename, null);
 
         return response()->streamDownload(function () use ($data): void {
             $handle = fopen('php://output', 'w');

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Pages;
 
 use App\Services\Accounting\FinancialStatementService;
+use App\Services\Audit\AuditService;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Actions\Action;
@@ -111,6 +112,8 @@ class IncomeStatementPage extends Page
     {
         $data = $this->getStatementData();
         $filename = 'income-statement-'.($this->startDate ?? 'all').'-to-'.($this->endDate ?? 'present').'.csv';
+
+        \app(AuditService::class)->recordExport('income statement', $filename, null);
 
         return response()->streamDownload(function () use ($data): void {
             $handle = fopen('php://output', 'w');

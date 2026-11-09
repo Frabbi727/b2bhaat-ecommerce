@@ -83,7 +83,7 @@ trait Auditable
             'Refund', 'WalletTransaction', 'SellerWallet', 'SellerPayment', 'SellerInvoice' => 'finance',
             'SellerProfile', 'SellerSubscription', 'SellerPlan', 'SellerSuspensionEvent' => 'sellers',
             'Coupon', 'CouponUsage', 'FlashSale', 'FlashSaleProduct', 'Banner' => 'marketing',
-            'StoreSetting', 'SmsSetting', 'SmsTemplate', 'EmailTemplate' => 'settings',
+            'StoreSetting', 'SmsSetting', 'SmsTemplate', 'EmailTemplate', 'PaymentMethod' => 'settings',
             'EmailLog', 'SmsLog' => 'communications',
             'ProductReview', 'Wishlist', 'CustomerAddress', 'RfqRequest' => 'customer_activity',
             'Category', 'Brand', 'Unit', 'Attribute', 'AttributeValue' => 'catalog',
