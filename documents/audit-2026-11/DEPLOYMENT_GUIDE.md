@@ -202,3 +202,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## UX-5 seller terms
 - **Code only, no migration.** Sellers will see different commission figures in Store Settings: the rate they are actually charged, not the rate set at approval.
+
+## I-1 settlement safety
+- **Code only, no migration.** Admins must now enter a reference for every gateway transfer. The duplicate check uses a cache lock (`CACHE_STORE=database` uses the existing `cache` table). Settlements recorded before this change have no stored comparison key, so their references are not checked; the feature is not yet on production, so none exist there.
