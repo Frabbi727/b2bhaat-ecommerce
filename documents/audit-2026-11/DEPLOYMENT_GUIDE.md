@@ -127,4 +127,4 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## UX-ACC-1 manual journals
 - **Code only.** After deploy, **Accounting → Journal Entries** shows **New manual journal**.
-- **Time zone:** the journal date can't be in the future by the server's clock. While the app runs on UTC (see PERF-5), between midnight and 6 am Dhaka time "today" in Dhaka is still "tomorrow" to the server, so pick the previous day or wait.
+- **Time zone:** the journal date can't be in the future by the server's clock. While the app runs on UTC (see PERF-5), between midnight and 6 am Dhaka time the server's date is still the previous day, so a journal dated today (Dhaka) is refused as a future date. Use the previous day's date, or post after 6 am.
