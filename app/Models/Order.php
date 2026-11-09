@@ -110,6 +110,22 @@ class Order extends Model
         });
     }
 
+    /**
+     * SEC-8: the SMS tracking link stops working this many days after the order (config orders.tracking_link_days).
+     */
+    public function trackingLinkExpired(): bool
+    {
+        return $this->created_at !== null && $this->created_at->copy()->addDays((int) config('orders.tracking_link_days', 90))->isPast();
+    }
+
+    /**
+     * SEC-8: the public invoice link stops working this many days after the order (config orders.invoice_link_days).
+     */
+    public function invoiceLinkExpired(): bool
+    {
+        return $this->created_at !== null && $this->created_at->copy()->addDays((int) config('orders.invoice_link_days', 365))->isPast();
+    }
+
     public function customer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'customer_id');

@@ -70,6 +70,8 @@ class InvoiceController extends Controller
             ->where('invoice_token', $token)
             ->firstOrFail();
 
+        abort_if($order->invoiceLinkExpired(), 410, 'This invoice link has expired. Sign in to your account to view the invoice.');
+
         return view('storefront.invoice', [
             'order' => $order,
         ]);

@@ -89,7 +89,9 @@ class OrderTracking extends Component
             'subOrders.items.product',
         ])->where('tracking_token', trim($token))->first();
 
-        if ($found) {
+        if ($found && $found->trackingLinkExpired()) {
+            $this->searchError = 'This tracking link has expired. Sign in to your account, or search with your order number and phone number.';
+        } elseif ($found) {
             $this->order = $found;
             $this->orderNumber = $found->order_number;
             $this->verifiedAccess = true;
