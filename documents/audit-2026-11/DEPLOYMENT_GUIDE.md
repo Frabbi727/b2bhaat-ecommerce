@@ -208,3 +208,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## M-3 cancelled orders verified later
 - **Code only, no migration.** Orders already left Cancelled / Paid by this path before the fix are not changed; find them with payment status Paid and order status Cancelled, and set them to Refunded after checking the refund rows.
+
+## M-4 TrxID released on rejection or expiry
+- **Code only, no migration.** Orders rejected or expired before this change keep their TrxID. To release them, clear `mfs_transaction_id` on orders with payment status Failed or Expired (a reviewed, one-off update; not done automatically).

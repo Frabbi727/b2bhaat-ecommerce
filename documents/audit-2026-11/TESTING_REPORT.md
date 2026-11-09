@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1418 tests, 1411 passed, 7 skipped, 6508 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1419 tests, 1412 passed, 7 skipped, 6514 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -93,6 +93,7 @@ The existing tests of other features were touched only to give their test produc
 | UX-5 | `tests/Feature/SellerTermsDisplayTest.php` (6) | Store Settings shows "Retail 7.5% · Wholesale 3%" from the plan and not the 10% approval rate; the shown rates equal what an order is charged in both channels, and a custom rate shows; the billing page shows Your terms, the rate, ৳499.00 and the renewal date; after a plan price rise the next payment shows the new price while the commission stays (MON-2); an unpaid bill is shown as the next payment; with fees off the rate is 0% and Store Settings says so. All six failed on the old code |
 | I-1 | `tests/Feature/Accounting/SettlementSafetyTest.php` (6) | The same gateway reference typed differently is refused and names the first journal, while the same reference on another gateway is accepted; a blank reference is refused; undoing a gateway transfer restores the gateway, bank and fee balances, marks the entry reversed, is audited and lets the reference be used again; undoing a courier remittance unmarks the parcel, puts it back on the unsettled list and restores the receivable, and a second undo changes nothing; other journals can't be undone this way; an admin undoes a transfer from the journal list, where the manual-journal Reverse button stays hidden. All six failed on the old code. Three older `SettlementServiceTest` cases now pass a reference so they still test what they were written for. The settlement test files (19 tests) also pass on a throwaway PostgreSQL database, which checks the JSON reference lookup |
 | M-3 | `tests/Feature/PaymentVerificationTest.php` (1 new, 1 changed) | Cancelling the whole order, then verifying its payment, leaves it Cancelled with payment Refunded. The PAY-1 test now expects Refunded instead of Paid for its fully cancelled order. Both failed on the old code |
+| M-4 | `tests/Feature/PaymentVerificationTest.php` (1 new) | After an order's payment expires, a new checkout with the same TrxID is accepted; after that order's payment is rejected, a third checkout with it is accepted; the expired order no longer holds the TrxID but its address details still show it. Failed on the old code (the second checkout was refused) |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
