@@ -279,7 +279,11 @@ class MonetizationJournalIntegrationTest extends TestCase
         $this->assertEquals($this->seller->id, $creditLine->seller_id);
     }
 
-    public function test_admin_waiver_payment_debits_promotional_discount_expense(): void
+    /**
+     * ACC-8: a waiver means the seller paid nothing, so no subscription revenue is booked (before, it booked revenue
+     * balanced by a made-up expense).
+     */
+    public function test_admin_waiver_posts_no_journal_because_no_money_was_received(): void
     {
         $invoice = SellerInvoice::create([
             'invoice_number' => 'SINV-SUB-WAIVE-01',
@@ -303,26 +307,9 @@ class MonetizationJournalIntegrationTest extends TestCase
             'verified_at' => now(),
         ]);
 
-        $journal = AccountingJournalEntry::where('idempotency_key', "seller_payment_{$payment->id}")
-            ->with(['lines.account'])
-            ->first();
-
-        $this->assertNotNull($journal);
-        $this->assertEquals(AccountingEvent::SUBSCRIPTION_PAID->value, $journal->financial_event);
-        $this->assertStringContainsString('admin_waiver', $journal->description);
-
-        // Debit: Platform Promotional Discount Expense (promotional_discount_expense)
-        $debitLine = $journal->lines->firstWhere('debit', '>', 0);
-        $this->assertNotNull($debitLine);
-        $this->assertEquals('promotional_discount_expense', $debitLine->account->system_slug);
-        $this->assertEquals('500.00', (string) $debitLine->debit);
-
-        // Credit: Subscription Revenue
-        $creditLine = $journal->lines->firstWhere('credit', '>', 0);
-        $this->assertNotNull($creditLine);
-        $this->assertEquals('subscription_revenue', $creditLine->account->system_slug);
-        $this->assertEquals('500.00', (string) $creditLine->credit);
-        $this->assertEquals($this->seller->id, $creditLine->seller_id);
+        $this->assertNull(app(MonetizationJournalHandler::class)->recordSellerPayment($payment));
+        $this->assertSame(0, AccountingJournalEntry::where('idempotency_key', "seller_payment_{$payment->id}")->count());
+        $this->assertSame(0, AccountingJournalEntry::where('financial_event', AccountingEvent::SUBSCRIPTION_PAID->value)->count());
     }
 
     public function test_idempotency_duplicate_calls_return_existing_journal_without_creating_new_lines(): void

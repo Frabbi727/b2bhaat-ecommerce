@@ -87,10 +87,14 @@ class MonetizationJournalHandler
             return null;
         }
 
+        // ACC-8: a waiver brings in no money, so there is no revenue to book.
+        if ($payment->payment_method === SellerPayment::METHOD_ADMIN_WAIVER) {
+            return null;
+        }
+
         $debitAccountSlug = match ($payment->payment_method) {
             SellerPayment::METHOD_WALLET_BALANCE => 'seller_wallet_payable',
             SellerPayment::METHOD_BANK_WIRE => 'bank_operating',
-            SellerPayment::METHOD_ADMIN_WAIVER => 'promotional_discount_expense',
             default => 'gateway_clearing',
         };
 
@@ -112,7 +116,6 @@ class MonetizationJournalHandler
         $debitNarration = match ($payment->payment_method) {
             SellerPayment::METHOD_WALLET_BALANCE => "Wallet balance deduction for {$invoiceNumber}",
             SellerPayment::METHOD_BANK_WIRE => "Bank wire transfer received for {$invoiceNumber}",
-            SellerPayment::METHOD_ADMIN_WAIVER => "Platform admin waiver applied for {$invoiceNumber}",
             default => "Gateway payment ({$paymentMethod}) received for {$invoiceNumber}",
         };
 
