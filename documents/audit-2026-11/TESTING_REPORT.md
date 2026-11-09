@@ -59,3 +59,13 @@ The existing tests of other features were touched only to give their test produc
 - **Mail delivery.** Notifications are tested with the fake; real delivery needs the queue worker and mail settings.
 - **Real PostgreSQL locking.** Same limit as Wave 0: the suite runs on SQLite.
 
+
+# Testing Report: Wave 1
+
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1281 tests, 1281 passed, 6007 assertions** (2026-11-09, branch `fix/audit-wave-1`).
+
+| Issue | Test file | What is proven |
+|---|---|---|
+| PERF-1 | `tests/Feature/PerformanceIndexesTest.php` (74) | Each of the 72 column sets has an index; the hot lookups (order lines, consignments, prices, wallet history, shop listing) are covered; rolling back removes only the new indexes and running again restores them |
+
+**PostgreSQL check:** the migration was also run on a throwaway local PostgreSQL database (created and deleted for the test): 72 indexes built concurrently, rollback removed exactly those 72, and a re-run restored them.

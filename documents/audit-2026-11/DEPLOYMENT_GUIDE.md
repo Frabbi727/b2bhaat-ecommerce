@@ -92,3 +92,11 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 - **Waiting price changes** are never applied by the old code. They simply stay in `product_change_requests` as history.
 - **Undoing the migrations** (`migrate:rollback`) drops the approval columns and the change history. Do this only from a backup decision, and never delete rows by hand.
 
+
+# Deployment Guide: Wave 1 (`fix/audit-wave-1`)
+
+## PERF-1 indexes
+- **Migration:** `2026_11_09_044216_add_performance_indexes.php`. It adds 72 indexes and changes no data.
+- **Safe while the shop is open:** on PostgreSQL each index is built with `CREATE INDEX CONCURRENTLY`, outside a transaction, so orders keep flowing while it runs. Any index that already exists is skipped.
+- **If a run is interrupted:** a concurrent build that stops can leave an index marked invalid. Check with `SELECT indexrelid::regclass FROM pg_index WHERE NOT indisvalid;`. Drop any listed `perf_…` index with `DROP INDEX CONCURRENTLY`, then run `php artisan migrate` again.
+- **Rollback:** `php artisan migrate:rollback --step=1` drops only the `perf_…` indexes, also concurrently.

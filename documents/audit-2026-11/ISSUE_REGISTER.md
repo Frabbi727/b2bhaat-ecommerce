@@ -75,7 +75,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | INV-5 | Inventory | Inactive variation is still sold through wholesale (`CartSessionService::putItem`) | Check `is_active` in the cart and in reservation | – | Open |
 | INV-8 | Inventory | Products go live on save | **Owner decision:** every new product and every price change waits for admin approval (status, queue, notifications) | INV-1 | **Fixed (5ba25b2..06e9ef4)** |
 | SEC-6 | Security | Livewire tracking and OTP actions are not throttled | `RateLimiter` inside the actions | SEC-7 | Open |
-| PERF-1 | Performance | No indexes on hot foreign keys or status columns on PostgreSQL | Index migration | – | Open |
+| PERF-1 | Performance | No indexes on hot foreign keys or status columns on PostgreSQL | Index migration | – | **Fixed (f0a554d)** |
 
 ## P2 (Wave 2)
 | ID | Title (evidence) | Solution summary |

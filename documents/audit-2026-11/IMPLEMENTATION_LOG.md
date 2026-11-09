@@ -56,3 +56,9 @@ New products and price changes now wait for admin approval. No production comman
 - **Refused publishing saves nothing.** When the plan limit or a suspension stops a seller from showing a product, none of that edit is saved. The seller is told to untick "Visible" to save a draft.
 - **Who reviews.** Only `super_admin` can open the admin panel, so only they can reach the queues; see the open owner decision in the Deployment Guide.
 
+
+# Implementation Log: Wave 1, branch `fix/audit-wave-1` (from `fix/audit-wave-0`)
+
+| # | Commit | Issue | What changed | Files |
+|---|---|---|---|---|
+| 1 | f0a554d | PERF-1 | 72 new database indexes: every foreign key that had none (PostgreSQL doesn't add them automatically), the status columns the admin queues and reports filter on, order and consignment dates, and `products(is_active, approval_status)` for the shop pages. Indexes only; no data is changed | `2026_11_09_044216_add_performance_indexes.php` |
