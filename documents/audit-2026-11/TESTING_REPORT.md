@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1438 tests, 1429 passed, 9 skipped, 6583 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1440 tests, 1431 passed, 9 skipped, 6592 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -102,6 +102,7 @@ The existing tests of other features were touched only to give their test produc
 | MON-8, MON-15, MON-16 | `tests/Feature/MonetizationOwnerDecisionsTest.php` (4) | Changing to a plan with the fee switch off raises a ৳0 bill that is settled and activates the plan; such a plan renews with no unpaid bill and no next payment shown; a category carrying a 50% rate does not change the commission charged; the admin sees the fees switch on, reads what off means, switches it off and the store setting follows. All four failed on the old code |
 | MON-12 | `tests/Feature/DelinquentSellerLimitsTest.php` (3) | An overdue bill blocks a payout, naming the bill, with the balance unchanged and no payout created; a bill not yet due doesn't block; a suspended seller's flash-sale entry is refused. The overdue and suspended cases failed on the old code |
 | ORD-2 | `tests/Feature/ParcelDispatchRulesTest.php` (4) | A cancelled parcel can't be handed to a courier, start a self-delivery or book a pickup, and keeps no tracking number or handover code; an unverified bKash order can't start a self-delivery even when called directly; a COD parcel is handed over with its status, tracking number and log. All four failed on the old code. `CourierBookingAndChallanTest` now books from an unfulfilled parcel (it used to move a shipped parcel back to processing) and expects the shared refusal message |
+| ORD-3, ORD-4 | `tests/Feature/CheckoutAtomicityTest.php` (2) | When another buyer uses the coupon's last use while this order is being written, the order is refused with a coupon message, and no order, coupon use or stock change remains (failed on the old code: the order was placed and the coupon went past its limit). A seller suspended after the cart was filled gets no order (passed on the old code; ORD-4 was already handled) |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 

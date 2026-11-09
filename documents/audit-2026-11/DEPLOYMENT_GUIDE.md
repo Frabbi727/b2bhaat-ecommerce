@@ -230,3 +230,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## ORD-2 dispatch rules
 - **Code only, no migration.** Sellers can no longer book a pickup for a parcel that is already shipped.
+
+## ORD-3 checkout in one transaction
+- **Code only, no migration.**
