@@ -246,3 +246,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## ACC-2 (mock gateway)
 - Code only. The seeder change affects new installs only (`firstOrCreate` never edits an existing row). Optional check on production: `select slug, is_active from payment_methods where slug = 'mock_gateway';` and, if it is active, switch it off in the admin panel. Checkout already hides it outside local/testing.
+
+## SEC-9 (seller invoice scope)
+- Code and Blade only. Run `php artisan view:clear` (part of the normal deploy).

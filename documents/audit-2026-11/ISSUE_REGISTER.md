@@ -108,13 +108,24 @@ All findings come from reading the code; every one cites file:line. Status value
 | ACC-17 | Reconciliation blind spots | Cover clearing and receivable accounts; store each run |
 | ACC-18 | Statement signs follow account type, not normal balance; no cash flow statement | Use `normal_balance`; add cash flow |
 | ACC-19 | Seller statement totals wrong | Base it on the ledger |
-| AUD-5 to AUD-9 | No named finance events; no system actor; URL tokens and TrxIDs not redacted; sellers see raw diffs; admin filters and export missing | Per finding |
+| AUD-5 | No named finance events | Named events |
+| AUD-6 | No system actor | System actor on automated writes |
+| AUD-7 | URL tokens and TrxIDs not redacted | Extend `AuditRedactor` |
+| AUD-8 | Sellers see raw diffs | Readable change summary |
+| AUD-9 | Admin filters and export missing | Filters and export |
 | UX-ACC-2 / UX-ACC-3 | Reverse action is unsafe; payout TrxID not unique; no maker-checker | Confirmations; uniqueness |
 | UX-ACC-6 | Found while testing ACC-7. On the Trial Balance and Financial Reconciliation pages (and likely the other custom report pages), icons render at full page width. The custom Blade views use Tailwind classes, but the admin panel has no compiled theme that includes them (`resources/views/filament/admin/pages/*.blade.php`, no `viteTheme` in `AdminPanelProvider`). Unchanged from `production` | Add a Filament admin theme that scans these views, or rewrite them with Filament components |
 | MON-15 | Found while fixing MON-2. The plan's **Charge Subscription Fee** switch is only used by the plan list. Renewal bills and plan-change bills charge the plan price even when the switch is off (`MonetizationProcessRenewalsCommand.php`, `SellerInvoiceSettlementService::startPlanChange`). Unchanged from `production` | Owner to decide: either bill nothing when the switch is off, or remove the switch and use price 0 for free plans | – | Fixed (`2134644`): owner decided switch off = no bill |
-| INV-6, 9, 10 | Price-tier validation; sellers can self-feature; importer creates global attributes | Per finding |
-| SEC-8 to SEC-10 | Tracking tokens never expire; sellers can see other sellers' invoice lines; sensitive mass-assignable fields | Per finding |
-| PERF-2 to PERF-5 | Dashboard queries; N+1; job failure handling; **APP_TIMEZONE not set (UTC)** | Per finding |
+| INV-6 | Price-tier validation gaps | Validate tiers |
+| INV-9 | Sellers can self-feature products | Admin-only featuring |
+| INV-10 | Importer creates global attributes | Only use existing attributes |
+| SEC-8 | Tracking tokens never expire | Expiry or rotation |
+| SEC-9 | Sellers can see other sellers' lines on a shared invoice | Scope the invoice view | Fixed (718f8cd) |
+| SEC-10 | Sensitive fields are mass-assignable | Tighten `$fillable` |
+| PERF-2 | Dashboard queries | Aggregate queries |
+| PERF-3 | N+1 queries | Eager loading |
+| PERF-4 | Job failure handling | `failed()` handlers and retries |
+| PERF-5 | **APP_TIMEZONE not set (UTC)** | Asia/Dhaka |
 | UX-1 to UX-4, UX-6 | Currency formats; jargon; navigation; confirmations; mobile layout | UI consistency pass |
 
 ## P3 (Wave 3)
