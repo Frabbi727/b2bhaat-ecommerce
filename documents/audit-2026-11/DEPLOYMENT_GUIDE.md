@@ -42,3 +42,52 @@
 
 - **Code:** revert the merge commit and redeploy. Bills paid while the new code was live keep their correct state.
 - **Plan changes still waiting for payment:** plan-change subscriptions created as `payment_due` are ignored by the old code, but the old code would still let the seller pay those bills. Before rolling back, void any unpaid plan-change bills: `seller_invoices` rows with status `unpaid` whose `subscription_id` points at a `payment_due` subscription.
+
+# Deployment Guide: INV-8 product and price approval (`feat/product-approval`)
+
+## Risk summary
+
+- **Three migrations** in `database/migrations/`:
+  - `2026_11_08_153554_add_approval_to_products_table.php`: adds the approval columns to `products` **and backfills** the catalog.
+  - `2026_11_08_153555_create_product_change_requests_table.php`: the table for held price changes.
+  - `2026_11_08_153556_create_notifications_table.php`: Laravel's database notifications table (the bell in both panels).
+- **Behaviour changes at once.** From the deploy on, new products and price edits wait for review.
+- **Rollback** is a code revert; see below.
+
+## Steps
+
+1. **Back up the production database** first. The backfill rewrites every row of `products`.
+2. **Preview the migrations:** `php artisan migrate --pretend`. Expect exactly the three files above.
+3. **Deploy and migrate:** `php artisan migrate`. The backfill marks every existing product `approved` with `approved_at = created_at`. It runs in chunks of 1000 products, so a large catalog is safe, but it still takes a moment on a very large table. Do it at a quiet time.
+4. **Start or restart the queue worker** (`php artisan queue:restart`). Decision mails to sellers go through the queue, so without a worker sellers get the in-panel bell message but no email.
+5. **Announce to sellers before the deploy**, in the seller panel and by email:
+   > From <date>, new products and price changes are checked by our team before buyers see them, usually within <N> hours.
+6. **Set a review target** (the owner picks <N> hours). The queue shows how long each item has waited.
+7. **Smoke test:**
+   - As a seller, show a new product. It should say "Waiting for review" and not appear on the storefront.
+   - As `super_admin`, open `/admin/approvals/products` and approve it. It should now appear.
+   - Change a price on a live product. The storefront price stays the same until you approve it at `/admin/approvals/changes`.
+
+## Known limits
+
+- **Rare race on the seller edit page.** The decision "is this product approved?" is read without a lock. The price list re-checks the status right before writing, so the window is almost nothing, but a decision made in that instant could let one save through the wrong path. Accepted as residual risk; no transaction was added to the form save.
+- **Review queue visibility.** See the open owner decision below.
+- **No off switch.** The approval rules cannot be turned off from settings.
+
+## Open owner decision: who can open the queues
+
+Users with role `admin` count as catalog reviewers, but the admin panel admits only `super_admin` (`User::canAccessPanel`). So an `admin` user cannot open the approval queues. Choose one:
+
+1. **Keep `super_admin` only.** Nothing to build. Only super admins approve.
+2. **Admit `admin` to the admin panel.** Easy, but it gives `admin` users every other admin page that their own permissions allow, so check that first.
+3. **Add a narrower route** just for the two queues, so `admin` reviews without full panel access. Most work.
+
+`canAccessPanel` has not been changed.
+
+## Rollback
+
+- **Code:** revert the merge and redeploy. The new columns and tables can stay, because the old code ignores them.
+- **Products that were waiting for review** and are marked visible would go live again after a revert, because the old code ignores the approval status. Hide the ones you do not want live before reverting.
+- **Waiting price changes** are never applied by the old code. They simply stay in `product_change_requests` as history.
+- **Undoing the migrations** (`migrate:rollback`) drops the approval columns and the change history. Do this only from a backup decision, and never delete rows by hand.
+

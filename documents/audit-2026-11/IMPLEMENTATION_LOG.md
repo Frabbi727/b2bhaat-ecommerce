@@ -24,3 +24,31 @@ There is one commit per issue. Each commit was test-first: a failing test, then 
 - **Lifting a suspension.** A suspension the admin imposed (policy or manual) is only lifted with the admin's Restore button, even if the seller pays. A billing suspension is lifted automatically only once no subscription bill is left unpaid. If a seller switches to another plan, the old plan's unpaid renewal bill is voided.
 - **Reclassify command after later reversals.** If a journal that was already corrected is reversed later, run `accounting:reclassify-shipping` again so the reversal is corrected too.
 - **Customer refunds after PAY-1.** They appear as *pending* Refund rows for the finance team to pay out, exactly like other cancellations.
+
+# Implementation Log: INV-8 product and price approval, branch `feat/product-approval`
+
+New products and price changes now wait for admin approval. No production commands were run. The three migrations were only run against the test database.
+
+| # | Commit | What changed |
+|---|---|---|
+| 1 | 5ba25b2 | Approval columns on `products`, new `product_change_requests` table, models, and the database `notifications` table. The backfill marks every existing product approved |
+| 2 | dbbdf37, 05e075e | Buyers see only approved products. A second commit closes the gaps found in quick view, bundles and order splitting |
+| 3 | 9146b8a, 700b3b4 | `PriceSet`: a normalised price list with a fingerprint, so equal prices are recognised as equal. Boundary tests |
+| 4 | 8f49304, 0a20bc8 | `ProductApprovalService`: submit, withdraw, approve and reject a new product, with audit entries and notifications. A failing notification never undoes a decision |
+| 5 | 0143629, 20bc80a | Held price, channel and category changes. A newer change replaces the waiting one. Proposal ids are validated. Limits: 200 price rows, 30 proposals per seller per hour |
+| 6 | fdb460d, 31da8d9 | Making a product visible sends it for review. A failed send keeps the product hidden |
+| 7 | bfee5bc, cc52eb0 | Seller edit page: price, channel and category edits on live products wait for review. Unrelated saves keep a waiting change |
+| 8 | fa2c15f, d06eb2a | Seller screens: review badges and filter, waiting-change callout, Withdraw, "Price changes" history, truthful tooltips |
+| 9 | 1d7b21b, 2d11752 | Admin queues (`approvals/products`, `approvals/changes`) with approve, reject, bulk approve, "never reviewed" filter on the moderation page. Notification text is escaped, and bulk approve skips products edited after the confirmation opened |
+| 10 | 06e9ef4 | A refused listing activation (plan limit or suspended store) now saves nothing, prices included. Before, the prices were already saved while the message said they were not |
+| 11 | final commit of this task | Approval security tests and these documents |
+
+## Behaviour changes the owner should know about
+
+- **New products wait for review.** A seller who shows a new product sends it to the admin queue. Buyers see it only after approval. A rejected product shows the reason and can be re-sent.
+- **Price, channel and category changes on live products wait for review.** Buyers keep paying the current prices meanwhile. Stock and title changes stay instant.
+- **A newer change replaces the waiting one.** The earlier request is kept in history as "Replaced by a newer price". Nothing is ever deleted.
+- **Existing products were approved automatically on deploy**, dated at their creation. The moderation page has a "never reviewed" filter that lists them, in case you want to review the old catalog.
+- **Refused publishing saves nothing.** When the plan limit or a suspension stops a seller from showing a product, none of that edit is saved. The seller is told to untick "Visible" to save a draft.
+- **Who reviews.** Only `super_admin` can open the admin panel, so only they can reach the queues; see the open owner decision in the Deployment Guide.
+
