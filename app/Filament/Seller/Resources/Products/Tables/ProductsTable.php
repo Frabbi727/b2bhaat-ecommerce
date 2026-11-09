@@ -354,17 +354,25 @@ class ProductsTable
         }
 
         if (! $visible) {
-            Notification::make()->title("{$changed} product(s) hidden")->success()->send();
+            $notification = Notification::make()->title("{$changed} product(s) hidden");
+            if ($failed > 0) {
+                $notification->body("{$failed} couldn't be withdrawn from review.")->warning();
+            } else {
+                $notification->success();
+            }
+            $notification->send();
 
             return;
         }
 
-        $shown = $changed - $sent;
-        Notification::make()
-            ->title("{$shown} shown, {$sent} sent for review")
-            ->body($failed > 0 ? "{$failed} could not be sent for review. Open them to try again." : null)
-            ->success()
-            ->send();
+        $shown = $changed - $sent - $failed;
+        $notification = Notification::make()->title("{$shown} shown, {$sent} sent for review");
+        if ($failed > 0) {
+            $notification->body("{$failed} couldn't be sent for review and stay hidden.")->warning();
+        } else {
+            $notification->success();
+        }
+        $notification->send();
     }
 
     /**
@@ -395,7 +403,12 @@ class ProductsTable
 
             return true;
         } catch (DomainException|AuthorizationException $e) {
-            Notification::make()->title('Could not send for review')->body($e->getMessage())->danger()->send();
+            $product->update(['is_active' => false]);
+            Notification::make()
+                ->title('Couldn\'t send for review')
+                ->body('The product is still hidden. Please try again.')
+                ->danger()
+                ->send();
 
             return false;
         }

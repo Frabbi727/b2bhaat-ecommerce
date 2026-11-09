@@ -109,7 +109,7 @@ class ImportProductsAction
     }
 
     /**
-     * @param  array{total_rows: int, products_created: int, variations_created: int, created: array<int, string>, sent_for_review?: array<int, string>, examples_skipped: int, ignored_columns: array<int, string>, errors: array<int, string>, hidden_over_limit?: array<int, string>, dry_run: bool}  $result
+     * @param  array{total_rows: int, products_created: int, variations_created: int, created: array<int, string>, sent_for_review?: array<int, string>, review_failed?: array<int, string>, examples_skipped: int, ignored_columns: array<int, string>, errors: array<int, string>, hidden_over_limit?: array<int, string>, dry_run: bool}  $result
      */
     public static function resultNotification(array $result): Notification
     {
@@ -146,6 +146,12 @@ class ImportProductsAction
         $sentForReview = $result['sent_for_review'] ?? [];
         if ($sentForReview !== []) {
             $lines[] = '<strong>'.count($sentForReview).' sent for review.</strong> Buyers will see them once an admin approves them.';
+        }
+
+        $reviewFailed = $result['review_failed'] ?? [];
+        if ($reviewFailed !== []) {
+            $lines[] = '<strong>'.count($reviewFailed).' couldn\'t be sent for review</strong> and were saved hidden: '
+                .e(collect($reviewFailed)->take(5)->implode(', ')).(count($reviewFailed) > 5 ? ' and '.(count($reviewFailed) - 5).' more.' : '.').' Turn Visible on to try again.';
         }
 
         $hidden = $result['hidden_over_limit'] ?? [];

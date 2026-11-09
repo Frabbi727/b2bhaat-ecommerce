@@ -17,13 +17,16 @@ use App\Models\SellerSubscription;
 use App\Models\Unit;
 use App\Models\User;
 use App\Notifications\Catalog\ProductSubmittedForReview;
+use App\Services\Catalog\ProductApprovalService;
 use App\Services\Inventory\ProductBulkImportService;
 use Database\Seeders\SystemLookupSeeder;
+use DomainException;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Repeater;
+use Filament\Notifications\Notification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -45,7 +48,7 @@ class SellerProductSubmissionTest extends TestCase
     {
         parent::setUp();
         $this->seed(SystemLookupSeeder::class);
-        Notification::fake();
+        NotificationFacade::fake();
         Cache::flush();
 
         $this->seller = $this->userWithRole('seller');
@@ -149,9 +152,9 @@ class SellerProductSubmissionTest extends TestCase
         $published = Product::where('slug', 'submission-kit')->sole();
         $this->assertSame(ProductApprovalStatus::PendingReview, $published->approval_status);
         $this->assertTrue($published->is_active);
-        Notification::assertSentTo($this->admin, ProductSubmittedForReview::class);
+        NotificationFacade::assertSentTo($this->admin, ProductSubmittedForReview::class);
 
-        Notification::fake();
+        NotificationFacade::fake();
 
         Livewire::test(CreateProduct::class)
             ->fillForm(array_merge($this->newProductData(), ['title' => 'Hidden Kit', 'slug' => 'hidden-kit']))
@@ -163,7 +166,7 @@ class SellerProductSubmissionTest extends TestCase
         $draft = Product::where('slug', 'hidden-kit')->sole();
         $this->assertSame(ProductApprovalStatus::Draft, $draft->approval_status);
         $this->assertFalse($draft->is_active);
-        Notification::assertNothingSent();
+        NotificationFacade::assertNothingSent();
     }
 
     public function test_publish_notification_body_tells_the_seller_what_happens_next(): void
@@ -177,7 +180,7 @@ class SellerProductSubmissionTest extends TestCase
         $undo();
 
         $component->assertNotified(
-            \Filament\Notifications\Notification::make()
+            Notification::make()
                 ->title('Sent for review')
                 ->body('Buyers will see it once an admin approves it.')
                 ->success()
@@ -194,7 +197,7 @@ class SellerProductSubmissionTest extends TestCase
         $draft->refresh();
         $this->assertTrue($draft->is_active);
         $this->assertSame(ProductApprovalStatus::PendingReview, $draft->approval_status);
-        Notification::assertSentTo($this->admin, ProductSubmittedForReview::class);
+        NotificationFacade::assertSentTo($this->admin, ProductSubmittedForReview::class);
 
         Livewire::test(ListProducts::class)
             ->call('updateTableColumnState', 'is_active', $draft->getKey(), false);
@@ -273,6 +276,78 @@ class SellerProductSubmissionTest extends TestCase
         $undo();
 
         $this->assertDatabaseMissing('products', ['slug' => 'submission-kit']);
-        Notification::assertNothingSent();
+        NotificationFacade::assertNothingSent();
+    }
+
+    public function test_toggle_on_a_rejected_product_resubmits_and_clears_the_reason(): void
+    {
+        $rejected = $this->product('Was Rejected', false, 'rejected');
+        $rejected->forceFill(['rejection_reason' => 'Photos are blurry, please retake them.', 'rejected_at' => now()])->save();
+
+        Livewire::test(ListProducts::class)
+            ->call('updateTableColumnState', 'is_active', $rejected->getKey(), true);
+
+        $rejected->refresh();
+        $this->assertSame(ProductApprovalStatus::PendingReview, $rejected->approval_status);
+        $this->assertNull($rejected->rejection_reason);
+        $this->assertTrue($rejected->is_active);
+    }
+
+    public function test_bulk_hide_withdraws_a_pending_product_to_draft(): void
+    {
+        $pending = $this->product('Waiting', true, 'pending_review');
+
+        Livewire::test(ListProducts::class)
+            ->callTableBulkAction('hide', [$pending]);
+
+        $pending->refresh();
+        $this->assertFalse($pending->is_active);
+        $this->assertSame(ProductApprovalStatus::Draft, $pending->approval_status);
+    }
+
+    public function test_over_limit_import_row_stays_draft_and_is_not_sent_for_review(): void
+    {
+        $this->limitToOneListing();
+        $this->product('Live One', true);
+
+        $columns = array_keys(ProductBulkImportService::columns());
+        $row = implode(',', array_merge(array_fill_keys($columns, ''), [
+            'product_title' => 'Over Limit',
+            'category' => 'Fabrics',
+            'sell_to' => 'retail',
+            'unit' => 'pcs',
+            'stock' => '5',
+            'retail_price' => '300',
+            'visible' => 'yes',
+        ]));
+
+        $result = app(ProductBulkImportService::class)->import($this->seller, implode("\n", [implode(',', $columns), $row]));
+
+        $over = Product::where('title', 'Over Limit')->sole();
+        $this->assertSame(['Over Limit'], $result['hidden_over_limit']);
+        $this->assertSame([], $result['sent_for_review']);
+        $this->assertFalse($over->is_active);
+        $this->assertSame(ProductApprovalStatus::Draft, $over->approval_status);
+    }
+
+    public function test_submit_failure_on_the_toggle_leaves_the_product_hidden(): void
+    {
+        $draft = $this->product('Will Fail', false);
+
+        $mock = $this->mock(ProductApprovalService::class);
+        $mock->shouldReceive('submitProduct')->andThrow(new DomainException('boom'));
+
+        Livewire::test(ListProducts::class)
+            ->call('updateTableColumnState', 'is_active', $draft->getKey(), true)
+            ->assertNotified(
+                Notification::make()
+                    ->title('Couldn\'t send for review')
+                    ->body('The product is still hidden. Please try again.')
+                    ->danger()
+            );
+
+        $draft->refresh();
+        $this->assertFalse($draft->is_active);
+        $this->assertSame(ProductApprovalStatus::Draft, $draft->approval_status);
     }
 }

@@ -124,6 +124,7 @@ class ProductBulkImportService
      *     variations_created: int,
      *     created: array<int, string>,
      *     sent_for_review: array<int, string>,
+     *     review_failed: array<int, string>,
      *     examples_skipped: int,
      *     ignored_columns: array<int, string>,
      *     errors: array<int, string>,
@@ -158,6 +159,7 @@ class ProductBulkImportService
             'variations_created' => 0,
             'created' => [],
             'sent_for_review' => [],
+            'review_failed' => [],
             'examples_skipped' => 0,
             'ignored_columns' => $ignoredColumns,
             'errors' => [],
@@ -224,6 +226,8 @@ class ProductBulkImportService
                         $result['sent_for_review'][] = $plan['product']['title'];
                     } catch (DomainException|AuthorizationException $e) {
                         report($e);
+                        $product->update(['is_active' => false]);
+                        $result['review_failed'][] = $plan['product']['title'];
                     }
                 }
             }

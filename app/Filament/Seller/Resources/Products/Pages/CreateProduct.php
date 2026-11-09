@@ -22,6 +22,8 @@ class CreateProduct extends CreateRecord
 
     protected bool $sentForReview = false;
 
+    protected bool $reviewFailed = false;
+
     public function getTitle(): string
     {
         return 'Add product';
@@ -107,11 +109,8 @@ class CreateProduct extends CreateRecord
             app(ProductApprovalService::class)->submitProduct($product, auth()->user());
             $this->sentForReview = true;
         } catch (DomainException|AuthorizationException $e) {
-            Notification::make()
-                ->title('Could not send for review')
-                ->body($e->getMessage())
-                ->danger()
-                ->send();
+            $product->update(['is_active' => false]);
+            $this->reviewFailed = true;
         }
     }
 
@@ -122,6 +121,13 @@ class CreateProduct extends CreateRecord
                 ->success()
                 ->title('Sent for review')
                 ->body('Buyers will see it once an admin approves it.');
+        }
+
+        if ($this->reviewFailed) {
+            return Notification::make()
+                ->danger()
+                ->title('Saved, but not sent for review')
+                ->body('Couldn\'t send for review. The product is still hidden. Please try again from the product list.');
         }
 
         return parent::getCreatedNotification();
