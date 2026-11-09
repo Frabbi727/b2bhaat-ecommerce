@@ -171,3 +171,8 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 - **Scheduler:** `payments:expire-unverified` runs hourly (needs the scheduler running, as for the other jobs).
 - **First run after deploy:** every bKash/Nagad order already waiting **more than 72 hours** is cancelled on the first hourly run, and each buyer gets an SMS. Before deploying, check them with `SELECT order_number, created_at FROM orders WHERE payment_status_id = (SELECT id FROM payment_statuses WHERE slug = 'awaiting_verification') AND created_at < now() - interval '72 hours';`. Verify or reject those first, or raise the time in Store Settings straight after deploy.
 - **Rollback:** deploy the previous code, then `php artisan migrate:rollback --step=1`. The status is removed only if no order uses it.
+
+## PAY-3 one TrxID per order
+- **Migration:** `2026_11_09_135916_add_mfs_transaction_columns_to_orders_table.php` adds `orders.mfs_gateway` and `orders.mfs_transaction_id` (unique together) and fills them from each order's saved TrxID. It changes nothing else. It reads every order once, so on a large table run it at a quiet time.
+- **Watch the output:** if it prints "PAY-3: N order(s) reuse a TrxID…", the listed orders used a TrxID that an earlier order had already used. Check each one against the bKash/Nagad statement; a paid order may need a refund, or the TrxID may have been a typo.
+- **Rollback:** `php artisan migrate:rollback --step=1` drops the two columns and the index; orders are kept.
