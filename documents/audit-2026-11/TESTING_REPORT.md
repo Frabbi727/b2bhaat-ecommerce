@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1424 tests, 1416 passed, 8 skipped, 6524 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 8 skipped tests are the PostgreSQL-only journal guards and the M-1 lock-order test; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1425 tests, 1417 passed, 8 skipped, 6526 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 8 skipped tests are the PostgreSQL-only journal guards and the M-1 lock-order test; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -96,6 +96,7 @@ The existing tests of other features were touched only to give their test produc
 | M-4 | `tests/Feature/PaymentVerificationTest.php` (1 new) | After an order's payment expires, a new checkout with the same TrxID is accepted; after that order's payment is rejected, a third checkout with it is accepted; the expired order no longer holds the TrxID but its address details still show it. Failed on the old code (the second checkout was refused) |
 | M-6 | `tests/Feature/Accounting/DeferredCommissionAccountMigrationTest.php` (2) | With code 2070 taken by an admin's account, the migration adds the deferred account as 2071 and leaves the other account unchanged (failed on the old code); with 2070 free it uses 2070, and a second run adds nothing. Both pass on a throwaway PostgreSQL database with `CommissionDeferralTest` |
 | M-1, M-2 | `tests/Feature/PaymentExpiryRunTest.php` (3) | With one order made to fail, the other overdue order still expires and the run reports "1 order(s) could not be cancelled" and exits with failure; with 1,001 overdue orders every one expires; on PostgreSQL, cancelling a parcel locks the order row before the parcel row (skipped on SQLite, which has no row locks). All three failed on the old code (the lock test on a throwaway PostgreSQL database). The order, payment, expiry and settlement test files (38 tests) also pass on PostgreSQL |
+| M-5 | `tests/Feature/AdminMonetizationPanelTest.php` (1 new) | With the reference lock made to time out, recording the payment raises the plain "being recorded" refusal the admin form shows, and the bill stays unpaid. Failed on the old code (raw lock timeout) |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
