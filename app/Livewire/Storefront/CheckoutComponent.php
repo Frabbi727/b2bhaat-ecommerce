@@ -7,6 +7,7 @@ use App\Events\Orders\OrderPlacedEvent;
 use App\Exceptions\FlashSaleUnavailableException;
 use App\Models\Coupon;
 use App\Models\CustomerAddress;
+use App\Models\Order;
 use App\Models\OrderStatus;
 use App\Models\PaymentMethod;
 use App\Models\PaymentStatus;
@@ -22,6 +23,7 @@ use App\Services\Orders\OrderSplitterService;
 use App\Services\Settings\StoreConfigurationService;
 use App\Services\Sms\OrderNotificationService;
 use Exception;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
@@ -242,6 +244,13 @@ class CheckoutComponent extends Component
                 'mfsSenderNumber.regex' => 'Enter an 11-digit mobile number, for example 01712345678.',
                 'mfsTransactionId.required' => "Enter the transaction ID from your {$paymentMethod->name} confirmation SMS.",
             ]);
+
+            // PAY-3: one TrxID pays for one order.
+            if (Order::trxIdAlreadyUsed($paymentMethod->slug, $this->mfsTransactionId)) {
+                $this->addError('mfsTransactionId', self::trxIdUsedMessage($paymentMethod->name));
+
+                return;
+            }
         }
 
         $cart = app(CartSessionService::class);
@@ -464,6 +473,12 @@ class CheckoutComponent extends Component
                 'order' => $order->order_number,
                 'phone' => $this->recipientPhone,
             ]);
+        } catch (UniqueConstraintViolationException $e) {
+            // Two orders with the same TrxID at the same moment: the second one is refused (PAY-3).
+            if (! str_contains($e->getMessage(), 'mfs_')) {
+                throw $e;
+            }
+            $this->addError('mfsTransactionId', self::trxIdUsedMessage($paymentMethod?->name ?? 'bKash/Nagad'));
         } catch (FlashSaleUnavailableException $e) {
             $this->errorMessage = $e->getMessage();
             if ($e->saleEnded) {
@@ -472,6 +487,11 @@ class CheckoutComponent extends Component
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
         }
+    }
+
+    private static function trxIdUsedMessage(string $gatewayName): string
+    {
+        return "This TrxID has already been used for another order. Check the transaction ID in your {$gatewayName} confirmation SMS.";
     }
 
     public function render()
