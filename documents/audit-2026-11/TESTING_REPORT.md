@@ -35,22 +35,23 @@ Each fix was test-first: the new test was run against the old code and failed, t
 
 # Testing Report: INV-8 product and price approval
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1189 tests, 1189 passed, 5856 assertions** (2026-11-09, branch `feat/product-approval`). The INV-8 files below add 157 of these tests.
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1204 tests, 1204 passed, 5918 assertions** (2026-11-09, branch `feat/product-approval`, after the final-review fixes in 595e5a4). The INV-8 files below add 168 of these tests; the final-review fixes added 15 tests in all, 4 of them in existing files of other features.
 
 | Test file | Tests | What is proven |
 |---|---|---|
-| `tests/Feature/Catalog/ApprovalSchemaTest.php` | 6 | Columns, table and defaults; the backfill marks existing products approved at their creation date |
+| `tests/Feature/Catalog/ApprovalSchemaTest.php` | 7 | Columns, table and defaults; the backfill marks existing products approved at their creation date and leaves `updated_at` alone; it runs in its own migration after the columns, outside a transaction, with a no-op `down()` |
 | `tests/Feature/Catalog/PriceSetTest.php` | 18 | Equal prices give equal fingerprints; ordering, rounding and limit edge cases |
 | `tests/Feature/Catalog/ProductApprovalLifecycleTest.php` | 20 | Submit, withdraw, approve and reject a new product; audit entries; notifications; a failing notification keeps the decision |
-| `tests/Feature/Catalog/ProductApprovalVisibilityTest.php` | 10 | Buyers see only approved products in listings, search, quick view, bundles and order splitting |
+| `tests/Feature/Catalog/ProductApprovalVisibilityTest.php` | 10 | Buyers see only approved products in listings, search (including header search), quick view, bundles and order splitting |
+| `tests/Feature/Catalog/FlashSaleApprovalVisibilityTest.php` | 4 | An unapproved product enrolled in a live sale is hidden on the sale page and the index; joining a sale refuses it; the seller picker leaves it out |
 | `tests/Feature/Catalog/ProductChangeRequestServiceTest.php` | 25 | Proposals, replacement by a newer change, approval and rejection, conflicts, rate and row limits, nothing deleted |
 | `tests/Feature/Catalog/SellerProductSubmissionTest.php` | 11 | Showing a product sends it for review; a failed send keeps it hidden |
 | `tests/Feature/Catalog/SellerProductEditApprovalTest.php` | 15 | Live-product price edits wait while stock and title are instant; unrelated saves keep a waiting change; a refused activation saves nothing, prices included |
-| `tests/Feature/Catalog/SellerApprovalScreensTest.php` | 18 | Badges, callout, Withdraw, history wording, escaping of seller-visible text |
-| `tests/Feature/Catalog/AdminApprovalQueueTest.php` | 28 | Both queues, approve and reject, bulk approve, conflicts, "never reviewed" filter, escaping, policy rules |
+| `tests/Feature/Catalog/SellerApprovalScreensTest.php` | 19 | Badges, callout, Withdraw, history wording (the reviewer shows as "B2Bhaat team"), escaping of seller-visible text |
+| `tests/Feature/Catalog/AdminApprovalQueueTest.php` | 33 | Both queues, approve and reject, bulk approve, conflicts, "never reviewed" filter, escaping, policy rules; the approve and not-approve modals show the product; a touch one second after opening makes approval stale; Approve and Not approve work from the Review slide-over footer |
 | `tests/Feature/Catalog/ProductApprovalSecurityTest.php` | 6 | A seller is refused on the admin pages and by the service; forged approval fields in the seller form or mass assignment do nothing; another seller's request cannot be seen or withdrawn; a guest is redirected |
 
-The existing tests of other features were touched only to give their test products an approved status (small changes in about a dozen files and `tests/TestCase.php`).
+The existing tests of other features were touched only to give their test products an approved status (small changes in about a dozen files and `tests/TestCase.php`). The final-review fixes also added tests to `CustomerWishlistTest` (2: an unapproved product cannot be saved from the catalog, and its wishlist row shows no title or price) and `ListingActivationGuardTest` (2: the listing guard reads visibility from the database), and approved the fixture products in `FlashSaleSubmissionValidationTest` and `SellerParticipationLifecycleWorkflowTest`.
 
 ## Not covered by automated tests
 

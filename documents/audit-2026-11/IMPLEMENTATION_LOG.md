@@ -27,7 +27,7 @@ There is one commit per issue. Each commit was test-first: a failing test, then 
 
 # Implementation Log: INV-8 product and price approval, branch `feat/product-approval`
 
-New products and price changes now wait for admin approval. No production commands were run. The three migrations were only run against the test database.
+New products and price changes now wait for admin approval. No production commands were run. The four migrations were only run against the test database.
 
 | # | Commit | What changed |
 |---|---|---|
@@ -41,13 +41,16 @@ New products and price changes now wait for admin approval. No production comman
 | 8 | fa2c15f, d06eb2a | Seller screens: review badges and filter, waiting-change callout, Withdraw, "Price changes" history, truthful tooltips |
 | 9 | 1d7b21b, 2d11752 | Admin queues (`approvals/products`, `approvals/changes`) with approve, reject, bulk approve, "never reviewed" filter on the moderation page. Notification text is escaped, and bulk approve skips products edited after the confirmation opened |
 | 10 | 06e9ef4 | A refused listing activation (plan limit or suspended store) now saves nothing, prices included. Before, the prices were already saved while the message said they were not |
-| 11 | final commit of this task | Approval security tests and these documents |
+| 11 | e6f5eb3 | Approval security tests and these documents |
+| 12 | 595e5a4 | Final-review fixes. Flash-sale pages show approved products only, the seller picker offers only approved products, and joining a sale refuses an unapproved one. The approve and not-approve modals show the product under review and pin its version when they open; the Review slide-over has Approve and Not approve in its footer. The wishlist refuses unapproved products and shows "No longer available" with no details for them. Sellers see "B2Bhaat team" as the reviewer. The listing guard reads visibility from the database. The backfill moved to its own migration (`153557`), run outside a transaction |
 
 ## Behaviour changes the owner should know about
 
 - **New products wait for review.** A seller who shows a new product sends it to the admin queue. Buyers see it only after approval. A rejected product shows the reason and can be re-sent.
 - **Price, channel and category changes on live products wait for review.** Buyers keep paying the current prices meanwhile. Stock and title changes stay instant.
 - **A newer change replaces the waiting one.** The earlier request is kept in history as "Replaced by a newer price". Nothing is ever deleted.
+- **Flash sales show approved products only.** A product waiting for review that was already enrolled in a sale stays off the sale pages until it is approved; a seller cannot enrol an unapproved product.
+- **Wishlist.** A saved product that is not on sale right now shows as "No longer available", with only a Remove button.
 - **Existing products were approved automatically on deploy**, dated at their creation. The moderation page has a "never reviewed" filter that lists them, in case you want to review the old catalog.
 - **Refused publishing saves nothing.** When the plan limit or a suspension stops a seller from showing a product, none of that edit is saved. The seller is told to untick "Visible" to save a draft.
 - **Who reviews.** Only `super_admin` can open the admin panel, so only they can reach the queues; see the open owner decision in the Deployment Guide.
