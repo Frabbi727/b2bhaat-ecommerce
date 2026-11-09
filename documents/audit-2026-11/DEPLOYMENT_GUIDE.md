@@ -199,3 +199,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## AUD-4 audit coverage
 - **Code only, no migration.** The audit log grows faster: one entry per account, bill, payment and setting change, and per report download. Account, finance and settings entries are written at once; seller entries go through the queue (needs the queue worker running, as before).
+
+## UX-5 seller terms
+- **Code only, no migration.** Sellers will see different commission figures in Store Settings: the rate they are actually charged, not the rate set at approval.
