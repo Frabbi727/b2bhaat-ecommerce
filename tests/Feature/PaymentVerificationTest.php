@@ -232,6 +232,28 @@ class PaymentVerificationTest extends TestCase
         $this->assertSame('refunded', $order->paymentStatus->slug);
     }
 
+    /**
+     * Wave 1 review M-4: a TrxID on an order whose payment expired unchecked, or was rejected, was never accepted, so
+     * the buyer can use it on a new order. The order keeps a record of what was entered.
+     */
+    public function test_a_trxid_from_an_expired_or_rejected_order_can_be_used_again(): void
+    {
+        $expired = $this->bkashOrder();
+        $this->travel(73)->hours();
+        $this->assertNotNull(app(PaymentVerificationService::class)->expireUnverified($expired, 72));
+
+        $rejected = $this->bkashOrder();
+        $this->assertNotSame($expired->id, $rejected->id, 'the same TrxID is accepted on a new order after expiry');
+        app(PaymentVerificationService::class)->rejectPayment($rejected, 'No such TrxID');
+
+        $third = $this->bkashOrder();
+        $this->assertNotSame($rejected->id, $third->id, 'the same TrxID is accepted on a new order after rejection');
+
+        $this->assertNull($expired->fresh()->mfs_transaction_id);
+        $this->assertSame('FAKE000000', $expired->fresh()->shipping_address['mfs_transaction_id']);
+        $this->assertSame('FAKE000000', $third->fresh()->mfs_transaction_id);
+    }
+
     public function test_books_owe_the_cancelled_part_to_the_buyer_not_the_seller(): void
     {
         $this->seed(AccountingChartOfAccountsSeeder::class);

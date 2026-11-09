@@ -64,6 +64,9 @@ class PaymentVerificationService
             $order->update([
                 'payment_status_id' => PaymentStatus::where('slug', 'failed')->firstOrFail()->id,
                 'order_status_id' => OrderStatus::where('slug', 'cancelled')->firstOrFail()->id,
+                // The TrxID was never accepted, so it is free for a new order; the address details keep what was
+                // entered (Wave 1 review M-4).
+                'mfs_transaction_id' => null,
             ]);
 
             return $order->fresh();
@@ -93,6 +96,9 @@ class PaymentVerificationService
             $order->update([
                 'payment_status_id' => PaymentStatus::where('slug', 'expired')->firstOrFail()->id,
                 'order_status_id' => OrderStatus::where('slug', 'cancelled')->firstOrFail()->id,
+                // The TrxID was never accepted, so it is free for a new order; the address details keep what was
+                // entered (Wave 1 review M-4).
+                'mfs_transaction_id' => null,
             ]);
 
             return $order->fresh();
