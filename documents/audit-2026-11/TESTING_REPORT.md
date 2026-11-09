@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1426 tests, 1417 passed, 9 skipped, 6526 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1427 tests, 1418 passed, 9 skipped, 6551 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -98,6 +98,7 @@ The existing tests of other features were touched only to give their test produc
 | M-1, M-2 | `tests/Feature/PaymentExpiryRunTest.php` (3) | With one order made to fail, the other overdue order still expires and the run reports "1 order(s) could not be cancelled" and exits with failure; with 1,001 overdue orders every one expires; on PostgreSQL, cancelling a parcel locks the order row before the parcel row (skipped on SQLite, which has no row locks). All three failed on the old code (the lock test on a throwaway PostgreSQL database). The order, payment, expiry and settlement test files (38 tests) also pass on PostgreSQL |
 | M-5 | `tests/Feature/AdminMonetizationPanelTest.php` (1 new) | With the reference lock made to time out, recording the payment raises the plain "being recorded" refusal the admin form shows, and the bill stays unpaid. Failed on the old code (raw lock timeout) |
 | M-7 | `tests/Feature/PerformanceIndexRebuildTest.php` (1, PostgreSQL only) | A failed unique build leaves `perf_users_role_id_index` invalid; running the migration again leaves a valid, non-unique index. Failed on the old code (still invalid). Run on a throwaway PostgreSQL database; skipped on SQLite before any migrations run. A full `migrate:fresh` on that throwaway database also succeeded |
+| M-8 | `tests/Feature/PublicActionThrottleTest.php` (1 new) | Opening a found order 12 times from its address-bar link always shows it and uses no tries. Failed on the old code (refused on the 11th). The SEC-6 tests still pass: 10 failed lookups still lock out even the right details |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 

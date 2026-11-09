@@ -195,6 +195,7 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 - **Code only, no migration.** Buyers with a switched-off option already in their cart see a message at checkout and must remove it.
 
 ## SEC-6 lookup and code limits
+- **M-8:** only lookups that find nothing count towards the order lookup limit.
 - **Code only, no migration.** The limits use the cache store (`CACHE_STORE=database` uses the existing `cache` table). Behind a proxy or load balancer, make sure `TrustProxies` is set so the real visitor address is used; otherwise every visitor shares one address and one limit.
 
 ## AUD-4 audit coverage
