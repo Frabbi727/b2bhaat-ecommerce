@@ -156,3 +156,7 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 - **Before deploy:** in **Seller Plans**, check exactly one active plan is marked **Default Free Plan for New Sellers** and that its listing limit is what you want sellers without a plan to have.
 - **After deploy (needs your go-ahead):** run `php artisan monetization:assign-default-plan --dry-run` to list the approved sellers with no plan, then `php artisan monetization:assign-default-plan` to put them on the default plan. It only adds subscriptions; it hides no products and is safe to run again.
 - **Rollback:** deploy the previous code. Subscriptions the command created stay; they are ordinary free-plan subscriptions.
+
+## MON-6 offline payments
+- **Code only, no migration.** The duplicate-reference check uses the cache lock store (`CACHE_STORE=database` uses the existing `cache_locks` table).
+- **Past duplicates:** references recorded before this deploy are not changed. To find any, run `SELECT payment_method, lower(trim(transaction_reference)), count(*) FROM seller_payments WHERE status = 'successful' AND transaction_reference IS NOT NULL GROUP BY 1, 2 HAVING count(*) > 1;`.
