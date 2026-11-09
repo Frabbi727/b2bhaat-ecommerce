@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1449 tests, 1440 passed, 9 skipped, 6618 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1451 tests, 1442 passed, 9 skipped, 6623 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -106,6 +106,7 @@ The existing tests of other features were touched only to give their test produc
 | FS-1, INV-7 | `tests/Feature/FlashUnitReleaseTest.php` (3) | An expired unpaid reservation returns its 2 flash units, and running the job twice doesn't return them again; a parcel returned by the courier returns its units; an approved return returns its units. All three failed on the old code |
 | FS-2 | `tests/Feature/FlashSaleApprovalConflictTest.php` (3) | Overlapping offer refused with a notice; bulk skips the clash and approves the rest; non-overlapping offer approved |
 | ACC-13 | `tests/Feature/Accounting/JournalNumberSequenceTest.php` (3) + PostgreSQL race run | Numbers run in order; a number already claimed is never reused; counter starts after existing journals. Scratch pgsql, 8 processes × 25 postings: old code 27/200 succeeded (rest unique violations), new code 200/200, numbers 1–200 with no duplicates |
+| ACC-2 | `tests/Feature/PaymentVerificationTest.php` (+2) | Mock checkout posts one `order_prepaid_received` journal and gateway clearing equals the order total; seeding in production leaves the mock inactive |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 

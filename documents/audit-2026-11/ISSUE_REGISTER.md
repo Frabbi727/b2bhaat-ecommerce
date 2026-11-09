@@ -99,7 +99,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | PAY-4 | Refunds are whole sub-order only | Line-level partial refunds |
 | FS-1 / INV-7 | Flash `units_sold` not returned on reject, expiry or return; expiry job can release twice | Central release helper; lock and re-check | Fixed (`d5b7dea`); payment rejection and PAY-2 expiry were already fixed in 4787c36 |
 | FS-2 | Admin approve bypasses the conflict checker | Approve through the service | Fixed (719e111) |
-| ACC-2 | Mock gateway marks orders paid with no journal (local/testing only) | Post the journal; never seed it as active |
+| ACC-2 | Mock gateway marks orders paid with no journal (local/testing only) | Post the journal; never seed it as active | Fixed (115060d) |
 | ACC-12 | No subscription deferral; any tax amount unbalances posting | **Needs legal/tax validation** |
 | ACC-13 | Journal-number race rolls back the business action | Sequence table or retry on collision | Fixed (13b48c2) |
 | ACC-14 | Entry date is always now(); no period close | Event dates; close-period UI |

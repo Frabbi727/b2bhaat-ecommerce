@@ -243,3 +243,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 ## ACC-13 (journal number counter)
 - **Migration:** creates `accounting_journal_sequences` (new empty table, additive, no lock on existing tables). No backfill: each month's row is created on first posting from the highest existing number.
 - Rollback: `php artisan migrate:rollback --step=1` drops the table; the old code ignores it.
+
+## ACC-2 (mock gateway)
+- Code only. The seeder change affects new installs only (`firstOrCreate` never edits an existing row). Optional check on production: `select slug, is_active from payment_methods where slug = 'mock_gateway';` and, if it is active, switch it off in the admin panel. Checkout already hides it outside local/testing.
