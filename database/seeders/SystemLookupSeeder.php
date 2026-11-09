@@ -46,6 +46,7 @@ class SystemLookupSeeder extends Seeder
             ['name' => 'Paid', 'slug' => 'paid', 'badge_color' => '#10B981', 'is_terminal' => true],
             ['name' => 'Failed', 'slug' => 'failed', 'badge_color' => '#EF4444', 'is_terminal' => true],
             ['name' => 'Refunded', 'slug' => 'refunded', 'badge_color' => '#6B7280', 'is_terminal' => true],
+            ['name' => 'Not Confirmed', 'slug' => 'expired', 'badge_color' => '#9CA3AF', 'is_terminal' => true],
         ];
         foreach ($paymentStatuses as $status) {
             PaymentStatus::firstOrCreate(['slug' => $status['slug']], $status);

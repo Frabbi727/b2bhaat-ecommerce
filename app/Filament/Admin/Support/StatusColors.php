@@ -25,6 +25,7 @@ class StatusColors
             'paid' => 'success',
             'awaiting_verification' => 'warning',
             'failed', 'refunded' => 'danger',
+            'expired' => 'gray',
             default => 'gray',
         };
     }

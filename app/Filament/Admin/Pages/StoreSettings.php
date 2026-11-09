@@ -77,6 +77,8 @@ class StoreSettings extends Page
 
             'low_stock_threshold' => $service->getLowStockThreshold(),
             'stock_reservation_ttl' => $service->getStockReservationTtl(),
+            'mfs_verification_reminder_hours' => $service->getMfsVerificationReminderHours(),
+            'mfs_verification_timeout_hours' => $service->getMfsVerificationTimeoutHours(),
             'allow_backorders' => $service->isBackorderAllowed(),
 
             'guest_checkout_enabled' => $service->isGuestCheckoutAllowed(),
@@ -328,6 +330,26 @@ class StoreSettings extends Page
                             ->helperText('Their stock goes back on sale. Cash on delivery orders and payments waiting for your check are not affected.')
                             ->required(),
 
+                        TextInput::make('mfs_verification_reminder_hours')
+                            ->label('Remind admins about unchecked bKash/Nagad payments after')
+                            ->numeric()
+                            ->integer()
+                            ->minValue(1)
+                            ->suffix('hours')
+                            ->helperText('Admins get a notification in the panel. Nothing is cancelled.')
+                            ->required(),
+
+                        TextInput::make('mfs_verification_timeout_hours')
+                            ->label('Cancel unchecked bKash/Nagad orders after')
+                            ->numeric()
+                            ->integer()
+                            ->minValue(1)
+                            ->gt('mfs_verification_reminder_hours')
+                            ->suffix('hours')
+                            ->helperText('The order is cancelled as "payment not confirmed" and its stock goes back on sale. The buyer is told by SMS to contact support with their TrxID if they did pay.')
+                            ->validationMessages(['gt' => 'Cancel after must be longer than the reminder time.'])
+                            ->required(),
+
                         Toggle::make('allow_backorders')
                             ->label('Allow orders when stock is 0')
                             ->helperText('When off, shoppers cannot add more than the seller has in stock.')
@@ -388,6 +410,8 @@ class StoreSettings extends Page
 
         $service->set('low_stock_threshold', (int) $state['low_stock_threshold'], 'inventory', 'integer');
         $service->set('stock_reservation_ttl', (int) $state['stock_reservation_ttl'], 'inventory', 'integer');
+        $service->set('mfs_verification_reminder_hours', (int) $state['mfs_verification_reminder_hours'], 'payments', 'integer');
+        $service->set('mfs_verification_timeout_hours', (int) $state['mfs_verification_timeout_hours'], 'payments', 'integer');
         $service->set('allow_backorders', (bool) $state['allow_backorders'], 'inventory', 'boolean');
 
         $service->set('guest_checkout_enabled', (bool) $state['guest_checkout_enabled'], 'checkout', 'boolean');

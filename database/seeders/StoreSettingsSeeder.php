@@ -38,6 +38,8 @@ class StoreSettingsSeeder extends Seeder
         // Group: inventory
         $this->seedDefault('low_stock_threshold', 10, 'inventory', 'integer');
         $this->seedDefault('stock_reservation_ttl', 15, 'inventory', 'integer');
+        $this->seedDefault('mfs_verification_reminder_hours', 12, 'payments', 'integer');
+        $this->seedDefault('mfs_verification_timeout_hours', 72, 'payments', 'integer');
         $this->seedDefault('allow_backorders', false, 'inventory', 'boolean');
 
         // Group: checkout

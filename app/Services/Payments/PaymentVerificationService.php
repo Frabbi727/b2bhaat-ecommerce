@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Payments;
 
 use App\Listeners\Orders\SendSellerNewConsignmentEmailListener;
+use App\Models\FlashSaleProduct;
 use App\Models\FulfillmentStatus;
 use App\Models\Order;
 use App\Models\OrderStatus;
@@ -36,7 +37,7 @@ class PaymentVerificationService
 
     /**
      * The TrxID could not be matched: fail the payment, cancel every consignment that has not shipped and put its
-     * reserved stock back (final review I4). Nothing was held in escrow, so no ledger change.
+     * reserved stock and flash-sale units back (final review I4, PAY-2). Nothing was held in escrow, so no ledger change.
      */
     public function rejectPayment(Order $order, string $reason): Order
     {
@@ -52,33 +53,11 @@ class PaymentVerificationService
                 throw new DomainException("Order #{$order->order_number} is not awaiting payment verification.");
             }
 
-            $cancelled = FulfillmentStatus::where('slug', 'cancelled')->firstOrFail();
-
-            foreach ($order->subOrders()->with('fulfillmentStatus', 'items')->lockForUpdate()->get() as $subOrder) {
-                if (! CourierStatusService::canTransition($subOrder->fulfillmentStatus?->slug, 'cancelled')) {
-                    continue;
-                }
-
-                $stockItems = $subOrder->items
-                    ->filter(fn ($item) => $item->variation_id)
-                    ->map(fn ($item) => ['variation_id' => $item->variation_id, 'quantity' => $item->quantity])
-                    ->values()
-                    ->all();
-                if ($stockItems !== []) {
-                    $this->stockReservationService->releaseStock($stockItems);
-                }
-
-                $subOrder->update(['fulfillment_status_id' => $cancelled->id]);
-
-                OrderTrackingLog::create([
-                    'sub_order_id' => $subOrder->id,
-                    'fulfillment_status_id' => $cancelled->id,
-                    'title' => 'Payment Rejected',
-                    'description' => "Payment could not be verified: {$reason}. Order cancelled and stock restored.",
-                    'hub_location' => 'Payments Desk',
-                    'logged_at' => now(),
-                ]);
-            }
+            $this->cancelUnpaidConsignments(
+                $order,
+                'Payment Rejected',
+                "Payment could not be verified: {$reason}. Order cancelled and stock restored.",
+            );
 
             $order->update([
                 'payment_status_id' => PaymentStatus::where('slug', 'failed')->firstOrFail()->id,
@@ -87,6 +66,89 @@ class PaymentVerificationService
 
             return $order->fresh();
         });
+    }
+
+    /**
+     * PAY-2: nobody checked the TrxID within the time limit, so the order is cancelled as "payment not confirmed"
+     * (not "rejected": the buyer may still have paid) and its stock and flash-sale units go back on sale. Returns null
+     * when the order was checked in the meantime or is not old enough yet.
+     */
+    public function expireUnverified(Order $order, int $timeoutHours): ?Order
+    {
+        $expired = DB::transaction(function () use ($order, $timeoutHours): ?Order {
+            $order = Order::whereKey($order->getKey())->lockForUpdate()->with('paymentStatus')->firstOrFail();
+
+            if ($order->paymentStatus?->slug !== 'awaiting_verification' || $order->created_at->gt(now()->subHours($timeoutHours))) {
+                return null;
+            }
+
+            $this->cancelUnpaidConsignments(
+                $order,
+                'Payment Not Confirmed',
+                "The payment was not confirmed within {$timeoutHours} hours, so the order was cancelled and its stock restored. If you paid, contact support with your TrxID for a refund.",
+            );
+
+            $order->update([
+                'payment_status_id' => PaymentStatus::where('slug', 'expired')->firstOrFail()->id,
+                'order_status_id' => OrderStatus::where('slug', 'cancelled')->firstOrFail()->id,
+            ]);
+
+            return $order->fresh();
+        });
+
+        if ($expired) {
+            DB::afterCommit(function () use ($expired): void {
+                try {
+                    app(OrderNotificationService::class)->sendPaymentNotConfirmed($expired);
+                } catch (\Throwable $exception) {
+                    Log::warning('Payment-not-confirmed SMS not sent: '.$exception->getMessage(), ['order_id' => $expired->id]);
+                }
+            });
+        }
+
+        return $expired;
+    }
+
+    /**
+     * Cancel every consignment of an unpaid order that has not shipped, and put its stock and flash-sale units back.
+     */
+    private function cancelUnpaidConsignments(Order $order, string $title, string $description): void
+    {
+        $cancelled = FulfillmentStatus::where('slug', 'cancelled')->firstOrFail();
+
+        foreach ($order->subOrders()->with('fulfillmentStatus', 'items')->lockForUpdate()->get() as $subOrder) {
+            if (! CourierStatusService::canTransition($subOrder->fulfillmentStatus?->slug, 'cancelled')) {
+                continue;
+            }
+
+            $stockItems = $subOrder->items
+                ->filter(fn ($item) => $item->variation_id)
+                ->map(fn ($item) => ['variation_id' => $item->variation_id, 'quantity' => $item->quantity])
+                ->values()
+                ->all();
+            if ($stockItems !== []) {
+                $this->stockReservationService->releaseStock($stockItems);
+            }
+
+            // The flash-sale units this order claimed are free for other buyers again.
+            foreach ($subOrder->items->filter(fn ($item) => $item->flash_sale_product_id) as $item) {
+                $offer = FlashSaleProduct::whereKey($item->flash_sale_product_id)->lockForUpdate()->first();
+                if ($offer) {
+                    $offer->update(['units_sold' => max(0, (int) $offer->units_sold - (int) $item->quantity)]);
+                }
+            }
+
+            $subOrder->update(['fulfillment_status_id' => $cancelled->id]);
+
+            OrderTrackingLog::create([
+                'sub_order_id' => $subOrder->id,
+                'fulfillment_status_id' => $cancelled->id,
+                'title' => $title,
+                'description' => $description,
+                'hub_location' => 'Payments Desk',
+                'logged_at' => now(),
+            ]);
+        }
     }
 
     public function markVerified(Order $order): Order

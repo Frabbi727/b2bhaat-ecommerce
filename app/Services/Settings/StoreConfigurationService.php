@@ -117,6 +117,22 @@ class StoreConfigurationService
     }
 
     /**
+     * Hours a bKash/Nagad payment may wait for an admin's check before admins are reminded (PAY-2).
+     */
+    public function getMfsVerificationReminderHours(): int
+    {
+        return max(1, (int) $this->get('mfs_verification_reminder_hours', 12));
+    }
+
+    /**
+     * Hours after which an unchecked bKash/Nagad order is cancelled as "payment not confirmed" (PAY-2).
+     */
+    public function getMfsVerificationTimeoutHours(): int
+    {
+        return max(1, (int) $this->get('mfs_verification_timeout_hours', 72));
+    }
+
+    /**
      * Check if customers can place orders without logged-in accounts.
      */
     public function isGuestCheckoutAllowed(): bool

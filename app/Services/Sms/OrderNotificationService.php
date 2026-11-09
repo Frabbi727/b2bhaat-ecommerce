@@ -252,6 +252,24 @@ class OrderNotificationService
     }
 
     /**
+     * PAY-2: tell the buyer their bKash/Nagad order was cancelled because the payment was not confirmed in time.
+     */
+    public function sendPaymentNotConfirmed(Order $order): bool
+    {
+        $phone = $this->extractCustomerPhone($order);
+        if (! $phone || ! PhoneNormalizer::isValid($phone)) {
+            return false;
+        }
+
+        $trxId = $order->shipping_address['mfs_transaction_id'] ?? null;
+        $trxText = $trxId ? " (TrxID {$trxId})" : '';
+        $message = "B2Bhaat: we could not confirm the payment for Order #{$order->order_number}{$trxText}, so the order was cancelled. If you paid, contact support with your TrxID and we will refund you.";
+        SendSmsJob::dispatch(PhoneNormalizer::normalize($phone), $message, 'payment_not_confirmed', bypassDeduplication: true);
+
+        return true;
+    }
+
+    /**
      * Tell a seller their plan's terms were changed and that their own terms stay until renewal (MON-2).
      */
     public function sendPlanTermsChangeNotice(User $seller, SellerSubscription $subscription, string $planName): bool
