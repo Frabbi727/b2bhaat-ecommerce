@@ -205,3 +205,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## I-1 settlement safety
 - **Code only, no migration.** Admins must now enter a reference for every gateway transfer. The duplicate check uses a cache lock (`CACHE_STORE=database` uses the existing `cache` table). Settlements recorded before this change have no stored comparison key, so their references are not checked; the feature is not yet on production, so none exist there.
+
+## M-3 cancelled orders verified later
+- **Code only, no migration.** Orders already left Cancelled / Paid by this path before the fix are not changed; find them with payment status Paid and order status Cancelled, and set them to Refunded after checking the refund rows.
