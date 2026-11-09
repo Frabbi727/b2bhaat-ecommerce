@@ -117,7 +117,7 @@
             <div class="flex items-center gap-3 shrink-0">
                 <!-- Wishlist -->
                 @php
-                    $wishlistCount = auth()->check() ? auth()->user()->wishlists()->count() : 0;
+                    $wishlistCount = auth()->check() ? auth()->user()->wishlists()->whereHas('product', fn ($query) => $query->sellable())->count() : 0;
                 @endphp
                 <a
                     href="{{ route('customer.wishlist') }}"

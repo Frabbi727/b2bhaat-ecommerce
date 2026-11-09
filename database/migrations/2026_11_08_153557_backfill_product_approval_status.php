@@ -12,8 +12,9 @@ return new class extends Migration
     public $withinTransaction = false;
 
     /**
-     * Self-guarding: any product that is no longer draft, or has an approval date, means the backfill already ran or
-     * the approval flow is live here, so nothing is touched. Right after the column migration every row is draft.
+     * Self-guarding: once the review workflow has been used here (anything submitted, rejected, reviewed or proposed),
+     * nothing is touched, so live drafts and waiting products are never grandfathered. Rows the backfill itself
+     * approved are not workflow activity, so a run that stopped partway simply resumes on the remaining drafts.
      */
     public function up(): void
     {
@@ -26,17 +27,23 @@ return new class extends Migration
 
     public static function approvalAlreadyLive(): bool
     {
-        return DB::table('products')
-            ->where(fn ($query) => $query->where('approval_status', '!=', 'draft')->orWhereNotNull('approved_at'))
+        $productActivity = DB::table('products')
+            ->where(fn ($query) => $query
+                ->whereIn('approval_status', ['pending_review', 'rejected'])
+                ->orWhereNotNull('submitted_at')
+                ->orWhereNotNull('rejected_at')
+                ->orWhereNotNull('approved_by_user_id'))
             ->exists();
+
+        return $productActivity || DB::table('product_change_requests')->exists();
     }
 
     /**
-     * Every product becomes approved, dated at creation, with no reviewer; `updated_at` is left untouched.
+     * Every draft product becomes approved, dated at creation, with no reviewer; `updated_at` is left untouched.
      */
     public static function backfill(): void
     {
-        DB::table('products')->orderBy('id')->select('id')->chunkById(1000, function ($products): void {
+        DB::table('products')->where('approval_status', 'draft')->orderBy('id')->select('id')->chunkById(1000, function ($products): void {
             DB::table('products')
                 ->whereIn('id', $products->pluck('id'))
                 ->update([

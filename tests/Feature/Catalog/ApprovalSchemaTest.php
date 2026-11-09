@@ -110,6 +110,19 @@ class ApprovalSchemaTest extends TestCase
         $this->assertNull(DB::table('products')->where('id', $draft->id)->value('approved_at'));
     }
 
+    public function test_the_backfill_migration_resumes_after_a_partial_run(): void
+    {
+        $done = $this->product();
+        $left = $this->product();
+        DB::table('products')->update(['approval_status' => 'draft', 'approved_at' => null]);
+        DB::table('products')->where('id', $done->id)->update(['approval_status' => 'approved', 'approved_at' => now()->subDay()]);
+
+        (require database_path('migrations/2026_11_08_153557_backfill_product_approval_status.php'))->up();
+
+        $this->assertSame('approved', DB::table('products')->where('id', $left->id)->value('approval_status'));
+        $this->assertTrue(now()->subDay()->isSameDay(Product::findOrFail($done->id)->approved_at));
+    }
+
     public function test_the_backfill_migration_approves_a_catalog_that_is_all_draft(): void
     {
         $first = $this->product();

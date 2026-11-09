@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Storefront;
 
+use App\Models\Product;
 use App\Models\Wishlist;
 use App\Services\Cart\CartSessionService;
 use App\Services\Logistics\ShippingCalculatorService;
@@ -60,10 +61,12 @@ class CartComponent extends Component
             return;
         }
 
-        Wishlist::firstOrCreate([
-            'user_id' => Auth::id(),
-            'product_id' => $productId,
-        ]);
+        if (Product::sellable()->whereKey($productId)->exists()) {
+            Wishlist::firstOrCreate([
+                'user_id' => Auth::id(),
+                'product_id' => $productId,
+            ]);
+        }
 
         $this->removeItem($key);
         $this->couponSuccessMessage = 'Item moved to your wishlist.';
