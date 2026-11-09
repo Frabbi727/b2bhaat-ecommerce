@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1431 tests, 1422 passed, 9 skipped, 6567 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1434 tests, 1425 passed, 9 skipped, 6573 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -100,6 +100,7 @@ The existing tests of other features were touched only to give their test produc
 | M-7 | `tests/Feature/PerformanceIndexRebuildTest.php` (1, PostgreSQL only) | A failed unique build leaves `perf_users_role_id_index` invalid; running the migration again leaves a valid, non-unique index. Failed on the old code (still invalid). Run on a throwaway PostgreSQL database; skipped on SQLite before any migrations run. A full `migrate:fresh` on that throwaway database also succeeded |
 | M-8 | `tests/Feature/PublicActionThrottleTest.php` (1 new) | Opening a found order 12 times from its address-bar link always shows it and uses no tries. Failed on the old code (refused on the 11th). The SEC-6 tests still pass: 10 failed lookups still lock out even the right details |
 | MON-8, MON-15, MON-16 | `tests/Feature/MonetizationOwnerDecisionsTest.php` (4) | Changing to a plan with the fee switch off raises a ৳0 bill that is settled and activates the plan; such a plan renews with no unpaid bill and no next payment shown; a category carrying a 50% rate does not change the commission charged; the admin sees the fees switch on, reads what off means, switches it off and the store setting follows. All four failed on the old code |
+| MON-12 | `tests/Feature/DelinquentSellerLimitsTest.php` (3) | An overdue bill blocks a payout, naming the bill, with the balance unchanged and no payout created; a bill not yet due doesn't block; a suspended seller's flash-sale entry is refused. The overdue and suspended cases failed on the old code |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 

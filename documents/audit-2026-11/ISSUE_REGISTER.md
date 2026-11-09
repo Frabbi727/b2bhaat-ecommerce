@@ -92,7 +92,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | ID | Title (evidence) | Solution summary | Status |
 |---|---|---|---|
 | MON-11 | Listing-pack purchase, COD-deficit invoice and seller TrxID submission are missing | Build the missing flows |
-| MON-12 | Delinquent sellers can withdraw; flash-sale submissions ignore suspension (`EscrowLedgerService.php:262`) | Block payouts while invoices are overdue |
+| MON-12 | Delinquent sellers can withdraw; flash-sale submissions ignore suspension (`EscrowLedgerService.php:262`) | Block payouts while invoices are overdue | Fixed (`5193504`) |
 | ORD-2 | Dispatch, self-delivery and booking write status without `canTransition` | Go through `CourierStatusService` with a lock |
 | ORD-3 | Checkout post-split steps are not atomic; coupon limit can be exceeded (`CouponService.php:80`) | Move them inside the transaction; lock the coupon |
 | ORD-4 | Splitter doesn't re-check seller suspension | Check `sellable` inside the transaction |

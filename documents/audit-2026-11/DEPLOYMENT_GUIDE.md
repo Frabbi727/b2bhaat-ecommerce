@@ -224,3 +224,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## MON-8, MON-15, MON-16 owner decisions
 - **Code only, no migration.** Check every plan's **Charge Subscription Fee** switch before deploying: plans with it off will stop billing at their next renewal or plan change. The marketplace fees switch now appears in Store Settings; it is on unless it was switched off in the database.
+
+## MON-12 overdue bills and suspended stores
+- **Code only, no migration.** Sellers with overdue bills will see their payout requests refused until they pay.
