@@ -19,4 +19,6 @@ enum AccountingEvent: string
     case PAYOUT_REJECTED = 'payout_rejected';
     case CUSTOMER_REFUND_DISBURSED = 'customer_refund_disbursed';
     case SHIPPING_RECLASSIFIED = 'shipping_reclassified';
+    case COURIER_COD_SETTLED = 'courier_cod_settled';
+    case GATEWAY_SETTLED = 'gateway_settled';
 }

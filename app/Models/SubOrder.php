@@ -69,6 +69,7 @@ class SubOrder extends Model
             'shipping_amount' => 'decimal:2',
             'is_self_delivered' => 'boolean',
             'handover_confirmed_at' => 'datetime',
+            'courier_settled_at' => 'datetime',
         ];
     }
 
