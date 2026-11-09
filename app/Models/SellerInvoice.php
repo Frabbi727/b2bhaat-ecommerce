@@ -44,7 +44,24 @@ class SellerInvoice extends Model
         'due_date',
         'paid_at',
         'metadata',
+        'billing_period_key',
     ];
+
+    /**
+     * The key that makes a renewal bill unique per subscription period (MON-10).
+     */
+    public static function renewalPeriodKey(int $subscriptionId, string $dueDate): string
+    {
+        return 'renewal:'.$subscriptionId.':'.substr($dueDate, 0, 10);
+    }
+
+    /**
+     * The key that allows one plan-change bill per pending subscription (MON-10).
+     */
+    public static function planChangeKey(int $subscriptionId): string
+    {
+        return 'plan_change:'.$subscriptionId;
+    }
 
     protected function casts(): array
     {

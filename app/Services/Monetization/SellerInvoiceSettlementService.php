@@ -75,6 +75,7 @@ class SellerInvoiceSettlementService
                 'status' => SellerInvoice::STATUS_UNPAID,
                 'due_date' => now()->toDateString(),
                 'metadata' => ['target_plan_id' => $plan->id, 'plan_name' => $plan->name],
+                'billing_period_key' => SellerInvoice::planChangeKey($pendingSubscription->id),
             ]);
         });
 

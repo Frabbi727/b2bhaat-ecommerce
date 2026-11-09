@@ -12,6 +12,7 @@ use App\Services\Settings\StoreConfigurationService;
 use App\Services\Sms\OrderNotificationService;
 use DomainException;
 use Illuminate\Console\Command;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
@@ -59,19 +60,35 @@ class MonetizationProcessRenewalsCommand extends Command
             $renewalTerms = $subscription->plan ? SellerSubscription::termsFromPlan($subscription->plan) : null;
             $price = $subscription->custom_subscription_price ?? $renewalTerms['term_subscription_price'] ?? $subscription->termSubscriptionPrice();
 
+            // One bill per subscription period, even if the command runs twice (MON-10).
+            $periodKey = SellerInvoice::renewalPeriodKey($subscription->id, $subscription->ends_at->toDateString());
+            $existingInvoice ??= SellerInvoice::where('billing_period_key', $periodKey)->first();
+
+            if ($existingInvoice && $existingInvoice->status !== SellerInvoice::STATUS_UNPAID && (float) $price > 0.00) {
+                $this->warn("Subscription #{$subscription->id}: this period is already billed (#{$existingInvoice->invoice_number}, {$existingInvoice->status}); no new bill raised.");
+
+                continue;
+            }
+
             if (! $existingInvoice) {
-                $invoice = SellerInvoice::create([
-                    'invoice_number' => 'SINV-'.date('Ymd').'-'.strtoupper(Str::random(6)),
-                    'seller_id' => $seller->id,
-                    'subscription_id' => $subscription->id,
-                    'invoice_type' => SellerInvoice::TYPE_SUBSCRIPTION_FEE,
-                    'subtotal' => (float) $price,
-                    'total_amount' => (float) $price,
-                    'status' => (float) $price <= 0.00 ? SellerInvoice::STATUS_PAID : SellerInvoice::STATUS_UNPAID,
-                    'due_date' => $subscription->ends_at->toDateString(),
-                    'paid_at' => (float) $price <= 0.00 ? now() : null,
-                    'metadata' => $renewalTerms ? ['renewal_terms' => Arr::except($renewalTerms, 'terms_captured_at')] : null,
-                ]);
+                try {
+                    $invoice = SellerInvoice::create([
+                        'invoice_number' => 'SINV-'.date('Ymd').'-'.strtoupper(Str::random(6)),
+                        'seller_id' => $seller->id,
+                        'subscription_id' => $subscription->id,
+                        'invoice_type' => SellerInvoice::TYPE_SUBSCRIPTION_FEE,
+                        'subtotal' => (float) $price,
+                        'total_amount' => (float) $price,
+                        'status' => (float) $price <= 0.00 ? SellerInvoice::STATUS_PAID : SellerInvoice::STATUS_UNPAID,
+                        'due_date' => $subscription->ends_at->toDateString(),
+                        'paid_at' => (float) $price <= 0.00 ? now() : null,
+                        'metadata' => $renewalTerms ? ['renewal_terms' => Arr::except($renewalTerms, 'terms_captured_at')] : null,
+                        'billing_period_key' => $periodKey,
+                    ]);
+                } catch (UniqueConstraintViolationException) {
+                    // Another run billed this period a moment ago; use that bill.
+                    $invoice = SellerInvoice::where('billing_period_key', $periodKey)->firstOrFail();
+                }
             } else {
                 $invoice = $existingInvoice;
             }
