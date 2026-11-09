@@ -9,10 +9,12 @@ use App\Filament\Admin\Resources\SellerPlans\Pages\CreateSellerPlan;
 use App\Filament\Admin\Resources\SellerPlans\Pages\ListSellerPlans;
 use App\Models\Role;
 use App\Models\SellerInvoice;
+use App\Models\SellerPayment;
 use App\Models\SellerPlan;
 use App\Models\SellerProfile;
 use App\Models\SellerSubscription;
 use App\Models\User;
+use App\Services\Monetization\SellerInvoiceSettlementService;
 use Database\Seeders\AccountingChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -233,5 +235,105 @@ class AdminMonetizationPanelTest extends TestCase
             ->assertTableActionHidden('extendGrace', $this->profile);
 
         $this->assertSame('active', $this->profile->fresh()->monetization_status);
+    }
+
+    private function unpaidBill(string $number, float $amount): SellerInvoice
+    {
+        return SellerInvoice::create([
+            'invoice_number' => $number,
+            'seller_id' => $this->seller->id,
+            'subscription_id' => $this->subscription->id,
+            'invoice_type' => 'subscription_fee',
+            'subtotal' => $amount,
+            'total_amount' => $amount,
+            'status' => 'unpaid',
+            'due_date' => now()->toDateString(),
+        ]);
+    }
+
+    /**
+     * MON-6: the admin chooses which bill the payment is for.
+     */
+    public function test_offline_payment_pays_the_bill_the_admin_chose(): void
+    {
+        $this->actingAs($this->admin);
+        $older = $this->unpaidBill('SINV-OLDER', 499.00);
+        $newer = $this->unpaidBill('SINV-NEWER', 150.00);
+
+        Livewire::test(ListSellerMonetizations::class)
+            ->callTableAction('recordOfflinePayment', $this->profile, [
+                'invoice_id' => $older->id,
+                'payment_method' => 'bkash',
+                'amount' => 499.00,
+                'transaction_reference' => 'BKASH-OLDER-1',
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame('paid', $older->fresh()->status);
+        $this->assertSame('unpaid', $newer->fresh()->status);
+    }
+
+    /**
+     * MON-6: no part-payments; the amount must equal the bill.
+     */
+    public function test_offline_payment_of_the_wrong_amount_records_nothing(): void
+    {
+        $this->actingAs($this->admin);
+        $bill = $this->unpaidBill('SINV-PART', 499.00);
+
+        Livewire::test(ListSellerMonetizations::class)
+            ->callTableAction('recordOfflinePayment', $this->profile, [
+                'invoice_id' => $bill->id,
+                'payment_method' => 'bkash',
+                'amount' => 300.00,
+                'transaction_reference' => 'BKASH-PART-1',
+            ])
+            ->assertNotified('Payment not recorded');
+
+        $this->assertSame('unpaid', $bill->fresh()->status);
+        $this->assertDatabaseMissing('seller_payments', ['transaction_reference' => 'BKASH-PART-1']);
+    }
+
+    /**
+     * MON-6: one bKash, Nagad or bank reference pays one bill.
+     */
+    public function test_a_reference_already_used_is_refused(): void
+    {
+        $this->actingAs($this->admin);
+        $first = $this->unpaidBill('SINV-REF-1', 499.00);
+        $second = $this->unpaidBill('SINV-REF-2', 499.00);
+        $service = app(SellerInvoiceSettlementService::class);
+
+        $service->recordOfflinePayment($this->seller, $first->id, ['payment_method' => 'bkash', 'amount' => 499.00, 'transaction_reference' => 'TRX9A8B7C'], $this->admin);
+
+        try {
+            $service->recordOfflinePayment($this->seller, $second->id, ['payment_method' => 'bkash', 'amount' => 499.00, 'transaction_reference' => ' trx9a8b7c '], $this->admin);
+            $this->fail('A reused reference was accepted.');
+        } catch (\DomainException $exception) {
+            $this->assertStringContainsString('SINV-REF-1', $exception->getMessage());
+        }
+
+        $this->assertSame('unpaid', $second->fresh()->status);
+        $this->assertSame(1, SellerPayment::where('payment_method', 'bkash')->count());
+    }
+
+    /**
+     * MON-6: a waiver covers the whole bill and needs no amount or reference.
+     */
+    public function test_a_waiver_covers_the_whole_bill(): void
+    {
+        $this->actingAs($this->admin);
+        $bill = $this->unpaidBill('SINV-WAIVE', 499.00);
+
+        Livewire::test(ListSellerMonetizations::class)
+            ->callTableAction('recordOfflinePayment', $this->profile, [
+                'invoice_id' => $bill->id,
+                'payment_method' => 'admin_waiver',
+                'notes' => 'Launch goodwill',
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame('paid', $bill->fresh()->status);
+        $this->assertDatabaseHas('seller_payments', ['invoice_id' => $bill->id, 'payment_method' => 'admin_waiver', 'amount' => 499.00]);
     }
 }

@@ -19,6 +19,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -143,6 +144,13 @@ class SellerMonetizationResource extends Resource
                         ->icon(Heroicon::OutlinedCurrencyBangladeshi)
                         ->color('primary')
                         ->schema([
+                            Select::make('invoice_id')
+                                ->label('Bill being paid')
+                                ->options(fn (SellerProfile $record): array => self::unpaidBillOptions($record))
+                                ->default(fn (SellerProfile $record): ?int => array_key_first(self::unpaidBillOptions($record)))
+                                ->helperText('The payment must be for the full bill amount.')
+                                ->required(),
+
                             Select::make('payment_method')
                                 ->label('Payment Channel')
                                 ->options([
@@ -151,17 +159,22 @@ class SellerMonetizationResource extends Resource
                                     'bank_wire' => 'Bank Wire / Deposit',
                                     'admin_waiver' => 'Admin Fee Waiver',
                                 ])
+                                ->live()
                                 ->required(),
 
                             TextInput::make('amount')
                                 ->label('Amount Received (৳)')
                                 ->numeric()
                                 ->prefix('৳')
-                                ->required(),
+                                ->hidden(fn (Get $get): bool => $get('payment_method') === 'admin_waiver')
+                                ->required(fn (Get $get): bool => $get('payment_method') !== 'admin_waiver'),
 
                             TextInput::make('transaction_reference')
                                 ->label('TrxID / Deposit Slip #')
-                                ->required(),
+                                ->helperText('Each reference can be recorded only once.')
+                                ->maxLength(100)
+                                ->hidden(fn (Get $get): bool => $get('payment_method') === 'admin_waiver')
+                                ->required(fn (Get $get): bool => $get('payment_method') !== 'admin_waiver'),
 
                             Textarea::make('notes')
                                 ->label('Admin Verification Notes')
@@ -175,8 +188,7 @@ class SellerMonetizationResource extends Resource
 
                             $invoice = SellerInvoice::where('seller_id', $seller->id)
                                 ->where('status', SellerInvoice::STATUS_UNPAID)
-                                ->latest('id')
-                                ->first();
+                                ->find($data['invoice_id'] ?? null);
 
                             if (! $invoice) {
                                 Notification::make()
@@ -231,5 +243,32 @@ class SellerMonetizationResource extends Resource
         return [
             'index' => ListSellerMonetizations::route('/'),
         ];
+    }
+
+    /**
+     * The seller's unpaid bills, newest first, labelled with number, type, amount and due date (MON-6).
+     *
+     * @return array<int, string>
+     */
+    public static function unpaidBillOptions(SellerProfile $record): array
+    {
+        if (! $record->user_id) {
+            return [];
+        }
+
+        return SellerInvoice::where('seller_id', $record->user_id)
+            ->where('status', SellerInvoice::STATUS_UNPAID)
+            ->latest('id')
+            ->get()
+            ->mapWithKeys(fn (SellerInvoice $invoice): array => [
+                $invoice->id => sprintf(
+                    '#%s · %s · ৳%s · due %s',
+                    $invoice->invoice_number,
+                    str_replace('_', ' ', (string) $invoice->invoice_type),
+                    number_format((float) $invoice->total_amount, 2),
+                    $invoice->due_date?->format('d M Y') ?? '—',
+                ),
+            ])
+            ->all();
     }
 }

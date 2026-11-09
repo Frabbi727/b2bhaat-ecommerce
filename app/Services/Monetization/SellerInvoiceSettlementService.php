@@ -12,6 +12,7 @@ use App\Models\SellerWallet;
 use App\Models\User;
 use App\Models\WalletTransaction;
 use DomainException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -136,19 +137,69 @@ class SellerInvoiceSettlementService
      * Record a payment an admin received outside the platform (bKash, Nagad, bank, waiver) against an
      * unpaid bill, then give the seller what the bill was for.
      *
-     * @param  array{payment_method: string, amount: float|int|string, transaction_reference: string, notes?: string|null}  $payment
+     * The amount must equal the bill (no part-payments), and a bKash, Nagad or bank reference can pay only one bill (MON-6).
+     *
+     * @param  array{payment_method: string, amount?: float|int|string|null, transaction_reference?: string|null, notes?: string|null}  $payment
      */
     public function recordOfflinePayment(User $seller, int $invoiceId, array $payment, User $admin): SellerInvoice
     {
+        // Two admins entering the same reference at once: the second waits, then sees it as already used.
+        $lockKey = 'seller-payment-reference:'.md5((string) $payment['payment_method'].'|'.mb_strtolower(trim((string) ($payment['transaction_reference'] ?? ''))));
+
+        return Cache::lock($lockKey, 15)->block(10, fn (): SellerInvoice => $this->recordOfflinePaymentLocked($seller, $invoiceId, $payment, $admin));
+    }
+
+    /**
+     * @param  array{payment_method: string, amount?: float|int|string|null, transaction_reference?: string|null, notes?: string|null}  $payment
+     */
+    private function recordOfflinePaymentLocked(User $seller, int $invoiceId, array $payment, User $admin): SellerInvoice
+    {
         return DB::transaction(function () use ($seller, $invoiceId, $payment, $admin): SellerInvoice {
             $invoice = $this->lockUnpaidInvoice($seller, $invoiceId);
+            $method = (string) $payment['payment_method'];
+            $billTotal = round((float) $invoice->total_amount, 2);
+            $isWaiver = $method === SellerPayment::METHOD_ADMIN_WAIVER;
+            $reference = trim((string) ($payment['transaction_reference'] ?? ''));
+
+            // MON-6: a bill is settled by one payment of exactly its amount; a waiver covers the whole bill.
+            $amount = $isWaiver ? $billTotal : round((float) ($payment['amount'] ?? 0), 2);
+            if (bccomp(sprintf('%.2f', $amount), sprintf('%.2f', $billTotal), 2) !== 0) {
+                throw new DomainException(sprintf(
+                    'Bill #%s is ৳%s, but ৳%s was entered. Record the full amount, or waive or reduce the bill first. Nothing was recorded.',
+                    $invoice->invoice_number,
+                    number_format($billTotal, 2),
+                    number_format($amount, 2),
+                ));
+            }
+
+            if (! $isWaiver) {
+                if ($reference === '') {
+                    throw new DomainException('Enter the TrxID or deposit slip number. Nothing was recorded.');
+                }
+
+                // MON-6: the same bKash, Nagad or bank reference can only pay one bill.
+                $usedOn = SellerPayment::query()
+                    ->where('payment_method', $method)
+                    ->whereRaw('LOWER(TRIM(transaction_reference)) = ?', [mb_strtolower($reference)])
+                    ->where('status', SellerPayment::STATUS_SUCCESSFUL)
+                    ->with('invoice:id,invoice_number')
+                    ->first();
+
+                if ($usedOn) {
+                    throw new DomainException(sprintf(
+                        'Reference %s was already recorded for bill #%s. Check the reference; nothing was recorded.',
+                        $reference,
+                        $usedOn->invoice?->invoice_number ?? $usedOn->invoice_id,
+                    ));
+                }
+            }
 
             SellerPayment::create([
                 'invoice_id' => $invoice->id,
                 'seller_id' => $seller->id,
-                'amount' => (float) $payment['amount'],
-                'payment_method' => $payment['payment_method'],
-                'transaction_reference' => $payment['transaction_reference'],
+                'amount' => $amount,
+                'payment_method' => $method,
+                'transaction_reference' => $reference !== '' ? $reference : null,
                 'status' => SellerPayment::STATUS_SUCCESSFUL,
                 'verified_by_user_id' => $admin->id,
                 'verified_at' => now(),
