@@ -252,3 +252,7 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## SEC-10 (mass assignment)
 - Code only. Any custom script that sets `blocked_at`, `blocked_reason`, `views_count`, `sales_count` or `was_active_before_suspension` with `update()`/`create()` must use `forceFill()` (or a query-builder update).
+
+## SEC-8 (link expiry)
+- New optional env keys `ORDER_TRACKING_LINK_DAYS` (default 90) and `ORDER_INVOICE_LINK_DAYS` (default 365). Run `php artisan config:cache` after setting them.
+- **Behaviour change to tell support:** SMS links for orders older than these windows stop working; buyers sign in or use order number + phone.

@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1455 tests, 1446 passed, 9 skipped, 6641 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1458 tests, 1449 passed, 9 skipped, 6648 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -109,6 +109,7 @@ The existing tests of other features were touched only to give their test produc
 | ACC-2 | `tests/Feature/PaymentVerificationTest.php` (+2) | Mock checkout posts one `order_prepaid_received` journal and gateway clearing equals the order total; seeding in production leaves the mock inactive |
 | SEC-9 | `tests/Feature/SellerInvoiceScopeTest.php` (2) | Seller sees own package and package total, not the other seller's package or the order total; buyer and admin still see everything |
 | SEC-10 | `tests/Feature/MassAssignmentHardeningTest.php` (2) | Forged product block/counter/suspension fields ignored by `update()`; a seller forging `monetization_status`, commission or approval in Store Settings changes nothing |
+| SEC-8 | `tests/Feature/TokenLinkExpiryTest.php` (3) | Links work inside the window; an old tracking link no longer opens the order; an old invoice link returns 410 while the signed-in buyer still sees it |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
