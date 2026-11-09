@@ -75,7 +75,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | INV-5 | Inventory | Inactive variation is still sold through wholesale (`CartSessionService::putItem`) | Check `is_active` in the cart and in reservation | – | Fixed (`552b49c`) |
 | INV-8 | Inventory | Products go live on save | **Owner decision:** every new product and every price change waits for admin approval (status, queue, notifications) | INV-1 | **Fixed (5ba25b2..06e9ef4)** |
 | INV-8b | Notifications | Found while testing UX-ACC-1. The `notifications` table added for INV-8 stores `data` as text, so on PostgreSQL the panels' notification bell query (`data->>'format'`) fails and every admin and seller page returns 500 (`2026_11_08_153556_create_notifications_table.php`). SQLite tests could not see it | Convert `data` to JSON on PostgreSQL | INV-8 | **Fixed (e215b9e)** |
-| SEC-6 | Security | Livewire tracking and OTP actions are not throttled | `RateLimiter` inside the actions | SEC-7 | Open |
+| SEC-6 | Security | Livewire tracking and OTP actions are not throttled | `RateLimiter` inside the actions | SEC-7 | Fixed (`94d5ffa`) |
 | PERF-1 | Performance | No indexes on hot foreign keys or status columns on PostgreSQL | Index migration | – | **Fixed (f0a554d)** |
 
 ## P2 (Wave 2)

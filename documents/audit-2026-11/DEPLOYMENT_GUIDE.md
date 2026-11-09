@@ -193,3 +193,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## INV-5 switched-off options
 - **Code only, no migration.** Buyers with a switched-off option already in their cart see a message at checkout and must remove it.
+
+## SEC-6 lookup and code limits
+- **Code only, no migration.** The limits use the cache store (`CACHE_STORE=database` uses the existing `cache` table). Behind a proxy or load balancer, make sure `TrustProxies` is set so the real visitor address is used; otherwise every visitor shares one address and one limit.
