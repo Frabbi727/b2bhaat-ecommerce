@@ -115,7 +115,8 @@ class OrderTracking extends Component
             return;
         }
 
-        // SEC-6: order numbers and phones can't be guessed by trying again and again
+        // SEC-6: order numbers and phones can't be guessed by trying again and again. Only lookups that find nothing
+        // count, so refreshing a found order or reloading it after a cancel never uses up tries (Wave 1 review M-8).
         $throttleKey = 'order-lookup:'.(request()->ip() ?? 'unknown');
         if (RateLimiter::tooManyAttempts($throttleKey, self::LOOKUPS_PER_WINDOW)) {
             $minutes = (int) max(1, ceil(RateLimiter::availableIn($throttleKey) / 60));
@@ -123,7 +124,6 @@ class OrderTracking extends Component
 
             return;
         }
-        RateLimiter::hit($throttleKey, self::LOOKUP_WINDOW_SECONDS);
 
         $query = Order::with([
             'orderStatus',
@@ -156,6 +156,7 @@ class OrderTracking extends Component
         $found = $query->first();
 
         if (! $found) {
+            RateLimiter::hit($throttleKey, self::LOOKUP_WINDOW_SECONDS);
             $this->searchError = "No matching order found for #{$trimmedOrderNumber}. Please check details.";
 
             return;

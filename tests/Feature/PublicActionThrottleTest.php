@@ -65,6 +65,25 @@ class PublicActionThrottleTest extends TestCase
             ->assertSet('verifiedAccess', true);
     }
 
+    /**
+     * Wave 1 review M-8: refreshing a found order (its details are in the address bar) is not guessing, so it never
+     * uses up the lookup limit.
+     */
+    public function test_refreshing_a_found_order_does_not_use_up_lookups(): void
+    {
+        $order = Order::firstOrFail();
+        $params = ['order' => $order->order_number, 'phone' => (string) $order->shipping_address['recipient_phone']];
+
+        for ($i = 0; $i < 12; $i++) {
+            Livewire::withQueryParams($params)
+                ->test(OrderTracking::class)
+                ->assertSet('searchError', '')
+                ->assertSet('verifiedAccess', true);
+        }
+
+        $this->assertSame(0, RateLimiter::attempts('order-lookup:127.0.0.1'));
+    }
+
     public function test_five_wrong_codes_lock_the_phone_even_with_a_new_code(): void
     {
         $otp = app(OtpService::class);
