@@ -99,17 +99,25 @@ class CodDeliveryJournalHandler
         return $this->journalPostingService->post($entryData);
     }
 
+    /**
+     * Self-collected COD: the seller kept the buyer's cash, so the seller owes the platform its commission, and the
+     * platform owes the seller the coupon share it funded. This mirrors the wallet charge in
+     * `EscrowLedgerService::settleSelfCollectedCod` (commission − coupon share), so wallet and ledger agree (ACC-3).
+     */
     public function recordSelfDeliveredCod(SubOrder $subOrder): ?AccountingJournalEntry
     {
         $order = $subOrder->order;
         $commission = round((float) $subOrder->commission_amount, 2);
+        $allocatedDiscount = round((float) $subOrder->allocatedDiscount(), 2);
 
-        if ($commission <= 0.0) {
+        if ($commission <= 0.0 && $allocatedDiscount <= 0.0) {
             return null;
         }
 
-        $lines = [
-            new JournalLineData(
+        $lines = [];
+
+        if ($commission > 0.0) {
+            $lines[] = new JournalLineData(
                 accountSlug: 'seller_wallet_payable',
                 debit: $commission,
                 credit: 0.00,
@@ -117,8 +125,8 @@ class CodDeliveryJournalHandler
                 subOrderId: $subOrder->id,
                 orderId: $order?->id,
                 narration: "Platform commission charged on self-collected COD for Sub-Order #{$subOrder->sub_order_number}",
-            ),
-            new JournalLineData(
+            );
+            $lines[] = new JournalLineData(
                 accountSlug: 'commission_revenue',
                 debit: 0.00,
                 credit: $commission,
@@ -126,8 +134,28 @@ class CodDeliveryJournalHandler
                 subOrderId: $subOrder->id,
                 orderId: $order?->id,
                 narration: "Platform commission earned on self-collected COD for Sub-Order #{$subOrder->sub_order_number}",
-            ),
-        ];
+            );
+        }
+
+        if ($allocatedDiscount > 0.0) {
+            $lines[] = new JournalLineData(
+                accountSlug: 'promotional_discount_expense',
+                debit: $allocatedDiscount,
+                credit: 0.00,
+                subOrderId: $subOrder->id,
+                orderId: $order?->id,
+                narration: "Platform-funded coupon share for self-collected COD Sub-Order #{$subOrder->sub_order_number}",
+            );
+            $lines[] = new JournalLineData(
+                accountSlug: 'seller_wallet_payable',
+                debit: 0.00,
+                credit: $allocatedDiscount,
+                sellerId: $subOrder->seller_id,
+                subOrderId: $subOrder->id,
+                orderId: $order?->id,
+                narration: "Coupon share owed to the seller for Sub-Order #{$subOrder->sub_order_number}",
+            );
+        }
 
         $entryData = new JournalEntryData(
             entryDate: now()->toDateString(),

@@ -65,6 +65,7 @@ class EscrowLedgerService
                 $wallet->refresh();
                 $this->record($wallet, $subOrder, WalletTransaction::TYPE_ESCROW_HOLD_ADJUSTMENT, $shortfall,
                     "Self-delivery fee added to escrow for Sub-Order #{$subOrder->sub_order_number}");
+                $this->escrowReleaseJournalHandler->recordSelfDeliveryFeeTopUp($subOrder, $shortfall);
             }
 
             return $hold;

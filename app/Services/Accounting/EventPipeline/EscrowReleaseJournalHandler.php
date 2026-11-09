@@ -65,4 +65,47 @@ class EscrowReleaseJournalHandler
 
         return $this->journalPostingService->post($entryData);
     }
+
+    /**
+     * A prepaid parcel switched to self-delivery after payment: the delivery fee the platform booked as shipping
+     * revenue now belongs to the seller and joins their escrow (D6). Mirrors the wallet top-up in
+     * `EscrowLedgerService::holdInEscrow` (ACC-4).
+     */
+    public function recordSelfDeliveryFeeTopUp(SubOrder $subOrder, float $amount): ?AccountingJournalEntry
+    {
+        $amount = round($amount, 2);
+        if ($amount <= 0.0) {
+            return null;
+        }
+
+        $orderId = $subOrder->order?->id ?? $subOrder->parent_order_id;
+
+        return $this->journalPostingService->post(new JournalEntryData(
+            entryDate: now()->toDateString(),
+            financialEvent: AccountingEvent::SELF_DELIVERY_FEE_MOVED->value,
+            idempotencyKey: "suborder_self_delivery_fee_{$subOrder->id}",
+            description: "Delivery fee moved to the seller for self-delivered Sub-Order #{$subOrder->sub_order_number}",
+            lines: [
+                new JournalLineData(
+                    accountSlug: 'shipping_service_revenue',
+                    debit: $amount,
+                    credit: 0.00,
+                    subOrderId: $subOrder->id,
+                    orderId: $orderId,
+                    narration: "Delivery fee no longer earned by the platform for Sub-Order #{$subOrder->sub_order_number}",
+                ),
+                new JournalLineData(
+                    accountSlug: 'seller_escrow_payable',
+                    debit: 0.00,
+                    credit: $amount,
+                    sellerId: $subOrder->seller_id,
+                    subOrderId: $subOrder->id,
+                    orderId: $orderId,
+                    narration: "Self-delivery fee added to escrow for Sub-Order #{$subOrder->sub_order_number}",
+                ),
+            ],
+            referenceType: SubOrder::class,
+            referenceId: $subOrder->id,
+        ));
+    }
 }
