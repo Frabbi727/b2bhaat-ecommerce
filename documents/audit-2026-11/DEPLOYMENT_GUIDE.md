@@ -214,3 +214,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## M-6 deferred commission account code
 - **No new migration;** the ACC-11 migration changed before release. Watch its output: if it prints that the account was added under a code other than 2070, do **not** run `AccountingChartOfAccountsSeeder` on that database. The seeder matches accounts by code and would overwrite the admin's 2070 account.
+
+## M-1, M-2 lock order and expiry run
+- **Code only, no migration.** `payments:expire-unverified` can now exit with a failure while still expiring the other orders; watch the scheduler log for "could not be cancelled" and the order numbers it lists.
