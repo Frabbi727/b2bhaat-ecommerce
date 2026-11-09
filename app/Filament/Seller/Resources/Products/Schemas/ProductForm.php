@@ -2,6 +2,8 @@
 
 namespace App\Filament\Seller\Resources\Products\Schemas;
 
+use App\Enums\ProductApprovalStatus;
+use App\Filament\Seller\Resources\Products\Pages\EditProduct;
 use App\Models\AttributeValue;
 use App\Models\Brand;
 use App\Models\Category;
@@ -155,7 +157,19 @@ class ProductForm
             ->description(fn (Get $get): string => self::pricingGuidance($get('sales_channel_id')))
             ->schema([
                 Repeater::make('prices')
-                    ->relationship('prices')
+                    // Variation-specific rows have no field here; scoping keeps them out of the form, so saving can
+                    // never delete them or drop their variation_id. They are carried over unchanged by EditProduct.
+                    ->relationship('prices', fn (Builder $query): Builder => $query->whereNull('variation_id'))
+                    // An approved product's live prices only change through an approved change request
+                    ->saveRelationshipsUsing(function (Repeater $component): void {
+                        $livewire = $component->getLivewire();
+
+                        if ($livewire instanceof EditProduct && $livewire->isHoldingPriceChanges()) {
+                            return;
+                        }
+
+                        $component->saveToRelationship();
+                    })
                     ->hiddenLabel()
                     ->rule(fn (Get $get): Closure => self::pricesMatchChannelRule($get('sales_channel_id')))
                     ->table([
@@ -214,6 +228,14 @@ class ProductForm
                         ->afterStateHydrated(fn (TextInput $component, ?Model $record) => $record ? $component->state($record->buy_price ?? 0) : null)
                         ->helperText('Private. Used only for your profit reports; buyers never see it.'),
                 ]),
+
+                Textarea::make('change_note')
+                    ->label('Note for our team (optional)')
+                    ->rows(2)
+                    ->maxLength(500)
+                    ->dehydrated(false)
+                    ->visible(fn (?Product $record): bool => $record?->approval_status === ProductApprovalStatus::Approved)
+                    ->helperText('Price, compare-at price, "Sell to" and category changes on a live product wait for approval; buyers keep paying the current prices until then.'),
             ]);
     }
 

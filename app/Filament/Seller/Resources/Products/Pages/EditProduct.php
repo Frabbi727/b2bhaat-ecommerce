@@ -2,16 +2,21 @@
 
 namespace App\Filament\Seller\Resources\Products\Pages;
 
+use App\Enums\ProductApprovalStatus;
 use App\Exceptions\ListingActivationRefusedException;
 use App\Filament\Seller\Resources\Products\ProductResource;
 use App\Filament\Seller\Resources\Products\Schemas\ProductForm;
 use App\Filament\Seller\Resources\Products\Tables\ProductsTable;
 use App\Models\Product;
+use App\Services\Catalog\PriceSet;
+use App\Services\Catalog\ProductApprovalService;
 use App\Services\Monetization\MonetizationEngineService;
+use DomainException;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Illuminate\Auth\Access\AuthorizationException;
 
 class EditProduct extends EditRecord
 {
@@ -19,6 +24,23 @@ class EditProduct extends EditRecord
 
     /** Stock shown when the form was opened. */
     public ?int $loadedSimpleStock = null;
+
+    /** True while saving a product that was approved when the save began; its prices then wait for review. */
+    protected bool $holdingPriceChanges = false;
+
+    /** @var array{rows: list<array<string, mixed>>, regular_price: mixed, sales_channel_id: int, category_id: int, note: ?string}|null */
+    protected ?array $submittedPricing = null;
+
+    protected bool $saveBegun = false;
+
+    protected ?string $savedNotificationTitle = null;
+
+    protected ?string $savedNotificationBody = null;
+
+    public function isHoldingPriceChanges(): bool
+    {
+        return $this->holdingPriceChanges;
+    }
 
     public function getSubheading(): ?string
     {
@@ -78,6 +100,10 @@ class EditProduct extends EditRecord
         /** @var Product $product */
         $product = $this->getRecord();
 
+        if (! $this->saveBegun) {
+            $this->beginSave();
+        }
+
         if (! empty($data['is_active']) && ! $product->is_active) {
             try {
                 app(MonetizationEngineService::class)->assertCanActivate(auth()->user());
@@ -95,11 +121,52 @@ class EditProduct extends EditRecord
         $data['specifications'] = ProductForm::groupsToSpecifications($data['specification_groups'] ?? null);
         unset($data['specification_groups']);
 
+        if ($this->holdingPriceChanges) {
+            unset($data['regular_price'], $data['sales_channel_id'], $data['category_id'], $data['change_note']);
+        }
+
         return $data;
+    }
+
+    /**
+     * Filament writes relationships (the prices repeater) while it reads the form state, before
+     * `mutateFormDataBeforeSave` runs and before it reloads the repeater from the database. So the decision to hold
+     * and the submitted pricing must both be captured here, from the database and the raw form state.
+     */
+    protected function beforeSave(): void
+    {
+        $this->beginSave();
+    }
+
+    protected function beginSave(): void
+    {
+        /** @var Product $product */
+        $product = $this->getRecord();
+
+        $this->saveBegun = true;
+        $this->savedNotificationTitle = null;
+        $this->savedNotificationBody = null;
+        $this->submittedPricing = null;
+
+        // Decided from the database, never from form data: a stale page must not leak prices live
+        $product->refresh();
+        $this->holdingPriceChanges = $product->approval_status === ProductApprovalStatus::Approved;
+
+        if ($this->holdingPriceChanges) {
+            $this->submittedPricing = [
+                'rows' => $this->submittedPriceRows(),
+                'regular_price' => $this->data['regular_price'] ?? null,
+                'sales_channel_id' => (int) ($this->data['sales_channel_id'] ?? $product->sales_channel_id),
+                'category_id' => (int) ($this->data['category_id'] ?? $product->category_id),
+                'note' => filled($this->data['change_note'] ?? null) ? (string) $this->data['change_note'] : null,
+            ];
+        }
     }
 
     protected function afterSave(): void
     {
+        $this->saveBegun = false;
+
         /** @var Product $product */
         $product = $this->getRecord();
 
@@ -112,10 +179,111 @@ class EditProduct extends EditRecord
         }
 
         $product->syncPrimaryImageFlag();
+
+        if ($this->holdingPriceChanges) {
+            $this->proposeSubmittedPricing($product);
+        } else {
+            $this->syncReviewStatus($product);
+        }
+    }
+
+    /**
+     * The form's base price rows plus the live variation-specific rows, which the form cannot show and so are
+     * carried over unchanged.
+     *
+     * @return list<array<string, mixed>>
+     */
+    protected function submittedPriceRows(): array
+    {
+        /** @var Product $product */
+        $product = $this->getRecord();
+
+        $formRows = collect(array_values($this->data['prices'] ?? []))
+            ->filter(fn (mixed $row): bool => is_array($row))
+            ->map(fn (array $row): array => [
+                'sales_channel_id' => $row['sales_channel_id'] ?? null,
+                'variation_id' => null,
+                'unit_price' => $row['unit_price'] ?? null,
+                'min_quantity' => $row['min_quantity'] ?? null,
+                'max_quantity' => $row['max_quantity'] ?? null,
+            ]);
+
+        $variationRows = $product->prices()->whereNotNull('variation_id')->get()
+            ->map(fn ($price): array => [
+                'sales_channel_id' => $price->sales_channel_id,
+                'variation_id' => $price->variation_id,
+                'unit_price' => $price->unit_price,
+                'min_quantity' => $price->min_quantity,
+                'max_quantity' => $price->max_quantity,
+            ]);
+
+        return $formRows->concat($variationRows)->values()->all();
+    }
+
+    protected function proposeSubmittedPricing(Product $product): void
+    {
+        $pricing = $this->submittedPricing;
+        $this->submittedPricing = null;
+
+        if ($pricing === null) {
+            return;
+        }
+
+        try {
+            $request = app(ProductApprovalService::class)->proposeChange(
+                $product,
+                auth()->user(),
+                PriceSet::fromInput($pricing['rows'], $pricing['regular_price']),
+                $pricing['sales_channel_id'],
+                $pricing['category_id'],
+                $pricing['note'],
+            );
+
+            if ($request !== null) {
+                $this->savedNotificationTitle = 'Changes saved. Your new prices are waiting for approval; buyers still pay the current prices.';
+            }
+        } catch (DomainException|AuthorizationException $e) {
+            Notification::make()
+                ->danger()
+                ->title('Your price changes weren\'t sent')
+                ->body($e->getMessage())
+                ->persistent()
+                ->send();
+        }
+
+        // Show what is live, not what was typed: the proposal waits for review
+        $this->fillForm();
+    }
+
+    /**
+     * An unapproved product goes to review when made visible, and is pulled back when hidden while it waits.
+     */
+    protected function syncReviewStatus(Product $product): void
+    {
+        $status = $product->approval_status;
+        $service = app(ProductApprovalService::class);
+
+        try {
+            if ($product->is_active && in_array($status, [ProductApprovalStatus::Draft, ProductApprovalStatus::Rejected], true)) {
+                $service->submitProduct($product, auth()->user());
+                $this->savedNotificationBody = 'Sent for review. Buyers will see it once an admin approves it.';
+            } elseif (! $product->is_active && $status === ProductApprovalStatus::PendingReview) {
+                $service->withdrawProduct($product, auth()->user());
+            }
+        } catch (DomainException|AuthorizationException $e) {
+            $product->update(['is_active' => false]);
+            $this->savedNotificationTitle = 'Saved, but not sent for review';
+            $this->savedNotificationBody = 'Couldn\'t send for review. The product is still hidden. Please try again from the product list.';
+        }
     }
 
     protected function getSavedNotificationTitle(): ?string
     {
-        return 'Changes saved';
+        return $this->savedNotificationTitle ?? 'Changes saved';
+    }
+
+    protected function getSavedNotification(): ?Notification
+    {
+        return parent::getSavedNotification()?->body($this->savedNotificationBody);
     }
 }
