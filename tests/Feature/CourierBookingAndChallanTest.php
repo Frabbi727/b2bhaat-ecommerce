@@ -28,6 +28,8 @@ class CourierBookingAndChallanTest extends TestCase
     {
         $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
         $subOrder = SubOrder::where('seller_id', $seller->id)->firstOrFail();
+        // A pickup is booked before the parcel ships; a shipped parcel can't go back to processing (ORD-2).
+        $subOrder->update(['fulfillment_status_id' => FulfillmentStatus::where('slug', 'unfulfilled')->value('id')]);
 
         $service = app(CourierBookingService::class);
         $updated = $service->schedulePickup($subOrder, [
@@ -59,7 +61,7 @@ class CourierBookingAndChallanTest extends TestCase
         $service = app(CourierBookingService::class);
 
         $this->expectException(Exception::class);
-        $this->expectExceptionMessage("Cannot schedule courier pickup for package in 'delivered' state.");
+        $this->expectExceptionMessage("Cannot move a consignment from 'delivered' to 'processing'.");
 
         $service->schedulePickup($subOrder, [
             'courier_name' => 'Pathao Courier',

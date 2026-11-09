@@ -2,12 +2,13 @@
 
 namespace App\Filament\Seller\Resources\SubOrders\Tables;
 
+use App\Exceptions\InvalidStatusTransitionException;
 use App\Models\FulfillmentStatus;
-use App\Models\OrderTrackingLog;
 use App\Models\SubOrder;
 use App\Services\Logistics\CourierBookingService;
 use App\Services\Logistics\CourierStatusService;
 use App\Services\Logistics\SelfDeliveryService;
+use DomainException;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\ViewAction;
@@ -156,22 +157,20 @@ class SubOrdersTable
                                 ->default('Parcel handed over to courier hub for last-mile transit.'),
                         ])
                         ->action(function (SubOrder $record, array $data): void {
-                            $shippedStatus = FulfillmentStatus::where('slug', 'shipped')->firstOrFail();
+                            try {
+                                app(CourierStatusService::class)->handOver(
+                                    $record,
+                                    'shipped',
+                                    ['courier_name' => $data['courier_name'], 'tracking_number' => $data['tracking_number']],
+                                    'Handed Over to Courier',
+                                    (string) ($data['note'] ?? ''),
+                                    (string) $data['hub_location'],
+                                );
+                            } catch (InvalidStatusTransitionException|DomainException $exception) {
+                                Notification::make()->title('Not dispatched')->body($exception->getMessage())->danger()->send();
 
-                            $record->update([
-                                'courier_name' => $data['courier_name'],
-                                'tracking_number' => $data['tracking_number'],
-                                'fulfillment_status_id' => $shippedStatus->id,
-                            ]);
-
-                            OrderTrackingLog::create([
-                                'sub_order_id' => $record->id,
-                                'fulfillment_status_id' => $shippedStatus->id,
-                                'title' => 'Handed Over to Courier',
-                                'description' => $data['note'],
-                                'hub_location' => $data['hub_location'],
-                                'logged_at' => now(),
-                            ]);
+                                return;
+                            }
 
                             Notification::make()
                                 ->title('Consignment Dispatched')
@@ -276,12 +275,18 @@ class SubOrdersTable
                                 ->required(),
                         ])
                         ->action(function (SubOrder $record, array $data): void {
-                            app(SelfDeliveryService::class)->dispatchSelfDelivery(
-                                subOrder: $record,
-                                hubLocation: $data['hub_location'],
-                                driverContact: $data['driver_contact'],
-                                dispatchNote: $data['dispatch_note']
-                            );
+                            try {
+                                app(SelfDeliveryService::class)->dispatchSelfDelivery(
+                                    subOrder: $record,
+                                    hubLocation: $data['hub_location'],
+                                    driverContact: $data['driver_contact'],
+                                    dispatchNote: $data['dispatch_note']
+                                );
+                            } catch (InvalidStatusTransitionException|DomainException $exception) {
+                                Notification::make()->title('Not dispatched')->body($exception->getMessage())->danger()->send();
+
+                                return;
+                            }
 
                             Notification::make()
                                 ->title('Dispatched via Factory Direct Fleet!')
@@ -371,7 +376,13 @@ class SubOrdersTable
                                 ->required(),
                         ])
                         ->action(function (SubOrder $record, array $data): void {
-                            $updated = app(CourierBookingService::class)->schedulePickup($record, $data);
+                            try {
+                                $updated = app(CourierBookingService::class)->schedulePickup($record, $data);
+                            } catch (InvalidStatusTransitionException|DomainException $exception) {
+                                Notification::make()->title('Pickup not booked')->body($exception->getMessage())->danger()->send();
+
+                                return;
+                            }
 
                             Notification::make()
                                 ->title('Courier Pickup Scheduled!')

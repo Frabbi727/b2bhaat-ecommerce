@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Logistics;
 
-use App\Models\FulfillmentStatus;
-use App\Models\OrderTrackingLog;
 use App\Models\SubOrder;
 use DomainException;
 use Exception;
@@ -33,12 +31,6 @@ class CourierBookingService
             throw new DomainException('Courier booking is not connected yet. Book the pickup in your courier\'s own app, then use "Dispatch Courier" with the real tracking number.');
         }
 
-        $currentSlug = $subOrder->fulfillmentStatus?->slug;
-
-        if (in_array($currentSlug, ['delivered', 'returned', 'cancelled'])) {
-            throw new Exception("Cannot schedule courier pickup for package in '{$currentSlug}' state.");
-        }
-
         $courierName = $data['courier_name'];
         $pickupSlot = $data['pickup_slot'];
         $pickupAddress = $data['pickup_address'];
@@ -57,25 +49,14 @@ class CourierBookingService
 
         $trackingNumber = $prefix.'-'.now()->format('ymd').'-'.rand(10000, 99999);
 
-        // Transition status to processing (Pickup Scheduled)
-        $processingStatus = FulfillmentStatus::where('slug', 'processing')->firstOrFail();
-
-        $subOrder->update([
-            'courier_name' => $courierName,
-            'tracking_number' => $trackingNumber,
-            'fulfillment_status_id' => $processingStatus->id,
-        ]);
-
-        // Log logistics event
-        OrderTrackingLog::create([
-            'sub_order_id' => $subOrder->id,
-            'fulfillment_status_id' => $processingStatus->id,
-            'title' => "Courier Pickup Scheduled ({$courierName})",
-            'description' => "Rider pickup booked for {$pickupSlot}. Dispatch hub: {$pickupAddress}. Weight/Volume: {$estimatedWeight}. Special Notes: {$instructions}",
-            'hub_location' => $pickupAddress,
-            'logged_at' => now(),
-        ]);
-
-        return $subOrder->fresh();
+        // Pickup scheduled = processing, under the shared status rules and lock (ORD-2)
+        return app(CourierStatusService::class)->handOver(
+            $subOrder,
+            'processing',
+            ['courier_name' => $courierName, 'tracking_number' => $trackingNumber],
+            "Courier Pickup Scheduled ({$courierName})",
+            "Rider pickup booked for {$pickupSlot}. Dispatch hub: {$pickupAddress}. Weight/Volume: {$estimatedWeight}. Special Notes: {$instructions}",
+            $pickupAddress,
+        );
     }
 }

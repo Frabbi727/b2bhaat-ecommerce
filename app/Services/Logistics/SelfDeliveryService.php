@@ -3,7 +3,6 @@
 namespace App\Services\Logistics;
 
 use App\Models\FulfillmentStatus;
-use App\Models\OrderTrackingLog;
 use App\Models\SubOrder;
 use Exception;
 use Illuminate\Support\Facades\RateLimiter;
@@ -26,33 +25,30 @@ class SelfDeliveryService
         ?string $driverContact = null,
         ?string $dispatchNote = null
     ): string {
-        $inTransitStatus = FulfillmentStatus::where('slug', 'in_transit')->first()
-            ?? FulfillmentStatus::where('slug', 'shipped')->firstOrFail();
+        $statusSlug = FulfillmentStatus::where('slug', 'in_transit')->exists() ? 'in_transit' : 'shipped';
 
         $handoverCode = str_pad((string) random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
         $trackingNumber = 'FD-'.strtoupper(Str::random(8));
-
-        $subOrder->update([
-            'is_self_delivered' => true,
-            'handover_code' => $handoverCode,
-            'courier_name' => 'Factory Direct Fleet',
-            'tracking_number' => $trackingNumber,
-            'fulfillment_status_id' => $inTransitStatus->id,
-        ]);
 
         $description = $dispatchNote ?: 'Package is out for direct factory fleet delivery. Secure 6-digit handover verification code issued to recipient.';
         if ($driverContact) {
             $description .= " Fleet driver/rep contact: {$driverContact}.";
         }
 
-        OrderTrackingLog::create([
-            'sub_order_id' => $subOrder->id,
-            'fulfillment_status_id' => $inTransitStatus->id,
-            'title' => 'Dispatched via Factory Direct Fleet',
-            'description' => $description,
-            'hub_location' => $hubLocation,
-            'logged_at' => now(),
-        ]);
+        // Same status rules and lock as every other parcel move (ORD-2)
+        $this->courierStatusService->handOver(
+            $subOrder,
+            $statusSlug,
+            [
+                'is_self_delivered' => true,
+                'handover_code' => $handoverCode,
+                'courier_name' => 'Factory Direct Fleet',
+                'tracking_number' => $trackingNumber,
+            ],
+            'Dispatched via Factory Direct Fleet',
+            $description,
+            $hubLocation,
+        );
 
         return $handoverCode;
     }

@@ -17,6 +17,7 @@ use App\Services\Inventory\StockReservationService;
 use App\Services\Orders\OrderStatusReconciler;
 use App\Services\Orders\RefundRecorder;
 use Carbon\Carbon;
+use DomainException;
 use Illuminate\Support\Facades\DB;
 
 class CourierStatusService
@@ -109,6 +110,49 @@ class CourierStatusService
                 $this->handleReturnedConsignment($subOrder);
             }
         });
+    }
+
+    /**
+     * ORD-2: the seller hands a parcel over (courier dispatch, pickup booking or self-delivery). Same lock and status
+     * rules as courier updates, and only once the order's payment is cleared. The parcel's courier details are saved
+     * with the new status. Handing over again in the same status updates the details (for example a rebooking).
+     *
+     * @param  array<string, mixed>  $parcelDetails  courier_name, tracking_number, is_self_delivered, handover_code
+     *
+     * @throws InvalidStatusTransitionException when the parcel can't move to that status
+     * @throws DomainException when the order's payment isn't cleared
+     */
+    public function handOver(SubOrder $subOrder, string $statusSlug, array $parcelDetails, string $title, string $description, string $hubLocation): SubOrder
+    {
+        DB::transaction(function () use ($subOrder, $statusSlug, $parcelDetails, $title, $description, $hubLocation): void {
+            Order::whereKey($subOrder->parent_order_id)->lockForUpdate()->first();
+
+            $subOrder = SubOrder::whereKey($subOrder->getKey())->lockForUpdate()->with(['fulfillmentStatus', 'order.paymentMethod', 'order.paymentStatus'])->firstOrFail();
+            $currentSlug = $subOrder->fulfillmentStatus?->slug;
+
+            if ($currentSlug !== $statusSlug && ! self::canTransition($currentSlug, $statusSlug)) {
+                throw InvalidStatusTransitionException::between($currentSlug, $statusSlug);
+            }
+
+            if (! $subOrder->isClearedForDispatch()) {
+                throw new DomainException("Sub-Order #{$subOrder->sub_order_number} can't be sent yet: the buyer's payment hasn't been confirmed.");
+            }
+
+            $status = FulfillmentStatus::where('slug', $statusSlug)->firstOrFail();
+            $subOrder->forceFill($parcelDetails + ['fulfillment_status_id' => $status->id])->save();
+
+            OrderTrackingLog::create([
+                'sub_order_id' => $subOrder->id,
+                'fulfillment_status_id' => $status->id,
+                'title' => $title,
+                'description' => $description,
+                'hub_location' => $hubLocation,
+                'logged_at' => now(),
+            ]);
+        });
+
+        // The caller's copy shows the saved state
+        return $subOrder->refresh();
     }
 
     protected function handleReturnedConsignment(SubOrder $subOrder): void
