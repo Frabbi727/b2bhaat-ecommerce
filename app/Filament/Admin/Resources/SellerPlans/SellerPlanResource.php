@@ -86,6 +86,7 @@ class SellerPlanResource extends Resource
                     ]),
 
                 Section::make('Subscription Pricing')
+                    ->description('Changes to price, billing cycle, listing limit or commission apply to sellers already on this plan from their next renewal. They are told by SMS.')
                     ->columns(['default' => 1, 'sm' => 3])
                     ->schema([
                         Toggle::make('is_subscription_fee_enabled')

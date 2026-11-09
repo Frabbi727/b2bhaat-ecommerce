@@ -68,15 +68,13 @@ class MonetizationEngineService
             return (float) $product->category->commission_rate_percentage;
         }
 
-        // 3. Check active plan
-        if ($subscription && $subscription->plan) {
-            if (! $subscription->plan->is_commission_enabled) {
+        // 3. The plan terms this subscription was sold on (MON-2)
+        if ($subscription && ($subscription->hasCapturedTerms() || $subscription->plan)) {
+            if (! $subscription->termCommissionEnabled()) {
                 return 0.00;
             }
 
-            return (float) ($channel->slug === SalesChannel::WHOLESALE
-                ? $subscription->plan->wholesale_commission_rate
-                : $subscription->plan->retail_commission_rate);
+            return $subscription->termCommissionRate($channel->slug === SalesChannel::WHOLESALE);
         }
 
         // 4. Fallback to seller profile default
@@ -143,11 +141,12 @@ class MonetizationEngineService
     public function getAllowedProductCount(User $seller): ?int
     {
         $subscription = $this->getActiveSubscription($seller);
-        if (! $subscription || ! $subscription->plan || ! $subscription->plan->is_listing_limit_enabled) {
+        if (! $subscription || (! $subscription->hasCapturedTerms() && ! $subscription->plan) || ! $subscription->termListingLimitEnabled()) {
             return null; // Unlimited
         }
 
-        $baseLimit = $subscription->custom_product_limit ?? $subscription->plan->max_active_products;
+        // The limit this subscription was sold on, or the admin's custom limit (MON-2)
+        $baseLimit = $subscription->termMaxActiveProducts();
         if ($baseLimit === null) {
             return null;
         }

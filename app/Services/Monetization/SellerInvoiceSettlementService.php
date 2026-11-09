@@ -22,6 +22,17 @@ use Illuminate\Support\Str;
  */
 class SellerInvoiceSettlementService
 {
+    /** Subscription columns that hold the kept plan terms (MON-2). */
+    public const TERM_COLUMNS = [
+        'term_subscription_price',
+        'term_billing_cycle_days',
+        'term_is_listing_limit_enabled',
+        'term_max_active_products',
+        'term_is_commission_enabled',
+        'term_retail_commission_rate',
+        'term_wholesale_commission_rate',
+    ];
+
     public function __construct(
         protected MonetizationSuspensionService $suspensionService
     ) {}
@@ -210,7 +221,7 @@ class SellerInvoiceSettlementService
             $subscription->update([
                 'status' => SellerSubscription::STATUS_ACTIVE,
                 'starts_at' => now(),
-                'ends_at' => now()->addDays($subscription->plan?->billing_cycle_days ?: 30),
+                'ends_at' => now()->addDays($subscription->termBillingCycleDays() ?: 30),
                 'grace_period_ends_at' => null,
             ]);
 
@@ -242,13 +253,21 @@ class SellerInvoiceSettlementService
             throw new DomainException("Bill #{$invoice->invoice_number} is for a plan that has already ended. Nothing was charged.");
         }
 
-        // Renewal: add the paid cycle on top of any days the seller still has left.
+        // Renewal: the new period runs on the terms the renewal bill was raised on, or else the plan's current
+        // terms (MON-2), and is added on top of any days the seller still has left.
+        $renewalTerms = $invoice->metadata['renewal_terms'] ?? null;
+        if (is_array($renewalTerms) && $renewalTerms !== []) {
+            $subscription->forceFill(array_intersect_key($renewalTerms, array_flip(self::TERM_COLUMNS)) + ['terms_captured_at' => now()]);
+        } elseif ($subscription->plan) {
+            $subscription->forceFill(SellerSubscription::termsFromPlan($subscription->plan));
+        }
+
         $periodStart = $subscription->ends_at && $subscription->ends_at->isFuture() ? $subscription->ends_at : now();
-        $subscription->update([
+        $subscription->forceFill([
             'status' => SellerSubscription::STATUS_ACTIVE,
-            'ends_at' => $periodStart->copy()->addDays($subscription->plan?->billing_cycle_days ?: 30),
+            'ends_at' => $periodStart->copy()->addDays($subscription->termBillingCycleDays() ?: 30),
             'grace_period_ends_at' => null,
-        ]);
+        ])->save();
     }
 
     /**

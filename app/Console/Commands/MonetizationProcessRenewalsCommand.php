@@ -12,6 +12,7 @@ use App\Services\Settings\StoreConfigurationService;
 use App\Services\Sms\OrderNotificationService;
 use DomainException;
 use Illuminate\Console\Command;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
 class MonetizationProcessRenewalsCommand extends Command
@@ -53,7 +54,10 @@ class MonetizationProcessRenewalsCommand extends Command
                 ->where('status', SellerInvoice::STATUS_UNPAID)
                 ->first();
 
-            $price = $subscription->custom_subscription_price ?? $subscription->plan?->subscription_price ?? 0.00;
+            // The next period runs on the plan's terms as they are now; edits made during the current period take
+            // effect here (MON-2). An admin's custom price still wins.
+            $renewalTerms = $subscription->plan ? SellerSubscription::termsFromPlan($subscription->plan) : null;
+            $price = $subscription->custom_subscription_price ?? $renewalTerms['term_subscription_price'] ?? $subscription->termSubscriptionPrice();
 
             if (! $existingInvoice) {
                 $invoice = SellerInvoice::create([
@@ -66,6 +70,7 @@ class MonetizationProcessRenewalsCommand extends Command
                     'status' => (float) $price <= 0.00 ? SellerInvoice::STATUS_PAID : SellerInvoice::STATUS_UNPAID,
                     'due_date' => $subscription->ends_at->toDateString(),
                     'paid_at' => (float) $price <= 0.00 ? now() : null,
+                    'metadata' => $renewalTerms ? ['renewal_terms' => Arr::except($renewalTerms, 'terms_captured_at')] : null,
                 ]);
             } else {
                 $invoice = $existingInvoice;
@@ -73,11 +78,14 @@ class MonetizationProcessRenewalsCommand extends Command
 
             // Free plan or 0 price automatically renews
             if ((float) $price <= 0.00) {
-                $cycleDays = $subscription->plan?->billing_cycle_days ?: 365;
-                $subscription->update([
+                if ($renewalTerms) {
+                    $subscription->forceFill($renewalTerms);
+                }
+                $cycleDays = $subscription->termBillingCycleDays() ?: 365;
+                $subscription->forceFill([
                     'ends_at' => $subscription->ends_at->addDays($cycleDays),
                     'status' => SellerSubscription::STATUS_ACTIVE,
-                ]);
+                ])->save();
                 $processedCount++;
 
                 continue;

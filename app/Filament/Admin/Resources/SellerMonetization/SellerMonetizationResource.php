@@ -84,7 +84,7 @@ class SellerMonetizationResource extends Resource
                     ->label('Active Listings / Quota')
                     ->formatStateUsing(function ($state, SellerProfile $record): string {
                         $sub = $record->user?->activeSellerSubscription;
-                        $limit = $sub?->custom_product_limit ?? $sub?->plan?->max_active_products;
+                        $limit = $sub?->termListingLimitEnabled() ? $sub->termMaxActiveProducts() : null;
                         $limitText = $limit ? "{$limit}" : '∞';
 
                         return "{$state} / {$limitText}";

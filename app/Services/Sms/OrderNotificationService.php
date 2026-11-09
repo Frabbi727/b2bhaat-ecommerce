@@ -252,6 +252,22 @@ class OrderNotificationService
     }
 
     /**
+     * Tell a seller their plan's terms were changed and that their own terms stay until renewal (MON-2).
+     */
+    public function sendPlanTermsChangeNotice(User $seller, SellerSubscription $subscription, string $planName): bool
+    {
+        if (empty($seller->phone) || ! PhoneNormalizer::isValid($seller->phone)) {
+            return false;
+        }
+
+        $renewsOn = $subscription->ends_at?->format('d M, Y') ?? 'your next renewal';
+        $message = "B2Bhaat: the {$planName} plan's price, limits or commission have changed. Your current terms stay the same until your renewal on {$renewsOn}; the new terms apply from then. See Billing in your seller dashboard.";
+        SendSmsJob::dispatch(PhoneNormalizer::normalize($seller->phone), $message, 'plan_terms_changed', bypassDeduplication: true);
+
+        return true;
+    }
+
+    /**
      * Use the admin's active template for this key when there is one, otherwise the fallback text.
      *
      * @param  array<string, string>  $values  placeholder => value
