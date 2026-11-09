@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1349 tests, 1342 passed, 7 skipped, 6267 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1351 tests, 1344 passed, 7 skipped, 6271 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -80,6 +80,7 @@ The existing tests of other features were touched only to give their test produc
 | MON-2 | `tests/Feature/SellerPlanTermsSnapshotTest.php` (7) | A new subscription keeps its plan's terms; editing the plan doesn't change a running subscription's commission or listing limit; the renewal bill and the next period use the new terms; moving a subscription to another plan takes that plan's terms; an admin's custom rate and limit still win; changing terms sends each seller an SMS and tells the admin; renaming a plan sends nothing. Three of these failed on the old code |
 | MON-3 | `tests/Feature/DefaultSellerPlanTest.php` (7) | Approval puts a seller on the default plan once; approval keeps a plan the seller already has; a seller with no plan gets the free limit and their visible products stay visible; an ended plan falls back to the free limit; with no default plan nothing changes; the backfill command previews with `--dry-run`, assigns only approved sellers without a plan, and is safe to repeat; restoring a suspended store uses its own plan's limit. Three of these failed on the old code |
 | MON-6 | `tests/Feature/AdminMonetizationPanelTest.php` (4 new) | The payment goes to the bill the admin chose, not the newest; a wrong amount records nothing and says why; a reference already used (different case and spaces) is refused and names the bill it paid; a waiver needs no amount or reference and covers the whole bill. All four failed on the old code; the 3 earlier offline-payment tests still pass |
+| MON-7 (check) | `tests/Feature/Accounting/MonetizationJournalIntegrationTest.php` (2 new) | Paying a bill from the wallet posts Dr seller wallet payable / Cr subscription revenue; recording a bKash payment posts Dr gateway clearing / Cr subscription revenue. Both passed on the existing code, so MON-7 was a false finding |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 

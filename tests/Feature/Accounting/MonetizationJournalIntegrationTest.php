@@ -18,8 +18,10 @@ use App\Models\SellerPayment;
 use App\Models\SellerPlan;
 use App\Models\SellerProfile;
 use App\Models\SellerSubscription;
+use App\Models\SellerWallet;
 use App\Models\User;
 use App\Services\Accounting\EventPipeline\MonetizationJournalHandler;
+use App\Services\Monetization\SellerInvoiceSettlementService;
 use Database\Seeders\AccountingChartOfAccountsSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -456,5 +458,51 @@ class MonetizationJournalIntegrationTest extends TestCase
             'payment_method' => SellerPayment::METHOD_BKASH,
             'status' => SellerPayment::STATUS_SUCCESSFUL,
         ]);
+    }
+
+    private function unpaidSubscriptionBill(string $number): SellerInvoice
+    {
+        return SellerInvoice::create([
+            'invoice_number' => $number,
+            'seller_id' => $this->seller->id,
+            'subscription_id' => $this->subscription->id,
+            'invoice_type' => SellerInvoice::TYPE_SUBSCRIPTION_FEE,
+            'subtotal' => 500.00,
+            'total_amount' => 500.00,
+            'status' => SellerInvoice::STATUS_UNPAID,
+            'due_date' => now()->toDateString(),
+        ]);
+    }
+
+    /**
+     * MON-7: the real payment paths post the billing journal, not only a hand-made payment row.
+     */
+    public function test_paying_a_bill_from_the_wallet_posts_the_billing_journal(): void
+    {
+        SellerWallet::create(['seller_id' => $this->seller->id, 'available_balance' => 800.00]);
+        $invoice = $this->unpaidSubscriptionBill('SINV-E2E-WALLET');
+
+        app(SellerInvoiceSettlementService::class)->payFromWallet($this->seller, $invoice->id);
+
+        $journal = AccountingJournalEntry::where('financial_event', AccountingEvent::SUBSCRIPTION_PAID->value)->with('lines.account')->sole();
+        $this->assertSame(500.0, (float) $journal->lines->firstWhere('account.system_slug', 'seller_wallet_payable')->debit);
+        $this->assertSame(500.0, (float) $journal->lines->firstWhere('account.system_slug', 'subscription_revenue')->credit);
+    }
+
+    public function test_recording_an_offline_payment_posts_the_billing_journal(): void
+    {
+        $invoice = $this->unpaidSubscriptionBill('SINV-E2E-OFFLINE');
+        $admin = User::factory()->create(['role_id' => Role::firstOrCreate(['slug' => 'super_admin'], ['name' => 'Super Admin'])->id]);
+
+        app(SellerInvoiceSettlementService::class)->recordOfflinePayment(
+            $this->seller,
+            $invoice->id,
+            ['payment_method' => SellerPayment::METHOD_BKASH, 'amount' => 500.00, 'transaction_reference' => 'BKASH-E2E-1'],
+            $admin,
+        );
+
+        $journal = AccountingJournalEntry::where('financial_event', AccountingEvent::SUBSCRIPTION_PAID->value)->with('lines.account')->sole();
+        $this->assertSame(500.0, (float) $journal->lines->firstWhere('account.system_slug', 'gateway_clearing')->debit);
+        $this->assertSame(500.0, (float) $journal->lines->firstWhere('account.system_slug', 'subscription_revenue')->credit);
     }
 }
