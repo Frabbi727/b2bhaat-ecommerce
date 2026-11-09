@@ -5,6 +5,7 @@ namespace App\Filament\Seller\Resources\Products\Schemas;
 use App\Enums\ProductApprovalStatus;
 use App\Exceptions\ApprovalConflictException;
 use App\Filament\Seller\Resources\Products\Pages\EditProduct;
+use App\Filament\Shared\ChangeRequestSummary;
 use App\Models\AttributeValue;
 use App\Models\Brand;
 use App\Models\Category;

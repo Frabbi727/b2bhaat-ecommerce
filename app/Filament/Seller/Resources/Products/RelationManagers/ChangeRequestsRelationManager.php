@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Seller\Resources\Products\RelationManagers;
 
-use App\Filament\Seller\Resources\Products\Schemas\ChangeRequestSummary;
+use App\Filament\Shared\ChangeRequestSummary;
 use App\Models\ProductChangeRequest;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;

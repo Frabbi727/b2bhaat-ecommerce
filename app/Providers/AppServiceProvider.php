@@ -22,6 +22,7 @@ use App\Listeners\Sellers\SendSellerKycDecisionEmailListener;
 use App\Listeners\Sellers\SendSellerRegistrationEmailListener;
 use App\Listeners\Sellers\SendWholesaleDecisionEmailListener;
 use App\Models\AuditLog;
+use App\Models\User;
 use App\Policies\AuditLogPolicy;
 use App\Services\Accounting\AccountResolverService;
 use App\Services\Audit\AuditContext;
@@ -73,6 +74,9 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::policy(AuditLog::class, AuditLogPolicy::class);
+
+        // A gate rather than a ProductPolicy: a policy would make Filament deny every other Product ability for sellers.
+        Gate::define('review-product', fn (User $user): bool => $user->isCatalogReviewer());
 
         RateLimiter::for('api', fn (Request $request) => Limit::perMinute(60)->by($request->ip()));
 

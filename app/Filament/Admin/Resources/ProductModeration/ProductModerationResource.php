@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\ProductModeration;
 
+use App\Enums\ProductApprovalStatus;
 use App\Filament\Admin\Resources\ProductModeration\Pages\ListModeratedProducts;
 use App\Models\Product;
 use BackedEnum;
@@ -13,6 +14,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
@@ -59,12 +61,20 @@ class ProductModerationResource extends Resource
                 TextColumn::make('seller.sellerProfile.store_name')->label('Seller')->searchable(),
                 TextColumn::make('category.name')->label('Category')->placeholder('—'),
                 TextColumn::make('sku')->label('SKU')->searchable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('approval_status')->label('Review')->badge()
+                    ->formatStateUsing(fn (ProductApprovalStatus $state): string => $state->label())
+                    ->color(fn (ProductApprovalStatus $state): string => $state->color()),
                 IconColumn::make('is_active')->label('Seller has it on')->boolean(),
                 TextColumn::make('blocked_reason')->label('Hidden by admin')->placeholder('—')->color('danger')->wrap()->limit(60),
                 TextColumn::make('created_at')->label('Added')->date('M d, Y')->sortable(),
             ])
             ->filters([
                 TernaryFilter::make('blocked_at')->label('Hidden by admin')->nullable(),
+                SelectFilter::make('approval_status')->label('Review status')
+                    ->options(collect(ProductApprovalStatus::cases())->mapWithKeys(fn (ProductApprovalStatus $status): array => [$status->value => $status->label()])->all()),
+                Filter::make('never_reviewed')->label('Approved on deploy (never reviewed)')
+                    ->query(fn (Builder $query): Builder => $query->whereNull('approved_by_user_id')
+                        ->where('approval_status', ProductApprovalStatus::Approved->value)),
                 SelectFilter::make('seller_id')->label('Seller')->relationship('seller', 'name')->searchable()->preload(),
             ])
             ->recordActions([

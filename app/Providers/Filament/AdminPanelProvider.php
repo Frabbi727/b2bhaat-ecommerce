@@ -3,6 +3,8 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Admin\Resources\AuditLogs\Widgets\AuditLogStatsWidget;
+use App\Filament\Admin\Resources\ChangeRequestApprovals\ChangeRequestApprovalResource;
+use App\Filament\Admin\Resources\ProductApprovals\ProductApprovalResource;
 use App\Filament\Admin\Widgets\AdminFulfillmentDistributionChart;
 use App\Filament\Admin\Widgets\AdminOrdersRevenueChart;
 use App\Filament\Admin\Widgets\AdminStatsOverview;
@@ -14,6 +16,7 @@ use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Navigation\NavigationGroup;
+use Filament\Navigation\NavigationItem;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -48,6 +51,16 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Marketing'),
                 NavigationGroup::make('Security & Audit'),
                 NavigationGroup::make('Settings')->collapsed(),
+            ])
+            ->databaseNotifications()
+            ->navigationItems([
+                // The parent the two queues sit under; Filament drops child items whose parent does not exist, and shows children only for a parent without a link.
+                NavigationItem::make('Approvals')
+                    ->group('Catalog')
+                    ->icon('heroicon-o-clipboard-document-check')
+                    ->sort(1)
+                    ->badge(fn (): ?string => ($total = (int) ProductApprovalResource::getNavigationBadge() + (int) ChangeRequestApprovalResource::getNavigationBadge()) > 0 ? (string) $total : null)
+                    ->visible(fn (): bool => auth()->user()?->isCatalogReviewer() === true),
             ])
             ->discoverResources(in: app_path('Filament/Admin/Resources'), for: 'App\Filament\Admin\Resources')
             ->discoverPages(in: app_path('Filament/Admin/Pages'), for: 'App\Filament\Admin\Pages')

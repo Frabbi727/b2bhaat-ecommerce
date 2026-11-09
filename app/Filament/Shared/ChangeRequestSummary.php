@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Filament\Seller\Resources\Products\Schemas;
+namespace App\Filament\Shared;
 
 use App\Models\Category;
 use App\Models\ProductChangeRequest;
@@ -47,7 +47,7 @@ class ChangeRequestSummary
     /**
      * The callout body: the channel and category lines, then the tier and compare-at table.
      */
-    public static function body(ProductChangeRequest $request): HtmlString
+    public static function body(ProductChangeRequest $request, string $noteLabel = 'Your note'): HtmlString
     {
         $html = '<div class="space-y-3 text-sm">';
 
@@ -79,12 +79,61 @@ class ChangeRequestSummary
         }
 
         if (filled($request->seller_note)) {
-            $html .= '<p>Your note: '.e((string) $request->seller_note).'</p>';
+            $html .= '<p>'.e($noteLabel).': '.e((string) $request->seller_note).'</p>';
         }
 
         $html .= '</div>';
 
         return new HtmlString($html);
+    }
+
+    /**
+     * The biggest price move in a request, for the admin queue. Rows are matched on channel, variation and minimum
+     * quantity; the signed percentage with the largest size wins. A request that only adds tiers reads "new".
+     * `alert` is true when any matched tier rises by more than 20% or falls by more than 50%.
+     *
+     * @return array{text: string, alert: bool}
+     */
+    public static function largestChange(ProductChangeRequest $request): array
+    {
+        $key = fn (array $row): string => implode('|', [$row['sales_channel_id'], $row['variation_id'] ?? '', $row['min_quantity']]);
+        $old = collect($request->base_prices ?? [])->keyBy($key);
+        $new = collect($request->proposed_prices ?? [])->keyBy($key);
+
+        $largest = null;
+        $alert = false;
+
+        foreach ($old as $rowKey => $before) {
+            $after = $new->get($rowKey);
+            $oldPrice = (float) $before['unit_price'];
+
+            if ($after === null || $oldPrice <= 0.0) {
+                continue;
+            }
+
+            $percent = ((float) $after['unit_price'] - $oldPrice) / $oldPrice * 100;
+            $alert = $alert || $percent > 20.0 || $percent < -50.0;
+
+            if ($largest === null || abs($percent) > abs($largest)) {
+                $largest = $percent;
+            }
+        }
+
+        $added = $new->keys()->diff($old->keys())->isNotEmpty();
+
+        if ($largest !== null && ! ($added && abs($largest) < 0.05)) {
+            return ['text' => sprintf('%+.1f%%', $largest), 'alert' => $alert];
+        }
+
+        if ($added) {
+            return ['text' => 'new', 'alert' => false];
+        }
+
+        if ($old->keys()->diff($new->keys())->isNotEmpty()) {
+            return ['text' => 'removed', 'alert' => false];
+        }
+
+        return ['text' => '—', 'alert' => false];
     }
 
     /**
