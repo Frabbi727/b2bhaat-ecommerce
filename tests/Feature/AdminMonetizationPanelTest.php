@@ -16,7 +16,10 @@ use App\Models\SellerSubscription;
 use App\Models\User;
 use App\Services\Monetization\SellerInvoiceSettlementService;
 use Database\Seeders\AccountingChartOfAccountsSeeder;
+use Illuminate\Contracts\Cache\Lock;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -292,6 +295,27 @@ class AdminMonetizationPanelTest extends TestCase
 
         $this->assertSame('unpaid', $bill->fresh()->status);
         $this->assertDatabaseMissing('seller_payments', ['transaction_reference' => 'BKASH-PART-1']);
+    }
+
+    /**
+     * Wave 1 review M-5: while another admin holds the reference, the second one gets a plain message, not a server error.
+     */
+    public function test_a_busy_reference_gives_a_plain_message(): void
+    {
+        $this->actingAs($this->admin);
+        $bill = $this->unpaidBill('SINV-BUSY-1', 499.00);
+        $lock = \Mockery::mock(Lock::class);
+        $lock->shouldReceive('block')->andThrow(new LockTimeoutException);
+        Cache::partialMock()->shouldReceive('lock')->andReturn($lock);
+
+        try {
+            app(SellerInvoiceSettlementService::class)->recordOfflinePayment($this->seller, $bill->id, ['payment_method' => 'bkash', 'amount' => 499.00, 'transaction_reference' => 'TRXBUSY1'], $this->admin);
+            $this->fail('A lock timeout must be refused with a message.');
+        } catch (\DomainException $exception) {
+            $this->assertStringContainsString('being recorded', $exception->getMessage());
+        }
+
+        $this->assertSame('unpaid', $bill->fresh()->status);
     }
 
     /**

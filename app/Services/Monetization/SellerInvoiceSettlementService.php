@@ -12,6 +12,7 @@ use App\Models\SellerWallet;
 use App\Models\User;
 use App\Models\WalletTransaction;
 use DomainException;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -147,7 +148,12 @@ class SellerInvoiceSettlementService
         // Two admins entering the same reference at once: the second waits, then sees it as already used.
         $lockKey = 'seller-payment-reference:'.md5((string) $payment['payment_method'].'|'.mb_strtolower(trim((string) ($payment['transaction_reference'] ?? ''))));
 
-        return Cache::lock($lockKey, 15)->block(10, fn (): SellerInvoice => $this->recordOfflinePaymentLocked($seller, $invoiceId, $payment, $admin));
+        try {
+            return Cache::lock($lockKey, 15)->block(10, fn (): SellerInvoice => $this->recordOfflinePaymentLocked($seller, $invoiceId, $payment, $admin));
+        } catch (LockTimeoutException) {
+            // Shown to the admin like any other refusal instead of a server error (Wave 1 review M-5).
+            throw new DomainException('A payment with this reference is being recorded by someone else right now. Wait a moment, then check the bill before trying again. Nothing was recorded.');
+        }
     }
 
     /**
