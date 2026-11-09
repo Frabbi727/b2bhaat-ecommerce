@@ -307,4 +307,68 @@ class SellerProductEditApprovalTest extends TestCase
         $this->assertSame(99, $variation->fresh()->stock_quantity);
         $this->assertSame(1, ProductChangeRequest::where('status', ProductChangeRequest::STATUS_PENDING)->count());
     }
+
+    public function test_unrelated_save_keeps_a_pending_price_change_pending(): void
+    {
+        $product = $this->product();
+        app(ProductApprovalService::class)->proposeChange(
+            $product,
+            $this->seller,
+            PriceSet::fromInput([$this->retailTier(300)], 500),
+            $this->retail->id,
+            $this->category->id,
+            null,
+        );
+
+        $this->edit($product)
+            ->fillForm(['title' => 'Just a rename'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('Just a rename', $product->fresh()->title);
+        $this->assertSame(1, ProductChangeRequest::where('status', ProductChangeRequest::STATUS_PENDING)->count());
+        $this->assertSame(0, ProductChangeRequest::where('status', ProductChangeRequest::STATUS_WITHDRAWN)->count());
+    }
+
+    public function test_changing_the_sales_channel_on_an_approved_product_is_held(): void
+    {
+        $wholesale = SalesChannel::where('slug', SalesChannel::WHOLESALE)->firstOrFail();
+        $undo = Repeater::fake();
+        $product = $this->product();
+
+        $this->edit($product)
+            ->fillForm([
+                'sales_channel_id' => $wholesale->id,
+                'prices' => [
+                    $this->retailTier(400),
+                    ['sales_channel_id' => $wholesale->id, 'unit_price' => 350, 'min_quantity' => 10, 'max_quantity' => null],
+                ],
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $undo();
+
+        $this->assertSame($this->retail->id, $product->fresh()->sales_channel_id);
+        $request = ProductChangeRequest::sole();
+        $this->assertSame(ProductChangeRequest::STATUS_PENDING, $request->status);
+        $this->assertSame($wholesale->id, $request->proposed_sales_channel_id);
+        $this->assertSame(1, $product->prices()->count());
+    }
+
+    public function test_a_stale_page_cannot_write_prices_live_after_approval(): void
+    {
+        $undo = Repeater::fake();
+        $product = $this->product('pending_review');
+        $component = $this->edit($product);
+
+        $product->forceFill(['approval_status' => ProductApprovalStatus::Approved])->save();
+
+        $component->fillForm(['prices' => [$this->retailTier(250)]])->call('save');
+
+        $undo();
+
+        $this->assertSame('400.00', $product->prices()->sole()->unit_price);
+        $this->assertSame(1, ProductChangeRequest::where('status', ProductChangeRequest::STATUS_PENDING)->count());
+    }
 }

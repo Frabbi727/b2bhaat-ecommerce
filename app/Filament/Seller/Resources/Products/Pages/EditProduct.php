@@ -31,8 +31,6 @@ class EditProduct extends EditRecord
     /** @var array{rows: list<array<string, mixed>>, regular_price: mixed, sales_channel_id: int, category_id: int, note: ?string}|null */
     protected ?array $submittedPricing = null;
 
-    protected bool $saveBegun = false;
-
     protected ?string $savedNotificationTitle = null;
 
     protected ?string $savedNotificationBody = null;
@@ -100,10 +98,6 @@ class EditProduct extends EditRecord
         /** @var Product $product */
         $product = $this->getRecord();
 
-        if (! $this->saveBegun) {
-            $this->beginSave();
-        }
-
         if (! empty($data['is_active']) && ! $product->is_active) {
             try {
                 app(MonetizationEngineService::class)->assertCanActivate(auth()->user());
@@ -143,7 +137,6 @@ class EditProduct extends EditRecord
         /** @var Product $product */
         $product = $this->getRecord();
 
-        $this->saveBegun = true;
         $this->savedNotificationTitle = null;
         $this->savedNotificationBody = null;
         $this->submittedPricing = null;
@@ -165,8 +158,6 @@ class EditProduct extends EditRecord
 
     protected function afterSave(): void
     {
-        $this->saveBegun = false;
-
         /** @var Product $product */
         $product = $this->getRecord();
 
@@ -229,11 +220,22 @@ class EditProduct extends EditRecord
             return;
         }
 
+        // An unrelated save re-submits the live prices the form was refilled with; that must not withdraw a pending
+        // request. Withdrawing is the explicit Withdraw action only.
+        $submitted = PriceSet::fromInput($pricing['rows'], $pricing['regular_price']);
+        if ($submitted->equals(PriceSet::fromProduct($product))
+            && $pricing['sales_channel_id'] === $product->sales_channel_id
+            && $pricing['category_id'] === $product->category_id) {
+            $this->fillForm();
+
+            return;
+        }
+
         try {
             $request = app(ProductApprovalService::class)->proposeChange(
                 $product,
                 auth()->user(),
-                PriceSet::fromInput($pricing['rows'], $pricing['regular_price']),
+                $submitted,
                 $pricing['sales_channel_id'],
                 $pricing['category_id'],
                 $pricing['note'],

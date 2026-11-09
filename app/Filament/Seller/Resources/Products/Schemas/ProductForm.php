@@ -168,6 +168,11 @@ class ProductForm
                             return;
                         }
 
+                        // Defence in depth: never overwrite live prices of a product that is approved right now
+                        if ($component->getRecord()?->fresh()?->approval_status === ProductApprovalStatus::Approved) {
+                            return;
+                        }
+
                         $component->saveToRelationship();
                     })
                     ->hiddenLabel()
