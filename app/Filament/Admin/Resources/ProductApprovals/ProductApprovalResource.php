@@ -28,6 +28,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use UnitEnum;
 
 /**
@@ -171,17 +172,20 @@ class ProductApprovalResource extends Resource
                     ->modalHeading('Approve the selected products?')
                     ->modalDescription(fn (Collection $records): string => 'These will go live: '.$records->pluck('title')->implode(', '))
                     ->deselectRecordsAfterCompletion()
-                    ->action(function (Collection $records): void {
+                    ->fillForm(fn (Collection $records): array => ['versions' => $records->mapWithKeys(
+                        fn (Product $record): array => [$record->getKey() => app(ProductApprovalService::class)->versionOf($record->fresh())]
+                    )->all()])
+                    ->schema([Hidden::make('versions')])
+                    ->action(function (array $data): void {
                         $service = app(ProductApprovalService::class);
                         $approved = 0;
                         $skipped = 0;
 
-                        foreach ($records as $record) {
+                        foreach ((array) ($data['versions'] ?? []) as $id => $version) {
                             try {
-                                $fresh = Product::query()->findOrFail($record->getKey());
-                                $service->approveProduct($fresh, auth()->user(), $service->versionOf($fresh));
+                                $service->approveProduct(Product::query()->findOrFail($id), auth()->user(), (string) $version);
                                 $approved++;
-                            } catch (DomainException) {
+                            } catch (DomainException|ModelNotFoundException) {
                                 $skipped++;
                             }
                         }

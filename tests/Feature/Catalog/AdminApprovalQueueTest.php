@@ -13,6 +13,7 @@ use App\Filament\Admin\Resources\ProductApprovals\ProductApprovalResource;
 use App\Filament\Admin\Resources\ProductApprovals\Schemas\ProductReviewDetails;
 use App\Filament\Admin\Resources\ProductModeration\Pages\ListModeratedProducts;
 use App\Filament\Shared\ChangeRequestSummary;
+use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\FlashSale;
 use App\Models\FlashSaleProduct;
@@ -30,6 +31,7 @@ use App\Services\Catalog\ProductApprovalService;
 use Database\Seeders\SystemLookupSeeder;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
@@ -247,7 +249,9 @@ class AdminApprovalQueueTest extends TestCase
         $this->travel(5)->seconds();
         $product->forceFill(['title' => 'Waiting Shirt v2'])->save();
 
-        $component->callMountedAction()->assertNotified();
+        $component->callMountedAction()->assertNotified(
+            Notification::make()->title('Could not complete this')->body(ProductApprovalService::STALE_VERSION_MESSAGE)->danger()
+        );
         $this->assertSame(ProductApprovalStatus::PendingReview, $product->fresh()->approval_status);
     }
 
@@ -274,7 +278,9 @@ class AdminApprovalQueueTest extends TestCase
 
         Livewire::test(ListChangeRequestApprovals::class)
             ->callAction(TestAction::make('approve')->table($request))
-            ->assertNotified();
+            ->assertNotified(
+                Notification::make()->title('Could not complete this')->body(ProductApprovalService::PRICES_CHANGED_REASON)->danger()
+            );
 
         $this->assertSame('111.00', $product->prices()->first()->unit_price);
         $this->assertNotSame(ProductChangeRequest::STATUS_APPROVED, $request->fresh()->status);
@@ -291,7 +297,9 @@ class AdminApprovalQueueTest extends TestCase
         $newer = $this->propose($product->fresh(), 130);
         NotificationFacade::fake();
 
-        $component->callMountedAction()->assertNotified();
+        $component->callMountedAction()->assertNotified(
+            Notification::make()->title('Could not complete this')->body(ProductApprovalService::SUPERSEDED_MESSAGE)->danger()
+        );
 
         $this->assertSame('110.00', $product->prices()->first()->unit_price);
         $this->assertSame(ProductChangeRequest::STATUS_SUPERSEDED, $old->fresh()->status);
@@ -473,5 +481,66 @@ class AdminApprovalQueueTest extends TestCase
         $this->product('Waiting Shirt');
 
         $this->get('/admin')->assertOk()->assertSee('Approvals')->assertSee('New products')->assertSee('Price changes');
+    }
+
+    public function test_bulk_approve_skips_a_product_changed_after_the_confirmation_opened(): void
+    {
+        NotificationFacade::fake();
+        $a = $this->product('Shirt A');
+        $b = $this->product('Shirt B');
+
+        $component = Livewire::test(ListProductApprovals::class)
+            ->selectTableRecords([$a->getKey(), $b->getKey()])
+            ->mountAction(TestAction::make('approveSelected')->table()->bulk());
+
+        $this->travel(1)->seconds();
+        $b->touch();
+
+        $component->callMountedAction()->assertNotified('1 approved, 1 skipped (changed since)');
+
+        $this->assertSame(ProductApprovalStatus::Approved, $a->fresh()->approval_status);
+        $this->assertSame(ProductApprovalStatus::PendingReview, $b->fresh()->approval_status);
+    }
+
+    public function test_submitted_notifications_escape_seller_text(): void
+    {
+        $title = '<a href="https://evil.test">Verify</a>';
+        $product = $this->product($title);
+        $body = (new ProductSubmittedForReview($product))->toDatabase($this->admin)['body'];
+        $this->assertStringNotContainsString('<a', $body);
+
+        $live = $this->product($title.' live', ProductApprovalStatus::Approved);
+        $live->forceFill(['title' => $title])->save();
+        $request = $this->propose($live->fresh(), 125);
+        $body = (new ProductChangeSubmitted($request))->toDatabase($this->admin)['body'];
+        $this->assertStringNotContainsString('<a', $body);
+    }
+
+    public function test_the_list_pages_are_forbidden_to_sellers_and_customers(): void
+    {
+        $customer = User::factory()->create([
+            'role_id' => Role::firstOrCreate(['slug' => 'customer'], ['name' => 'Customer'])->id,
+            'is_active' => true,
+        ]);
+
+        foreach ([$this->seller, $customer] as $user) {
+            $this->actingAs($user);
+            Livewire::test(ListProductApprovals::class)->assertForbidden();
+            Livewire::test(ListChangeRequestApprovals::class)->assertForbidden();
+        }
+    }
+
+    public function test_the_submissions_column_counts_product_submitted_audit_rows(): void
+    {
+        $product = $this->product('Waiting Shirt');
+        foreach ([1, 2] as $_) {
+            AuditLog::create([
+                'module' => 'approvals', 'action' => 'product_submitted', 'description' => 'x',
+                'auditable_type' => Product::class, 'auditable_id' => $product->id,
+            ]);
+        }
+
+        Livewire::test(ListProductApprovals::class)
+            ->assertTableColumnStateSet('submissions_count', 2, $product);
     }
 }

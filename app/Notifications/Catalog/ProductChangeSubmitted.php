@@ -37,7 +37,7 @@ class ProductChangeSubmitted extends Notification
     {
         $bell = FilamentNotification::make()
             ->title($this->toArray($notifiable)['title'])
-            ->body($this->toArray($notifiable)['body'])
+            ->body(e($this->toArray($notifiable)['body']))
             ->warning()
             ->actions([
                 Action::make('review')

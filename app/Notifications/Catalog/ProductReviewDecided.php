@@ -60,7 +60,7 @@ class ProductReviewDecided extends Notification implements ShouldQueue
     {
         $bell = FilamentNotification::make()
             ->title($this->approved ? 'Your product was approved' : 'Your product was not approved')
-            ->body($this->product->title.($this->approved ? ' is now visible to buyers.' : ': '.$this->reason));
+            ->body(e($this->product->title).($this->approved ? ' is now visible to buyers.' : ': '.e((string) $this->reason)));
 
         if ($this->approved) {
             $bell->success();

@@ -7,7 +7,9 @@ namespace App\Filament\Shared;
 use App\Models\Category;
 use App\Models\ProductChangeRequest;
 use App\Models\SalesChannel;
+use Illuminate\Support\Collection;
 use Illuminate\Support\HtmlString;
+use WeakMap;
 
 /**
  * Plain-language summary of a held price, channel or category change: what it changes and an old-against-new table.
@@ -146,9 +148,7 @@ class ChangeRequestSummary
         $lines = [];
 
         if ($request->proposed_sales_channel_id !== null) {
-            $names = SalesChannel::query()
-                ->whereIn('id', [$request->base_sales_channel_id, $request->proposed_sales_channel_id])
-                ->pluck('name', 'id');
+            $names = self::channelNames($request);
             $lines[] = 'Channel: '.($names[$request->base_sales_channel_id] ?? '—').' → '.($names[$request->proposed_sales_channel_id] ?? '—');
         }
 
@@ -173,7 +173,7 @@ class ChangeRequestSummary
         $key = fn (array $row): string => implode('|', [$row['sales_channel_id'], $row['variation_id'] ?? '', $row['min_quantity']]);
         $old = collect($request->base_prices ?? [])->keyBy($key);
         $new = collect($request->proposed_prices ?? [])->keyBy($key);
-        $channels = SalesChannel::query()->pluck('name', 'id');
+        $channels = self::channelNames($request);
 
         $rows = [];
         foreach ($old->keys()->merge($new->keys())->unique() as $rowKey) {
@@ -197,6 +197,19 @@ class ChangeRequestSummary
         }
 
         return $rows;
+    }
+
+    /**
+     * Channel names, looked up once per request object so a table of rows does not query per row.
+     *
+     * @return Collection<int, string>
+     */
+    protected static function channelNames(ProductChangeRequest $request): Collection
+    {
+        static $memo = null;
+        $memo ??= new WeakMap;
+
+        return $memo[$request] ??= SalesChannel::query()->pluck('name', 'id');
     }
 
     protected static function moneyOrNull(int|float|string|null $value): ?string

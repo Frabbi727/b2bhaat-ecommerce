@@ -62,7 +62,7 @@ class ProductChangeDecided extends Notification implements ShouldQueue
     {
         $bell = FilamentNotification::make()
             ->title($this->approved ? 'Your price change was approved' : 'Your price change was not approved')
-            ->body(($this->request->product?->title).($this->approved ? ': the new prices are now live.' : ': '.$this->reason));
+            ->body(e((string) $this->request->product?->title).($this->approved ? ': the new prices are now live.' : ': '.e((string) $this->reason)));
 
         if ($this->approved) {
             $bell->success();
