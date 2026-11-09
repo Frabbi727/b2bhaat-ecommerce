@@ -233,7 +233,9 @@ class CustomerAuth extends Component
         $result = $otpService->verify($normalized, trim($this->otpCode), 'login');
 
         if (! $result['success']) {
-            if ($result['error'] === 'EXPIRED') {
+            if ($result['error'] === 'LOCKED') {
+                $this->errorMessage = self::lockedMessage($result);
+            } elseif ($result['error'] === 'EXPIRED') {
                 $this->errorMessage = 'The OTP code has expired. Please request a new code.';
             } elseif ($result['error'] === 'MAX_ATTEMPTS_EXCEEDED') {
                 $this->errorMessage = 'Maximum attempts reached. Please request a new OTP.';
@@ -268,6 +270,16 @@ class CustomerAuth extends Component
     private static function mayUseOtpLogin(User $user): bool
     {
         return ! $user->isSuperAdmin() && ! $user->isSeller();
+    }
+
+    /**
+     * @param  array{success: bool, error?: string, seconds_remaining?: int}  $result
+     */
+    private static function lockedMessage(array $result): string
+    {
+        $minutes = (int) max(1, ceil(($result['seconds_remaining'] ?? 60) / 60));
+
+        return "Too many wrong codes for this number. Please try again in {$minutes} minute(s).";
     }
 
     /**
@@ -345,7 +357,9 @@ class CustomerAuth extends Component
         $result = $otpService->verify($normalized, trim($this->otpCode), 'registration');
 
         if (! $result['success']) {
-            if ($result['error'] === 'EXPIRED') {
+            if ($result['error'] === 'LOCKED') {
+                $this->errorMessage = self::lockedMessage($result);
+            } elseif ($result['error'] === 'EXPIRED') {
                 $this->errorMessage = 'The OTP has expired. Please request a new code.';
             } elseif ($result['error'] === 'MAX_ATTEMPTS_EXCEEDED') {
                 $this->errorMessage = 'Too many failed attempts. Please request a new OTP.';

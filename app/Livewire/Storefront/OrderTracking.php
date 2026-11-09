@@ -7,6 +7,7 @@ use App\Models\SubOrder;
 use App\Services\Orders\OrderDisputeService;
 use App\Services\Settings\StoreConfigurationService;
 use Exception;
+use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
@@ -15,6 +16,11 @@ use Livewire\Component;
 #[Layout('layouts.storefront')]
 class OrderTracking extends Component
 {
+    /** SEC-6: order lookups allowed per network address in each window. */
+    public const LOOKUPS_PER_WINDOW = 10;
+
+    public const LOOKUP_WINDOW_SECONDS = 600;
+
     #[Url(as: 'order')]
     public string $orderNumber = '';
 
@@ -108,6 +114,16 @@ class OrderTracking extends Component
 
             return;
         }
+
+        // SEC-6: order numbers and phones can't be guessed by trying again and again
+        $throttleKey = 'order-lookup:'.(request()->ip() ?? 'unknown');
+        if (RateLimiter::tooManyAttempts($throttleKey, self::LOOKUPS_PER_WINDOW)) {
+            $minutes = (int) max(1, ceil(RateLimiter::availableIn($throttleKey) / 60));
+            $this->searchError = "Too many lookups from your connection. Please try again in {$minutes} minute(s).";
+
+            return;
+        }
+        RateLimiter::hit($throttleKey, self::LOOKUP_WINDOW_SECONDS);
 
         $query = Order::with([
             'orderStatus',

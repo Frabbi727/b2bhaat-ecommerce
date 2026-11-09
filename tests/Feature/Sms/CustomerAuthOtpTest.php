@@ -134,6 +134,41 @@ class CustomerAuthOtpTest extends TestCase
     }
 
     /**
+     * SEC-6: after five wrong codes the sign-in form says how long to wait, and even the right code is refused.
+     */
+    public function test_wrong_codes_pause_otp_sign_in_with_a_clear_message(): void
+    {
+        User::create([
+            'role_id' => Role::where('slug', 'retail')->first()->id,
+            'name' => 'Existing Customer',
+            'phone' => '8801812345678',
+            'email' => 'existing@example.com',
+            'password' => bcrypt('secret123'),
+            'is_active' => true,
+        ]);
+
+        $component = Livewire::test(CustomerAuth::class)
+            ->set('mode', 'login')
+            ->set('loginMethod', 'otp')
+            ->set('otpPhone', '01812345678')
+            ->call('sendLoginOtp');
+
+        $lastSent = end($this->mockDriver->sentMessages);
+        preg_match('/\b(\d{6})\b/', $lastSent['message'], $matches);
+
+        for ($i = 0; $i < 5; $i++) {
+            $component->set('otpCode', '00000'.$i)->call('verifyLoginOtp');
+        }
+
+        $component->set('otpCode', $matches[1])
+            ->call('verifyLoginOtp')
+            ->assertSet('errorMessage', 'Too many wrong codes for this number. Please try again in 15 minute(s).')
+            ->assertNoRedirect();
+
+        $this->assertFalse(Auth::check());
+    }
+
+    /**
      * SEC-7: panel accounts (super admin, seller) must sign in with their password, never with an SMS code alone.
      */
     public function test_admin_phone_gets_no_login_code_and_cannot_sign_in_by_otp(): void
