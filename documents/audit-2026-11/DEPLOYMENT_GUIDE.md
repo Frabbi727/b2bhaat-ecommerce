@@ -165,3 +165,9 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 - **Migration:** `2026_11_09_104236_add_billing_period_key_to_seller_invoices_table.php` adds `billing_period_key` (unique) to `seller_invoices` and keys existing renewal bills. It changes no amount or status and removes nothing.
 - **Watch the output:** if it prints "MON-10: N renewal bill(s) repeat a period…", some sellers were billed twice for one period in the past. Find them with `SELECT subscription_id, due_date, count(*) FROM seller_invoices WHERE invoice_type = 'subscription_fee' GROUP BY 1, 2 HAVING count(*) > 1;` and have the accountant void or refund the extra unpaid or paid bills.
 - **Rollback:** `php artisan migrate:rollback --step=1` drops the column and index; bills are kept.
+
+## PAY-2 unchecked bKash/Nagad payments
+- **Migration:** `2026_11_09_110445_add_mfs_verification_timeout_support.php` adds `orders.verification_reminded_at` and the payment status **Not Confirmed** (`expired`). It changes no order.
+- **Scheduler:** `payments:expire-unverified` runs hourly (needs the scheduler running, as for the other jobs).
+- **First run after deploy:** every bKash/Nagad order already waiting **more than 72 hours** is cancelled on the first hourly run, and each buyer gets an SMS. Before deploying, check them with `SELECT order_number, created_at FROM orders WHERE payment_status_id = (SELECT id FROM payment_statuses WHERE slug = 'awaiting_verification') AND created_at < now() - interval '72 hours';`. Verify or reject those first, or raise the time in Store Settings straight after deploy.
+- **Rollback:** deploy the previous code, then `php artisan migrate:rollback --step=1`. The status is removed only if no order uses it.

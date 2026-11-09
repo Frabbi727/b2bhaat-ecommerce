@@ -55,7 +55,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | MON-8 | Monetization | Turning the monetization switch off makes commission 0 (`MonetizationEngineService.php:48-50`) | The switch controls subscriptions and listing fees only | – | Open |
 | MON-10 / ACC-10 | Monetization | Auto-renew balance check is outside the lock; stale `running_balance`; no unique period key | Lock and re-check; refresh; unique (subscription, period) index | – | **Partly fixed (8d3d7e0)**: auto-renew now locks and re-checks inside the shared settlement service; running balance is refreshed. **Fixed (cdfd924)**: `billing_period_key` with a unique index; the renewal command reuses or skips an already-billed period |
 | UX-5 | Seller UI | Sellers see a fallback commission, not their effective rate (`StoreSettings.php:225`) | Show the effective rate, limits, usage and next payment | MON-2 | Open |
-| PAY-2 | Payments | MFS orders never time out (`ReleaseExpiredStockReservationsCommand.php:60-62`) | Configurable verification timeout that releases stock and flash quota | – | Open |
+| PAY-2 | Payments | MFS orders never time out (`ReleaseExpiredStockReservationsCommand.php:60-62`) | Configurable verification timeout that releases stock and flash quota | – | **Fixed (4787c36)**: owner chose a reminder at 12 h and cancellation at 72 h, both store settings; status "Not Confirmed"; buyer SMS |
 | PAY-3 / SEC-5 | Payments | bKash/Nagad TrxID can be reused across orders (`CheckoutComponent.php:363`) | Dedicated column with a unique index per gateway (migration) | – | Open |
 | ORD-1 | Orders | Full cancel marks a partly shipped order cancelled; admin can edit order status freely (`OrderDisputeService.php:139-148`, `OrderForm.php:23`) | Derive the parent status from its sub-orders; status read-only in the form | ORD-2 | Open |
 | ACC-3 | Accounting | Self-collected COD: wallet and ledger disagree (`EscrowLedgerService.php:84`, `CodDeliveryJournalHandler.php:111-130`) | Book the discount share; post even when commission is 0 | – | **Fixed (62d6d30)** |
@@ -87,7 +87,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | ORD-3 | Checkout post-split steps are not atomic; coupon limit can be exceeded (`CouponService.php:80`) | Move them inside the transaction; lock the coupon |
 | ORD-4 | Splitter doesn't re-check seller suspension | Check `sellable` inside the transaction |
 | PAY-4 | Refunds are whole sub-order only | Line-level partial refunds |
-| FS-1 / INV-7 | Flash `units_sold` not returned on reject, expiry or return; expiry job can release twice | Central release helper; lock and re-check |
+| FS-1 / INV-7 | Flash `units_sold` not returned on reject, expiry or return; expiry job can release twice | Central release helper; lock and re-check | Partly fixed (4787c36): payment rejection and the PAY-2 expiry now return flash units; expiry of unpaid reservations and returns still don't |
 | FS-2 | Admin approve bypasses the conflict checker | Approve through the service |
 | ACC-2 | Mock gateway marks orders paid with no journal (local/testing only) | Post the journal; never seed it as active |
 | ACC-12 | No subscription deferral; any tax amount unbalances posting | **Needs legal/tax validation** |

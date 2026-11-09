@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1355 tests, 1348 passed, 7 skipped, 6279 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1362 tests, 1355 passed, 7 skipped, 6302 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -82,6 +82,7 @@ The existing tests of other features were touched only to give their test produc
 | MON-6 | `tests/Feature/AdminMonetizationPanelTest.php` (4 new) | The payment goes to the bill the admin chose, not the newest; a wrong amount records nothing and says why; a reference already used (different case and spaces) is refused and names the bill it paid; a waiver needs no amount or reference and covers the whole bill. All four failed on the old code; the 3 earlier offline-payment tests still pass |
 | MON-7 (check) | `tests/Feature/Accounting/MonetizationJournalIntegrationTest.php` (2 new) | Paying a bill from the wallet posts Dr seller wallet payable / Cr subscription revenue; recording a bKash payment posts Dr gateway clearing / Cr subscription revenue. Both passed on the existing code, so MON-7 was a false finding |
 | MON-10, ACC-10 | `tests/Feature/SellerBillingPeriodKeyTest.php` (4) | The renewal bill carries its period key and running the command twice raises one bill; a period already paid is not billed again; the database refuses a second bill with the same key; a plan-change bill is keyed to its new subscription. All four failed on the old code |
+| PAY-2 | `tests/Feature/UnverifiedPaymentTimeoutTest.php` (7) | A 13-hour-old unchecked payment reminds admins exactly once and cancels nothing; a 73-hour-old one is cancelled as Not Confirmed, its consignment cancelled, stock returned, TrxID kept, and the buyer SMS queued; a 2-hour-old one is left alone; an order verified in the meantime is not cancelled; the limit follows the store setting; expiry and rejection both free flash-sale units (rejection failed this on the old code) |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
@@ -96,6 +97,8 @@ The existing tests of other features were touched only to give their test produc
 **PostgreSQL check (MON-2):** on a throwaway local database (created and deleted), the migration was run over 4 existing subscriptions on two plans. Each got its plan's price, commission, listing limit and commission switch. Rollback dropped only the new columns and kept every subscription.
 
 **PostgreSQL check (MON-10):** on a throwaway local database (created and deleted), the migration ran over 4 bills for one subscription period: 3 renewal bills (one paid) and 1 old plan-change bill. The paid bill got the key, the plan-change bill was skipped, the other 2 were reported ("2 renewal bill(s) repeat a period…") and left unchanged. Rollback kept all 4 bills.
+
+**PostgreSQL check (PAY-2):** on a throwaway local database (created and deleted), the migration adds the Not Confirmed status and the reminder column; rollback removes the unused status; the 7 PAY-2 tests pass on PostgreSQL.
 
 **Known test limit:** most accounting tests are written for SQLite. On PostgreSQL, 34 fail before reaching any journal code because their setup hard-codes `order_status_id = 1` (ids drift between tests there), and 11 deliberately insert unbalanced or already-posted journals, which the ACC-9 guards now refuse. This predates Wave 1 except for those 11, which show the guards working.
 
