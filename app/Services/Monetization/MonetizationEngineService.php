@@ -15,7 +15,8 @@ use App\Services\Settings\StoreConfigurationService;
 class MonetizationEngineService
 {
     public function __construct(
-        protected StoreConfigurationService $config
+        protected StoreConfigurationService $config,
+        protected DefaultPlanService $defaultPlans,
     ) {}
 
     /**
@@ -141,7 +142,18 @@ class MonetizationEngineService
     public function getAllowedProductCount(User $seller): ?int
     {
         $subscription = $this->getActiveSubscription($seller);
-        if (! $subscription || (! $subscription->hasCapturedTerms() && ! $subscription->plan) || ! $subscription->termListingLimitEnabled()) {
+
+        if (! $subscription) {
+            // No running plan (never assigned, or ended): the default free plan's limit applies (MON-3).
+            $defaultPlan = $this->defaultPlans->defaultPlan();
+            if (! $defaultPlan || ! $defaultPlan->is_listing_limit_enabled || $defaultPlan->max_active_products === null) {
+                return null; // Unlimited
+            }
+
+            return (int) $defaultPlan->max_active_products + $this->getActiveListingAddonSlots($seller);
+        }
+
+        if ((! $subscription->hasCapturedTerms() && ! $subscription->plan) || ! $subscription->termListingLimitEnabled()) {
             return null; // Unlimited
         }
 

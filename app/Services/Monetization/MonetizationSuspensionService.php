@@ -119,6 +119,16 @@ class MonetizationSuspensionService
                 ->whereIn('id', $snapshotIds)
                 ->whereNull('blocked_at');
 
+            // Put the suspended plan back first, so the quota below is that plan's and not the free plan's (MON-3)
+            $suspendedSub = SellerSubscription::where('seller_id', $seller->id)
+                ->where('status', SellerSubscription::STATUS_SUSPENDED)
+                ->latest('id')
+                ->first();
+
+            if ($suspendedSub) {
+                $suspendedSub->update(['status' => SellerSubscription::STATUS_ACTIVE]);
+            }
+
             // Quota limit respect
             $quota = $this->monetizationEngine->getAllowedProductCount($seller);
             if ($quota !== null) {
@@ -140,16 +150,6 @@ class MonetizationSuspensionService
 
             // 3. Update seller profile monetization status
             $seller->sellerProfile()->update(['monetization_status' => 'active']);
-
-            // 4. Update subscription status back to active if was suspended
-            $suspendedSub = SellerSubscription::where('seller_id', $seller->id)
-                ->where('status', SellerSubscription::STATUS_SUSPENDED)
-                ->latest('id')
-                ->first();
-
-            if ($suspendedSub) {
-                $suspendedSub->update(['status' => SellerSubscription::STATUS_ACTIVE]);
-            }
 
             // 5. Update event audit log
             if ($lastEvent) {

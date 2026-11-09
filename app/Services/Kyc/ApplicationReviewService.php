@@ -9,6 +9,7 @@ use App\Events\Sellers\WholesaleKycDecidedEvent;
 use App\Models\Role;
 use App\Models\SellerProfile;
 use App\Models\User;
+use App\Services\Monetization\DefaultPlanService;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -17,6 +18,10 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class ApplicationReviewService
 {
+    public function __construct(
+        private readonly DefaultPlanService $defaultPlans,
+    ) {}
+
     public function approveSeller(SellerProfile $profile, float $commissionRatePercentage): void
     {
         $profile->update([
@@ -26,6 +31,11 @@ class ApplicationReviewService
             'rejection_reason' => null,
             'commission_rate_percentage' => $commissionRatePercentage,
         ]);
+
+        // An approved seller always has a plan (MON-3).
+        if ($profile->user) {
+            $this->defaultPlans->assignIfMissing($profile->user);
+        }
 
         try {
             event(new SellerKycDecidedEvent($profile->fresh(), true));
