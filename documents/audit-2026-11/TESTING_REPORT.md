@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1331 tests, 1324 passed, 7 skipped, 6193 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1338 tests, 1331 passed, 7 skipped, 6220 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -77,6 +77,7 @@ The existing tests of other features were touched only to give their test produc
 | ACC-3, ACC-4 | `tests/Feature/Accounting/SelfDeliveryJournalsTest.php` (4) | Self-collected COD with a coupon: the seller's wallet and `seller_wallet_payable` agree, with commission revenue and coupon expense booked; with zero commission the coupon share still posts; with neither, nothing posts. A prepaid parcel switched to self-delivery: escrow in the books equals the wallet escrow, shipping revenue returns to zero, and after release the escrow account is zero and the wallet account holds the full amount |
 | ACC-8 | `tests/Feature/Accounting/MonetizationJournalIntegrationTest.php` (1 rewritten) | An admin waiver posts no journal and books no subscription revenue. The old test asserted the revenue-plus-expense entry and was replaced |
 | ACC-11 | `tests/Feature/Accounting/CommissionDeferralTest.php` (6), `OrderPaymentJournalIntegrationTest.php` (5 updated) | A prepaid payment holds commission as deferred; delivery moves it to income exactly once; cancelling before delivery clears the deferred amount; a return after release takes it back out of income; an order paid before the change keeps its booked commission and moves nothing on delivery; courier COD is unchanged; the books balance in every case. The 5 updated tests now expect the commission in the deferred account at payment |
+| MON-2 | `tests/Feature/SellerPlanTermsSnapshotTest.php` (7) | A new subscription keeps its plan's terms; editing the plan doesn't change a running subscription's commission or listing limit; the renewal bill and the next period use the new terms; moving a subscription to another plan takes that plan's terms; an admin's custom rate and limit still win; changing terms sends each seller an SMS and tells the admin; renaming a plan sends nothing. Three of these failed on the old code |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
@@ -87,6 +88,8 @@ The existing tests of other features were touched only to give their test produc
 **Existing tests changed (ACC-6):** seven billing and finance test classes now seed the chart of accounts in `setUp`, because their billing payments now need the accounts the journals use. No assertion was relaxed.
 
 **PostgreSQL check (ACC-11):** on a throwaway local database (created and deleted), the migration skips a database with no chart yet, inserts account 2070 when it is missing, and rollback removes it only while nothing is posted to it. `CommissionDeferralTest` and `SelfDeliveryJournalsTest` pass on PostgreSQL with the ACC-9 journal guards active.
+
+**PostgreSQL check (MON-2):** on a throwaway local database (created and deleted), the migration was run over 4 existing subscriptions on two plans. Each got its plan's price, commission, listing limit and commission switch. Rollback dropped only the new columns and kept every subscription.
 
 **Known test limit:** most accounting tests are written for SQLite. On PostgreSQL, 34 fail before reaching any journal code because their setup hard-codes `order_status_id = 1` (ids drift between tests there), and 11 deliberately insert unbalanced or already-posted journals, which the ACC-9 guards now refuse. This predates Wave 1 except for those 11, which show the guards working.
 

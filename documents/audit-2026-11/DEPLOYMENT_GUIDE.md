@@ -144,3 +144,9 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 - **Already-paid orders:** commission booked before the deploy stays as income; nothing is moved or re-posted for them.
 - **Check after deploy:** verify one bKash/Nagad payment, then confirm Journal Entries shows its commission on account 2070; after delivery, a `commission_earned` journal moves it to commission revenue.
 - **Rollback:** `php artisan migrate:rollback --step=1` removes the account only while nothing is posted to it. After real use, roll back the code only; the account stays, and any balance on it is real deferred commission.
+
+## MON-2 plan terms kept until renewal
+- **Migration:** `2026_11_09_095816_add_term_snapshot_to_seller_subscriptions_table.php` adds 8 columns to `seller_subscriptions` and fills them for every existing subscription from its plan's current values. It changes no other data. Run it **before** editing any plan after the deploy, so today's terms are what gets kept.
+- **SMS:** saving a plan with a changed price, cycle, limit or commission now sends one SMS to each seller on it (active, grace period or suspended). Plan edits cost SMS credit in proportion to the number of sellers.
+- **Check after deploy:** `SELECT count(*) FROM seller_subscriptions WHERE terms_captured_at IS NULL;` should be 0.
+- **Rollback:** `php artisan migrate:rollback --step=1` drops the columns; the old code then reads the plan's live values again.

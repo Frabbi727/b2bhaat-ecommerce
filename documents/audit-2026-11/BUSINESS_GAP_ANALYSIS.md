@@ -14,7 +14,7 @@ This page compares what B2Bhaat promises sellers and buyers with what the code d
 | Paying early keeps the remaining days | The period restarted from today | Fixed (d8460de) |
 | Paying during grace keeps the store open | Products stayed hidden | Fixed (8d3d7e0) |
 | Admin offline payment renews the plan | It marked the bill paid but left the plan expired | Fixed (8d3d7e0) |
-| Plan price changes don't surprise existing sellers **(D: keep terms until renewal)** | Edits apply immediately | Wave 1, MON-2 |
+| Plan price changes don't surprise existing sellers **(D: keep terms until renewal)** | Edits apply immediately | Wave 1, MON-2 **(fixed 21eb20a)** |
 | New sellers start on the free plan | No subscription means unlimited listings | Wave 1, MON-3 |
 | Billing shows in the books | Seller payments post no journals | Wave 1, MON-7 |
 | Listing packs and COD-deficit bills | Invoice types exist, but there is no purchase flow | Wave 2, MON-11 |
