@@ -44,8 +44,8 @@ class MonetizationEngineService
 
     /**
      * Resolve the dynamic commission percentage for a specific seller, product, and channel.
-     * Order: the admin's custom rate on the subscription, then the product's category rate, then the plan terms the
-     * subscription was sold on (MON-2), then the rate set when the seller was approved.
+     * Order: the admin's custom rate on the subscription, then the plan terms the subscription was sold on (MON-2),
+     * then the rate set when the seller was approved. Zero while marketplace fees are switched off (MON-8).
      */
     public function resolveCommissionRate(User $seller, Product $product, SalesChannel $channel): float
     {
@@ -53,23 +53,13 @@ class MonetizationEngineService
             return 0.00;
         }
 
-        $subscription = $this->getActiveSubscription($seller);
-
-        $custom = $this->customCommissionRate($subscription, $channel->slug);
-        if ($custom !== null) {
-            return $custom;
-        }
-
-        if (isset($product->category->commission_rate_percentage) && $product->category->commission_rate_percentage !== null) {
-            return (float) $product->category->commission_rate_percentage;
-        }
-
-        return $this->planOrDefaultCommissionRate($seller, $subscription, $channel->slug === SalesChannel::WHOLESALE);
+        // The seller's custom rate, then the plan, then the default. There are no per-category rates (owner
+        // decision MON-16), so the product's category plays no part.
+        return $this->sellerCommissionRate($seller, $channel->slug === SalesChannel::WHOLESALE);
     }
 
     /**
-     * UX-5: the seller's own commission rate for a channel, as charged on any product whose category has no rate
-     * of its own. Uses the same rules as resolveCommissionRate().
+     * UX-5: the seller's commission rate for a channel; resolveCommissionRate() charges exactly this.
      */
     public function sellerCommissionRate(User $seller, bool $wholesale): float
     {

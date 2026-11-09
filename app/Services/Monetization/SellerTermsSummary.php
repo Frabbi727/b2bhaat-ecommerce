@@ -83,7 +83,7 @@ class SellerTermsSummary
 
         $price = $subscription->custom_subscription_price !== null
             ? (float) $subscription->custom_subscription_price
-            : (float) ($subscription->plan?->subscription_price ?? $subscription->termSubscriptionPrice());
+            : ($subscription->plan?->chargedPrice() ?? $subscription->termSubscriptionPrice());
 
         return $price > 0 ? [$price, $subscription->ends_at, false] : [null, null, false];
     }

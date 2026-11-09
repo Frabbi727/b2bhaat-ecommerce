@@ -58,6 +58,14 @@ class SellerPlan extends Model
 
     public function isFree(): bool
     {
-        return ! $this->is_subscription_fee_enabled || (float) $this->subscription_price <= 0.00;
+        return $this->chargedPrice() <= 0.00;
+    }
+
+    /**
+     * What a period on this plan is billed: nothing while "Charge Subscription Fee" is off (owner decision MON-15).
+     */
+    public function chargedPrice(): float
+    {
+        return $this->is_subscription_fee_enabled ? max(0.00, (float) $this->subscription_price) : 0.00;
     }
 }

@@ -110,7 +110,7 @@ class SellerSubscription extends Model
     public static function termsFromPlan(SellerPlan $plan): array
     {
         return [
-            'term_subscription_price' => (float) $plan->subscription_price,
+            'term_subscription_price' => $plan->chargedPrice(),
             'term_billing_cycle_days' => (int) $plan->billing_cycle_days,
             'term_is_listing_limit_enabled' => (bool) $plan->is_listing_limit_enabled,
             'term_max_active_products' => $plan->max_active_products !== null ? (int) $plan->max_active_products : null,
