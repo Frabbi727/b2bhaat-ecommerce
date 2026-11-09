@@ -221,3 +221,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## M-7 interrupted index builds
 - **No new migration;** the PERF-1 migration changed before release. If it stops part-way on production, run `php artisan migrate --force` again: half-built indexes are dropped and rebuilt, still concurrently.
+
+## MON-8, MON-15, MON-16 owner decisions
+- **Code only, no migration.** Check every plan's **Charge Subscription Fee** switch before deploying: plans with it off will stop billing at their next renewal or plan change. The marketplace fees switch now appears in Store Settings; it is on unless it was switched off in the database.
