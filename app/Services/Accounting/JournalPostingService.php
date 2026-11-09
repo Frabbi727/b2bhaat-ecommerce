@@ -95,19 +95,7 @@ class JournalPostingService
                 $yearMonth = Carbon::parse($data->entryDate)->format('Ym');
                 $prefix = sprintf('JRN-%s-', $yearMonth);
 
-                $lastEntry = AccountingJournalEntry::where('journal_number', 'like', "{$prefix}%")
-                    ->orderByDesc('journal_number')
-                    ->lockForUpdate()
-                    ->first();
-
-                if ($lastEntry) {
-                    $lastSeq = (int) substr($lastEntry->journal_number, strlen($prefix));
-                    $nextSeq = $lastSeq + 1;
-                } else {
-                    $nextSeq = 1;
-                }
-
-                $journalNumber = sprintf('%s%06d', $prefix, $nextSeq);
+                $journalNumber = sprintf('%s%06d', $prefix, $this->nextSequence($prefix));
 
                 // Entry is created as DRAFT so journal lines can be appended without triggering immutability guards
                 $entry = AccountingJournalEntry::create([
@@ -150,6 +138,30 @@ class JournalPostingService
 
             throw $e;
         }
+    }
+
+    /**
+     * ACC-13: take the next number for the prefix from its counter row. The row stays locked until the caller's
+     * transaction commits, so a concurrent posting waits and then sees the new value instead of reusing it.
+     * A missing row is created from the highest existing number (journals posted before the counter existed).
+     */
+    private function nextSequence(string $prefix): int
+    {
+        $sequences = DB::table('accounting_journal_sequences');
+
+        if (! (clone $sequences)->where('prefix', $prefix)->exists()) {
+            $highest = AccountingJournalEntry::where('journal_number', 'like', "{$prefix}%")
+                ->pluck('journal_number')
+                ->map(fn (string $number): int => (int) substr($number, strlen($prefix)))
+                ->max() ?? 0;
+
+            (clone $sequences)->insertOrIgnore(['prefix' => $prefix, 'last_number' => $highest]);
+        }
+
+        $last = (int) (clone $sequences)->where('prefix', $prefix)->lockForUpdate()->value('last_number');
+        (clone $sequences)->where('prefix', $prefix)->update(['last_number' => $last + 1]);
+
+        return $last + 1;
     }
 
     /**
