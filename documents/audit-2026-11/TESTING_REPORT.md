@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1380 tests, 1373 passed, 7 skipped, 6370 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1384 tests, 1377 passed, 7 skipped, 6387 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -86,6 +86,7 @@ The existing tests of other features were touched only to give their test produc
 | PAY-3, SEC-5 | `tests/Feature/MfsTransactionIdUniqueTest.php` (5) | An order stores its TrxID cleaned up (spaces removed, upper case); a TrxID already used is refused at checkout in any letter case and no order is created; the same TrxID on Nagad is allowed after bKash; the database refuses a second order with the same TrxID; cash-on-delivery orders need no TrxID. All five failed on the old code |
 | ORD-1 | `tests/Feature/OrderStatusFromConsignmentsTest.php` (7) | Full cancel of a partly shipped order cancels only the waiting parcel and leaves the order open; full cancel is refused when every parcel has shipped; one parcel cancelled and the other delivered completes the order; one delivered and one returned completes it; cancelling every parcel of a paid order cancels and refunds it; a wrongly cancelled order with parcels on the way reopens as Processing; the admin has no edit page or Change status action. Six failed on the old code; the paid-refund case already worked and still does. `FinancialRecordRetentionTest` now checks that the order edit page is gone instead of checking its locked fields |
 | INV-3 | `tests/Feature/StockAdjustmentTest.php` (6) | Saving the form after an order took 3 units keeps the lower stock; the stock field is read-only and a typed value is ignored; Adjust stock adds to the live figure (after a concurrent sale) and writes an audit entry with before, after, change and reason; removing more than is in stock is refused and changes nothing; a seller adjusts one option from the product list; an option of another product can't be adjusted. All six failed on the old code. Three older tests (`SimpleProductStockTest`, `SellerProductEditApprovalTest`, `FinalReviewFixesTest`) that typed stock into the form now use Adjust stock, with the same expected figures |
+| INV-4 | `tests/Feature/OrderedVariationDeletionTest.php` (4) | Deleting an ordered option is refused with a message pointing to Sellable, and the order line keeps its link; an option never ordered still deletes; the database refuses a direct delete of an ordered option; in the product form the delete button keeps the ordered option with a notice, while the never-ordered one is removed on save. Three failed on the old code; the never-ordered case already worked |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
@@ -104,6 +105,8 @@ The existing tests of other features were touched only to give their test produc
 **PostgreSQL check (PAY-2):** on a throwaway local database (created and deleted), the migration adds the Not Confirmed status and the reminder column; rollback removes the unused status; the 7 PAY-2 tests pass on PostgreSQL.
 
 **PostgreSQL check (PAY-3):** on a throwaway local database (created and deleted), the migration ran over 4 orders. bKash "abc 123" was kept on the oldest order as ABC123. A later bKash ABC123 was reported ("ORD-T2 (bkash ABC123, first used on ORD-T1)") and left empty. Nagad ABC123 was kept. A cash-on-delivery order stayed empty. Rollback kept every order.
+
+**PostgreSQL check (INV-4):** on a throwaway local database (created and deleted), after the migration a direct `DELETE` of an ordered option was refused by the foreign key and the order line kept its link. Rollback restored the old rule (clear the link) and a re-run restored the block. With one order line that had already lost its option, the migration printed "INV-4: 1 order line(s) already lost their option…" and left it unchanged. The 4 INV-4 tests pass on PostgreSQL.
 
 **Known test limit:** most accounting tests are written for SQLite. On PostgreSQL, 34 fail before reaching any journal code because their setup hard-codes `order_status_id = 1` (ids drift between tests there), and 11 deliberately insert unbalanced or already-posted journals, which the ACC-9 guards now refuse. This predates Wave 1 except for those 11, which show the guards working.
 

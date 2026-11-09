@@ -185,3 +185,8 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 ## INV-3 stock adjustments
 - **Code only, no migration.** No stock figure is changed on deploy.
 - **Tell sellers:** stock is now changed with **Adjust stock** on the product page or in the product list menu; the stock box in the form is read-only.
+
+## INV-4 ordered options can't be deleted
+- **Migration:** `2026_11_09_141813_restrict_deleting_ordered_variations.php` changes the `order_items.variation_id` foreign key from "clear on delete" to "refuse delete". No row is changed. It briefly locks `order_items` and `product_variations` while the key is rebuilt and checked; run it at a quiet time.
+- **Watch the output:** "INV-4: N order line(s) already lost their option…" counts past order lines whose option was deleted earlier. They can't be restored from the database; the invoice shows the product name without the option.
+- **Rollback:** `php artisan migrate:rollback --step=1` puts back the old "clear on delete" key.
