@@ -211,3 +211,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## M-4 TrxID released on rejection or expiry
 - **Code only, no migration.** Orders rejected or expired before this change keep their TrxID. To release them, clear `mfs_transaction_id` on orders with payment status Failed or Expired (a reviewed, one-off update; not done automatically).
+
+## M-6 deferred commission account code
+- **No new migration;** the ACC-11 migration changed before release. Watch its output: if it prints that the account was added under a code other than 2070, do **not** run `AccountingChartOfAccountsSeeder` on that database. The seeder matches accounts by code and would overwrite the admin's 2070 account.
