@@ -38,6 +38,7 @@ class SellerPanelProvider extends PanelProvider
             ->brandName(fn (): string => app(StoreConfigurationService::class)->getStoreIdentity()['name'].' Seller Center')
             ->path('seller')
             ->login()
+            ->databaseNotifications()
             ->navigationGroups([
                 NavigationGroup::make('Sales'),
                 NavigationGroup::make('Catalog'),

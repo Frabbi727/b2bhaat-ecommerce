@@ -31,6 +31,9 @@ class EditProduct extends EditRecord
     /** @var array{rows: list<array<string, mixed>>, regular_price: mixed, sales_channel_id: int, category_id: int, note: ?string}|null */
     protected ?array $submittedPricing = null;
 
+    /** Id of the rejected price change whose red callout the seller dismissed. */
+    public ?int $dismissedRejectedChangeId = null;
+
     protected ?string $savedNotificationTitle = null;
 
     protected ?string $savedNotificationBody = null;
@@ -40,6 +43,18 @@ class EditProduct extends EditRecord
         return $this->holdingPriceChanges;
     }
 
+    /**
+     * Reloads the record and refills the form, so the callout and the pricing fields reflect a withdrawn request.
+     */
+    public function reloadAfterChangeDecision(): void
+    {
+        $record = $this->getRecord();
+        $record->refresh();
+        $record->unsetRelation('pendingChange');
+
+        $this->fillForm();
+    }
+
     public function getSubheading(): ?string
     {
         /** @var Product $product */
@@ -47,6 +62,8 @@ class EditProduct extends EditRecord
 
         return match (true) {
             (bool) $product->blocked_at => 'Hidden by the marketplace',
+            $product->approval_status === ProductApprovalStatus::PendingReview => 'Waiting for review'.($product->submitted_at ? ' since '.$product->submitted_at->timezone('Asia/Dhaka')->format('j M') : ''),
+            $product->approval_status === ProductApprovalStatus::Rejected && filled($product->rejection_reason) => 'Not approved: '.$product->rejection_reason,
             $product->is_active => 'Live on your storefront · last saved '.$product->updated_at?->diffForHumans(),
             default => 'Hidden draft · last saved '.$product->updated_at?->diffForHumans(),
         };
@@ -56,6 +73,8 @@ class EditProduct extends EditRecord
     {
         return [
             ProductsTable::viewOnStorefrontAction()
+                // Shown (but disabled) before approval so the seller sees why buyers can't reach the page yet
+                ->visible(fn (Product $record): bool => $record->approval_status !== ProductApprovalStatus::Approved || ($record->is_active && ! $record->blocked_at))
                 ->button()
                 ->color('gray'),
 

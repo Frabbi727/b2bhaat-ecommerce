@@ -40,7 +40,7 @@ class ProductsTable
         $lowStock = app(StoreConfigurationService::class)->getLowStockThreshold();
 
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['primaryImage', 'unit', 'salesChannel', 'retailPrice', 'wholesalePrice']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['primaryImage', 'unit', 'salesChannel', 'retailPrice', 'wholesalePrice', 'pendingChange']))
             ->columns([
                 ImageColumn::make('cover')
                     ->label('')
@@ -125,9 +125,26 @@ class ProductsTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
+                TextColumn::make('approval_status')
+                    ->label('Review')
+                    ->badge()
+                    ->formatStateUsing(fn (ProductApprovalStatus $state): string => $state->label())
+                    ->color(fn (ProductApprovalStatus $state): string => $state->color())
+                    ->tooltip(fn (Product $record): ?string => $record->approval_status === ProductApprovalStatus::Rejected ? $record->rejection_reason : null),
+
+                TextColumn::make('price_change_waiting')
+                    ->label('')
+                    ->state(fn (Product $record): ?string => $record->pendingChange ? 'Price change waiting' : null)
+                    ->badge()
+                    ->color('warning'),
+
                 ToggleColumn::make('is_active')
                     ->label('Visible')
-                    ->tooltip(fn (Product $record): string => $record->is_active ? 'Shown on your storefront' : 'Hidden from buyers')
+                    ->tooltip(fn (Product $record): string => match (true) {
+                        $record->approval_status !== ProductApprovalStatus::Approved && ! $record->is_active => 'Turning this on sends it for review',
+                        $record->is_active => 'Shown on your storefront',
+                        default => 'Hidden from buyers',
+                    })
                     ->beforeStateUpdated(function (Product $record, $state): bool {
                         if ($state) {
                             try {
@@ -174,6 +191,10 @@ class ProductsTable
                 SelectFilter::make('sales_channel_id')
                     ->label('Sold to')
                     ->options(fn () => SalesChannel::where('is_active', true)->pluck('name', 'id')),
+
+                SelectFilter::make('approval_status')
+                    ->label('Review')
+                    ->options(collect(ProductApprovalStatus::cases())->mapWithKeys(fn (ProductApprovalStatus $status): array => [$status->value => $status->label()])->all()),
 
                 TernaryFilter::make('is_active')
                     ->label('Visibility')
@@ -254,6 +275,8 @@ class ProductsTable
             ->label('View on storefront')
             ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
             ->url(fn (Product $record): string => route('catalog.show', $record->slug), shouldOpenInNewTab: true)
+            ->disabled(fn (Product $record): bool => $record->approval_status !== ProductApprovalStatus::Approved)
+            ->tooltip(fn (Product $record): ?string => $record->approval_status !== ProductApprovalStatus::Approved ? 'Not visible to buyers until approved' : null)
             ->visible(fn (Product $record): bool => $record->is_active && ! $record->blocked_at);
     }
 

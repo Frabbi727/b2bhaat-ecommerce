@@ -20,4 +20,14 @@ enum ProductApprovalStatus: string
             self::Rejected => 'Not approved',
         };
     }
+
+    public function color(): string
+    {
+        return match ($this) {
+            self::Draft => 'gray',
+            self::PendingReview => 'warning',
+            self::Approved => 'success',
+            self::Rejected => 'danger',
+        };
+    }
 }

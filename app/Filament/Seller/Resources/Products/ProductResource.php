@@ -5,6 +5,7 @@ namespace App\Filament\Seller\Resources\Products;
 use App\Filament\Seller\Resources\Products\Pages\CreateProduct;
 use App\Filament\Seller\Resources\Products\Pages\EditProduct;
 use App\Filament\Seller\Resources\Products\Pages\ListProducts;
+use App\Filament\Seller\Resources\Products\RelationManagers\ChangeRequestsRelationManager;
 use App\Filament\Seller\Resources\Products\Schemas\ProductForm;
 use App\Filament\Seller\Resources\Products\Tables\ProductsTable;
 use App\Models\Product;
@@ -57,7 +58,7 @@ class ProductResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            ChangeRequestsRelationManager::class,
         ];
     }
 

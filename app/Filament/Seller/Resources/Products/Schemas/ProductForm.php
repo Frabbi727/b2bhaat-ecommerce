@@ -3,15 +3,19 @@
 namespace App\Filament\Seller\Resources\Products\Schemas;
 
 use App\Enums\ProductApprovalStatus;
+use App\Exceptions\ApprovalConflictException;
 use App\Filament\Seller\Resources\Products\Pages\EditProduct;
 use App\Models\AttributeValue;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductChangeRequest;
 use App\Models\SalesChannel;
 use App\Models\Unit;
 use App\Services\Catalog\PriceSet;
+use App\Services\Catalog\ProductApprovalService;
 use Closure;
+use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\KeyValue;
@@ -22,14 +26,20 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Callout;
+use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
 /**
@@ -50,6 +60,7 @@ class ProductForm
                     ->columnSpanFull()
                     ->schema([
                         Group::make([
+                            ...self::reviewCallouts(),
                             self::detailsSection(),
                             self::photosSection(),
                             self::pricingSection(),
@@ -66,6 +77,122 @@ class ProductForm
                         ])->columnSpan(['lg' => 1]),
                     ]),
             ]);
+    }
+
+    /**
+     * What the seller needs to know about review state, above the pricing they are about to edit.
+     *
+     * @return array<int, Callout>
+     */
+    protected static function reviewCallouts(): array
+    {
+        $waiting = fn (?Product $record): ?ProductChangeRequest => $record?->exists ? $record->pendingChange : null;
+
+        $rejectedChange = function (?Product $record, ?Component $component): ?ProductChangeRequest {
+            if (! $record?->exists || $record->pendingChange !== null) {
+                return null;
+            }
+
+            $latestRejected = $record->changeRequests()
+                ->where('status', ProductChangeRequest::STATUS_REJECTED)
+                ->latest('reviewed_at')
+                ->latest('id')
+                ->first();
+
+            if ($latestRejected === null) {
+                return null;
+            }
+
+            $decidedAfter = $record->changeRequests()
+                ->where('status', ProductChangeRequest::STATUS_APPROVED)
+                ->where('reviewed_at', '>', $latestRejected->reviewed_at ?? $latestRejected->updated_at)
+                ->exists();
+
+            $livewire = $component?->getLivewire();
+            $dismissed = $livewire instanceof EditProduct && $livewire->dismissedRejectedChangeId === $latestRejected->id;
+
+            return $decidedAfter || $dismissed ? null : $latestRejected;
+        };
+
+        return [
+            Callout::make('Not approved')
+                ->key('rejectedProductCallout')
+                ->danger()
+                ->description(fn (?Product $record): string => (string) $record?->rejection_reason)
+                ->visible(fn (?Product $record): bool => $record?->exists && $record->approval_status === ProductApprovalStatus::Rejected && filled($record->rejection_reason)),
+
+            Callout::make(fn (?Product $record): string => ($request = $waiting($record)) === null ? '' : 'Waiting for approval: '.ChangeRequestSummary::heading($request)
+                .' (submitted '.$request->created_at?->diffForHumans().')')
+                ->key('pendingChangeCallout')
+                ->warning()
+                ->description(fn (?Product $record): Htmlable => new HtmlString(
+                    ($waiting($record) === null ? '' : ChangeRequestSummary::body($waiting($record))->toHtml())
+                    .'<p class="mt-3 text-sm">Buyers still pay the current prices shown below.</p>'
+                    .'<p class="mt-1 text-sm">Saving different prices replaces this request with a new one.</p>'
+                ))
+                ->visible(fn (?Product $record): bool => $waiting($record) !== null)
+                ->actions([
+                    Action::make('withdrawChange')
+                        ->label('Withdraw')
+                        ->color('gray')
+                        ->requiresConfirmation()
+                        ->modalHeading('Withdraw this price change?')
+                        ->modalDescription('Your current prices stay as they are.')
+                        ->visible(fn (?Product $record): bool => ($request = $waiting($record)) !== null
+                            && $request->status === ProductChangeRequest::STATUS_PENDING
+                            && $request->seller_id === auth()->id()
+                            && $record->seller_id === auth()->id())
+                        ->action(function (?Product $record, $livewire): void {
+                            self::withdrawPendingChange($record, $livewire);
+                        }),
+                ]),
+
+            Callout::make('Price change not approved')
+                ->key('rejectedChangeCallout')
+                ->danger()
+                ->description(fn (?Product $record, Callout $component) => new HtmlString(
+                    '<p>'.e((string) $rejectedChange($record, $component)?->rejection_reason).'</p>'
+                    .'<p class="mt-1 text-sm">Your current prices are unchanged. Edit and save to send a new proposal.</p>'
+                ))
+                ->visible(fn (?Product $record, Callout $component): bool => $rejectedChange($record, $component) !== null)
+                ->controlActions([
+                    Action::make('dismissRejectedChange')
+                        ->label('Dismiss')
+                        ->icon(Heroicon::OutlinedXMark)
+                        ->iconButton()
+                        ->color('gray')
+                        ->action(function (?Product $record, $livewire): void {
+                            $rejected = $record?->changeRequests()
+                                ->where('status', ProductChangeRequest::STATUS_REJECTED)
+                                ->latest('reviewed_at')->latest('id')->first();
+
+                            if ($livewire instanceof EditProduct && $rejected !== null) {
+                                $livewire->dismissedRejectedChangeId = $rejected->id;
+                            }
+                        }),
+                ]),
+        ];
+    }
+
+    protected static function withdrawPendingChange(?Product $product, mixed $livewire): void
+    {
+        $request = $product?->pendingChange;
+
+        if ($request === null) {
+            return;
+        }
+
+        try {
+            app(ProductApprovalService::class)->withdrawChange($request, auth()->user());
+
+            Notification::make()->success()->title('Price change withdrawn')->body('Your current prices stay as they are.')->send();
+        } catch (ApprovalConflictException|AuthorizationException $e) {
+            Notification::make()->danger()->title('Could not withdraw this price change')->body($e->getMessage())->send();
+        }
+
+        if ($livewire instanceof EditProduct) {
+            $livewire->reloadAfterChangeDecision();
+        }
     }
 
     protected static function detailsSection(): Section

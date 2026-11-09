@@ -6,6 +6,7 @@ namespace App\Notifications\Catalog;
 
 use App\Filament\Seller\Resources\Products\ProductResource;
 use App\Models\Product;
+use Filament\Notifications\Notification as FilamentNotification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -48,6 +49,26 @@ class ProductReviewDecided extends Notification implements ShouldQueue
             $this->approved ? 'View product' : 'Fix and send again',
             ProductResource::getUrl('edit', ['record' => $this->product], panel: 'seller'),
         );
+    }
+
+    /**
+     * Filament's notification bell reads the title, body, status and actions keys; the rest is kept for other readers.
+     *
+     * @return array<string, mixed>
+     */
+    public function toDatabase(object $notifiable): array
+    {
+        $bell = FilamentNotification::make()
+            ->title($this->approved ? 'Your product was approved' : 'Your product was not approved')
+            ->body($this->product->title.($this->approved ? ' is now visible to buyers.' : ': '.$this->reason));
+
+        if ($this->approved) {
+            $bell->success();
+        } else {
+            $bell->danger();
+        }
+
+        return [...$this->toArray($notifiable), ...$bell->getDatabaseMessage()];
     }
 
     /**

@@ -6,6 +6,7 @@ namespace App\Notifications\Catalog;
 
 use App\Filament\Seller\Resources\Products\ProductResource;
 use App\Models\ProductChangeRequest;
+use Filament\Notifications\Notification as FilamentNotification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -50,6 +51,26 @@ class ProductChangeDecided extends Notification implements ShouldQueue
             $this->approved ? 'View product' : 'Review and send again',
             ProductResource::getUrl('edit', ['record' => $this->request->product_id], panel: 'seller'),
         );
+    }
+
+    /**
+     * Filament's notification bell reads the title, body, status and actions keys; the rest is kept for other readers.
+     *
+     * @return array<string, mixed>
+     */
+    public function toDatabase(object $notifiable): array
+    {
+        $bell = FilamentNotification::make()
+            ->title($this->approved ? 'Your price change was approved' : 'Your price change was not approved')
+            ->body(($this->request->product?->title).($this->approved ? ': the new prices are now live.' : ': '.$this->reason));
+
+        if ($this->approved) {
+            $bell->success();
+        } else {
+            $bell->danger();
+        }
+
+        return [...$this->toArray($notifiable), ...$bell->getDatabaseMessage()];
     }
 
     /**
