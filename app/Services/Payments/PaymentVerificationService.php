@@ -16,6 +16,7 @@ use App\Services\Accounting\EventPipeline\RefundJournalHandler;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Logistics\CourierStatusService;
+use App\Services\Orders\OrderStatusReconciler;
 use App\Services\Orders\RefundRecorder;
 use App\Services\Sms\OrderNotificationService;
 use DomainException;
@@ -33,6 +34,7 @@ class PaymentVerificationService
         protected OrderPaymentJournalHandler $orderPaymentJournalHandler,
         protected RefundRecorder $refundRecorder,
         protected RefundJournalHandler $refundJournalHandler,
+        protected OrderStatusReconciler $statusReconciler,
     ) {}
 
     /**
@@ -167,8 +169,11 @@ class PaymentVerificationService
             // A consignment the buyer cancelled while we were checking the payment: the money arrived, so we owe it
             // back instead of holding it for the seller (PAY-1).
             // Sub-orders are locked so a buyer cancelling at this moment waits for us, then sees the order as paid.
+            $hadCancelledParcels = false;
+
             foreach ($order->subOrders()->with('fulfillmentStatus')->lockForUpdate()->get() as $subOrder) {
                 if ($subOrder->fulfillmentStatus?->slug === 'cancelled') {
+                    $hadCancelledParcels = true;
                     $reason = 'Cancelled before the payment was verified';
                     $this->refundRecorder->recordIfPaid($subOrder, $reason);
                     // Take the cancelled part back out of seller escrow, commission and shipping, and owe it to the buyer.
@@ -178,6 +183,11 @@ class PaymentVerificationService
                 }
 
                 $this->escrowLedgerService->holdInEscrow($subOrder);
+            }
+
+            // An order cancelled in full while the payment was checked is now refunded, not paid (Wave 1 review M-3).
+            if ($hadCancelledParcels) {
+                $this->statusReconciler->reconcile($order);
             }
 
             DB::afterCommit(function () use ($order): void {

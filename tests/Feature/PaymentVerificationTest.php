@@ -207,12 +207,29 @@ class PaymentVerificationTest extends TestCase
 
         app(PaymentVerificationService::class)->markVerified($order);
 
-        $this->assertSame('paid', $order->fresh()->paymentStatus->slug);
+        // Wave 1 review M-3: everything was cancelled, so the money is owed back, not kept.
+        $this->assertSame('refunded', $order->fresh()->paymentStatus->slug);
         $refund = Refund::where('sub_order_id', $subOrder->id)->first();
         $this->assertNotNull($refund);
         $this->assertSame(round($subOrder->fresh()->paidAmount(), 2), round((float) $refund->amount, 2));
         $this->assertFalse(WalletTransaction::where('sub_order_id', $subOrder->id)->exists());
         $this->assertSame('cancelled', $subOrder->fresh()->fulfillmentStatus->slug);
+    }
+
+    /**
+     * Wave 1 review M-3: an order cancelled in full before its payment was verified ends Cancelled / Refunded,
+     * never Cancelled / Paid.
+     */
+    public function test_an_order_cancelled_before_verification_ends_cancelled_and_refunded(): void
+    {
+        $order = $this->bkashOrder();
+        app(OrderDisputeService::class)->cancelFullOrder($order, 'Changed my mind');
+
+        app(PaymentVerificationService::class)->markVerified($order);
+
+        $order->refresh();
+        $this->assertSame('cancelled', $order->orderStatus->slug);
+        $this->assertSame('refunded', $order->paymentStatus->slug);
     }
 
     public function test_books_owe_the_cancelled_part_to_the_buyer_not_the_seller(): void
