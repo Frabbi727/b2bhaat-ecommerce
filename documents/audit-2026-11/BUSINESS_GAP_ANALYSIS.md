@@ -34,7 +34,7 @@ This page compares what B2Bhaat promises sellers and buyers with what the code d
 | Promise | Reality | Status |
 |---|---|---|
 | Products go live after admin review **(D: every new product and every price change)** | Products go live on save | Wave 1, INV-8 |
-| Stock changes only through orders or stock tools | Saving the product form overwrites live stock | Wave 1, INV-3 |
+| Stock changes only through orders or stock tools | Fixed: form stock is read-only; Adjust stock adds or removes units with a reason | Wave 1, INV-3 (fixed) |
 | Inactive variations can't be sold | Wholesale cart still sells them | Wave 1, INV-5 |
 
 ## Accounting
