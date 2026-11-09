@@ -76,7 +76,9 @@ class RecordGatewayTransferAction
                         ->required(),
                 ]),
                 TextInput::make('reference')
-                    ->label('Transfer reference (optional)')
+                    ->label('Transfer reference')
+                    ->helperText('From the gateway or bank statement. Each reference can be recorded once per gateway.')
+                    ->required()
                     ->maxLength(100),
                 Checkbox::make('confirmed')
                     ->label('I have checked these amounts against the gateway and bank statements.')
@@ -91,7 +93,7 @@ class RecordGatewayTransferAction
                         fee: (float) ($data['fee'] ?? 0),
                         depositAccountSlug: (string) $data['deposit_account'],
                         entryDate: (string) $data['entry_date'],
-                        reference: filled($data['reference'] ?? null) ? (string) $data['reference'] : null,
+                        reference: (string) ($data['reference'] ?? ''),
                         actor: auth()->user(),
                     );
                 } catch (SettlementException $e) {

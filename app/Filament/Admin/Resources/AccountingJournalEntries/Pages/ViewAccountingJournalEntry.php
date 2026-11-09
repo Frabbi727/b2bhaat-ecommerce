@@ -21,6 +21,7 @@ class ViewAccountingJournalEntry extends ViewRecord
     {
         return [
             AccountingJournalEntriesTable::reverseAction(),
+            AccountingJournalEntriesTable::undoSettlementAction(),
         ];
     }
 

@@ -215,7 +215,7 @@ class SettlementServiceTest extends TestCase
         $this->postGatewayReceipt(1000.00);
 
         try {
-            $this->settlements->settleGatewayTransfer('nagad', 1500.00, 0.00, 'bank_operating', now()->toDateString(), null, $this->admin);
+            $this->settlements->settleGatewayTransfer('nagad', 1500.00, 0.00, 'bank_operating', now()->toDateString(), 'NG-BIG-1', $this->admin);
             $this->fail('A transfer larger than the clearing balance should be refused.');
         } catch (SettlementException $e) {
             $this->assertStringContainsString('1,000.00', $e->getMessage());
@@ -230,7 +230,7 @@ class SettlementServiceTest extends TestCase
 
         $this->expectException(SettlementException::class);
 
-        $this->settlements->settleGatewayTransfer('bkash', 100.00, 100.00, 'bank_operating', now()->toDateString(), null, $this->admin);
+        $this->settlements->settleGatewayTransfer('bkash', 100.00, 100.00, 'bank_operating', now()->toDateString(), 'BK-FEE-1', $this->admin);
     }
 
     public function test_only_bank_or_cash_can_receive_a_settlement(): void
@@ -239,6 +239,6 @@ class SettlementServiceTest extends TestCase
 
         $this->expectException(SettlementException::class);
 
-        $this->settlements->settleGatewayTransfer('bkash', 500.00, 0.00, 'commission_revenue', now()->toDateString(), null, $this->admin);
+        $this->settlements->settleGatewayTransfer('bkash', 500.00, 0.00, 'commission_revenue', now()->toDateString(), 'BK-ACC-1', $this->admin);
     }
 }

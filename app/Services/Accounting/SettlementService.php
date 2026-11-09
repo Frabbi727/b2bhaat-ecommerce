@@ -7,13 +7,16 @@ namespace App\Services\Accounting;
 use App\DTOs\Accounting\JournalEntryData;
 use App\DTOs\Accounting\JournalLineData;
 use App\Enums\Accounting\AccountingEvent;
+use App\Enums\Accounting\JournalEntryStatus;
 use App\Exceptions\Accounting\SettlementException;
 use App\Models\Accounting\AccountingJournalEntry;
 use App\Models\SubOrder;
 use App\Models\User;
 use App\Services\Audit\AuditService;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -24,7 +27,10 @@ use Illuminate\Support\Str;
  *   `courier_cod_receivable` parcel by parcel and books the charges as `courier_delivery_expense`. Each parcel can be
  *   settled once.
  * - A gateway transfer moves money from the bKash, Nagad or card gateway account to the bank. It clears
- *   `gateway_clearing` and books the fee as `gateway_fee_expense`.
+ *   `gateway_clearing` and books the fee as `gateway_fee_expense`. Its reference is required and can be used once
+ *   per gateway (I-1).
+ * - Either can be undone if it was recorded by mistake (I-1): a reversal journal is posted and a remittance's
+ *   parcels go back on the unsettled list.
  */
 class SettlementService
 {
@@ -223,47 +229,155 @@ class SettlementService
             throw new SettlementException('The fee must be zero or more, and less than the amount taken out of the gateway.');
         }
 
-        $entry = DB::transaction(function () use ($gateway, $grossAmount, $fee, $depositAccountSlug, $entryDate, $reference, $actor): AccountingJournalEntry {
-            $available = $this->gatewayClearingBalance();
+        $referenceKey = self::referenceKey($reference);
 
-            if ($grossAmount > $available) {
-                throw new SettlementException(sprintf(
-                    'The books show only ৳%s held by payment gateways, so ৳%s can\'t have been taken out. Check the amount, or record the missing receipts first. Nothing was recorded.',
-                    number_format($available, 2),
-                    number_format($grossAmount, 2),
-                ));
-            }
+        if ($referenceKey === '') {
+            throw new SettlementException('Enter the transfer reference from the gateway or bank statement, so the same transfer can\'t be recorded twice.');
+        }
 
-            $netAmount = round($grossAmount - $fee, 2);
-            $gatewayLabel = Str::headline($gateway);
-            $lines = [new JournalLineData(accountSlug: $depositAccountSlug, debit: $netAmount, narration: "Transfer received from {$gatewayLabel}")];
+        $reference = trim((string) $reference);
 
-            if ($fee > 0) {
-                $lines[] = new JournalLineData(accountSlug: 'gateway_fee_expense', debit: $fee, narration: "{$gatewayLabel} fee");
-            }
-
-            $lines[] = new JournalLineData(accountSlug: 'gateway_clearing', credit: $grossAmount, narration: "Taken out of {$gatewayLabel}");
-
-            return $this->journalPostingService->post(new JournalEntryData(
-                entryDate: $entryDate,
-                financialEvent: AccountingEvent::GATEWAY_SETTLED->value,
-                idempotencyKey: 'gateway_settled_'.Str::uuid()->toString(),
-                description: "Transfer from {$gatewayLabel} to ".strtolower(self::DEPOSIT_ACCOUNTS[$depositAccountSlug]),
-                lines: $lines,
-                createdByUserId: $actor->id,
-                metadata: array_filter([
-                    'reference' => $reference,
-                    'gateway' => $gateway,
-                    'gross' => $grossAmount,
-                    'fee' => $fee,
-                    'net' => $netAmount,
-                ], fn (mixed $value): bool => $value !== null && $value !== ''),
+        try {
+            // One gateway transfer at a time, so two people can't both pass the balance and reference checks.
+            $entry = Cache::lock('gateway-transfer', 15)->block(10, fn (): AccountingJournalEntry => DB::transaction(
+                fn (): AccountingJournalEntry => $this->postGatewayTransfer($gateway, $grossAmount, $fee, $depositAccountSlug, $entryDate, $reference, $referenceKey, $actor),
             ));
-        });
+        } catch (LockTimeoutException) {
+            throw new SettlementException('Another gateway transfer is being recorded right now. Please try again in a moment; nothing was recorded.');
+        }
 
         $this->audit($entry, 'gateway_transfer_recorded', "Recorded gateway transfer {$entry->journal_number}");
 
         return $entry;
+    }
+
+    /**
+     * Undoes a courier remittance or gateway transfer recorded by mistake: posts a reversal journal and, for a
+     * remittance, puts its parcels back on the unsettled list. Undoing an already undone settlement changes nothing.
+     *
+     * @throws SettlementException
+     */
+    public function undoSettlement(AccountingJournalEntry $entry, string $reason, User $actor): AccountingJournalEntry
+    {
+        if (! self::isUndoableSettlement($entry)) {
+            throw new SettlementException('Only a courier remittance or gateway transfer can be undone here.');
+        }
+
+        if (trim($reason) === '') {
+            throw new SettlementException('Give a reason for undoing this settlement.');
+        }
+
+        $alreadyUndone = false;
+
+        $reversal = DB::transaction(function () use ($entry, $reason, $actor, &$alreadyUndone): AccountingJournalEntry {
+            $locked = AccountingJournalEntry::query()->whereKey($entry->id)->lockForUpdate()->firstOrFail();
+            $alreadyUndone = self::statusOf($locked) === JournalEntryStatus::REVERSED;
+
+            $reversal = $this->journalPostingService->reverse($locked, $reason, $actor);
+
+            if ($locked->financial_event === AccountingEvent::COURIER_COD_SETTLED->value) {
+                SubOrder::query()
+                    ->where('courier_settlement_journal_id', $locked->id)
+                    ->lockForUpdate()
+                    ->get()
+                    ->each(fn (SubOrder $parcel): bool => $parcel->forceFill([
+                        'courier_settled_at' => null,
+                        'courier_settlement_journal_id' => null,
+                    ])->save());
+            }
+
+            return $reversal;
+        });
+
+        if (! $alreadyUndone) {
+            $this->audit($entry->fresh(), 'settlement_undone', "Undid settlement {$entry->journal_number}: {$reason}");
+        }
+
+        return $reversal;
+    }
+
+    /**
+     * A posted courier remittance or gateway transfer, which undoSettlement() accepts.
+     */
+    public static function isUndoableSettlement(AccountingJournalEntry $entry): bool
+    {
+        return in_array($entry->financial_event, [AccountingEvent::COURIER_COD_SETTLED->value, AccountingEvent::GATEWAY_SETTLED->value], true)
+            && in_array(self::statusOf($entry), [JournalEntryStatus::POSTED, JournalEntryStatus::REVERSED], true);
+    }
+
+    /**
+     * The form a transfer reference is compared in: upper case, no spaces, so "bk-settle 77" matches "BK-SETTLE-77".
+     */
+    public static function referenceKey(?string $reference): string
+    {
+        return strtoupper((string) preg_replace('/[\s\-_\/.]+/', '', (string) $reference));
+    }
+
+    /**
+     * @throws SettlementException
+     */
+    private function postGatewayTransfer(
+        string $gateway,
+        float $grossAmount,
+        float $fee,
+        string $depositAccountSlug,
+        string $entryDate,
+        string $reference,
+        string $referenceKey,
+        User $actor,
+    ): AccountingJournalEntry {
+        $duplicate = AccountingJournalEntry::query()
+            ->where('financial_event', AccountingEvent::GATEWAY_SETTLED->value)
+            ->where('status', JournalEntryStatus::POSTED->value)
+            ->where('metadata->gateway', $gateway)
+            ->where('metadata->reference_key', $referenceKey)
+            ->first();
+
+        if ($duplicate) {
+            throw new SettlementException(sprintf(
+                'Transfer reference %s for %s was already recorded as %s. If that entry was wrong, undo it first. Nothing was recorded.',
+                $reference,
+                Str::headline($gateway),
+                $duplicate->journal_number,
+            ));
+        }
+
+        $available = $this->gatewayClearingBalance();
+
+        if ($grossAmount > $available) {
+            throw new SettlementException(sprintf(
+                'The books show only ৳%s held by payment gateways, so ৳%s can\'t have been taken out. Check the amount, or record the missing receipts first. Nothing was recorded.',
+                number_format($available, 2),
+                number_format($grossAmount, 2),
+            ));
+        }
+
+        $netAmount = round($grossAmount - $fee, 2);
+        $gatewayLabel = Str::headline($gateway);
+        $lines = [new JournalLineData(accountSlug: $depositAccountSlug, debit: $netAmount, narration: "Transfer received from {$gatewayLabel}")];
+
+        if ($fee > 0) {
+            $lines[] = new JournalLineData(accountSlug: 'gateway_fee_expense', debit: $fee, narration: "{$gatewayLabel} fee");
+        }
+
+        $lines[] = new JournalLineData(accountSlug: 'gateway_clearing', credit: $grossAmount, narration: "Taken out of {$gatewayLabel}");
+
+        return $this->journalPostingService->post(new JournalEntryData(
+            entryDate: $entryDate,
+            financialEvent: AccountingEvent::GATEWAY_SETTLED->value,
+            idempotencyKey: 'gateway_settled_'.Str::uuid()->toString(),
+            description: "Transfer from {$gatewayLabel} to ".strtolower(self::DEPOSIT_ACCOUNTS[$depositAccountSlug]),
+            lines: $lines,
+            createdByUserId: $actor->id,
+            metadata: [
+                'reference' => $reference,
+                'reference_key' => $referenceKey,
+                'gateway' => $gateway,
+                'gross' => $grossAmount,
+                'fee' => $fee,
+                'net' => $netAmount,
+            ],
+        ));
     }
 
     /**
@@ -296,6 +410,13 @@ class SettlementService
                 'lines.debit as amount',
                 'entries.entry_date',
             ]);
+    }
+
+    private static function statusOf(AccountingJournalEntry $entry): ?JournalEntryStatus
+    {
+        return $entry->status instanceof JournalEntryStatus
+            ? $entry->status
+            : JournalEntryStatus::tryFrom((string) $entry->status);
     }
 
     private function assertDepositAccount(string $slug): void

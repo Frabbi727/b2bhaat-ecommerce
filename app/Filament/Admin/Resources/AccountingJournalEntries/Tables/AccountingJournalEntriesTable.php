@@ -6,8 +6,10 @@ namespace App\Filament\Admin\Resources\AccountingJournalEntries\Tables;
 
 use App\Enums\Accounting\AccountingEvent;
 use App\Enums\Accounting\JournalEntryStatus;
+use App\Exceptions\Accounting\SettlementException;
 use App\Models\Accounting\AccountingJournalEntry;
 use App\Services\Accounting\JournalPostingService;
+use App\Services\Accounting\SettlementService;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\TextInput;
@@ -100,6 +102,7 @@ class AccountingJournalEntriesTable
             ->recordActions([
                 ViewAction::make(),
                 self::reverseAction(),
+                self::undoSettlementAction(),
             ]);
     }
 
@@ -150,6 +153,48 @@ class AccountingJournalEntriesTable
 
                 Notification::make()
                     ->title('Journal entry reversed successfully')
+                    ->success()
+                    ->send();
+            });
+    }
+
+    /**
+     * I-1: a courier remittance or gateway transfer recorded by mistake is undone through the settlement service, so
+     * the parcels go back on the unsettled list and the transfer reference can be used again.
+     */
+    public static function undoSettlementAction(): Action
+    {
+        return Action::make('undoSettlement')
+            ->label('Undo settlement')
+            ->icon(Heroicon::OutlinedArrowUturnLeft)
+            ->color('danger')
+            ->visible(fn (?AccountingJournalEntry $record): bool => $record !== null
+                && SettlementService::isUndoableSettlement($record)
+                && ! $record->reversal_journal_id)
+            ->requiresConfirmation()
+            ->modalHeading('Undo this settlement?')
+            ->modalDescription('A reversing journal is posted. A courier remittance\'s parcels go back on the unsettled list; a gateway transfer\'s reference can be recorded again. Record the correct settlement afterwards.')
+            ->modalSubmitActionLabel('Undo settlement')
+            ->schema([
+                TextInput::make('reason')
+                    ->label('Why is it being undone?')
+                    ->required()
+                    ->maxLength(255)
+                    ->placeholder('e.g. Wrong amount entered'),
+            ])
+            ->action(function (AccountingJournalEntry $record, array $data, Action $action): void {
+                try {
+                    $reversal = app(SettlementService::class)->undoSettlement($record, (string) $data['reason'], auth()->user());
+                } catch (SettlementException $e) {
+                    Notification::make()->title('Settlement not undone')->body($e->getMessage())->danger()->persistent()->send();
+                    $action->halt();
+
+                    return;
+                }
+
+                Notification::make()
+                    ->title("Settlement {$record->journal_number} undone")
+                    ->body("Reversal journal {$reversal->journal_number} was posted.")
                     ->success()
                     ->send();
             });
