@@ -10,6 +10,7 @@ use App\Models\SellerPlan;
 use App\Models\SellerSubscription;
 use App\Services\Monetization\MonetizationEngineService;
 use App\Services\Monetization\SellerInvoiceSettlementService;
+use App\Services\Monetization\SellerTermsSummary;
 use BackedEnum;
 use DomainException;
 use Filament\Notifications\Notification;
@@ -36,6 +37,16 @@ class SubscriptionBilling extends Page
     public function getActiveSubscription(): ?SellerSubscription
     {
         return app(MonetizationEngineService::class)->getActiveSubscription(auth()->user());
+    }
+
+    /**
+     * UX-5: commission, listing limit and next payment as actually charged.
+     *
+     * @return array<string, mixed>
+     */
+    public function getTermsSummary(): array
+    {
+        return app(SellerTermsSummary::class)->forSeller(auth()->user());
     }
 
     public function getUsedProductSlots(): int

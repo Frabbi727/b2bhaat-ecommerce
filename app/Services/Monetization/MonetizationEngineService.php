@@ -44,6 +44,8 @@ class MonetizationEngineService
 
     /**
      * Resolve the dynamic commission percentage for a specific seller, product, and channel.
+     * Order: the admin's custom rate on the subscription, then the product's category rate, then the plan terms the
+     * subscription was sold on (MON-2), then the rate set when the seller was approved.
      */
     public function resolveCommissionRate(User $seller, Product $product, SalesChannel $channel): float
     {
@@ -53,32 +55,61 @@ class MonetizationEngineService
 
         $subscription = $this->getActiveSubscription($seller);
 
-        // 1. Check seller custom override on subscription
-        if ($subscription) {
-            if ($channel->slug === SalesChannel::WHOLESALE && $subscription->custom_wholesale_commission !== null) {
-                return (float) $subscription->custom_wholesale_commission;
-            }
-
-            if ($channel->slug === SalesChannel::RETAIL && $subscription->custom_retail_commission !== null) {
-                return (float) $subscription->custom_retail_commission;
-            }
+        $custom = $this->customCommissionRate($subscription, $channel->slug);
+        if ($custom !== null) {
+            return $custom;
         }
 
-        // 2. Check category override if available
         if (isset($product->category->commission_rate_percentage) && $product->category->commission_rate_percentage !== null) {
             return (float) $product->category->commission_rate_percentage;
         }
 
-        // 3. The plan terms this subscription was sold on (MON-2)
+        return $this->planOrDefaultCommissionRate($seller, $subscription, $channel->slug === SalesChannel::WHOLESALE);
+    }
+
+    /**
+     * UX-5: the seller's own commission rate for a channel, as charged on any product whose category has no rate
+     * of its own. Uses the same rules as resolveCommissionRate().
+     */
+    public function sellerCommissionRate(User $seller, bool $wholesale): float
+    {
+        if (! $this->config->isMonetizationEnabled()) {
+            return 0.00;
+        }
+
+        $subscription = $this->getActiveSubscription($seller);
+
+        return $this->customCommissionRate($subscription, $wholesale ? SalesChannel::WHOLESALE : SalesChannel::RETAIL)
+            ?? $this->planOrDefaultCommissionRate($seller, $subscription, $wholesale);
+    }
+
+    private function customCommissionRate(?SellerSubscription $subscription, ?string $channelSlug): ?float
+    {
+        if (! $subscription) {
+            return null;
+        }
+
+        if ($channelSlug === SalesChannel::WHOLESALE && $subscription->custom_wholesale_commission !== null) {
+            return (float) $subscription->custom_wholesale_commission;
+        }
+
+        if ($channelSlug === SalesChannel::RETAIL && $subscription->custom_retail_commission !== null) {
+            return (float) $subscription->custom_retail_commission;
+        }
+
+        return null;
+    }
+
+    private function planOrDefaultCommissionRate(User $seller, ?SellerSubscription $subscription, bool $wholesale): float
+    {
         if ($subscription && ($subscription->hasCapturedTerms() || $subscription->plan)) {
             if (! $subscription->termCommissionEnabled()) {
                 return 0.00;
             }
 
-            return $subscription->termCommissionRate($channel->slug === SalesChannel::WHOLESALE);
+            return $subscription->termCommissionRate($wholesale);
         }
 
-        // 4. Fallback to seller profile default
         return (float) ($seller->sellerProfile?->commission_rate_percentage ?? 10.00);
     }
 

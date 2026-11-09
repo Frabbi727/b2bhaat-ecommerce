@@ -7,6 +7,7 @@
         $paidInvoices = $this->getPaidInvoices();
         $plans = $this->getAvailablePlans();
         $walletBalance = $this->getWalletBalance();
+        $terms = $this->getTermsSummary();
         $monetizationStatus = auth()->user()->sellerProfile?->monetization_status ?? 'active';
 
         $percentCapacity = $allowedSlots ? min(100, (int) round(($usedSlots / $allowedSlots) * 100)) : 0;
@@ -270,6 +271,47 @@
             </x-slot>
         </x-filament::section>
     </div>
+
+    {{-- 2b. What you pay (UX-5): the figures the order and billing code actually charge --}}
+    <x-filament::section heading="Your terms" description="What B2Bhaat charges you now, under your current plan." class="mb-6" id="your-terms">
+        <dl style="display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 1rem 1.5rem; font-size: 0.8125rem;">
+            <div>
+                <dt style="color: #71717a;">Commission on retail sales</dt>
+                <dd style="font-size: 1.125rem; font-weight: 700;">{{ \App\Services\Monetization\SellerTermsSummary::formatRate($terms['retail_rate']) }}</dd>
+            </div>
+            <div>
+                <dt style="color: #71717a;">Commission on wholesale sales</dt>
+                <dd style="font-size: 1.125rem; font-weight: 700;">{{ \App\Services\Monetization\SellerTermsSummary::formatRate($terms['wholesale_rate']) }}</dd>
+            </div>
+            <div>
+                <dt style="color: #71717a;">Visible products</dt>
+                <dd style="font-size: 1.125rem; font-weight: 700;">
+                    {{ number_format($terms['listings_visible']) }} of {{ $terms['listing_limit'] !== null ? number_format($terms['listing_limit']) : 'unlimited' }}
+                </dd>
+            </div>
+            <div>
+                <dt style="color: #71717a;">Next payment</dt>
+                <dd style="font-size: 1.125rem; font-weight: 700;">
+                    @if ($terms['next_payment_amount'] !== null)
+                        ৳{{ number_format($terms['next_payment_amount'], 2) }}
+                        <span style="display: block; font-size: 0.75rem; font-weight: 400; color: #71717a;">
+                            {{ $terms['next_payment_is_bill'] ? 'Unpaid bill, due' : 'Renewal on' }} {{ $terms['next_payment_date']?->format('d M Y') }}{{ ! $terms['next_payment_is_bill'] && $terms['auto_renew'] ? ' · paid from your wallet if the balance covers it' : '' }}
+                        </span>
+                    @else
+                        Nothing due
+                    @endif
+                </dd>
+            </div>
+        </dl>
+
+        @if (! $terms['monetization_on'])
+            <p style="margin-top: 1rem; font-size: 0.75rem; color: #71717a;">Marketplace fees are switched off at the moment, so no commission is taken.</p>
+        @else
+            @if ($terms['custom_rate'])
+                <p style="margin-top: 1rem; font-size: 0.75rem; color: #71717a;">These include a rate agreed with B2Bhaat for your store.</p>
+            @endif
+        @endif
+    </x-filament::section>
 
     {{-- 3. Pending Invoices Section (Action Required) --}}
     @if ($pendingInvoices->isNotEmpty())

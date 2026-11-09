@@ -3,6 +3,7 @@
 namespace App\Filament\Seller\Pages;
 
 use App\Models\SellerProfile;
+use App\Services\Monetization\SellerTermsSummary;
 use App\Services\Settings\StoreConfigurationService;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -222,9 +223,23 @@ class StoreSettings extends Page
                     ->copyable()
                     ->placeholder('Not provided'),
 
+                // UX-5: the rate actually charged (plan terms, custom rate), not the rate set at approval
                 TextEntry::make('commission')
                     ->label('Marketplace fee')
-                    ->state($profile?->commission_rate_percentage !== null ? rtrim(rtrim(number_format((float) $profile->commission_rate_percentage, 2), '0'), '.').'% of each sale' : null)
+                    ->state(function () use ($user): ?string {
+                        if (! $user) {
+                            return null;
+                        }
+
+                        $terms = app(SellerTermsSummary::class)->forSeller($user);
+
+                        if (! $terms['monetization_on']) {
+                            return 'No commission while marketplace fees are switched off';
+                        }
+
+                        return 'Retail '.SellerTermsSummary::formatRate($terms['retail_rate']).' · Wholesale '.SellerTermsSummary::formatRate($terms['wholesale_rate']).' of each sale';
+                    })
+                    ->helperText('Full terms and next payment: Subscription & Billing.')
                     ->placeholder('Not set'),
 
                 TextEntry::make('contact')
