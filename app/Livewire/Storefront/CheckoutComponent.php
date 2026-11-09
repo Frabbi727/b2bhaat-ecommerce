@@ -25,6 +25,7 @@ use App\Services\Sms\OrderNotificationService;
 use Exception;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
@@ -392,62 +393,65 @@ class CheckoutComponent extends Component
                 }, $items)),
             ];
 
-            $splitter = app(OrderSplitterService::class);
-            $order = $splitter->createAndSplitOrder($customer, $orderPayload);
+            // ORD-3: the order, its payment status, the coupon use and the saved address commit together or not at all.
+            $order = DB::transaction(function () use ($customer, $orderPayload, $paymentMethod, $appliedCoupon, $subtotal, $discountAmount): Order {
+                $splitter = app(OrderSplitterService::class);
+                $order = $splitter->createAndSplitOrder($customer, $orderPayload);
 
-            $escrowService = app(EscrowLedgerService::class);
+                $escrowService = app(EscrowLedgerService::class);
 
-            if ($paymentMethod && in_array($paymentMethod->slug, ['bkash', 'nagad'], true)) {
-                // Manual MFS: the TrxID is checked by an admin before anything is paid, held or shipped (PRA-006).
-                $order->update([
-                    'payment_status_id' => PaymentStatus::where('slug', 'awaiting_verification')->firstOrFail()->id,
-                    'order_status_id' => OrderStatus::where('slug', 'confirmed')->firstOrFail()->id,
-                ]);
-            } elseif ($paymentMethod && $paymentMethod->slug === 'mock_gateway') {
-                $paidStatus = PaymentStatus::where('slug', 'paid')->firstOrFail();
-                $confirmedStatus = OrderStatus::where('slug', 'confirmed')->firstOrFail();
+                if ($paymentMethod && in_array($paymentMethod->slug, ['bkash', 'nagad'], true)) {
+                    // Manual MFS: the TrxID is checked by an admin before anything is paid, held or shipped (PRA-006).
+                    $order->update([
+                        'payment_status_id' => PaymentStatus::where('slug', 'awaiting_verification')->firstOrFail()->id,
+                        'order_status_id' => OrderStatus::where('slug', 'confirmed')->firstOrFail()->id,
+                    ]);
+                } elseif ($paymentMethod && $paymentMethod->slug === 'mock_gateway') {
+                    $paidStatus = PaymentStatus::where('slug', 'paid')->firstOrFail();
+                    $confirmedStatus = OrderStatus::where('slug', 'confirmed')->firstOrFail();
 
-                $order->update([
-                    'payment_status_id' => $paidStatus->id,
-                    'order_status_id' => $confirmedStatus->id,
-                ]);
+                    $order->update([
+                        'payment_status_id' => $paidStatus->id,
+                        'order_status_id' => $confirmedStatus->id,
+                    ]);
 
-                foreach ($order->subOrders as $subOrder) {
-                    $escrowService->holdInEscrow($subOrder);
+                    foreach ($order->subOrders as $subOrder) {
+                        $escrowService->holdInEscrow($subOrder);
+                    }
+                } elseif ($paymentMethod && $paymentMethod->slug === 'cod') {
+                    $confirmedStatus = OrderStatus::where('slug', 'confirmed')->firstOrFail();
+                    $order->update([
+                        'order_status_id' => $confirmedStatus->id,
+                    ]);
                 }
-            } elseif ($paymentMethod && $paymentMethod->slug === 'cod') {
-                $confirmedStatus = OrderStatus::where('slug', 'confirmed')->firstOrFail();
-                $order->update([
-                    'order_status_id' => $confirmedStatus->id,
-                ]);
-            }
 
-            // Record coupon usage if applied
-            if ($appliedCoupon && ! empty($appliedCoupon['id'])) {
-                $couponModel = Coupon::find($appliedCoupon['id']);
-                if ($couponModel) {
-                    app(CouponService::class)->recordUsage(
-                        coupon: $couponModel,
+                // Use the coupon under a lock; a coupon used up meanwhile cancels the whole order (ORD-3)
+                if ($appliedCoupon && ! empty($appliedCoupon['id'])) {
+                    app(CouponService::class)->redeem(
+                        couponId: (int) $appliedCoupon['id'],
                         userId: $customer->id,
                         orderId: $order->id,
-                        discountAmount: $discountAmount
+                        subtotal: $subtotal,
+                        discountAmount: $discountAmount,
                     );
                 }
-            }
 
-            // Save address to address book if requested by customer
-            if ($this->saveToAddressBook && Auth::check()) {
-                CustomerAddress::create([
-                    'user_id' => $customer->id,
-                    'address_title' => $this->newAddressTitle ?: 'Consignment Address',
-                    'recipient_name' => $this->recipientName,
-                    'recipient_phone' => $this->recipientPhone,
-                    'street_address' => $this->streetAddress,
-                    'city' => $this->city,
-                    'postal_code' => $this->postalCode,
-                    'is_default' => $customer->addresses()->count() === 0,
-                ]);
-            }
+                // Save address to address book if requested by customer
+                if ($this->saveToAddressBook && Auth::check()) {
+                    CustomerAddress::create([
+                        'user_id' => $customer->id,
+                        'address_title' => $this->newAddressTitle ?: 'Consignment Address',
+                        'recipient_name' => $this->recipientName,
+                        'recipient_phone' => $this->recipientPhone,
+                        'street_address' => $this->streetAddress,
+                        'city' => $this->city,
+                        'postal_code' => $this->postalCode,
+                        'is_default' => $customer->addresses()->count() === 0,
+                    ]);
+                }
+
+                return $order;
+            });
 
             // Send transactional Order Confirmation SMS with tokenized invoice & tracking
             try {

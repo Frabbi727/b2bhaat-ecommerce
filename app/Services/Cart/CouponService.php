@@ -7,6 +7,7 @@ namespace App\Services\Cart;
 use App\Models\Coupon;
 use App\Models\CouponUsage;
 use App\Models\Order;
+use DomainException;
 
 class CouponService
 {
@@ -63,6 +64,28 @@ class CouponService
             'coupon' => $coupon,
             'discount' => $discount,
         ];
+    }
+
+    /**
+     * ORD-3: use the coupon for an order, inside the order's transaction. The coupon row is locked and checked again,
+     * so two buyers checking out at once can't both take its last use; if it fails, the whole order rolls back.
+     *
+     * @throws DomainException when the coupon can no longer be used
+     */
+    public function redeem(int $couponId, int $userId, int $orderId, float $subtotal, float $discountAmount): CouponUsage
+    {
+        $coupon = Coupon::whereKey($couponId)->lockForUpdate()->first();
+
+        if (! $coupon) {
+            throw new DomainException('Promotional coupon cannot be redeemed: it no longer exists. Remove it to place your order.');
+        }
+
+        $validation = $coupon->validateForSubtotal($subtotal, $userId);
+        if (! $validation['valid']) {
+            throw new DomainException("Promotional coupon cannot be redeemed: {$validation['message']} Remove it to place your order.");
+        }
+
+        return $this->recordUsage($coupon, $userId, $orderId, $discountAmount);
     }
 
     /**
