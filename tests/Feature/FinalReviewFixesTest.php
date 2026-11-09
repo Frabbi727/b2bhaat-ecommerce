@@ -260,10 +260,10 @@ class FinalReviewFixesTest extends TestCase
         $this->test_editing_simple_product_without_touching_stock_keeps_live_stock();
         $product = Product::where('slug', 'simple-race')->firstOrFail();
 
+        // INV-3: through "Adjust stock" (5 in stock + 35), not by typing a new total into the form
         Livewire::test(EditProduct::class, ['record' => $product->getRouteKey()])
-            ->fillForm(['simple_stock_quantity' => 40])
-            ->call('save')
-            ->assertHasNoFormErrors();
+            ->callAction('adjustStock', ['change' => 35, 'reason' => 'received'])
+            ->assertHasNoActionErrors();
 
         $this->assertSame(40, $product->variations()->sole()->stock_quantity);
     }

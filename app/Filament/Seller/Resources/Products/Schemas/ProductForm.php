@@ -392,6 +392,7 @@ class ProductForm
                     ->live(),
 
                 // Simple products keep stock on their default variation (PRA-011)
+                // INV-3: opening stock only; after that it changes through "Adjust stock", never by saving this form
                 TextInput::make('simple_stock_quantity')
                     ->label('Units in stock')
                     ->numeric()
@@ -399,9 +400,12 @@ class ProductForm
                     ->minValue(0)
                     ->default(0)
                     ->required()
+                    ->disabled(fn (string $operation): bool => $operation === 'edit')
                     ->dehydrated(false)
                     ->visible(fn (Get $get): bool => ! $get('has_variations'))
-                    ->helperText('Orders are refused once this reaches 0.')
+                    ->helperText(fn (string $operation): string => $operation === 'edit'
+                        ? 'Use “Adjust stock” at the top of the page to add or remove units.'
+                        : 'Orders are refused once this reaches 0.')
                     ->maxWidth('xs'),
 
                 Repeater::make('variations')
@@ -431,13 +435,16 @@ class ProductForm
                             ->searchable()
                             ->placeholder('e.g. Colour: Black'),
 
+                        // INV-3: a new option sets its opening stock; a saved one changes only through "Adjust stock"
                         TextInput::make('stock_quantity')
                             ->label('Stock')
                             ->numeric()
                             ->integer()
                             ->minValue(0)
                             ->default(0)
-                            ->required(),
+                            ->required()
+                            ->disabled(fn (?Model $record): bool => (bool) $record?->exists)
+                            ->dehydrated(fn (?Model $record): bool => ! $record?->exists),
 
                         TextInput::make('buy_price')
                             ->label('Cost')

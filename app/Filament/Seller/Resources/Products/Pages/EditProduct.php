@@ -4,6 +4,7 @@ namespace App\Filament\Seller\Resources\Products\Pages;
 
 use App\Enums\ProductApprovalStatus;
 use App\Exceptions\ListingActivationRefusedException;
+use App\Filament\Seller\Resources\Products\Actions\AdjustStockAction;
 use App\Filament\Seller\Resources\Products\ProductResource;
 use App\Filament\Seller\Resources\Products\Schemas\ProductForm;
 use App\Filament\Seller\Resources\Products\Tables\ProductsTable;
@@ -21,9 +22,6 @@ use Illuminate\Auth\Access\AuthorizationException;
 class EditProduct extends EditRecord
 {
     protected static string $resource = ProductResource::class;
-
-    /** Stock shown when the form was opened. */
-    public ?int $loadedSimpleStock = null;
 
     /** True while saving a product that was approved when the save began; its prices then wait for review. */
     protected bool $holdingPriceChanges = false;
@@ -55,6 +53,25 @@ class EditProduct extends EditRecord
         $this->fillForm();
     }
 
+    /**
+     * Shows a stock figure changed by "Adjust stock" in the read-only fields, without touching unsaved edits.
+     */
+    public function showAdjustedStock(int $variationId, int $stock): void
+    {
+        /** @var Product $product */
+        $product = $this->getRecord();
+
+        if (! $product->has_variations) {
+            $this->data['simple_stock_quantity'] = $stock;
+        }
+
+        foreach (array_keys($this->data['variations'] ?? []) as $key) {
+            if ($key === "record-{$variationId}") {
+                $this->data['variations'][$key]['stock_quantity'] = $stock;
+            }
+        }
+    }
+
     public function getSubheading(): ?string
     {
         /** @var Product $product */
@@ -77,6 +94,8 @@ class EditProduct extends EditRecord
                 ->visible(fn (Product $record): bool => $record->approval_status !== ProductApprovalStatus::Approved || ($record->is_active && ! $record->blocked_at))
                 ->button()
                 ->color('gray'),
+
+            AdjustStockAction::make(),
 
             ActionGroup::make([
                 ProductsTable::duplicateAction(),
@@ -106,7 +125,6 @@ class EditProduct extends EditRecord
         /** @var Product $product */
         $product = $this->getRecord();
         $data['simple_stock_quantity'] = (int) ($product->variations()->orderBy('id')->value('stock_quantity') ?? 0);
-        $this->loadedSimpleStock = $data['simple_stock_quantity'];
         $data['specification_groups'] = ProductForm::specificationsToGroups($product->specifications);
 
         return $data;
@@ -188,14 +206,7 @@ class EditProduct extends EditRecord
         /** @var Product $product */
         $product = $this->getRecord();
 
-        $submittedStock = (int) ($this->data['simple_stock_quantity'] ?? 0);
-
-        // Write stock only when the seller changed it, so units sold while the form was open are not restored (M3)
-        if (! $product->has_variations && $submittedStock !== $this->loadedSimpleStock) {
-            $product->ensureDefaultVariation()->update(['stock_quantity' => $submittedStock]);
-            $this->loadedSimpleStock = $submittedStock;
-        }
-
+        // Stock is never written from this form (INV-3); it changes only through "Adjust stock" and orders.
         $product->syncPrimaryImageFlag();
 
         if ($this->holdingPriceChanges) {

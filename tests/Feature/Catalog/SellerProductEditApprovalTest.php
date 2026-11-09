@@ -169,10 +169,15 @@ class SellerProductEditApprovalTest extends TestCase
     {
         $product = $this->product();
 
+        $stockBefore = $product->variations()->sole()->stock_quantity;
+
+        // INV-3: stock changes through "Adjust stock", which needs no approval either
         $this->edit($product)
-            ->fillForm(['title' => 'Renamed', 'simple_stock_quantity' => 25])
+            ->fillForm(['title' => 'Renamed'])
             ->call('save')
-            ->assertHasNoFormErrors();
+            ->assertHasNoFormErrors()
+            ->callAction('adjustStock', ['change' => 25 - $stockBefore, 'reason' => 'count_correction'])
+            ->assertHasNoActionErrors();
 
         $this->assertSame('Renamed', $product->fresh()->title);
         $this->assertSame(25, $product->variations()->sole()->stock_quantity);
