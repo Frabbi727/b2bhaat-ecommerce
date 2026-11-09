@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1321 tests, 1314 passed, 7 skipped, 6163 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1325 tests, 1318 passed, 7 skipped, 6171 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -74,6 +74,8 @@ The existing tests of other features were touched only to give their test produc
 | INV-8b | `tests/Feature/DatabaseNotificationsQueryTest.php` (1) | The notification bell's query runs. It failed on PostgreSQL before the fix and passes after; an existing notification row converts to JSON intact |
 | UX-ACC-1 | `tests/Feature/Accounting/ManualJournalEntryTest.php` (8) | A balanced journal posts as a manual journal by the admin, with its reference and an audit entry, and can be reversed; unbalanced lines, a two-sided line, a missing confirmation, an inactive account, a closed period and a future date are refused with nothing posted; a seller can't open the journal pages |
 | ACC-7 | `tests/Feature/Accounting/SettlementServiceTest.php` (9), `SettlementActionsTest.php` (4) | Unsettled delivered courier COD parcels are listed with their amounts, filtered by courier; a remittance clears the receivable, books bank and courier charges, marks the parcels and writes an audit entry; amounts that don't add up, a parcel settled twice, and a self-delivered or unknown parcel are refused with nothing changed; a gateway transfer clears the gateway account and books the fee; a transfer larger than the books show, a fee as large as the transfer, and a non-bank, non-cash deposit account are refused; both buttons work from the journal list and need the confirmation tick |
+| ACC-3, ACC-4 | `tests/Feature/Accounting/SelfDeliveryJournalsTest.php` (4) | Self-collected COD with a coupon: the seller's wallet and `seller_wallet_payable` agree, with commission revenue and coupon expense booked; with zero commission the coupon share still posts; with neither, nothing posts. A prepaid parcel switched to self-delivery: escrow in the books equals the wallet escrow, shipping revenue returns to zero, and after release the escrow account is zero and the wallet account holds the full amount |
+| ACC-8 | `tests/Feature/Accounting/MonetizationJournalIntegrationTest.php` (1 rewritten) | An admin waiver posts no journal and books no subscription revenue. The old test asserted the revenue-plus-expense entry and was replaced |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 

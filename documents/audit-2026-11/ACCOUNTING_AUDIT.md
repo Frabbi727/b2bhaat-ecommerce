@@ -48,12 +48,12 @@ Tests prove three things: the trial balance stays balanced, real courier bills s
 
 | ID | Finding | Plan |
 |---|---|---|
-| ACC-3 | Self-collected COD: the discount share is not booked; no journal when commission is 0 | Book it; always post |
-| ACC-4 | Self-delivery escrow top-up has no journal | Post the top-up |
+| ACC-3 | Self-collected COD: the discount share is not booked; no journal when commission is 0 | **Fixed (62d6d30)** |
+| ACC-4 | Self-delivery escrow top-up has no journal | **Fixed (62d6d30)** |
 | ACC-5 | Reversing a system journal does not undo wallets or payouts | Allow reversal of manual journals only |
 | ACC-6 | Handlers silently skip posting when an account is missing | Throw and roll back |
 | ACC-7 | Courier COD receivable and gateway clearing are never settled; gateway fees are never booked | **Fixed (78b7ef4):** courier remittance and gateway transfer actions |
-| ACC-8 | Admin waiver books subscription revenue | Post net zero |
+| ACC-8 | Admin waiver books subscription revenue | **Fixed (f7edbb6):** a waiver posts nothing |
 | ACC-9 | No DB-level balance or immutability constraints | PostgreSQL CHECK constraints and triggers |
 | ACC-11 | Commission booked at payment **(owner: book on delivery)** | Deferred commission liability |
 | MON-7 | Seller billing posts no journals | Call `MonetizationJournalHandler` from the settlement service |

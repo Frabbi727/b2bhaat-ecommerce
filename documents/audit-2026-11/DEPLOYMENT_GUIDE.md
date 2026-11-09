@@ -133,3 +133,7 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 - **Migration:** `2026_11_09_091139_add_courier_settlement_to_sub_orders_table.php` adds two empty columns to `sub_orders` (`courier_settled_at`, `courier_settlement_journal_id`). It changes no data.
 - **Before first use:** every COD parcel delivered before this deploy shows as waiting for courier payment, including ones the courier already paid. The accountant should record those past payments with **Courier remittance**, dated when each was received, so the receivable starts out right. Likewise, past bKash or Nagad cash-outs need **Gateway transfer** entries before the gateway balance can be trusted.
 - **Rollback:** `php artisan migrate:rollback --step=1` drops the two columns. Any settlement journals already posted stay in the books, because posted journals are permanent (ACC-9); reverse them with manual journals if needed.
+
+## ACC-3, ACC-4, ACC-8 journal fixes
+- **Code only, no migration.** New events post the corrected journals; nothing already posted is changed.
+- **After deploy:** open **Accounting → Reconciliation** and run the full audit. Any seller listed with a wallet/ledger difference is a past self-delivery case; send the list to the accountant for correcting manual journals.

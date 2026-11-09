@@ -58,12 +58,12 @@ All findings come from reading the code; every one cites file:line. Status value
 | PAY-2 | Payments | MFS orders never time out (`ReleaseExpiredStockReservationsCommand.php:60-62`) | Configurable verification timeout that releases stock and flash quota | – | Open |
 | PAY-3 / SEC-5 | Payments | bKash/Nagad TrxID can be reused across orders (`CheckoutComponent.php:363`) | Dedicated column with a unique index per gateway (migration) | – | Open |
 | ORD-1 | Orders | Full cancel marks a partly shipped order cancelled; admin can edit order status freely (`OrderDisputeService.php:139-148`, `OrderForm.php:23`) | Derive the parent status from its sub-orders; status read-only in the form | ORD-2 | Open |
-| ACC-3 | Accounting | Self-collected COD: wallet and ledger disagree (`EscrowLedgerService.php:84`, `CodDeliveryJournalHandler.php:111-130`) | Book the discount share; post even when commission is 0 | – | Open |
-| ACC-4 | Accounting | Self-delivery escrow top-up has no journal (`EscrowLedgerService.php:58-62`) | Post the top-up | ACC-1 | Open |
+| ACC-3 | Accounting | Self-collected COD: wallet and ledger disagree (`EscrowLedgerService.php:84`, `CodDeliveryJournalHandler.php:111-130`) | Book the discount share; post even when commission is 0 | – | **Fixed (62d6d30)** |
+| ACC-4 | Accounting | Self-delivery escrow top-up has no journal (`EscrowLedgerService.php:58-62`) | Post the top-up | ACC-1 | **Fixed (62d6d30)** |
 | ACC-5 | Accounting | Reversing a system journal leaves wallets and payouts unchanged (`AccountingJournalEntriesTable.php:103-150`) | Allow reversal only for manual journals; system events reverse through their own business action | – | **Fixed (390a0ed)** |
 | ACC-6 | Accounting | Handlers `return null` silently when an account is missing (`PayoutJournalHandler.php:34` etc.) | Throw; the business action rolls back | – | **Fixed (7869d3c)** |
 | ACC-7 | Accounting | `courier_cod_receivable` and `gateway_clearing` are never settled; gateway fees are never booked | Courier remittance and gateway settlement actions; fee expense; courier payable | UX-ACC-1 | **Fixed (78b7ef4)** |
-| ACC-8 | Accounting | Admin waiver books fake subscription revenue (`MonetizationJournalHandler.php:97`) | Post no entry for a waiver, or post net zero | MON-7 | Open |
+| ACC-8 | Accounting | Admin waiver books fake subscription revenue (`MonetizationJournalHandler.php:97`) | Post no entry for a waiver, or post net zero | MON-7 | **Fixed (f7edbb6)** |
 | ACC-9 | Accounting | No DB constraints for balance or immutability; lines cascade on delete | PostgreSQL CHECK constraints and triggers; restrict delete | – | **Fixed (29d8f78)** |
 | ACC-11 | Accounting | Commission booked as income at payment, before delivery (`OrderPaymentJournalHandler.php:68-79`) | **Owner decision:** defer until delivery or escrow release (deferred commission liability) | ACC-9 | Open |
 | UX-ACC-1 | Accounting UI | No manual journal entry | Balanced manual journal form with confirmation and audit | ACC-9 | **Fixed (217be0a)** |
