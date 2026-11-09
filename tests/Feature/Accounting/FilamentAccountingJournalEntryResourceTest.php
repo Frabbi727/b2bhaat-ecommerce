@@ -260,6 +260,32 @@ class FilamentAccountingJournalEntryResourceTest extends TestCase
         $this->assertNotNull($entry->reversal_journal_id);
     }
 
+    /**
+     * ACC-5: a system journal mirrors a wallet, escrow or payout movement, so reversing only the journal would leave
+     * the books disagreeing with the money. Those are undone through their own business action instead.
+     */
+    public function test_reversal_action_is_hidden_for_system_journals(): void
+    {
+        $entry = $this->postingService->post(new JournalEntryData(
+            entryDate: '2026-11-07',
+            financialEvent: AccountingEvent::ESCROW_RELEASED->value,
+            idempotencyKey: 'test_system_journal_reverse_guard',
+            description: 'Escrow released to seller wallet',
+            lines: [
+                new JournalLineData(accountSlug: 'cash_on_hand', debit: 300.00, credit: 0.00),
+                new JournalLineData(accountSlug: 'bank_operating', debit: 0.00, credit: 300.00),
+            ],
+        ));
+
+        Livewire::test(ListAccountingJournalEntries::class)
+            ->assertTableActionHidden('reverse', $entry);
+
+        Livewire::test(ViewAccountingJournalEntry::class, ['record' => $entry->getKey()])
+            ->assertActionHidden('reverse');
+
+        $this->assertSame(JournalEntryStatus::POSTED, $entry->fresh()->status);
+    }
+
     public function test_reversal_action_is_hidden_for_already_reversed_entries_and_reversal_entries(): void
     {
         $entry = $this->postingService->post(new JournalEntryData(

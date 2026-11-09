@@ -103,6 +103,10 @@ class AccountingJournalEntriesTable
             ]);
     }
 
+    /**
+     * Only manual journals can be reversed here (ACC-5). A system journal mirrors a wallet, escrow or payout
+     * movement, so it is undone through that business action, which keeps the money and the books in step.
+     */
     public static function reverseAction(): Action
     {
         return Action::make('reverse')
@@ -110,7 +114,7 @@ class AccountingJournalEntriesTable
             ->icon(Heroicon::OutlinedArrowUturnLeft)
             ->color('danger')
             ->visible(function (?AccountingJournalEntry $record): bool {
-                if (! $record) {
+                if (! $record || $record->financial_event !== AccountingEvent::MANUAL_JOURNAL->value) {
                     return false;
                 }
 
