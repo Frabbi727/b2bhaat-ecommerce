@@ -227,3 +227,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## MON-12 overdue bills and suspended stores
 - **Code only, no migration.** Sellers with overdue bills will see their payout requests refused until they pay.
+
+## ORD-2 dispatch rules
+- **Code only, no migration.** Sellers can no longer book a pickup for a parcel that is already shipped.
