@@ -62,14 +62,22 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1287 tests, 1287 passed, 6017 assertions** (2026-11-09, branch `fix/audit-wave-1`).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1299 tests, 1292 passed, 7 skipped, 6030 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
 | PERF-1 | `tests/Feature/PerformanceIndexesTest.php` (74) | Each of the 72 column sets has an index; the hot lookups (order lines, consignments, prices, wallet history, shop listing) are covered; rolling back removes only the new indexes and running again restores them |
-
 | AUD-2, AUD-3 | `tests/Feature/Audit/AuditImmutabilityTest.php` (6), `AuditServiceTest.php` (1 updated) | An audit record can't be edited or deleted; routine pruning still works; a failed audit write is reported and the surrounding action still commits; a rolled-back action sends no queued entry, a committed one sends exactly one |
+| ACC-6 | `tests/Feature/Accounting/MissingAccountFailsLoudlyTest.php` (2), 3 handler tests updated | A payout with a missing account is refused and the wallet and wallet history are unchanged; with the full chart it works. The old "returns null when unseeded" tests now expect the refusal |
+| ACC-9 | `tests/Feature/Accounting/JournalDatabaseGuardsTest.php` (9) | An entry with lines can't be deleted (every database). On PostgreSQL: posted lines can't be deleted or changed, a posted entry can't be edited, no line can be added to it, a negative or two-sided line is refused, an unbalanced draft can't be posted, and reversal still works |
+| ACC-5 | `tests/Feature/Accounting/FilamentAccountingJournalEntryResourceTest.php` (1 new) | Reverse is hidden for a system journal on the list and the view page; the existing tests still reverse manual journals |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
 **PostgreSQL check (PERF-1):** the migration was also run on a throwaway local PostgreSQL database (created and deleted for the test): 72 indexes built concurrently, rollback removed exactly those 72, and a re-run restored them.
+
+**PostgreSQL check (ACC-9):** on a throwaway local database (created and deleted for the test), all 9 guard tests passed. Real posting paths were run against the triggers and passed: payment verification, COD courier delivery, escrow cancellation and refund, return after release, refund and cancellation reconciliation, and the shipping reclassify command. Rollback and re-run of the migration worked. With an old bad line planted before the migration, the line was kept, the amount rule was added for new lines only (`NOT VALID`), and the migration printed the count.
+
+**Existing tests changed (ACC-6):** seven billing and finance test classes now seed the chart of accounts in `setUp`, because their billing payments now need the accounts the journals use. No assertion was relaxed.
+
+**Known test limit:** most accounting tests are written for SQLite. On PostgreSQL, 34 fail before reaching any journal code because their setup hard-codes `order_status_id = 1` (ids drift between tests there), and 11 deliberately insert unbalanced or already-posted journals, which the ACC-9 guards now refuse. This predates Wave 1 except for those 11, which show the guards working.

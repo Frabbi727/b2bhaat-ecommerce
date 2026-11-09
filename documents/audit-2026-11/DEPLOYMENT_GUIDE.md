@@ -106,3 +106,16 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 - **What changes:** nobody can edit, delete or truncate audit records any more, including from a database console. Only `audit:prune` can delete routine entries past the retention window. If someone truly needs to remove audit rows (for example by legal order), a database owner must first drop the trigger. That is deliberate.
 - **Check after deploy:** in a database console, `UPDATE audit_logs SET description = description WHERE id = (SELECT max(id) FROM audit_logs);` must fail with "Audit records cannot be changed or deleted."
 - **Rollback:** `php artisan migrate:rollback --step=1` removes the trigger. The code changes need no data rollback.
+
+## ACC-6 missing accounts
+- **No migration.** Before deploying, confirm the chart of accounts is complete, or a payout, refund payment or billing payment that needs a missing account will be refused after deploy. Check with `SELECT system_slug FROM accounting_accounts WHERE system_slug IS NOT NULL ORDER BY 1;` against the slugs in `AccountingChartOfAccountsSeeder`.
+- **If an account is missing:** add it in the admin chart of accounts, or run `php artisan db:seed --class=AccountingChartOfAccountsSeeder`. Running the seeder creates no duplicates and changes no journals, but it also resets the names and descriptions of the standard accounts and marks them active again. Take a backup first if anyone has renamed or deactivated a standard account.
+
+## ACC-9 journal guards
+- **Migration:** `2026_11_09_080335_add_journal_integrity_guards.php`. It changes no data and takes a moment. It rebuilds one foreign key on `accounting_journal_lines`, which briefly locks that table; run it outside peak hours.
+- **Check old data first:** `SELECT count(*) FROM accounting_journal_lines WHERE NOT (debit >= 0 AND credit >= 0 AND (debit > 0) <> (credit > 0));`. If it is not 0, the migration still runs: it keeps those lines, applies the rule to new lines only, and prints the count. Review those lines with the accountant; fix them with correcting journals, not edits.
+- **Check after deploy:** `UPDATE accounting_journal_entries SET description = description WHERE id = (SELECT max(id) FROM accounting_journal_entries WHERE status = 'posted');` must fail with "Posted journal … cannot be changed".
+- **Rollback:** `php artisan migrate:rollback --step=1` removes the triggers and the amount rule and restores the old cascade foreign key.
+
+## ACC-5 reverse button
+- **Code only.** After deploy, the Reverse button appears only on manual journals.
