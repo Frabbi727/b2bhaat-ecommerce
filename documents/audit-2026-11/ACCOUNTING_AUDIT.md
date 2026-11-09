@@ -55,7 +55,7 @@ Tests prove three things: the trial balance stays balanced, real courier bills s
 | ACC-7 | Courier COD receivable and gateway clearing are never settled; gateway fees are never booked | **Fixed (78b7ef4):** courier remittance and gateway transfer actions |
 | ACC-8 | Admin waiver books subscription revenue | **Fixed (f7edbb6):** a waiver posts nothing |
 | ACC-9 | No DB-level balance or immutability constraints | PostgreSQL CHECK constraints and triggers |
-| ACC-11 | Commission booked at payment **(owner: book on delivery)** | Deferred commission liability |
+| ACC-11 | Commission booked at payment **(owner: book on delivery)** | Deferred commission liability. **Fixed (1b5acc5)** for new prepaid payments |
 | MON-7 | Seller billing posts no journals | Call `MonetizationJournalHandler` from the settlement service |
 | ACC-12 to ACC-21 | Deferral, numbering race, float maths, statement signs, reconciliation gaps | See register |
 

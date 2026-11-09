@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1325 tests, 1318 passed, 7 skipped, 6171 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1331 tests, 1324 passed, 7 skipped, 6193 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -76,6 +76,7 @@ The existing tests of other features were touched only to give their test produc
 | ACC-7 | `tests/Feature/Accounting/SettlementServiceTest.php` (9), `SettlementActionsTest.php` (4) | Unsettled delivered courier COD parcels are listed with their amounts, filtered by courier; a remittance clears the receivable, books bank and courier charges, marks the parcels and writes an audit entry; amounts that don't add up, a parcel settled twice, and a self-delivered or unknown parcel are refused with nothing changed; a gateway transfer clears the gateway account and books the fee; a transfer larger than the books show, a fee as large as the transfer, and a non-bank, non-cash deposit account are refused; both buttons work from the journal list and need the confirmation tick |
 | ACC-3, ACC-4 | `tests/Feature/Accounting/SelfDeliveryJournalsTest.php` (4) | Self-collected COD with a coupon: the seller's wallet and `seller_wallet_payable` agree, with commission revenue and coupon expense booked; with zero commission the coupon share still posts; with neither, nothing posts. A prepaid parcel switched to self-delivery: escrow in the books equals the wallet escrow, shipping revenue returns to zero, and after release the escrow account is zero and the wallet account holds the full amount |
 | ACC-8 | `tests/Feature/Accounting/MonetizationJournalIntegrationTest.php` (1 rewritten) | An admin waiver posts no journal and books no subscription revenue. The old test asserted the revenue-plus-expense entry and was replaced |
+| ACC-11 | `tests/Feature/Accounting/CommissionDeferralTest.php` (6), `OrderPaymentJournalIntegrationTest.php` (5 updated) | A prepaid payment holds commission as deferred; delivery moves it to income exactly once; cancelling before delivery clears the deferred amount; a return after release takes it back out of income; an order paid before the change keeps its booked commission and moves nothing on delivery; courier COD is unchanged; the books balance in every case. The 5 updated tests now expect the commission in the deferred account at payment |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
@@ -84,6 +85,8 @@ The existing tests of other features were touched only to give their test produc
 **PostgreSQL check (ACC-9):** on a throwaway local database (created and deleted for the test), all 9 guard tests passed. Real posting paths were run against the triggers and passed: payment verification, COD courier delivery, escrow cancellation and refund, return after release, refund and cancellation reconciliation, and the shipping reclassify command. Rollback and re-run of the migration worked. With an old bad line planted before the migration, the line was kept, the amount rule was added for new lines only (`NOT VALID`), and the migration printed the count.
 
 **Existing tests changed (ACC-6):** seven billing and finance test classes now seed the chart of accounts in `setUp`, because their billing payments now need the accounts the journals use. No assertion was relaxed.
+
+**PostgreSQL check (ACC-11):** on a throwaway local database (created and deleted), the migration skips a database with no chart yet, inserts account 2070 when it is missing, and rollback removes it only while nothing is posted to it. `CommissionDeferralTest` and `SelfDeliveryJournalsTest` pass on PostgreSQL with the ACC-9 journal guards active.
 
 **Known test limit:** most accounting tests are written for SQLite. On PostgreSQL, 34 fail before reaching any journal code because their setup hard-codes `order_status_id = 1` (ids drift between tests there), and 11 deliberately insert unbalanced or already-posted journals, which the ACC-9 guards now refuse. This predates Wave 1 except for those 11, which show the guards working.
 

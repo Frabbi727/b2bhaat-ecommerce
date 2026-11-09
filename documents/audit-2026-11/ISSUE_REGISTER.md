@@ -65,7 +65,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | ACC-7 | Accounting | `courier_cod_receivable` and `gateway_clearing` are never settled; gateway fees are never booked | Courier remittance and gateway settlement actions; fee expense; courier payable | UX-ACC-1 | **Fixed (78b7ef4)** |
 | ACC-8 | Accounting | Admin waiver books fake subscription revenue (`MonetizationJournalHandler.php:97`) | Post no entry for a waiver, or post net zero | MON-7 | **Fixed (f7edbb6)** |
 | ACC-9 | Accounting | No DB constraints for balance or immutability; lines cascade on delete | PostgreSQL CHECK constraints and triggers; restrict delete | – | **Fixed (29d8f78)** |
-| ACC-11 | Accounting | Commission booked as income at payment, before delivery (`OrderPaymentJournalHandler.php:68-79`) | **Owner decision:** defer until delivery or escrow release (deferred commission liability) | ACC-9 | Open |
+| ACC-11 | Accounting | Commission booked as income at payment, before delivery (`OrderPaymentJournalHandler.php:68-79`) | **Owner decision:** defer until delivery or escrow release (deferred commission liability) | ACC-9 | Fixed (1b5acc5): held in Deferred Commission Revenue (2070) at payment, income on delivery; new payments only |
 | UX-ACC-1 | Accounting UI | No manual journal entry | Balanced manual journal form with confirmation and audit | ACC-9 | **Fixed (217be0a)** |
 | AUD-2 | Audit | Audit rows can be updated or deleted (`AuditLog.php`) | Model guards plus a PostgreSQL trigger | – | **Fixed (f05a94c)** |
 | AUD-3 | Audit | Audit failures are swallowed and can abort the PostgreSQL transaction (`AuditService.php:52-56`) | Savepoint or after-commit write; failures reported | – | **Fixed (f05a94c)** |

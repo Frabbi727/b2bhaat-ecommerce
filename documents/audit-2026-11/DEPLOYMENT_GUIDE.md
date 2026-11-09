@@ -137,3 +137,10 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 ## ACC-3, ACC-4, ACC-8 journal fixes
 - **Code only, no migration.** New events post the corrected journals; nothing already posted is changed.
 - **After deploy:** open **Accounting → Reconciliation** and run the full audit. Any seller listed with a wallet/ledger difference is a past self-delivery case; send the list to the accountant for correcting manual journals.
+
+## ACC-11 commission on delivery
+- **Migration:** `2026_11_09_095029_add_deferred_commission_revenue_account.php` adds account 2070 **Deferred Commission Revenue** if it is missing. It changes no journal.
+- **Seeder:** running `AccountingChartOfAccountsSeeder` also adds it (with the ACC-6 caveat above).
+- **Already-paid orders:** commission booked before the deploy stays as income; nothing is moved or re-posted for them.
+- **Check after deploy:** verify one bKash/Nagad payment, then confirm Journal Entries shows its commission on account 2070; after delivery, a `commission_earned` journal moves it to commission revenue.
+- **Rollback:** `php artisan migrate:rollback --step=1` removes the account only while nothing is posted to it. After real use, roll back the code only; the account stays, and any balance on it is real deferred commission.
