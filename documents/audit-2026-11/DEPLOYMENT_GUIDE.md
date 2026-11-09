@@ -100,3 +100,9 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 - **Safe while the shop is open:** on PostgreSQL each index is built with `CREATE INDEX CONCURRENTLY`, outside a transaction, so orders keep flowing while it runs. Any index that already exists is skipped.
 - **If a run is interrupted:** a concurrent build that stops can leave an index marked invalid. Check with `SELECT indexrelid::regclass FROM pg_index WHERE NOT indisvalid;`. Drop any listed `perf_…` index with `DROP INDEX CONCURRENTLY`, then run `php artisan migrate` again.
 - **Rollback:** `php artisan migrate:rollback --step=1` drops only the `perf_…` indexes, also concurrently.
+
+## AUD-2 / AUD-3 audit log
+- **Migration:** `2026_11_09_045325_make_audit_logs_append_only.php` adds a PostgreSQL trigger. It changes no data and takes only a moment.
+- **What changes:** nobody can edit, delete or truncate audit records any more, including from a database console. Only `audit:prune` can delete routine entries past the retention window. If someone truly needs to remove audit rows (for example by legal order), a database owner must first drop the trigger. That is deliberate.
+- **Check after deploy:** in a database console, `UPDATE audit_logs SET description = description WHERE id = (SELECT max(id) FROM audit_logs);` must fail with "Audit records cannot be changed or deleted."
+- **Rollback:** `php artisan migrate:rollback --step=1` removes the trigger. The code changes need no data rollback.

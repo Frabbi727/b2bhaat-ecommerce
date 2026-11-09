@@ -62,10 +62,14 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1281 tests, 1281 passed, 6007 assertions** (2026-11-09, branch `fix/audit-wave-1`).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1287 tests, 1287 passed, 6017 assertions** (2026-11-09, branch `fix/audit-wave-1`).
 
 | Issue | Test file | What is proven |
 |---|---|---|
 | PERF-1 | `tests/Feature/PerformanceIndexesTest.php` (74) | Each of the 72 column sets has an index; the hot lookups (order lines, consignments, prices, wallet history, shop listing) are covered; rolling back removes only the new indexes and running again restores them |
 
-**PostgreSQL check:** the migration was also run on a throwaway local PostgreSQL database (created and deleted for the test): 72 indexes built concurrently, rollback removed exactly those 72, and a re-run restored them.
+| AUD-2, AUD-3 | `tests/Feature/Audit/AuditImmutabilityTest.php` (6), `AuditServiceTest.php` (1 updated) | An audit record can't be edited or deleted; routine pruning still works; a failed audit write is reported and the surrounding action still commits; a rolled-back action sends no queued entry, a committed one sends exactly one |
+
+**PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
+
+**PostgreSQL check (PERF-1):** the migration was also run on a throwaway local PostgreSQL database (created and deleted for the test): 72 indexes built concurrently, rollback removed exactly those 72, and a re-run restored them.

@@ -67,8 +67,8 @@ All findings come from reading the code; every one cites file:line. Status value
 | ACC-9 | Accounting | No DB constraints for balance or immutability; lines cascade on delete | PostgreSQL CHECK constraints and triggers; restrict delete | – | Open |
 | ACC-11 | Accounting | Commission booked as income at payment, before delivery (`OrderPaymentJournalHandler.php:68-79`) | **Owner decision:** defer until delivery or escrow release (deferred commission liability) | ACC-9 | Open |
 | UX-ACC-1 | Accounting UI | No manual journal entry | Balanced manual journal form with confirmation and audit | ACC-9 | Open |
-| AUD-2 | Audit | Audit rows can be updated or deleted (`AuditLog.php`) | Model guards plus a PostgreSQL trigger | – | Open |
-| AUD-3 | Audit | Audit failures are swallowed and can abort the PostgreSQL transaction (`AuditService.php:52-56`) | Savepoint or after-commit write; failures reported | – | Open |
+| AUD-2 | Audit | Audit rows can be updated or deleted (`AuditLog.php`) | Model guards plus a PostgreSQL trigger | – | **Fixed (f05a94c)** |
+| AUD-3 | Audit | Audit failures are swallowed and can abort the PostgreSQL transaction (`AuditService.php:52-56`) | Savepoint or after-commit write; failures reported | – | **Fixed (f05a94c)** |
 | AUD-4 | Audit | Not logged: user role/password changes, invoices, payments, KYC, exports, query-builder writes | Make those models Auditable plus explicit events | AUD-3 | Open |
 | INV-3 | Inventory | Saving the product form overwrites live variation stock (`ProductForm.php:242,269`) | Stock read-only on edit; adjust through a locked stock action | – | Open |
 | INV-4 | Inventory | Ordered variations can be deleted (`order_items.variation_id` nullOnDelete) | Block delete, or deactivate instead | – | Open |
