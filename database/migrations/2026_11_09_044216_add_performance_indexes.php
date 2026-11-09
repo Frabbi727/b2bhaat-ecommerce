@@ -64,6 +64,12 @@ return new class extends Migration
     public function up(): void
     {
         foreach (self::applicable() as [$table, $columns, $name]) {
+            // A concurrent build that failed leaves an invalid index under our name; drop it so it is built again
+            // (Wave 1 review M-7).
+            if (in_array($name, self::invalidIndexes($table), true)) {
+                DB::statement("DROP INDEX CONCURRENTLY IF EXISTS \"{$name}\"");
+            }
+
             if (self::isCovered($table, $columns)) {
                 continue;
             }
@@ -128,12 +134,40 @@ return new class extends Migration
      */
     private static function isCovered(string $table, array $columns): bool
     {
+        $invalid = self::invalidIndexes($table);
+
         foreach (Schema::getIndexes($table) as $index) {
+            // An invalid index (a failed concurrent build) is never used by PostgreSQL, so it covers nothing.
+            if (in_array($index['name'], $invalid, true)) {
+                continue;
+            }
+
             if (array_slice($index['columns'], 0, count($columns)) === $columns) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * Names of the table's indexes PostgreSQL marked invalid. Other databases have none.
+     *
+     * @return list<string>
+     */
+    private static function invalidIndexes(string $table): array
+    {
+        if (DB::getDriverName() !== 'pgsql') {
+            return [];
+        }
+
+        return array_map(fn (object $row): string => (string) $row->name, DB::select(
+            'select c.relname as name from pg_index i
+                join pg_class c on c.oid = i.indexrelid
+                join pg_class t on t.oid = i.indrelid
+                join pg_namespace n on n.oid = t.relnamespace
+            where t.relname = ? and n.nspname = current_schema() and not i.indisvalid',
+            [$table],
+        ));
     }
 };
