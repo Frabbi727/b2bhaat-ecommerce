@@ -233,3 +233,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## ORD-3 checkout in one transaction
 - **Code only, no migration.**
+
+## FS-1 / INV-7 flash units
+- **Code only, no migration.** Units already lost to earlier returns or expiries are not recalculated.
