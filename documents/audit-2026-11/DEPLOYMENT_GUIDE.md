@@ -150,3 +150,9 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 - **SMS:** saving a plan with a changed price, cycle, limit or commission now sends one SMS to each seller on it (active, grace period or suspended). Plan edits cost SMS credit in proportion to the number of sellers.
 - **Check after deploy:** `SELECT count(*) FROM seller_subscriptions WHERE terms_captured_at IS NULL;` should be 0.
 - **Rollback:** `php artisan migrate:rollback --step=1` drops the columns; the old code then reads the plan's live values again.
+
+## MON-3 default plan
+- **Code only, no migration.**
+- **Before deploy:** in **Seller Plans**, check exactly one active plan is marked **Default Free Plan for New Sellers** and that its listing limit is what you want sellers without a plan to have.
+- **After deploy (needs your go-ahead):** run `php artisan monetization:assign-default-plan --dry-run` to list the approved sellers with no plan, then `php artisan monetization:assign-default-plan` to put them on the default plan. It only adds subscriptions; it hides no products and is safe to run again.
+- **Rollback:** deploy the previous code. Subscriptions the command created stay; they are ordinary free-plan subscriptions.

@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1338 tests, 1331 passed, 7 skipped, 6220 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1345 tests, 1338 passed, 7 skipped, 6242 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 7 skipped tests are the PostgreSQL-only journal guards; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -78,6 +78,7 @@ The existing tests of other features were touched only to give their test produc
 | ACC-8 | `tests/Feature/Accounting/MonetizationJournalIntegrationTest.php` (1 rewritten) | An admin waiver posts no journal and books no subscription revenue. The old test asserted the revenue-plus-expense entry and was replaced |
 | ACC-11 | `tests/Feature/Accounting/CommissionDeferralTest.php` (6), `OrderPaymentJournalIntegrationTest.php` (5 updated) | A prepaid payment holds commission as deferred; delivery moves it to income exactly once; cancelling before delivery clears the deferred amount; a return after release takes it back out of income; an order paid before the change keeps its booked commission and moves nothing on delivery; courier COD is unchanged; the books balance in every case. The 5 updated tests now expect the commission in the deferred account at payment |
 | MON-2 | `tests/Feature/SellerPlanTermsSnapshotTest.php` (7) | A new subscription keeps its plan's terms; editing the plan doesn't change a running subscription's commission or listing limit; the renewal bill and the next period use the new terms; moving a subscription to another plan takes that plan's terms; an admin's custom rate and limit still win; changing terms sends each seller an SMS and tells the admin; renaming a plan sends nothing. Three of these failed on the old code |
+| MON-3 | `tests/Feature/DefaultSellerPlanTest.php` (7) | Approval puts a seller on the default plan once; approval keeps a plan the seller already has; a seller with no plan gets the free limit and their visible products stay visible; an ended plan falls back to the free limit; with no default plan nothing changes; the backfill command previews with `--dry-run`, assigns only approved sellers without a plan, and is safe to repeat; restoring a suspended store uses its own plan's limit. Three of these failed on the old code |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
