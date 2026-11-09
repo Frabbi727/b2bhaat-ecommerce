@@ -160,3 +160,8 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 ## MON-6 offline payments
 - **Code only, no migration.** The duplicate-reference check uses the cache lock store (`CACHE_STORE=database` uses the existing `cache_locks` table).
 - **Past duplicates:** references recorded before this deploy are not changed. To find any, run `SELECT payment_method, lower(trim(transaction_reference)), count(*) FROM seller_payments WHERE status = 'successful' AND transaction_reference IS NOT NULL GROUP BY 1, 2 HAVING count(*) > 1;`.
+
+## MON-10 one bill per period
+- **Migration:** `2026_11_09_104236_add_billing_period_key_to_seller_invoices_table.php` adds `billing_period_key` (unique) to `seller_invoices` and keys existing renewal bills. It changes no amount or status and removes nothing.
+- **Watch the output:** if it prints "MON-10: N renewal bill(s) repeat a period…", some sellers were billed twice for one period in the past. Find them with `SELECT subscription_id, due_date, count(*) FROM seller_invoices WHERE invoice_type = 'subscription_fee' GROUP BY 1, 2 HAVING count(*) > 1;` and have the accountant void or refund the extra unpaid or paid bills.
+- **Rollback:** `php artisan migrate:rollback --step=1` drops the column and index; bills are kept.
