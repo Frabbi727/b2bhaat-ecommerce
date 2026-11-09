@@ -13,6 +13,7 @@ use App\Models\PaymentMethod;
 use App\Models\PaymentStatus;
 use App\Models\SalesChannel;
 use App\Models\User;
+use App\Services\Accounting\EventPipeline\OrderPaymentJournalHandler;
 use App\Services\Cart\CartSessionService;
 use App\Services\Cart\CouponService;
 use App\Services\Email\EmailRecipientResolver;
@@ -418,6 +419,9 @@ class CheckoutComponent extends Component
                     foreach ($order->subOrders as $subOrder) {
                         $escrowService->holdInEscrow($subOrder);
                     }
+
+                    // ACC-2: book the money exactly as a verified payment does
+                    app(OrderPaymentJournalHandler::class)->recordPrepaidPayment($order);
                 } elseif ($paymentMethod && $paymentMethod->slug === 'cod') {
                     $confirmedStatus = OrderStatus::where('slug', 'confirmed')->firstOrFail();
                     $order->update([

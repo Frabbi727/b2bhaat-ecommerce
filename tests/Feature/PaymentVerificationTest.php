@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Filament\Admin\Resources\Orders\Pages\ListOrders;
 use App\Filament\Seller\Resources\SubOrders\Pages\ListSubOrders;
 use App\Livewire\Storefront\CheckoutComponent;
+use App\Models\Accounting\AccountingJournalEntry;
 use App\Models\FulfillmentStatus;
 use App\Models\Order;
 use App\Models\PaymentMethod;
@@ -100,6 +101,30 @@ class PaymentVerificationTest extends TestCase
         $this->checkout('mock_gateway')->assertHasErrors(['selectedPaymentMethodId']);
 
         $this->assertSame($ordersBefore, Order::count());
+    }
+
+    public function test_mock_gateway_payment_posts_the_same_journal_as_a_verified_payment(): void
+    {
+        $this->seed(AccountingChartOfAccountsSeeder::class);
+
+        $this->checkout('mock_gateway')->assertHasNoErrors();
+        $order = $this->latestOrder();
+
+        $this->assertSame('paid', $order->paymentStatus->slug);
+        // ACC-2: the escrow is held, so the books must show the money too.
+        $this->assertSame(1, AccountingJournalEntry::where('financial_event', 'order_prepaid_received')
+            ->whereHas('lines', fn ($lines) => $lines->where('order_id', $order->id))->count());
+        $this->assertSame(round((float) $order->total_amount, 2), app(GeneralLedgerService::class)->getBalanceForSlug('gateway_clearing'));
+    }
+
+    public function test_the_mock_gateway_is_only_seeded_active_in_local_and_testing(): void
+    {
+        PaymentMethod::where('slug', PaymentMethod::MOCK)->delete();
+        $this->app->detectEnvironment(fn (): string => 'production');
+
+        $this->app->make(SystemLookupSeeder::class)->setContainer($this->app)->run();
+
+        $this->assertFalse((bool) PaymentMethod::where('slug', PaymentMethod::MOCK)->value('is_active'));
     }
 
     public function test_inactive_method_rejected(): void

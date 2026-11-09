@@ -101,7 +101,8 @@ class SystemLookupSeeder extends Seeder
             ['name' => 'bKash Gateway', 'slug' => 'bkash', 'is_active' => true],
             ['name' => 'Nagad Gateway', 'slug' => 'nagad', 'is_active' => true],
             ['name' => 'SSLCommerz Gateway', 'slug' => 'sslcommerz', 'is_active' => true],
-            ['name' => 'Mock Sandbox Gateway', 'slug' => 'mock_gateway', 'is_active' => true],
+            // ACC-2: the sandbox gateway is never switched on outside local/testing
+            ['name' => 'Mock Sandbox Gateway', 'slug' => 'mock_gateway', 'is_active' => app()->environment('local', 'testing')],
         ];
         foreach ($paymentMethods as $pm) {
             PaymentMethod::firstOrCreate(['slug' => $pm['slug']], $pm);
