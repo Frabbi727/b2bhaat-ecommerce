@@ -181,3 +181,7 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 - **Code only, no migration.** Existing orders are not changed on deploy; each is corrected the next time one of its parcels changes.
 - **To find orders the old rule left wrong:** `SELECT o.order_number FROM orders o JOIN order_statuses s ON s.id = o.order_status_id WHERE s.slug = 'cancelled' AND EXISTS (SELECT 1 FROM sub_orders so JOIN fulfillment_statuses f ON f.id = so.fulfillment_status_id WHERE so.parent_order_id = o.id AND f.slug NOT IN ('cancelled', 'returned'));` (cancelled orders with a parcel still open or delivered).
 - **Bookmarks:** links to `/admin/orders/{id}/edit` now show 404; use the order page.
+
+## INV-3 stock adjustments
+- **Code only, no migration.** No stock figure is changed on deploy.
+- **Tell sellers:** stock is now changed with **Adjust stock** on the product page or in the product list menu; the stock box in the form is read-only.

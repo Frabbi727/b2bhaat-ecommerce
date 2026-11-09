@@ -70,7 +70,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | AUD-2 | Audit | Audit rows can be updated or deleted (`AuditLog.php`) | Model guards plus a PostgreSQL trigger | – | **Fixed (f05a94c)** |
 | AUD-3 | Audit | Audit failures are swallowed and can abort the PostgreSQL transaction (`AuditService.php:52-56`) | Savepoint or after-commit write; failures reported | – | **Fixed (f05a94c)** |
 | AUD-4 | Audit | Not logged: user role/password changes, invoices, payments, KYC, exports, query-builder writes | Make those models Auditable plus explicit events | AUD-3 | Open |
-| INV-3 | Inventory | Saving the product form overwrites live variation stock (`ProductForm.php:242,269`) | Stock read-only on edit; adjust through a locked stock action | – | Open |
+| INV-3 | Inventory | Saving the product form overwrites live variation stock (`ProductForm.php:242,269`) | Stock read-only on edit; adjust through a locked stock action | – | Fixed (`963e881`) |
 | INV-4 | Inventory | Ordered variations can be deleted (`order_items.variation_id` nullOnDelete) | Block delete, or deactivate instead | – | Open |
 | INV-5 | Inventory | Inactive variation is still sold through wholesale (`CartSessionService::putItem`) | Check `is_active` in the cart and in reservation | – | Open |
 | INV-8 | Inventory | Products go live on save | **Owner decision:** every new product and every price change waits for admin approval (status, queue, notifications) | INV-1 | **Fixed (5ba25b2..06e9ef4)** |
