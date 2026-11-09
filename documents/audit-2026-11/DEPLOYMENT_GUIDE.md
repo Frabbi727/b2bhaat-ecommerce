@@ -196,3 +196,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## SEC-6 lookup and code limits
 - **Code only, no migration.** The limits use the cache store (`CACHE_STORE=database` uses the existing `cache` table). Behind a proxy or load balancer, make sure `TrustProxies` is set so the real visitor address is used; otherwise every visitor shares one address and one limit.
+
+## AUD-4 audit coverage
+- **Code only, no migration.** The audit log grows faster: one entry per account, bill, payment and setting change, and per report download. Account, finance and settings entries are written at once; seller entries go through the queue (needs the queue worker running, as before).
