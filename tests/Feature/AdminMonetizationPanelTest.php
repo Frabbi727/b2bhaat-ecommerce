@@ -13,6 +13,7 @@ use App\Models\SellerPlan;
 use App\Models\SellerProfile;
 use App\Models\SellerSubscription;
 use App\Models\User;
+use Database\Seeders\AccountingChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -34,6 +35,7 @@ class AdminMonetizationPanelTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(AccountingChartOfAccountsSeeder::class);
 
         $adminRole = Role::firstOrCreate(['slug' => 'super_admin'], ['name' => 'Super Admin']);
         $this->admin = User::factory()->create([

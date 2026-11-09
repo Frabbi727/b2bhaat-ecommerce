@@ -7,6 +7,7 @@ namespace App\Services\Accounting\EventPipeline;
 use App\DTOs\Accounting\JournalEntryData;
 use App\DTOs\Accounting\JournalLineData;
 use App\Enums\Accounting\AccountingEvent;
+use App\Exceptions\Accounting\MissingAccountException;
 use App\Models\Accounting\AccountingAccount;
 use App\Models\Accounting\AccountingJournalEntry;
 use App\Models\WalletTransaction;
@@ -31,9 +32,7 @@ class PayoutJournalHandler
             return null;
         }
 
-        if (! $this->areAccountsConfigured('seller_wallet_payable', 'reserved_payout_payable')) {
-            return null;
-        }
+        $this->assertAccountsConfigured('seller_wallet_payable', 'reserved_payout_payable');
 
         $payout->loadMissing('wallet');
         $sellerId = $payout->wallet?->seller_id;
@@ -92,9 +91,7 @@ class PayoutJournalHandler
             ? 'gateway_clearing'
             : 'bank_operating';
 
-        if (! $this->areAccountsConfigured('reserved_payout_payable', $creditAccountSlug)) {
-            return null;
-        }
+        $this->assertAccountsConfigured('reserved_payout_payable', $creditAccountSlug);
 
         $payout->loadMissing('wallet');
         $sellerId = $payout->wallet?->seller_id;
@@ -151,9 +148,7 @@ class PayoutJournalHandler
             return null;
         }
 
-        if (! $this->areAccountsConfigured('reserved_payout_payable', 'seller_wallet_payable')) {
-            return null;
-        }
+        $this->assertAccountsConfigured('reserved_payout_payable', 'seller_wallet_payable');
 
         $payout->loadMissing('wallet');
         $sellerId = $payout->wallet?->seller_id;
@@ -196,16 +191,21 @@ class PayoutJournalHandler
     }
 
     /**
-     * Check if required accounting accounts exist in the chart of accounts.
+     * Every account this journal needs must exist; otherwise the posting fails loudly and the money movement around
+     * it rolls back (ACC-6), instead of the journal being skipped.
+     *
+     * @throws MissingAccountException
      */
-    protected function areAccountsConfigured(string ...$slugs): bool
+    protected function assertAccountsConfigured(string ...$slugs): void
     {
-        if (! Schema::hasTable('accounting_accounts')) {
-            return false;
-        }
-
         $required = array_values(array_unique(array_merge(['reserved_payout_payable'], $slugs)));
+        $present = Schema::hasTable('accounting_accounts')
+            ? AccountingAccount::whereIn('system_slug', $required)->pluck('system_slug')->all()
+            : [];
+        $missing = array_values(array_diff($required, $present));
 
-        return AccountingAccount::whereIn('system_slug', $required)->count() === count($required);
+        if ($missing !== []) {
+            throw MissingAccountException::forSlugs($missing);
+        }
     }
 }

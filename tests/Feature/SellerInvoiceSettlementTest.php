@@ -15,6 +15,7 @@ use App\Models\SellerWallet;
 use App\Models\User;
 use App\Services\Monetization\MonetizationSuspensionService;
 use App\Services\Monetization\SellerInvoiceSettlementService;
+use Database\Seeders\AccountingChartOfAccountsSeeder;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -39,6 +40,7 @@ class SellerInvoiceSettlementTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(AccountingChartOfAccountsSeeder::class);
 
         $this->seller = User::factory()->create([
             'role_id' => Role::firstOrCreate(['slug' => 'seller'], ['name' => 'Seller'])->id,

@@ -16,6 +16,7 @@ use App\Models\SellerSubscription;
 use App\Models\SellerWallet;
 use App\Models\Unit;
 use App\Models\User;
+use Database\Seeders\AccountingChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -33,6 +34,7 @@ class MonetizationCronAndSmsAlertsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(AccountingChartOfAccountsSeeder::class);
 
         Queue::fake();
 

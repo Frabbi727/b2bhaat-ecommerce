@@ -12,6 +12,7 @@ use App\Models\SellerProfile;
 use App\Models\SellerSubscription;
 use App\Models\SellerSuspensionEvent;
 use App\Models\User;
+use Database\Seeders\AccountingChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -20,6 +21,12 @@ use Tests\TestCase;
 class SellerMonetizationSchemaTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(AccountingChartOfAccountsSeeder::class);
+    }
 
     public function test_monetization_tables_exist_with_expected_columns(): void
     {

@@ -7,6 +7,7 @@ namespace App\Services\Accounting\EventPipeline;
 use App\DTOs\Accounting\JournalEntryData;
 use App\DTOs\Accounting\JournalLineData;
 use App\Enums\Accounting\AccountingEvent;
+use App\Exceptions\Accounting\MissingAccountException;
 use App\Models\Accounting\AccountingAccount;
 use App\Models\Accounting\AccountingJournalEntry;
 use App\Models\Refund;
@@ -41,9 +42,7 @@ class CustomerRefundDisbursementJournalHandler
             default => 'gateway_clearing',
         };
 
-        if (! $this->areAccountsConfigured($creditAccountSlug)) {
-            return null;
-        }
+        $this->assertAccountsConfigured($creditAccountSlug);
 
         $customerId = $refund->order?->customer_id;
         $orderNumber = $refund->order?->order_number ?? (string) $refund->order_id;
@@ -93,16 +92,21 @@ class CustomerRefundDisbursementJournalHandler
     }
 
     /**
-     * Check if required accounting accounts exist in the chart of accounts.
+     * Every account this journal needs must exist; otherwise the posting fails loudly and the money movement around
+     * it rolls back (ACC-6), instead of the journal being skipped.
+     *
+     * @throws MissingAccountException
      */
-    protected function areAccountsConfigured(string ...$slugs): bool
+    protected function assertAccountsConfigured(string ...$slugs): void
     {
-        if (! Schema::hasTable('accounting_accounts')) {
-            return false;
-        }
-
         $required = array_values(array_unique(array_merge(['customer_refund_payable'], $slugs)));
+        $present = Schema::hasTable('accounting_accounts')
+            ? AccountingAccount::whereIn('system_slug', $required)->pluck('system_slug')->all()
+            : [];
+        $missing = array_values(array_diff($required, $present));
 
-        return AccountingAccount::whereIn('system_slug', $required)->count() === count($required);
+        if ($missing !== []) {
+            throw MissingAccountException::forSlugs($missing);
+        }
     }
 }

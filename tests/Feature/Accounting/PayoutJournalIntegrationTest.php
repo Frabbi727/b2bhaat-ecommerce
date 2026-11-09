@@ -6,6 +6,7 @@ namespace Tests\Feature\Accounting;
 
 use App\Enums\Accounting\AccountingEvent;
 use App\Enums\Accounting\JournalEntryStatus;
+use App\Exceptions\Accounting\MissingAccountException;
 use App\Models\Accounting\AccountingAccount;
 use App\Models\Accounting\AccountingFiscalYear;
 use App\Models\Accounting\AccountingJournalEntry;
@@ -303,7 +304,7 @@ class PayoutJournalIntegrationTest extends TestCase
     /**
      * Test 6: Zero/negative amount or unseeded accounts return null without exceptions.
      */
-    public function test_zero_or_negative_amount_or_unseeded_accounts_return_null_without_exceptions(): void
+    public function test_zero_or_negative_amount_returns_null_and_missing_accounts_are_refused(): void
     {
         // Zero amount
         $zeroPayout = WalletTransaction::create([
@@ -347,8 +348,18 @@ class PayoutJournalIntegrationTest extends TestCase
             'reference_note' => 'Valid payout with unseeded accounts',
         ]);
 
-        $this->assertNull($this->handler->recordPayoutRequested($validPayout));
-        $this->assertNull($this->handler->recordPayoutDisbursed($validPayout));
-        $this->assertNull($this->handler->recordPayoutRejected($validPayout, 'Test unseeded'));
+        // ACC-6: each posting refuses loudly instead of skipping the journal.
+        foreach ([
+            fn () => $this->handler->recordPayoutRequested($validPayout),
+            fn () => $this->handler->recordPayoutDisbursed($validPayout),
+            fn () => $this->handler->recordPayoutRejected($validPayout, 'Test unseeded'),
+        ] as $post) {
+            try {
+                $post();
+                $this->fail('A posting with missing accounts should be refused.');
+            } catch (MissingAccountException) {
+                $this->addToAssertionCount(1);
+            }
+        }
     }
 }

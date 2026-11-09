@@ -16,6 +16,7 @@ use App\Models\SellerSubscription;
 use App\Models\SellerWallet;
 use App\Models\Unit;
 use App\Models\User;
+use Database\Seeders\AccountingChartOfAccountsSeeder;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Repeater;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -43,6 +44,7 @@ class SellerBillingAndQuotaEnforcementTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(AccountingChartOfAccountsSeeder::class);
 
         $sellerRole = Role::firstOrCreate(['slug' => 'seller'], ['name' => 'Seller']);
         $this->seller = User::factory()->create([

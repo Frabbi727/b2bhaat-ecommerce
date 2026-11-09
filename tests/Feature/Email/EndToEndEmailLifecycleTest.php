@@ -23,6 +23,7 @@ use App\Models\Role;
 use App\Models\SellerProfile;
 use App\Models\SubOrder;
 use App\Models\User;
+use Database\Seeders\AccountingChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -30,6 +31,12 @@ use Tests\TestCase;
 class EndToEndEmailLifecycleTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(AccountingChartOfAccountsSeeder::class);
+    }
 
     public function test_complete_ecommerce_email_lifecycle(): void
     {

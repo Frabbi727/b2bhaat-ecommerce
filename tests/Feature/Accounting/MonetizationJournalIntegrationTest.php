@@ -6,6 +6,7 @@ namespace Tests\Feature\Accounting;
 
 use App\Enums\Accounting\AccountingEvent;
 use App\Enums\Accounting\JournalEntryStatus;
+use App\Exceptions\Accounting\MissingAccountException;
 use App\Models\Accounting\AccountingAccount;
 use App\Models\Accounting\AccountingFiscalYear;
 use App\Models\Accounting\AccountingJournalEntry;
@@ -443,7 +444,7 @@ class MonetizationJournalIntegrationTest extends TestCase
         );
     }
 
-    public function test_returns_null_gracefully_when_accounting_accounts_not_seeded(): void
+    public function test_a_payment_is_refused_when_accounting_accounts_are_missing(): void
     {
         AccountingAccount::query()->delete();
 
@@ -458,16 +459,15 @@ class MonetizationJournalIntegrationTest extends TestCase
             'due_date' => now()->toDateString(),
         ]);
 
-        $payment = SellerPayment::create([
+        // ACC-6: recording a successful payment with missing accounts is refused, not silently left out of the books.
+        $this->expectException(MissingAccountException::class);
+
+        SellerPayment::create([
             'invoice_id' => $invoice->id,
             'seller_id' => $this->seller->id,
             'amount' => 500.00,
             'payment_method' => SellerPayment::METHOD_BKASH,
             'status' => SellerPayment::STATUS_SUCCESSFUL,
         ]);
-
-        $this->assertNull(
-            AccountingJournalEntry::where('idempotency_key', "seller_payment_{$payment->id}")->first()
-        );
     }
 }

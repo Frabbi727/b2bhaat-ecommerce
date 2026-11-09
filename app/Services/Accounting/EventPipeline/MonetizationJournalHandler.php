@@ -7,6 +7,7 @@ namespace App\Services\Accounting\EventPipeline;
 use App\DTOs\Accounting\JournalEntryData;
 use App\DTOs\Accounting\JournalLineData;
 use App\Enums\Accounting\AccountingEvent;
+use App\Exceptions\Accounting\MissingAccountException;
 use App\Models\Accounting\AccountingAccount;
 use App\Models\Accounting\AccountingJournalEntry;
 use App\Models\SellerInvoice;
@@ -86,11 +87,6 @@ class MonetizationJournalHandler
             return null;
         }
 
-        // Graceful check: return null if accounts are not seeded in the database
-        if (! Schema::hasTable('accounting_accounts') || ! AccountingAccount::where('system_slug', $creditAccountSlug)->exists()) {
-            return null;
-        }
-
         $debitAccountSlug = match ($payment->payment_method) {
             SellerPayment::METHOD_WALLET_BALANCE => 'seller_wallet_payable',
             SellerPayment::METHOD_BANK_WIRE => 'bank_operating',
@@ -98,8 +94,15 @@ class MonetizationJournalHandler
             default => 'gateway_clearing',
         };
 
-        if (! AccountingAccount::where('system_slug', $debitAccountSlug)->exists()) {
-            return null;
+        // ACC-6: a missing account fails loudly so the payment rolls back, instead of skipping the journal.
+        $missing = array_values(array_diff(
+            [$creditAccountSlug, $debitAccountSlug],
+            Schema::hasTable('accounting_accounts')
+                ? AccountingAccount::whereIn('system_slug', [$creditAccountSlug, $debitAccountSlug])->pluck('system_slug')->all()
+                : [],
+        ));
+        if ($missing !== []) {
+            throw MissingAccountException::forSlugs($missing);
         }
 
         $payment->loadMissing('invoice');

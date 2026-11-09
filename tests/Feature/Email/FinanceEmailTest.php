@@ -16,6 +16,7 @@ use App\Models\Refund;
 use App\Models\SellerWallet;
 use App\Models\User;
 use App\Models\WalletTransaction;
+use Database\Seeders\AccountingChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -23,6 +24,12 @@ use Tests\TestCase;
 class FinanceEmailTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(AccountingChartOfAccountsSeeder::class);
+    }
 
     public function test_customer_receives_email_when_refund_is_settled(): void
     {

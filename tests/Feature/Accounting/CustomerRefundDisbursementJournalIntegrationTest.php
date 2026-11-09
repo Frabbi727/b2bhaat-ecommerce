@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Accounting;
 
 use App\Events\Finance\RefundSettledEvent;
+use App\Exceptions\Accounting\MissingAccountException;
 use App\Filament\Admin\Resources\Refunds\Pages\ListRefunds;
 use App\Models\Accounting\AccountingAccount;
 use App\Models\Accounting\AccountingFiscalYear;
@@ -213,7 +214,7 @@ class CustomerRefundDisbursementJournalIntegrationTest extends TestCase
         $this->assertSame(1, $count);
     }
 
-    public function test_unseeded_db_or_zero_amount_returns_null_safely(): void
+    public function test_zero_amount_returns_null_and_a_missing_account_is_refused(): void
     {
         $subOrder2 = SubOrder::create([
             'parent_order_id' => $this->order->id,
@@ -278,7 +279,9 @@ class CustomerRefundDisbursementJournalIntegrationTest extends TestCase
             'paid_at' => now(),
         ]);
 
-        $this->assertNull($this->handler->recordRefundDisbursed($validRefund));
+        // ACC-6: a missing account is refused loudly instead of skipping the journal.
+        $this->expectException(MissingAccountException::class);
+        $this->handler->recordRefundDisbursed($validRefund);
     }
 
     public function test_refund_settled_event_automatically_triggers_double_entry_posting(): void
