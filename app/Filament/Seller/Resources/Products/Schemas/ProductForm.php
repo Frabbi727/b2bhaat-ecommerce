@@ -11,6 +11,7 @@ use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductChangeRequest;
+use App\Models\ProductVariation;
 use App\Models\SalesChannel;
 use App\Models\Unit;
 use App\Services\Catalog\PriceSet;
@@ -458,6 +459,20 @@ class ProductForm
                             ->label('Sellable')
                             ->default(true),
                     ])
+                    // INV-4: an option that has been ordered stays, so past orders keep showing what was bought
+                    ->deleteAction(fn (Action $action): Action => $action->before(function (array $arguments, Action $action): void {
+                        $variationId = str_starts_with((string) ($arguments['item'] ?? ''), 'record-') ? (int) substr((string) $arguments['item'], 7) : null;
+
+                        if ($variationId && ProductVariation::whereKey($variationId)->first()?->hasBeenOrdered()) {
+                            Notification::make()
+                                ->warning()
+                                ->title('This option has orders, so it can’t be deleted')
+                                ->body('Switch off “Sellable” to stop selling it. Past orders and invoices keep showing it.')
+                                ->send();
+
+                            $action->cancel();
+                        }
+                    }))
                     ->addActionLabel('Add variation')
                     ->minItems(fn (Get $get): int => $get('has_variations') ? 1 : 0)
                     ->defaultItems(1),
