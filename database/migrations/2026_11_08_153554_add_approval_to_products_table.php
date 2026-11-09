@@ -2,7 +2,6 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -19,23 +18,6 @@ return new class extends Migration
             $table->foreignId('reviewed_by_user_id')->nullable()->constrained('users')->nullOnDelete();
 
             $table->index(['approval_status', 'submitted_at']);
-        });
-
-        self::backfill();
-    }
-
-    /**
-     * Grandfathers the existing catalog: every product becomes approved, dated at creation, with no reviewer.
-     */
-    public static function backfill(): void
-    {
-        DB::table('products')->orderBy('id')->select('id')->chunkById(1000, function ($products): void {
-            DB::table('products')
-                ->whereIn('id', $products->pluck('id'))
-                ->update([
-                    'approval_status' => 'approved',
-                    'approved_at' => DB::raw('created_at'),
-                ]);
         });
     }
 

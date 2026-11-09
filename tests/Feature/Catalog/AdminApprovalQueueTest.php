@@ -543,4 +543,72 @@ class AdminApprovalQueueTest extends TestCase
         Livewire::test(ListProductApprovals::class)
             ->assertTableColumnStateSet('submissions_count', 2, $product);
     }
+
+    public function test_the_approve_modal_shows_the_product_it_approves(): void
+    {
+        $product = $this->product('Waiting Shirt');
+        $product->forceFill(['short_description' => 'Hand-loomed cotton, forty count'])->save();
+
+        Livewire::test(ListProductApprovals::class)
+            ->mountAction(TestAction::make('approve')->table($product))
+            ->assertMountedActionModalSee('Waiting Shirt')
+            ->assertMountedActionModalSee('Hand-loomed cotton, forty count')
+            ->assertMountedActionModalSee('Queue Store');
+    }
+
+    public function test_the_reject_modal_shows_the_product_it_rejects(): void
+    {
+        $product = $this->product('Waiting Shirt');
+        $product->forceFill(['short_description' => 'Hand-loomed cotton, forty count'])->save();
+
+        Livewire::test(ListProductApprovals::class)
+            ->mountAction(TestAction::make('reject')->table($product))
+            ->assertMountedActionModalSee('Hand-loomed cotton, forty count');
+    }
+
+    public function test_approving_after_the_product_is_touched_a_second_later_is_refused(): void
+    {
+        NotificationFacade::fake();
+        $product = $this->product('Waiting Shirt');
+
+        $component = Livewire::test(ListProductApprovals::class)
+            ->mountAction(TestAction::make('approve')->table($product));
+
+        $this->travel(1)->seconds();
+        $product->touch();
+
+        $component->callMountedAction()->assertNotified(
+            Notification::make()->title('Could not complete this')->body(ProductApprovalService::STALE_VERSION_MESSAGE)->danger()
+        );
+        $this->assertSame(ProductApprovalStatus::PendingReview, $product->fresh()->approval_status);
+    }
+
+    public function test_the_review_slide_over_can_approve_from_its_footer(): void
+    {
+        NotificationFacade::fake();
+        $product = $this->product('Waiting Shirt');
+
+        Livewire::test(ListProductApprovals::class)
+            ->mountAction([TestAction::make('view')->table($product), TestAction::make('approve')])
+            ->assertMountedActionModalSee('Waiting Shirt')
+            ->callMountedAction()
+            ->assertNotified('Product approved');
+
+        $this->assertSame(ProductApprovalStatus::Approved, $product->fresh()->approval_status);
+    }
+
+    public function test_the_review_slide_over_can_reject_from_its_footer(): void
+    {
+        NotificationFacade::fake();
+        $product = $this->product('Waiting Shirt');
+
+        Livewire::test(ListProductApprovals::class)
+            ->mountAction([TestAction::make('view')->table($product), TestAction::make('reject')])
+            ->setActionData(['reason' => 'The photos are blurry, please upload clearer ones.'])
+            ->callMountedAction()
+            ->assertHasNoFormErrors()
+            ->assertNotified('Product not approved');
+
+        $this->assertSame(ProductApprovalStatus::Rejected, $product->fresh()->approval_status);
+    }
 }

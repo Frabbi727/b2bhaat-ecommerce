@@ -234,6 +234,20 @@ class SellerApprovalScreensTest extends TestCase
             ->assertDontSee('superseded');
     }
 
+    public function test_the_history_tab_names_the_team_not_the_reviewer(): void
+    {
+        $product = $this->product('Live Shirt');
+        $request = $this->propose($product, 120);
+        $admin = User::query()->whereHas('role', fn ($q) => $q->where('slug', 'admin'))->firstOrFail();
+        $admin->forceFill(['name' => 'Reviewer Rahima Khatun'])->save();
+        app(ProductApprovalService::class)->rejectChange($request, $admin, 'Price is too far from the market');
+
+        Livewire::test(ChangeRequestsRelationManager::class, ['ownerRecord' => $product, 'pageClass' => EditProduct::class])
+            ->assertTableColumnStateSet('reviewer', 'B2Bhaat team', $request->fresh())
+            ->assertSee('B2Bhaat team')
+            ->assertDontSee('Reviewer Rahima Khatun');
+    }
+
     public function test_view_on_storefront_is_disabled_for_a_draft(): void
     {
         $product = $this->product('Draft Shirt', ProductApprovalStatus::Draft, active: false);

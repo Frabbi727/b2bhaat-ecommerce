@@ -6,6 +6,7 @@ namespace App\Filament\Seller\Resources\FlashSales;
 
 use App\Enums\FlashSaleDiscountType;
 use App\Enums\FlashSaleStatus;
+use App\Enums\ProductApprovalStatus;
 use App\Exceptions\FlashSaleSubmissionException;
 use App\Filament\Seller\Resources\FlashSales\Pages\ListFlashSales;
 use App\Filament\Seller\Resources\FlashSales\Pages\ViewFlashSale;
@@ -16,6 +17,7 @@ use App\Models\Product;
 use App\Models\SalesChannel;
 use App\Services\Promotions\FlashSaleSubmissionService;
 use BackedEnum;
+use DomainException;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DateTimePicker;
@@ -191,7 +193,7 @@ class FlashSaleResource extends Resource
                         ->title('Product submitted successfully for review')
                         ->success()
                         ->send();
-                } catch (FlashSaleSubmissionException $e) {
+                } catch (FlashSaleSubmissionException|DomainException $e) {
                     Notification::make()
                         ->title('Submission failed')
                         ->body($e->getMessage())
@@ -201,6 +203,28 @@ class FlashSaleResource extends Resource
                     $action->halt();
                 }
             });
+    }
+
+    /**
+     * The signed-in seller's products the picker may offer: visible, approved, in an eligible category and not yet submitted.
+     *
+     * @return Builder<Product>
+     */
+    public static function submittableProductsQuery(FlashSale $record): Builder
+    {
+        $query = Product::query()
+            ->where('seller_id', auth()->id())
+            ->where('is_active', true)
+            ->where('approval_status', ProductApprovalStatus::Approved->value)
+            ->with(['prices.salesChannel', 'variations']);
+
+        if ($record->categories()->exists()) {
+            $query->whereIn('category_id', $record->categories()->pluck('categories.id'));
+        }
+
+        $submittedProductIds = FlashSaleProduct::where('flash_sale_id', $record->id)->pluck('product_id');
+
+        return $query->whereNotIn('id', $submittedProductIds);
     }
 
     public static function getProductSubmissionForm(FlashSale $record): array
@@ -213,19 +237,7 @@ class FlashSaleResource extends Resource
                 ->preload()
                 ->live()
                 ->options(function () use ($record): array {
-                    $query = Product::query()
-                        ->where('seller_id', auth()->id())
-                        ->where('is_active', true)
-                        ->with(['prices.salesChannel', 'variations']);
-
-                    if ($record->categories()->exists()) {
-                        $query->whereIn('category_id', $record->categories()->pluck('categories.id'));
-                    }
-
-                    $submittedProductIds = FlashSaleProduct::where('flash_sale_id', $record->id)->pluck('product_id');
-                    $query->whereNotIn('id', $submittedProductIds);
-
-                    return $query->get()->mapWithKeys(function (Product $product): array {
+                    return static::submittableProductsQuery($record)->get()->mapWithKeys(function (Product $product): array {
                         $base = static::resolveProductRetailPrice($product);
                         $stock = static::resolveProductStock($product);
 

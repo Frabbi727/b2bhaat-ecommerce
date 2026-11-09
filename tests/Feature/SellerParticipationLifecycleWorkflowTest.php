@@ -63,6 +63,7 @@ class SellerParticipationLifecycleWorkflowTest extends TestCase
             'has_variations' => true,
             'is_active' => true,
         ]);
+        $this->approveProducts($this->product);
 
         ProductVariation::create([
             'product_id' => $this->product->id,

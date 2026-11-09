@@ -62,6 +62,7 @@ class FlashSaleSubmissionValidationTest extends TestCase
             'is_active' => true,
         ]);
 
+        $this->approveProducts($this->product);
         $this->product->ensureDefaultVariation()->update(['stock_quantity' => 100]);
 
         ProductPrice::create([
@@ -195,6 +196,7 @@ class FlashSaleSubmissionValidationTest extends TestCase
             'slug' => 'second-product',
             'is_active' => true,
         ]);
+        $this->approveProducts($product2);
         $product2->ensureDefaultVariation()->update(['stock_quantity' => 50]);
         ProductPrice::create([
             'product_id' => $product2->id,

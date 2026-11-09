@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Catalog;
 
 use App\Livewire\Storefront\CheckoutComponent;
+use App\Livewire\Storefront\HeaderSearch;
 use App\Livewire\Storefront\ProductCatalog;
 use App\Livewire\Storefront\ProductDetail;
 use App\Models\Category;
@@ -108,6 +109,7 @@ class ProductApprovalVisibilityTest extends TestCase
         $this->assertFalse(Product::listable()->whereKey($product->id)->exists());
         $this->get(route('catalog.show', $product->slug))->assertNotFound();
         $this->assertContains('Hidden Item', $cart->unavailableItemTitles());
+        Livewire::test(HeaderSearch::class)->set('query', 'Hidden Item')->assertViewHas('results', fn ($results) => $results->doesntContain('id', $product->id));
 
         $cart->clear();
         $this->expectExceptionMessage('This product is no longer available.');
@@ -120,6 +122,7 @@ class ProductApprovalVisibilityTest extends TestCase
 
         $this->assertTrue(Product::listable()->whereKey($product->id)->exists());
         $this->get(route('catalog.show', $product->slug))->assertOk();
+        Livewire::test(HeaderSearch::class)->set('query', 'Visible Item')->assertViewHas('results', fn ($results) => $results->contains('id', $product->id));
     }
 
     public function test_checkout_refuses_a_product_that_is_no_longer_approved(): void

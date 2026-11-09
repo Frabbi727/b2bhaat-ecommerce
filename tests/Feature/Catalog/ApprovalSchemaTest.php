@@ -85,13 +85,38 @@ class ApprovalSchemaTest extends TestCase
         $product = $this->product();
         DB::table('products')->update(['approval_status' => 'draft', 'approved_at' => null]);
 
-        $file = collect(glob(database_path('migrations/*_add_approval_to_products_table.php')))->first();
-        (require $file)::backfill();
+        $updatedAt = DB::table('products')->where('id', $product->id)->value('updated_at');
+
+        (require database_path('migrations/2026_11_08_153557_backfill_product_approval_status.php'))::backfill();
 
         $fresh = Product::findOrFail($product->id);
         $this->assertSame(ProductApprovalStatus::Approved, $fresh->approval_status);
         $this->assertTrue($fresh->created_at->equalTo($fresh->approved_at));
         $this->assertNull($fresh->approved_by_user_id);
+        $this->assertSame($updatedAt, DB::table('products')->where('id', $product->id)->value('updated_at'));
+    }
+
+    public function test_the_backfill_runs_on_its_own_outside_a_transaction_right_after_the_columns(): void
+    {
+        $migrations = collect(glob(database_path('migrations/2026_11_08_*.php')))->map(fn (string $path): string => basename($path, '.php'))->values();
+        $columns = $migrations->search('2026_11_08_153554_add_approval_to_products_table');
+        $backfill = $migrations->search('2026_11_08_153557_backfill_product_approval_status');
+
+        $this->assertNotFalse($columns);
+        $this->assertNotFalse($backfill);
+        $this->assertGreaterThan($columns, $backfill);
+        $this->assertSame([], $migrations->slice($columns + 1, $backfill - $columns - 1)
+            ->filter(fn (string $name): bool => str_contains($name, 'products'))->values()->all());
+
+        $migration = require database_path('migrations/2026_11_08_153557_backfill_product_approval_status.php');
+        $this->assertFalse($migration->withinTransaction);
+
+        $this->assertStringNotContainsString('backfill', (string) file_get_contents(database_path('migrations/2026_11_08_153554_add_approval_to_products_table.php')));
+
+        $product = $this->product();
+        DB::table('products')->update(['approval_status' => 'draft', 'approved_at' => null]);
+        $migration->down();
+        $this->assertSame('draft', DB::table('products')->where('id', $product->id)->value('approval_status'));
     }
 
     public function test_only_one_pending_request_per_product(): void

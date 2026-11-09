@@ -6,6 +6,7 @@ namespace App\Services\Promotions;
 
 use App\Enums\FlashSaleDiscountType;
 use App\Enums\FlashSaleSubmissionStatus;
+use App\Enums\ProductApprovalStatus;
 use App\Enums\SellerEligibilityType;
 use App\Exceptions\FlashSaleSubmissionException;
 use App\Models\FlashSale;
@@ -13,6 +14,7 @@ use App\Models\FlashSaleProduct;
 use App\Models\Product;
 use App\Models\SalesChannel;
 use App\Models\User;
+use DomainException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -44,6 +46,10 @@ class FlashSaleSubmissionService
 
             if ((int) $product->seller_id !== (int) $seller->id) {
                 throw new FlashSaleSubmissionException('You can only submit your own products.');
+            }
+
+            if ($product->approval_status !== ProductApprovalStatus::Approved) {
+                throw new DomainException('Only approved products can join a flash sale.');
             }
 
             if (! $campaign->isRegistrationOpen()) {

@@ -64,6 +64,7 @@ class CustomerWishlist extends Component
         $wishlists = Auth::check()
             ? Auth::user()->wishlists()
                 ->with([
+                    'product' => fn ($product) => $product->sellable(),
                     'product.seller.sellerProfile',
                     'product.images',
                     'product.category',

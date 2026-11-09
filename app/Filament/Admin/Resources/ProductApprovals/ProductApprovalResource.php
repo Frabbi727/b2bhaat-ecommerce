@@ -23,6 +23,7 @@ use Filament\Forms\Components\Hidden;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -133,34 +134,13 @@ class ProductApprovalResource extends Resource
                     ->slideOver()
                     ->modalHeading(fn (Product $record): string => $record->title)
                     ->modalSubmitAction(false)
-                    ->schema(fn () => [
-                        TextEntry::make('details')->hiddenLabel()->html()
-                            ->state(fn (Product $record) => ProductReviewDetails::html($record)),
+                    ->schema(fn () => [self::reviewDetailsEntry()])
+                    ->extraModalFooterActions(fn (): array => [
+                        self::approveAction()->cancelParentActions(),
+                        self::rejectAction()->cancelParentActions(),
                     ]),
-                Action::make('approve')
-                    ->label('Approve')
-                    ->icon('heroicon-o-check-circle')
-                    ->color('success')
-                    ->authorize('review-product')
-                    ->requiresConfirmation()
-                    ->modalHeading('Approve this product?')
-                    ->modalDescription('Buyers will be able to see it in the shop, and the seller is told.')
-                    ->fillForm(fn (?Product $record): array => ['version' => $record === null ? '' : app(ProductApprovalService::class)->versionOf($record->fresh())])
-                    ->schema([Hidden::make('version')])
-                    ->action(function (?Product $record, array $data): void {
-                        self::decide($record, fn () => app(ProductApprovalService::class)->approveProduct($record, auth()->user(), (string) $data['version']), 'Product approved');
-                    }),
-                Action::make('reject')
-                    ->label('Not approve')
-                    ->icon('heroicon-o-x-circle')
-                    ->color('danger')
-                    ->authorize('review-product')
-                    ->modalHeading('Why is this product not approved?')
-                    ->fillForm(fn (?Product $record): array => ['version' => $record === null ? '' : app(ProductApprovalService::class)->versionOf($record->fresh())])
-                    ->schema([...RejectionForm::fields(self::QUICK_PICKS), Hidden::make('version')])
-                    ->action(function (?Product $record, array $data): void {
-                        self::decide($record, fn () => app(ProductApprovalService::class)->rejectProduct($record, auth()->user(), (string) $data['reason'], (string) $data['version']), 'Product not approved');
-                    }),
+                self::approveAction(),
+                self::rejectAction(),
             ])
             ->toolbarActions([
                 BulkAction::make('approveSelected')
@@ -194,6 +174,61 @@ class ProductApprovalResource extends Resource
                         ($skipped > 0 ? $notification->warning() : $notification->success())->send();
                     }),
             ]);
+    }
+
+    /**
+     * Approve, showing the product exactly as it is when the modal opens; the version is captured at that same mount,
+     * so a seller edit after this point makes the approval stale and it is refused.
+     */
+    public static function approveAction(): Action
+    {
+        return Action::make('approve')
+            ->label('Approve')
+            ->icon('heroicon-o-check-circle')
+            ->color('success')
+            ->authorize('review-product')
+            ->modalHeading('Approve this product?')
+            ->modalDescription('Buyers will be able to see it in the shop, and the seller is told.')
+            ->modalWidth(Width::ThreeExtraLarge)
+            ->modalSubmitActionLabel('Approve')
+            ->fillForm(fn (?Product $record): array => ['version' => self::versionFor($record)])
+            ->schema(fn (): array => [self::reviewDetailsEntry(), Hidden::make('version')])
+            ->action(function (?Product $record, array $data): void {
+                self::decide($record, fn () => app(ProductApprovalService::class)->approveProduct($record, auth()->user(), (string) $data['version']), 'Product approved');
+            });
+    }
+
+    /**
+     * Not approve, with the same review content as the approve modal and the version captured when it opens.
+     */
+    public static function rejectAction(): Action
+    {
+        return Action::make('reject')
+            ->label('Not approve')
+            ->icon('heroicon-o-x-circle')
+            ->color('danger')
+            ->authorize('review-product')
+            ->modalHeading('Why is this product not approved?')
+            ->modalWidth(Width::ThreeExtraLarge)
+            ->fillForm(fn (?Product $record): array => ['version' => self::versionFor($record)])
+            ->schema(fn (): array => [self::reviewDetailsEntry(), ...RejectionForm::fields(self::QUICK_PICKS), Hidden::make('version')])
+            ->action(function (?Product $record, array $data): void {
+                self::decide($record, fn () => app(ProductApprovalService::class)->rejectProduct($record, auth()->user(), (string) $data['reason'], (string) $data['version']), 'Product not approved');
+            });
+    }
+
+    /**
+     * The product as buyers would see it, plus the seller's standing; shared by the Review slide-over and both decisions.
+     */
+    protected static function reviewDetailsEntry(): TextEntry
+    {
+        return TextEntry::make('details')->hiddenLabel()->html()
+            ->state(fn (?Product $record) => $record === null ? null : ProductReviewDetails::html($record));
+    }
+
+    protected static function versionFor(?Product $record): string
+    {
+        return $record === null ? '' : app(ProductApprovalService::class)->versionOf($record->fresh());
     }
 
     public static function getPages(): array

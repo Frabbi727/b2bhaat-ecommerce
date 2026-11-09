@@ -58,6 +58,21 @@
         @else
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 @foreach ($wishlists as $wishlist)
+                    @if ($wishlist->product === null)
+                        {{-- Not sellable right now: no title, photo or price, only a way to remove it --}}
+                        <div wire:key="wishlist-{{ $wishlist->id }}" class="bg-white rounded-2xl border border-dashed border-slate-300 p-6 flex flex-col items-center justify-center text-center gap-3">
+                            <h4 class="font-bold text-sm text-slate-700">No longer available</h4>
+                            <p class="text-xs text-slate-500">This product can't be bought right now.</p>
+                            <button
+                                wire:click="removeFromWishlist({{ $wishlist->id }})"
+                                type="button"
+                                class="py-2 px-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition"
+                            >
+                                Remove
+                            </button>
+                        </div>
+                        @continue
+                    @endif
                     @php
                         $product = $wishlist->product;
                         $imgUrl = $product->primaryImage?->public_url ?? 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800';

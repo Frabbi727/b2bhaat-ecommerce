@@ -136,10 +136,11 @@ class EditProduct extends EditRecord
 
     /**
      * Runs from `beforeSave`, before Filament writes the prices repeater, so a refused activation saves nothing.
+     * Visibility is read from the database, not the loaded record, so a product hidden elsewhere meanwhile is guarded again.
      */
     protected function assertListingMayBecomeVisible(Product $product): void
     {
-        if (empty($this->data['is_active']) || $product->is_active) {
+        if (empty($this->data['is_active']) || (bool) $product->fresh()?->is_active) {
             return;
         }
 

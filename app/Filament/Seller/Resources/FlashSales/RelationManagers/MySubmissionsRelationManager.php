@@ -11,6 +11,7 @@ use App\Filament\Seller\Resources\FlashSales\FlashSaleResource;
 use App\Models\FlashSale;
 use App\Models\FlashSaleProduct;
 use App\Services\Promotions\FlashSaleSubmissionService;
+use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -57,7 +58,7 @@ class MySubmissionsRelationManager extends RelationManager
                                 ->title('Product submitted successfully for review')
                                 ->success()
                                 ->send();
-                        } catch (FlashSaleSubmissionException $e) {
+                        } catch (FlashSaleSubmissionException|DomainException $e) {
                             Notification::make()
                                 ->title('Submission failed')
                                 ->body($e->getMessage())

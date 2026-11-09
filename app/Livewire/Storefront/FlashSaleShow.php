@@ -31,6 +31,7 @@ class FlashSaleShow extends Component
         $effective = $sale->effectiveStatus();
 
         $products = $sale->approvedProducts()
+            ->listable()
             ->with(['primaryImage', 'brand', 'prices.salesChannel'])
             ->get();
 

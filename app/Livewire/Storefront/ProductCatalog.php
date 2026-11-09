@@ -288,6 +288,8 @@ class ProductCatalog extends Component
         if ($existing) {
             $existing->delete();
             $this->feedbackMessage = 'Product removed from your Wishlist.';
+        } elseif (! Product::sellable()->whereKey($productId)->exists()) {
+            $this->errorMessage = 'This product is not available right now.';
         } else {
             Wishlist::create([
                 'user_id' => $userId,

@@ -28,7 +28,6 @@ class ChangeRequestsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn ($query) => $query->with('reviewedBy'))
             ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('status')
@@ -55,8 +54,9 @@ class ChangeRequestsRelationManager extends RelationManager
                     ->dateTime('j M Y, H:i', 'Asia/Dhaka')
                     ->placeholder('—'),
 
-                TextColumn::make('reviewedBy.name')
+                TextColumn::make('reviewer')
                     ->label('Reviewer')
+                    ->state(fn (ProductChangeRequest $record): ?string => $record->reviewed_at === null ? null : 'B2Bhaat team')
                     ->placeholder('—'),
 
                 TextColumn::make('rejection_reason')

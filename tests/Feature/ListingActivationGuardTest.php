@@ -17,8 +17,10 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Services\Inventory\ProductBulkImportService;
 use Filament\Facades\Filament;
+use Filament\Support\Exceptions\Halt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use ReflectionMethod;
 use Tests\TestCase;
 
 /**
@@ -141,6 +143,37 @@ class ListingActivationGuardTest extends TestCase
             ->call('save');
 
         $this->assertFalse($draft->fresh()->is_active);
+    }
+
+    public function test_a_page_opened_while_visible_cannot_republish_after_it_was_hidden_elsewhere(): void
+    {
+        $this->product('Live One', true);
+        $target = $this->product('Target', true);
+
+        $page = Livewire::test(EditProduct::class, ['record' => $target->getRouteKey()]);
+
+        $target->forceFill(['is_active' => false])->save();
+        $this->product('Live Two', true);
+
+        $page->fillForm(['is_active' => true])->call('save')->assertNotified('Product not published');
+
+        $this->assertFalse($target->fresh()->is_active);
+        $this->assertSame(2, Product::where('seller_id', $this->seller->id)->where('is_active', true)->count());
+    }
+
+    public function test_the_listing_guard_reads_visibility_from_the_database_not_the_loaded_record(): void
+    {
+        $this->product('Live One', true);
+        $target = $this->product('Target', true);
+        $page = Livewire::test(EditProduct::class, ['record' => $target->getRouteKey()])->instance();
+
+        $stale = $target->fresh();
+        Product::whereKey($target->id)->update(['is_active' => false]);
+        $this->product('Live Two', true);
+        $page->data['is_active'] = true;
+
+        $this->expectException(Halt::class);
+        (new ReflectionMethod($page, 'assertListingMayBecomeVisible'))->invoke($page, $stale);
     }
 
     public function test_bulk_import_saves_over_limit_products_hidden_and_says_so(): void
