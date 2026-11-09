@@ -8,6 +8,7 @@ use App\Models\AuditLog;
 use App\Services\Audit\AuditService;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Removes routine audit entries past the retention window. Money, accounting, sign-in, billing and settings
@@ -60,7 +61,14 @@ class PruneAuditLogsCommand extends Command
             return self::SUCCESS;
         }
 
-        $deleted = $prunable()->delete();
+        // Audit rows are append-only (AUD-2); on PostgreSQL the trigger allows deletes only inside this transaction.
+        $deleted = DB::transaction(function () use ($prunable): int {
+            if (DB::getDriverName() === 'pgsql') {
+                DB::statement("SET LOCAL app.audit_prune = 'on'");
+            }
+
+            return $prunable()->delete();
+        });
 
         $auditService->record([
             'module' => 'audit',

@@ -8,16 +8,26 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use LogicException;
 
 class AuditLog extends Model
 {
     public $timestamps = false;
 
+    public const IMMUTABLE_MESSAGE = 'Audit records cannot be changed or deleted.';
+
+    /**
+     * Audit records are append-only (AUD-2). The model refuses edits and deletes; on PostgreSQL a trigger also refuses
+     * them for direct queries, except the routine prune, which runs with `app.audit_prune` switched on.
+     */
     protected static function booted(): void
     {
         static::creating(function (AuditLog $log): void {
             $log->created_at ??= now();
         });
+
+        static::updating(fn (): never => throw new LogicException(self::IMMUTABLE_MESSAGE));
+        static::deleting(fn (): never => throw new LogicException(self::IMMUTABLE_MESSAGE));
     }
 
     protected $fillable = [

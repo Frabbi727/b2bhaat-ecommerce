@@ -6,6 +6,7 @@ namespace App\Services\Audit;
 
 use App\Jobs\LogAuditJob;
 use App\Models\AuditLog;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class AuditService
@@ -24,6 +25,12 @@ class AuditService
     ) {}
 
     /**
+     * Writes one audit entry. Never throws (AUD-3):
+     * - A synchronous write runs in its own savepoint, so a failed insert can't abort the caller's PostgreSQL
+     *   transaction, and the failure is reported to the error tracker rather than only logged.
+     * - A queued entry is dispatched after the surrounding transaction commits, so an action that rolls back leaves
+     *   no entry claiming it happened.
+     *
      * @param  array<string, mixed>  $attributes
      */
     public function record(array $attributes): ?AuditLog
@@ -43,14 +50,18 @@ class AuditService
             unset($merged['sync']);
 
             if ($isSync) {
-                return AuditLog::create($merged);
+                return DB::transaction(fn (): AuditLog => AuditLog::create($merged));
             }
 
-            LogAuditJob::dispatch($merged);
+            DB::afterCommit(fn () => LogAuditJob::dispatch($merged));
 
             return null;
         } catch (\Throwable $e) {
-            Log::warning('Audit logging failed: '.$e->getMessage(), ['attributes' => $attributes]);
+            report($e);
+            Log::error('Audit logging failed: '.$e->getMessage(), [
+                'module' => $attributes['module'] ?? null,
+                'action' => $attributes['action'] ?? null,
+            ]);
 
             return null;
         }

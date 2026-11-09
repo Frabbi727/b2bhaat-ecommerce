@@ -9,6 +9,7 @@ use App\Models\AuditLog;
 use App\Services\Audit\AuditContext;
 use App\Services\Audit\AuditService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -171,7 +172,8 @@ class AuditServiceTest extends TestCase
 
     public function test_service_is_fault_tolerant_and_returns_null_on_exception(): void
     {
-        Log::shouldReceive('warning')->once();
+        Log::shouldReceive('error')->once();
+        Exceptions::fake();
 
         $service = app(AuditService::class);
 
