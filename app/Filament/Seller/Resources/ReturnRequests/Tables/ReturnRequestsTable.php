@@ -52,7 +52,7 @@ class ReturnRequestsTable
                     ->label('Status')
                     ->badge()
                     ->color(fn (ReturnRequest $record): array => match ($record->status) {
-                        'approved' => Color::Emerald,
+                        'approved', 'resolved' => Color::Emerald,
                         'rejected' => Color::Rose,
                         default => Color::Amber,
                     }),
