@@ -966,7 +966,7 @@
                                 @error('rfqTargetQuantity') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
                             </div>
                             <div>
-                                <label class="block font-semibold text-slate-700 mb-1">Target Price / Unit (৳ Tk)</label>
+                                <label class="block font-semibold text-slate-700 mb-1">Target Price / Unit (৳)</label>
                                 <input type="number" step="0.01" wire:model="rfqTargetPrice" placeholder="Your budget in ৳" class="w-full py-2 px-3 border border-slate-300 rounded-xl font-bold focus:ring-2 focus:ring-indigo-500"/>
                             </div>
                             <div>

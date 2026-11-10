@@ -8,6 +8,7 @@ use App\Events\Finance\RefundSettledEvent;
 use App\Filament\Admin\Resources\Refunds\Pages\ListRefunds;
 use App\Models\Refund;
 use App\Services\Accounting\EventPipeline\CustomerRefundDisbursementJournalHandler;
+use App\Services\Formatting\Money;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
@@ -56,7 +57,7 @@ class RefundResource extends Resource
                 TextColumn::make('subOrder.sub_order_number')->label('Consignment')->placeholder('—')->searchable(),
                 TextColumn::make('order.customer.name')->label('Customer')->searchable(),
                 TextColumn::make('order.paymentMethod.name')->label('Paid via'),
-                TextColumn::make('amount')->label('Owed (Tk)')->money('BDT')->weight('bold')->sortable(),
+                TextColumn::make('amount')->label('Owed (৳)')->formatStateUsing(fn ($state): string => Money::taka($state))->weight('bold')->sortable(),
                 TextColumn::make('reason')->wrap()->limit(60),
                 TextColumn::make('status')->badge()->color(fn (string $state): string => $state === Refund::STATUS_PAID ? 'success' : 'warning'),
                 TextColumn::make('method')->placeholder('—'),

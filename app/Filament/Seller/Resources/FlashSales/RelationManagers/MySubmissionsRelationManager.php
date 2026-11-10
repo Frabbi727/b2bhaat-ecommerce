@@ -10,6 +10,7 @@ use App\Exceptions\FlashSaleSubmissionException;
 use App\Filament\Seller\Resources\FlashSales\FlashSaleResource;
 use App\Models\FlashSale;
 use App\Models\FlashSaleProduct;
+use App\Services\Formatting\Money;
 use App\Services\Promotions\FlashSaleSubmissionService;
 use DomainException;
 use Filament\Actions\Action;
@@ -77,11 +78,11 @@ class MySubmissionsRelationManager extends RelationManager
 
                 TextColumn::make('original_retail_price')
                     ->label('Original Price')
-                    ->money('BDT'),
+                    ->formatStateUsing(fn ($state): string => Money::taka($state)),
 
                 TextColumn::make('campaign_price')
                     ->label('Campaign Price')
-                    ->money('BDT'),
+                    ->formatStateUsing(fn ($state): string => Money::taka($state)),
 
                 TextColumn::make('discount_value')
                     ->label('Discount')
@@ -106,7 +107,7 @@ class MySubmissionsRelationManager extends RelationManager
                 TextColumn::make('revenue')
                     ->label('Revenue Generated')
                     ->state(fn (FlashSaleProduct $record): float => (float) ($record->campaign_price * $record->units_sold))
-                    ->money('BDT'),
+                    ->formatStateUsing(fn ($state): string => Money::taka($state)),
 
                 TextColumn::make('status')
                     ->badge(),

@@ -67,7 +67,6 @@
                     <span class="text-2xl font-bold font-mono tracking-tight text-gray-900 dark:text-white">
                         {{ $revenues['formatted_total'] }}
                     </span>
-                    <span class="text-xs text-gray-400 font-mono">BDT</span>
                 </div>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     Gross marketplace earnings
@@ -86,7 +85,6 @@
                     <span class="text-2xl font-bold font-mono tracking-tight text-gray-900 dark:text-white">
                         {{ $expenses['formatted_total'] }}
                     </span>
-                    <span class="text-xs text-gray-400 font-mono">BDT</span>
                 </div>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     Platform operational costs
@@ -110,9 +108,6 @@
                 <div class="mt-2 flex items-baseline gap-2">
                     <span class="text-2xl font-bold font-mono tracking-tight {{ $isProfit ? 'text-emerald-900 dark:text-emerald-200' : 'text-rose-900 dark:text-rose-200' }}">
                         {{ $data['formatted_net_income'] }}
-                    </span>
-                    <span class="text-xs font-mono font-semibold {{ $isProfit ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">
-                        BDT
                     </span>
                 </div>
                 <p class="mt-1 text-xs {{ $isProfit ? 'text-emerald-700/90 dark:text-emerald-300/90' : 'text-rose-700/90 dark:text-rose-300/90' }}">
@@ -249,7 +244,7 @@
                         <tr class="border-b border-gray-200 bg-gray-100/60 text-xs font-medium uppercase tracking-wider text-gray-600 dark:border-gray-800 dark:bg-gray-800/80 dark:text-gray-300">
                             <th scope="col" class="py-3 px-6 w-32">Account Code</th>
                             <th scope="col" class="py-3 px-6">Account Name / Line Item</th>
-                            <th scope="col" class="py-3 px-6 text-right w-48">Amount (BDT)</th>
+                            <th scope="col" class="py-3 px-6 text-right w-48">Amount (৳)</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100 dark:divide-gray-800/60">
@@ -354,7 +349,6 @@
                         <span class="text-3xl font-extrabold font-mono tracking-tight {{ $isProfit ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300' }}">
                             {{ $data['formatted_net_income'] }}
                         </span>
-                        <span class="text-xs font-mono font-medium text-gray-500 dark:text-gray-400 ml-1">BDT</span>
                     </div>
                 </div>
             </div>

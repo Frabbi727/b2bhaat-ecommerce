@@ -7,6 +7,7 @@ namespace App\Filament\Admin\Pages;
 use App\Jobs\SendSmsJob;
 use App\Models\SmsLog;
 use App\Models\SmsSetting;
+use App\Services\Formatting\Money;
 use App\Services\Sms\Contracts\SmsGatewayInterface;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -281,7 +282,7 @@ class SmsSettings extends Page
         $balance = $sms->checkBalance();
 
         if (is_numeric($balance)) {
-            $this->liveBalance = 'BDT '.number_format((float) $balance, 2);
+            $this->liveBalance = Money::taka($balance);
             Notification::make()
                 ->title('SMS balance updated')
                 ->body("BulkSMSBD balance: {$this->liveBalance}")

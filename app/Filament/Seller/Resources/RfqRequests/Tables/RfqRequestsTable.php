@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Seller\Resources\RfqRequests\Tables;
 
 use App\Models\RfqRequest;
+use App\Services\Formatting\Money;
 use App\Services\Rfq\RfqNotificationService;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -50,7 +51,7 @@ class RfqRequestsTable
                     ->weight('bold'),
                 TextColumn::make('target_unit_price')
                     ->label('Target Price')
-                    ->money('BDT')
+                    ->formatStateUsing(fn ($state): string => Money::taka($state))
                     ->placeholder('Open to quote')
                     ->sortable(),
                 TextColumn::make('destination_district')
@@ -67,7 +68,7 @@ class RfqRequestsTable
                     }),
                 TextColumn::make('seller_quoted_price')
                     ->label('Your Quoted Price')
-                    ->money('BDT')
+                    ->formatStateUsing(fn ($state): string => Money::taka($state))
                     ->placeholder('Awaiting quote')
                     ->sortable(),
                 TextColumn::make('dispatch_days')
@@ -92,7 +93,7 @@ class RfqRequestsTable
                     ->visible(fn (RfqRequest $record): bool => auth()->user()?->can('update', $record) ?? false)
                     ->form([
                         TextInput::make('seller_quoted_price')
-                            ->label('Quoted Price per Unit (Tk ৳)')
+                            ->label('Quoted Price per Unit (৳)')
                             ->prefix('৳')
                             ->numeric()
                             ->minValue(1)

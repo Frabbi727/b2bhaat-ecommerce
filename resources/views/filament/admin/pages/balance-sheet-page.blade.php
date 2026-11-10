@@ -68,7 +68,6 @@
                     <span class="text-2xl font-bold font-mono tracking-tight text-gray-900 dark:text-white">
                         {{ $assets['formatted_total'] }}
                     </span>
-                    <span class="text-xs text-gray-400 font-mono">BDT</span>
                 </div>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     Cash, bank &amp; receivables
@@ -87,7 +86,6 @@
                     <span class="text-2xl font-bold font-mono tracking-tight text-gray-900 dark:text-white">
                         {{ $liabilities['formatted_total'] }}
                     </span>
-                    <span class="text-xs text-gray-400 font-mono">BDT</span>
                 </div>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     Escrow held &amp; seller obligations
@@ -106,7 +104,6 @@
                     <span class="text-2xl font-bold font-mono tracking-tight text-gray-900 dark:text-white">
                         {{ $equity['formatted_total'] }}
                     </span>
-                    <span class="text-xs text-gray-400 font-mono">BDT</span>
                 </div>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     Owner capital &amp; cumulative earnings
@@ -240,7 +237,7 @@
                         <tr class="border-b border-gray-200 bg-gray-100/60 text-xs font-medium uppercase tracking-wider text-gray-600 dark:border-gray-800 dark:bg-gray-800/80 dark:text-gray-300">
                             <th scope="col" class="py-3 px-6 w-32">Account Code</th>
                             <th scope="col" class="py-3 px-6">Account Name / Line Item</th>
-                            <th scope="col" class="py-3 px-6 text-right w-48">Amount (BDT)</th>
+                            <th scope="col" class="py-3 px-6 text-right w-48">Amount (৳)</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100 dark:divide-gray-800/60">
@@ -406,7 +403,6 @@
                         <span class="text-3xl font-extrabold font-mono tracking-tight {{ $isBalanced ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300' }}">
                             {{ $data['formatted_total_liabilities_and_equity'] }}
                         </span>
-                        <span class="text-xs font-mono font-medium text-gray-500 dark:text-gray-400 ml-1">BDT</span>
                     </div>
                 </div>
             </div>

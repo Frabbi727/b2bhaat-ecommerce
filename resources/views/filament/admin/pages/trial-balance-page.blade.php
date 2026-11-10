@@ -64,7 +64,6 @@
                     <span class="text-2xl font-bold font-mono tracking-tight text-gray-900 dark:text-white">
                         ৳{{ number_format($grandTotal['total_debit'], 2) }}
                     </span>
-                    <span class="text-xs text-gray-400 font-mono">BDT</span>
                 </div>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     Net active debit position: <span class="font-mono font-medium text-emerald-600 dark:text-emerald-400">৳{{ number_format($grandTotal['total_net_debit'], 2) }}</span>
@@ -83,7 +82,6 @@
                     <span class="text-2xl font-bold font-mono tracking-tight text-gray-900 dark:text-white">
                         ৳{{ number_format($grandTotal['total_credit'], 2) }}
                     </span>
-                    <span class="text-xs text-gray-400 font-mono">BDT</span>
                 </div>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     Net active credit position: <span class="font-mono font-medium text-indigo-600 dark:text-indigo-400">৳{{ number_format($grandTotal['total_net_credit'], 2) }}</span>

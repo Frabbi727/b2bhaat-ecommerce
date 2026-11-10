@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\WalletTransactions\Tables;
 
 use App\Models\WalletTransaction;
 use App\Services\Escrow\EscrowLedgerService;
+use App\Services\Formatting\Money;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -41,7 +42,7 @@ class WalletTransactionsTable
                     }),
 
                 TextColumn::make('amount')
-                    ->money('BDT')
+                    ->formatStateUsing(fn ($state): string => Money::taka($state))
                     ->weight('semibold')
                     ->sortable(),
 

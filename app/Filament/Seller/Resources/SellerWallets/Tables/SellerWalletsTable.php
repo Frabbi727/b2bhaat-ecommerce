@@ -4,6 +4,7 @@ namespace App\Filament\Seller\Resources\SellerWallets\Tables;
 
 use App\Models\SellerWallet;
 use App\Services\Escrow\EscrowLedgerService;
+use App\Services\Formatting\Money;
 use App\Services\Settings\StoreConfigurationService;
 use Exception;
 use Filament\Actions\Action;
@@ -21,15 +22,15 @@ class SellerWalletsTable
         return $table
             ->columns([
                 TextColumn::make('available_balance')
-                    ->label('Available Balance (Tk)')
-                    ->money('BDT')
+                    ->label('Available Balance (৳)')
+                    ->formatStateUsing(fn ($state): string => Money::taka($state))
                     ->weight('black')
                     ->color('success')
                     ->size('lg'),
 
                 TextColumn::make('escrow_held_balance')
-                    ->label('Escrow Held Balance (Tk)')
-                    ->money('BDT')
+                    ->label('Escrow Held Balance (৳)')
+                    ->formatStateUsing(fn ($state): string => Money::taka($state))
                     ->weight('bold')
                     ->color('warning')
                     ->description('Automatically transfers 48h after delivery handover'),
@@ -45,7 +46,7 @@ class SellerWalletsTable
                     ->color('success')
                     ->schema([
                         TextInput::make('amount')
-                            ->label('Withdrawal Amount (Tk)')
+                            ->label('Withdrawal Amount (৳)')
                             ->prefix('৳')
                             ->numeric()
                             ->required()

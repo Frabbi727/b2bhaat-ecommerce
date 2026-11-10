@@ -7,6 +7,7 @@ namespace App\Filament\Admin\Resources\AccountingJournalEntries\Schemas;
 use App\Enums\Accounting\JournalEntryStatus;
 use App\Models\Accounting\AccountingJournalEntry;
 use App\Models\Accounting\AccountingJournalLine;
+use App\Services\Formatting\Money;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
@@ -120,8 +121,8 @@ class AccountingJournalEntryInfolist
                     ->hiddenLabel()
                     ->table([
                         TableColumn::make('Account'),
-                        TableColumn::make('Debit (Tk)')->width('130px'),
-                        TableColumn::make('Credit (Tk)')->width('130px'),
+                        TableColumn::make('Debit (৳)')->width('130px'),
+                        TableColumn::make('Credit (৳)')->width('130px'),
                         TableColumn::make('Dimensions')->width('240px'),
                         TableColumn::make('Narration'),
                     ])
@@ -131,11 +132,11 @@ class AccountingJournalEntryInfolist
                             ->weight('medium'),
 
                         TextEntry::make('debit')
-                            ->money('BDT')
+                            ->formatStateUsing(fn ($state): string => Money::taka($state))
                             ->weight(fn (AccountingJournalLine $line): string => (float) $line->debit > 0 ? 'bold' : 'normal'),
 
                         TextEntry::make('credit')
-                            ->money('BDT')
+                            ->formatStateUsing(fn ($state): string => Money::taka($state))
                             ->weight(fn (AccountingJournalLine $line): string => (float) $line->credit > 0 ? 'bold' : 'normal'),
 
                         TextEntry::make('dimensions')
@@ -174,13 +175,13 @@ class AccountingJournalEntryInfolist
                 Grid::make(2)->schema([
                     TextEntry::make('total_debit')
                         ->label('Total Debit')
-                        ->money('BDT')
+                        ->formatStateUsing(fn ($state): string => Money::taka($state))
                         ->state(fn (AccountingJournalEntry $record): float => (float) $record->lines->sum('debit'))
                         ->weight('bold'),
 
                     TextEntry::make('total_credit')
                         ->label('Total Credit')
-                        ->money('BDT')
+                        ->formatStateUsing(fn ($state): string => Money::taka($state))
                         ->state(fn (AccountingJournalEntry $record): float => (float) $record->lines->sum('credit'))
                         ->weight('bold'),
                 ]),

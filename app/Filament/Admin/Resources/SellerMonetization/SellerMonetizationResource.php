@@ -8,6 +8,7 @@ use App\Filament\Admin\Resources\SellerMonetization\Pages\ListSellerMonetization
 use App\Models\SellerInvoice;
 use App\Models\SellerProfile;
 use App\Models\SellerSubscription;
+use App\Services\Formatting\Money;
 use App\Services\Monetization\MonetizationSuspensionService;
 use App\Services\Monetization\SellerInvoiceSettlementService;
 use BackedEnum;
@@ -96,7 +97,7 @@ class SellerMonetizationResource extends Resource
                     ->state(fn (SellerProfile $record): float => (float) SellerInvoice::where('seller_id', $record->user_id)
                         ->where('status', SellerInvoice::STATUS_UNPAID)
                         ->sum('total_amount'))
-                    ->money('BDT')
+                    ->formatStateUsing(fn ($state): string => Money::taka($state))
                     ->color(fn ($state): string => (float) $state > 0 ? 'danger' : 'gray'),
             ])
             ->recordActions([

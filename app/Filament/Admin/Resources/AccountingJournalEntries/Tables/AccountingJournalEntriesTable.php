@@ -10,6 +10,7 @@ use App\Exceptions\Accounting\SettlementException;
 use App\Models\Accounting\AccountingJournalEntry;
 use App\Services\Accounting\JournalPostingService;
 use App\Services\Accounting\SettlementService;
+use App\Services\Formatting\Money;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\TextInput;
@@ -58,8 +59,8 @@ class AccountingJournalEntriesTable
                     ->sortable(),
 
                 TextColumn::make('total_debit')
-                    ->label('Total (Tk)')
-                    ->money('BDT')
+                    ->label('Total (৳)')
+                    ->formatStateUsing(fn ($state): string => Money::taka($state))
                     ->state(fn (AccountingJournalEntry $record): float => (float) $record->lines->sum('debit'))
                     ->weight('bold'),
 

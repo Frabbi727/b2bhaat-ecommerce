@@ -9,6 +9,7 @@ use App\Enums\FlashSaleSubmissionStatus;
 use App\Events\Promotions\FlashSaleSubmissionDecidedEvent;
 use App\Exceptions\InvalidStatusTransitionException;
 use App\Models\FlashSaleProduct;
+use App\Services\Formatting\Money;
 use App\Services\Promotions\FlashSaleLifecycleService;
 use App\Services\Promotions\FlashSaleSubmissionService;
 use Filament\Actions\Action;
@@ -47,11 +48,11 @@ class SubmissionsRelationManager extends RelationManager
 
                 TextColumn::make('original_retail_price')
                     ->label('Original Price')
-                    ->money('BDT'),
+                    ->formatStateUsing(fn ($state): string => Money::taka($state)),
 
                 TextColumn::make('campaign_price')
                     ->label('Campaign Price')
-                    ->money('BDT'),
+                    ->formatStateUsing(fn ($state): string => Money::taka($state)),
 
                 TextColumn::make('discount_value')
                     ->label('Discount')

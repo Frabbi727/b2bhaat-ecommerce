@@ -26,7 +26,7 @@
                 </div>
                 <div class="flex items-start gap-2">
                     <span class="text-indigo-600 font-bold">3.</span>
-                    <span>Start listing dual-channel products in Bangladeshi Taka (Tk) and fulfilling sub-orders with courier integration.</span>
+                    <span>Start listing dual-channel products in Bangladeshi Taka (৳) and fulfilling sub-orders with courier integration.</span>
                 </div>
             </div>
 

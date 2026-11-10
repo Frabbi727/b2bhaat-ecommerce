@@ -209,7 +209,7 @@ class OrderNotificationService
             return false;
         }
 
-        $message = "Dear {$seller->name}, your B2Bhaat subscription renewal is due on {$invoice->due_date?->format('d M, Y')}. Amount: Tk ".number_format((float) $invoice->total_amount, 2).'. Pay via your seller dashboard.';
+        $message = "Dear {$seller->name}, your B2Bhaat subscription renewal is due on {$invoice->due_date?->format('d M, Y')}. Amount: BDT ".number_format((float) $invoice->total_amount, 2).'. Pay via your seller dashboard.';
         SendSmsJob::dispatch(PhoneNormalizer::normalize($seller->phone), $message, 'subscription_renewal', bypassDeduplication: true);
 
         return true;

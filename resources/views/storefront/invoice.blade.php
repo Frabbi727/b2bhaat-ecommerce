@@ -117,8 +117,8 @@
                                     <th class="py-2.5 px-4">Item & Specifications</th>
                                     <th class="py-2.5 px-4">Channel</th>
                                     <th class="py-2.5 px-4 text-center">Quantity</th>
-                                    <th class="py-2.5 px-4 text-right">Unit Rate (Tk)</th>
-                                    <th class="py-2.5 px-4 text-right">Line Total (Tk)</th>
+                                    <th class="py-2.5 px-4 text-right">Unit Rate (৳)</th>
+                                    <th class="py-2.5 px-4 text-right">Line Total (৳)</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 bg-white">

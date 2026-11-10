@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderStatus;
 use App\Models\PaymentMethod;
 use App\Models\PaymentStatus;
+use App\Services\Formatting\Money;
 use App\Services\Payments\PaymentVerificationService;
 use App\Services\Sms\OrderNotificationService;
 use Filament\Actions\Action;
@@ -44,7 +45,7 @@ class OrdersTable
 
                 TextColumn::make('total_amount')
                     ->label('Total')
-                    ->money('BDT')
+                    ->formatStateUsing(fn ($state): string => Money::taka($state))
                     ->weight('semibold')
                     ->sortable(),
 
@@ -67,7 +68,7 @@ class OrdersTable
 
                 TextColumn::make('shipping_amount')
                     ->label('Delivery')
-                    ->money('BDT')
+                    ->formatStateUsing(fn ($state): string => Money::taka($state))
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([

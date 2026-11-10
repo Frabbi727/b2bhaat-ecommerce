@@ -6,6 +6,7 @@ use App\Filament\Admin\Support\StatusColors;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\SubOrder;
+use App\Services\Formatting\Money;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
@@ -57,7 +58,7 @@ class OrderInfolist
                     ->state(fn (Order $record): int => $record->subOrders->count()),
                 TextEntry::make('total_amount')
                     ->label('Order total')
-                    ->money('BDT')
+                    ->formatStateUsing(fn ($state): string => Money::taka($state))
                     ->weight('bold'),
             ]);
     }
@@ -101,14 +102,14 @@ class OrderInfolist
                                     ->state(fn (OrderItem $record): string => $record->product?->title ?? 'Removed product')
                                     ->belowContent(fn (OrderItem $record): ?string => $record->variation?->sku),
                                 TextEntry::make('quantity')->numeric(),
-                                TextEntry::make('unit_price')->money('BDT'),
-                                TextEntry::make('total_price')->money('BDT')->weight('medium'),
+                                TextEntry::make('unit_price')->formatStateUsing(fn ($state): string => Money::taka($state)),
+                                TextEntry::make('total_price')->formatStateUsing(fn ($state): string => Money::taka($state))->weight('medium'),
                             ]),
                         Grid::make(['default' => 2, 'md' => 4])->schema([
-                            TextEntry::make('subtotal')->label('Goods')->money('BDT'),
-                            TextEntry::make('shipping_amount')->label('Delivery fee')->money('BDT'),
-                            TextEntry::make('commission_amount')->label('Marketplace commission')->money('BDT'),
-                            TextEntry::make('net_earnings')->label('Seller receives')->money('BDT')->weight('medium'),
+                            TextEntry::make('subtotal')->label('Goods')->formatStateUsing(fn ($state): string => Money::taka($state)),
+                            TextEntry::make('shipping_amount')->label('Delivery fee')->formatStateUsing(fn ($state): string => Money::taka($state)),
+                            TextEntry::make('commission_amount')->label('Marketplace commission')->formatStateUsing(fn ($state): string => Money::taka($state)),
+                            TextEntry::make('net_earnings')->label('Seller receives')->formatStateUsing(fn ($state): string => Money::taka($state))->weight('medium'),
                         ]),
                     ]),
             ]);
@@ -164,17 +165,17 @@ class OrderInfolist
                     TextEntry::make('goods')
                         ->label('Goods')
                         ->state(fn (Order $record): float => (float) $record->subOrders->sum('subtotal'))
-                        ->money('BDT'),
-                    TextEntry::make('shipping_amount')->label('Delivery')->money('BDT'),
+                        ->formatStateUsing(fn ($state): string => Money::taka($state)),
+                    TextEntry::make('shipping_amount')->label('Delivery')->formatStateUsing(fn ($state): string => Money::taka($state)),
                     TextEntry::make('discount_amount')
                         ->label(fn (Order $record): string => $record->coupon_code ? "Coupon {$record->coupon_code}" : 'Discount')
-                        ->money('BDT')
+                        ->formatStateUsing(fn ($state): string => Money::taka($state))
                         ->visible(fn (Order $record): bool => (float) $record->discount_amount > 0),
                     TextEntry::make('tax_amount')
                         ->label('VAT')
-                        ->money('BDT')
+                        ->formatStateUsing(fn ($state): string => Money::taka($state))
                         ->visible(fn (Order $record): bool => (float) $record->tax_amount > 0),
-                    TextEntry::make('total_amount')->label('Total')->money('BDT')->weight('bold'),
+                    TextEntry::make('total_amount')->label('Total')->formatStateUsing(fn ($state): string => Money::taka($state))->weight('bold'),
                 ]),
             ]);
     }
