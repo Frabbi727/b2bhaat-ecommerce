@@ -142,7 +142,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | UX-ACC-4 / UX-ACC-5 | Journal display and format consistency | Open |
 | INV-11 | Product SKU uniqueness | Open | Fixed (34c4e6f) |
 | SEC-11 | Courier webhook replay | Open | Fixed (0fb505f) |
-| UX-7 | MOQ shown only at checkout | Open |
+| UX-7 | MOQ shown only at checkout | Open | Fixed (56d410b) |
 
 ## Needs owner or legal validation
 - VAT and BIN on B2B invoices.

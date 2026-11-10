@@ -323,3 +323,5 @@ MON-13 adds one migration, `add_commission_rate_to_order_items_table` (a nullabl
 - Before migrating, check production for shared SKUs: `SELECT sku, COUNT(*) FROM products WHERE sku IS NOT NULL GROUP BY sku HAVING COUNT(*) > 1;`
 - No rows: the migration just adds the index. Rows: the migration stops and lists them; ask the sellers which product keeps the SKU, change the other, then run `php artisan migrate` again. Nothing else in the deploy depends on this index.
 - Rollback drops the index only.
+
+UX-7 changes Blade views and Tailwind classes: run `npm ci && npm run build` (already in the deploy steps). No migration.

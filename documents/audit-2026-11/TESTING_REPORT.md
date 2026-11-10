@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1582 tests, 1573 passed, 9 skipped, 7164 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1587 tests, 1578 passed, 9 skipped, 7173 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -146,6 +146,7 @@ The existing tests of other features were touched only to give their test produc
 | ACC-20 | `tests/Feature/Accounting/ChartOfAccountsModelGuardTest.php` (3) | Each locked field of a system account is refused with the account named, and its name is still editable; a used account keeps type, balance side and code but can be renamed and switched off; an unused account can be corrected |
 | MON-13 | `tests/Feature/Monetization/DefaultCommissionRateTest.php` (5), `MonetizationEngineServiceTest` (+1 assertion, fixture fixed) | Default 10% with no setting; web and app sign-ups start on the 12.5% setting; a seller with no plan or own rate is charged it; the admin page saves 9% and refuses 150%; an order line keeps the 2% plan rate it was charged. Also passes on scratch PostgreSQL, migration up, down, up |
 | INV-11 | `tests/Feature/ProductSkuUniquenessTest.php` (4) | Two products cannot share a SKU; products with no SKU do not clash; a copied product gets its own SKU; with a duplicate present the migration stops, names the SKU and both product ids, and renames nothing. Also passes on scratch PostgreSQL, migration up, down, up |
+| UX-7 | `tests/Feature/WholesaleMinimumShownTest.php` (5) | The product page states the minimum by the matrix; buyers without wholesale prices see where bulk orders start; with tier rows stored out of order a lot of 60 is accepted (minimum 50); the cart warns about a lot of 30 ('Add 20 more') and says nothing at 50 |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
