@@ -135,7 +135,7 @@ class IncomeStatementPage extends Page
                 fputcsv($handle, [
                     $row['code'],
                     $row['name'],
-                    number_format($row['amount'], 2, '.', ''),
+                    number_format($row['is_contra'] ? -$row['amount'] : $row['amount'], 2, '.', ''),
                 ]);
             }
             fputcsv($handle, ['Total Operating Revenue', '', $data['revenues']['formatted_total']]);
@@ -148,7 +148,7 @@ class IncomeStatementPage extends Page
                 fputcsv($handle, [
                     $row['code'],
                     $row['name'],
-                    number_format($row['amount'], 2, '.', ''),
+                    number_format($row['is_contra'] ? -$row['amount'] : $row['amount'], 2, '.', ''),
                 ]);
             }
             fputcsv($handle, ['Total Operating Expenses', '', $data['expenses']['formatted_total']]);

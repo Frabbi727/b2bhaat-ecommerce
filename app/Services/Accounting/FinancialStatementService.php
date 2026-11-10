@@ -6,10 +6,12 @@ namespace App\Services\Accounting;
 
 use App\Enums\Accounting\AccountType;
 use App\Enums\Accounting\JournalEntryStatus;
+use App\Enums\Accounting\NormalBalance;
 use App\Models\Accounting\AccountingAccount;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class FinancialStatementService
 {
@@ -21,12 +23,12 @@ class FinancialStatementService
      *     end_date: ?string,
      *     period_label: string,
      *     revenues: array{
-     *         accounts: array<int, array{code: string, name: string, amount: float, formatted_amount: string}>,
+     *         accounts: array<int, array{code: string, name: string, amount: float, is_contra: bool, formatted_amount: string}>,
      *         total: float,
      *         formatted_total: string
      *     },
      *     expenses: array{
-     *         accounts: array<int, array{code: string, name: string, amount: float, formatted_amount: string}>,
+     *         accounts: array<int, array{code: string, name: string, amount: float, is_contra: bool, formatted_amount: string}>,
      *         total: float,
      *         formatted_total: string
      *     },
@@ -39,42 +41,7 @@ class FinancialStatementService
      */
     public function getIncomeStatement(?string $startDate = null, ?string $endDate = null): array
     {
-        $isAllTime = ($startDate === 'all' || $startDate === 'all-time');
-
-        if (! $isAllTime && empty($startDate) && empty($endDate)) {
-            $startDate = now(config('app.display_timezone'))->startOfMonth()->toDateString();
-            $endDate = now(config('app.display_timezone'))->endOfMonth()->toDateString();
-        }
-
-        $start = null;
-        if (! $isAllTime && ! empty($startDate)) {
-            try {
-                $start = Carbon::parse($startDate)->toDateString();
-            } catch (\Throwable) {
-                $start = null;
-            }
-        }
-
-        $end = null;
-        if (! $isAllTime && ! empty($endDate)) {
-            try {
-                $end = Carbon::parse($endDate)->toDateString();
-            } catch (\Throwable) {
-                $end = null;
-            }
-        }
-
-        if ($start !== null && $end !== null && $start > $end) {
-            [$start, $end] = [$end, $start];
-        }
-
-        $periodLabel = match (true) {
-            $isAllTime => 'All Time',
-            $start !== null && $end !== null => Carbon::parse($start)->format('M d, Y').' - '.Carbon::parse($end)->format('M d, Y'),
-            $start !== null => 'From '.Carbon::parse($start)->format('M d, Y'),
-            $end !== null => 'Up to '.Carbon::parse($end)->format('M d, Y'),
-            default => 'All Time',
-        };
+        ['is_all_time' => $isAllTime, 'start' => $start, 'end' => $end, 'label' => $periodLabel] = $this->resolvePeriod($startDate, $endDate);
 
         /** @var Collection<int, object{account_id: int, total_debit: string, total_credit: string}> $totals */
         $totals = DB::table('accounting_journal_lines')
@@ -102,24 +69,7 @@ class FinancialStatementService
             ->orderBy('code')
             ->get();
 
-        $revenueRows = [];
-        $totalRevenues = 0.0;
-
-        foreach ($revenueAccounts as $account) {
-            $line = $totals->get($account->id);
-            $debit = (float) ($line->total_debit ?? 0.0);
-            $credit = (float) ($line->total_credit ?? 0.0);
-            $amount = round($credit - $debit, 2);
-
-            $revenueRows[] = [
-                'code' => (string) $account->code,
-                'name' => (string) $account->name,
-                'amount' => $amount,
-                'formatted_amount' => $this->formatMoney($amount),
-            ];
-
-            $totalRevenues = round($totalRevenues + $amount, 2);
-        }
+        ['rows' => $revenueRows, 'total' => $totalRevenues] = $this->statementRows($revenueAccounts, $totals, AccountType::REVENUE);
 
         // Operating Expenses (5000 series): Debit - Credit
         $expenseAccounts = AccountingAccount::query()
@@ -131,24 +81,7 @@ class FinancialStatementService
             ->orderBy('code')
             ->get();
 
-        $expenseRows = [];
-        $totalExpenses = 0.0;
-
-        foreach ($expenseAccounts as $account) {
-            $line = $totals->get($account->id);
-            $debit = (float) ($line->total_debit ?? 0.0);
-            $credit = (float) ($line->total_credit ?? 0.0);
-            $amount = round($debit - $credit, 2);
-
-            $expenseRows[] = [
-                'code' => (string) $account->code,
-                'name' => (string) $account->name,
-                'amount' => $amount,
-                'formatted_amount' => $this->formatMoney($amount),
-            ];
-
-            $totalExpenses = round($totalExpenses + $amount, 2);
-        }
+        ['rows' => $expenseRows, 'total' => $totalExpenses] = $this->statementRows($expenseAccounts, $totals, AccountType::EXPENSE);
 
         $netIncome = round($totalRevenues - $totalExpenses, 2);
         $isProfit = $netIncome >= 0.0;
@@ -186,17 +119,17 @@ class FinancialStatementService
      *     as_of_date: string,
      *     formatted_as_of_date: string,
      *     assets: array{
-     *         accounts: array<int, array{code: string, name: string, amount: float, formatted_amount: string}>,
+     *         accounts: array<int, array{code: string, name: string, amount: float, is_contra: bool, formatted_amount: string}>,
      *         total: float,
      *         formatted_total: string
      *     },
      *     liabilities: array{
-     *         accounts: array<int, array{code: string, name: string, amount: float, formatted_amount: string}>,
+     *         accounts: array<int, array{code: string, name: string, amount: float, is_contra: bool, formatted_amount: string}>,
      *         total: float,
      *         formatted_total: string
      *     },
      *     equity: array{
-     *         capital_accounts: array<int, array{code: string, name: string, amount: float, formatted_amount: string}>,
+     *         capital_accounts: array<int, array{code: string, name: string, amount: float, is_contra: bool, formatted_amount: string}>,
      *         retained_earnings: float,
      *         formatted_retained_earnings: string,
      *         current_net_income: float,
@@ -248,24 +181,7 @@ class FinancialStatementService
             ->orderBy('code')
             ->get();
 
-        $assetRows = [];
-        $totalAssets = 0.0;
-
-        foreach ($assetAccounts as $account) {
-            $line = $totals->get($account->id);
-            $debit = (float) ($line->total_debit ?? 0.0);
-            $credit = (float) ($line->total_credit ?? 0.0);
-            $amount = round($debit - $credit, 2);
-
-            $assetRows[] = [
-                'code' => (string) $account->code,
-                'name' => (string) $account->name,
-                'amount' => $amount,
-                'formatted_amount' => $this->formatMoney($amount),
-            ];
-
-            $totalAssets = round($totalAssets + $amount, 2);
-        }
+        ['rows' => $assetRows, 'total' => $totalAssets] = $this->statementRows($assetAccounts, $totals, AccountType::ASSET);
 
         // Liabilities (2000 series): Credit - Debit
         $liabilityAccounts = AccountingAccount::query()
@@ -277,24 +193,7 @@ class FinancialStatementService
             ->orderBy('code')
             ->get();
 
-        $liabilityRows = [];
-        $totalLiabilities = 0.0;
-
-        foreach ($liabilityAccounts as $account) {
-            $line = $totals->get($account->id);
-            $debit = (float) ($line->total_debit ?? 0.0);
-            $credit = (float) ($line->total_credit ?? 0.0);
-            $amount = round($credit - $debit, 2);
-
-            $liabilityRows[] = [
-                'code' => (string) $account->code,
-                'name' => (string) $account->name,
-                'amount' => $amount,
-                'formatted_amount' => $this->formatMoney($amount),
-            ];
-
-            $totalLiabilities = round($totalLiabilities + $amount, 2);
-        }
+        ['rows' => $liabilityRows, 'total' => $totalLiabilities] = $this->statementRows($liabilityAccounts, $totals, AccountType::LIABILITY);
 
         // Equity (3000 series): Credit - Debit
         $equityAccounts = AccountingAccount::query()
@@ -306,24 +205,7 @@ class FinancialStatementService
             ->orderBy('code')
             ->get();
 
-        $capitalRows = [];
-        $retainedEarnings = 0.0;
-
-        foreach ($equityAccounts as $account) {
-            $line = $totals->get($account->id);
-            $debit = (float) ($line->total_debit ?? 0.0);
-            $credit = (float) ($line->total_credit ?? 0.0);
-            $amount = round($credit - $debit, 2);
-
-            $capitalRows[] = [
-                'code' => (string) $account->code,
-                'name' => (string) $account->name,
-                'amount' => $amount,
-                'formatted_amount' => $this->formatMoney($amount),
-            ];
-
-            $retainedEarnings = round($retainedEarnings + $amount, 2);
-        }
+        ['rows' => $capitalRows, 'total' => $retainedEarnings] = $this->statementRows($equityAccounts, $totals, AccountType::EQUITY);
 
         // Dynamic Cumulative Net Income up to asOfDate = Revenues - Expenses
         $allRevenueAccounts = AccountingAccount::query()
@@ -393,6 +275,247 @@ class FinancialStatementService
             'discrepancy' => $discrepancy,
             'formatted_discrepancy' => $this->formatMoney($discrepancy, signed: true),
         ];
+    }
+
+    /** Accounts that hold the platform's own cash. Money still with a gateway or courier is not cash yet. */
+    public const CASH_ACCOUNT_SLUGS = ['cash_on_hand', 'bank_operating'];
+
+    /** Plain names for the business events that move cash. */
+    private const CASH_EVENT_LABELS = [
+        'order_prepaid_received' => 'Customer payments received',
+        'cod_delivered' => 'Cash on delivery collected',
+        'cod_self_delivered' => 'Cash on delivery collected by sellers',
+        'escrow_released' => 'Escrow released to sellers',
+        'refund_processed' => 'Refunds',
+        'subscription_paid' => 'Subscription payments',
+        'listing_pack_paid' => 'Listing pack payments',
+        'manual_journal' => 'Manual journals',
+        'payout_requested' => 'Payout requests',
+        'payout_disbursed' => 'Payouts to sellers',
+        'payout_rejected' => 'Rejected payouts',
+        'customer_refund_disbursed' => 'Refunds paid to customers',
+        'shipping_reclassified' => 'Shipping corrections',
+        'courier_cod_settled' => 'Courier COD remittances',
+        'gateway_settled' => 'Gateway transfers to bank',
+        'self_delivery_fee_moved' => 'Self-delivery fees',
+        'commission_earned' => 'Commission earned',
+        'reversal' => 'Reversals and corrections',
+    ];
+
+    /**
+     * ACC-18: cash flow statement (direct method) for the platform's cash and bank accounts. Each journal that
+     * changes cash is grouped by its business event. A journal whose other side is owner equity is a financing
+     * flow; everything else is operating (the platform has no investing activity recorded in its chart). Moving
+     * money between cash and bank nets to zero and is left out.
+     *
+     * @return array{
+     *     start_date: ?string,
+     *     end_date: ?string,
+     *     period_label: string,
+     *     opening_cash: float,
+     *     operating: array{lines: list<array{event: string, label: string, inflows: float, outflows: float, net: float}>, inflows: float, outflows: float, net: float},
+     *     financing: array{lines: list<array{event: string, label: string, inflows: float, outflows: float, net: float}>, inflows: float, outflows: float, net: float},
+     *     net_change: float,
+     *     closing_cash: float,
+     *     is_consistent: bool
+     * }
+     */
+    public function getCashFlowStatement(?string $startDate = null, ?string $endDate = null): array
+    {
+        ['is_all_time' => $isAllTime, 'start' => $start, 'end' => $end, 'label' => $periodLabel] = $this->resolvePeriod($startDate, $endDate);
+
+        $cashAccountIds = AccountingAccount::query()->whereIn('system_slug', self::CASH_ACCOUNT_SLUGS)->pluck('id')->all();
+        $equityAccountIds = AccountingAccount::query()->where('type', AccountType::EQUITY)->pluck('id')->all();
+        $statuses = [JournalEntryStatus::POSTED->value, JournalEntryStatus::REVERSED->value];
+
+        $cashBalancePoisha = function (?string $before, ?string $through) use ($cashAccountIds, $statuses): int {
+            $row = DB::table('accounting_journal_lines')
+                ->join('accounting_journal_entries', 'accounting_journal_lines.journal_entry_id', '=', 'accounting_journal_entries.id')
+                ->whereIn('accounting_journal_entries.status', $statuses)
+                ->whereIn('accounting_journal_lines.account_id', $cashAccountIds === [] ? [0] : $cashAccountIds)
+                ->when($before !== null, fn ($q) => $q->whereDate('accounting_journal_entries.entry_date', '<', $before))
+                ->when($through !== null, fn ($q) => $q->whereDate('accounting_journal_entries.entry_date', '<=', $through))
+                ->selectRaw('COALESCE(SUM(accounting_journal_lines.debit), 0) as total_debit')
+                ->selectRaw('COALESCE(SUM(accounting_journal_lines.credit), 0) as total_credit')
+                ->first();
+
+            return (int) round(((float) $row->total_debit - (float) $row->total_credit) * 100);
+        };
+
+        $openingPoisha = (! $isAllTime && $start !== null) ? $cashBalancePoisha($start, null) : 0;
+        $closingPoisha = $cashBalancePoisha(null, $isAllTime ? null : $end);
+
+        $journals = DB::table('accounting_journal_lines')
+            ->join('accounting_journal_entries', 'accounting_journal_lines.journal_entry_id', '=', 'accounting_journal_entries.id')
+            ->whereIn('accounting_journal_entries.status', $statuses)
+            ->when(! $isAllTime && $start !== null, fn ($q) => $q->whereDate('accounting_journal_entries.entry_date', '>=', $start))
+            ->when(! $isAllTime && $end !== null, fn ($q) => $q->whereDate('accounting_journal_entries.entry_date', '<=', $end))
+            ->select('accounting_journal_entries.id', 'accounting_journal_entries.financial_event', 'accounting_journal_lines.account_id', 'accounting_journal_lines.debit', 'accounting_journal_lines.credit')
+            ->get()
+            ->groupBy('id');
+
+        $sections = ['operating' => [], 'financing' => []];
+
+        foreach ($journals as $lines) {
+            $cashNetPoisha = 0;
+            $touchesEquity = false;
+
+            foreach ($lines as $line) {
+                if (in_array((int) $line->account_id, $cashAccountIds, true)) {
+                    $cashNetPoisha += (int) round(((float) $line->debit - (float) $line->credit) * 100);
+                } elseif (in_array((int) $line->account_id, $equityAccountIds, true)) {
+                    $touchesEquity = true;
+                }
+            }
+
+            if ($cashNetPoisha === 0) {
+                continue;
+            }
+
+            $section = $touchesEquity ? 'financing' : 'operating';
+            $event = (string) $lines->first()->financial_event;
+            $sections[$section][$event] ??= ['in' => 0, 'out' => 0];
+            $sections[$section][$event][$cashNetPoisha > 0 ? 'in' : 'out'] += abs($cashNetPoisha);
+        }
+
+        $build = function (array $events): array {
+            ksort($events);
+            $lines = [];
+            $in = 0;
+            $out = 0;
+
+            foreach ($events as $event => $amounts) {
+                $lines[] = [
+                    'event' => (string) $event,
+                    'label' => self::CASH_EVENT_LABELS[$event] ?? Str::headline((string) $event),
+                    'inflows' => $this->normalizeZero($amounts['in'] / 100),
+                    'outflows' => $this->normalizeZero($amounts['out'] / 100),
+                    'net' => $this->normalizeZero(($amounts['in'] - $amounts['out']) / 100),
+                ];
+                $in += $amounts['in'];
+                $out += $amounts['out'];
+            }
+
+            return [
+                'lines' => $lines,
+                'inflows' => $this->normalizeZero($in / 100),
+                'outflows' => $this->normalizeZero($out / 100),
+                'net' => $this->normalizeZero(($in - $out) / 100),
+                'net_poisha' => $in - $out,
+            ];
+        };
+
+        $operating = $build($sections['operating']);
+        $financing = $build($sections['financing']);
+        $netChangePoisha = $operating['net_poisha'] + $financing['net_poisha'];
+        unset($operating['net_poisha'], $financing['net_poisha']);
+
+        return [
+            'start_date' => $start,
+            'end_date' => $end,
+            'period_label' => $periodLabel,
+            'opening_cash' => $this->normalizeZero($openingPoisha / 100),
+            'operating' => $operating,
+            'financing' => $financing,
+            'net_change' => $this->normalizeZero($netChangePoisha / 100),
+            'closing_cash' => $this->normalizeZero($closingPoisha / 100),
+            'is_consistent' => $openingPoisha + $netChangePoisha === $closingPoisha,
+        ];
+    }
+
+    /**
+     * Turns the report's date inputs into a period. No dates means the current Dhaka month; 'all' means all time.
+     *
+     * @return array{is_all_time: bool, start: ?string, end: ?string, label: string}
+     */
+    private function resolvePeriod(?string $startDate, ?string $endDate): array
+    {
+        $isAllTime = ($startDate === 'all' || $startDate === 'all-time');
+
+        if (! $isAllTime && empty($startDate) && empty($endDate)) {
+            $startDate = now(config('app.display_timezone'))->startOfMonth()->toDateString();
+            $endDate = now(config('app.display_timezone'))->endOfMonth()->toDateString();
+        }
+
+        $start = null;
+        if (! $isAllTime && ! empty($startDate)) {
+            try {
+                $start = Carbon::parse($startDate)->toDateString();
+            } catch (\Throwable) {
+                $start = null;
+            }
+        }
+
+        $end = null;
+        if (! $isAllTime && ! empty($endDate)) {
+            try {
+                $end = Carbon::parse($endDate)->toDateString();
+            } catch (\Throwable) {
+                $end = null;
+            }
+        }
+
+        if ($start !== null && $end !== null && $start > $end) {
+            [$start, $end] = [$end, $start];
+        }
+
+        $periodLabel = match (true) {
+            $isAllTime => 'All Time',
+            $start !== null && $end !== null => Carbon::parse($start)->format('M d, Y').' - '.Carbon::parse($end)->format('M d, Y'),
+            $start !== null => 'From '.Carbon::parse($start)->format('M d, Y'),
+            $end !== null => 'Up to '.Carbon::parse($end)->format('M d, Y'),
+            default => 'All Time',
+        };
+
+        return ['is_all_time' => $isAllTime, 'start' => $start, 'end' => $end, 'label' => $periodLabel];
+    }
+
+    /**
+     * ACC-18: one statement line per account. The amount is the account's balance in its own normal direction, so
+     * it matches the ledger page. A contra account (its normal balance is the opposite of its section's, such as
+     * sales returns under revenue) is marked and shown in brackets, and is deducted from the section total.
+     *
+     * @param  Collection<int, AccountingAccount>  $accounts
+     * @param  Collection<int|string, object>  $totals
+     * @return array{rows: array<int, array{code: string, name: string, amount: float, is_contra: bool, formatted_amount: string}>, total: float}
+     */
+    private function statementRows(Collection $accounts, Collection $totals, AccountType $section): array
+    {
+        $rows = [];
+        $sectionTotalPoisha = 0;
+
+        foreach ($accounts as $account) {
+            $line = $totals->get($account->id);
+            $debitPoisha = (int) round(((float) ($line->total_debit ?? 0.0)) * 100);
+            $creditPoisha = (int) round(((float) ($line->total_credit ?? 0.0)) * 100);
+
+            $normalBalance = $account->normal_balance instanceof NormalBalance
+                ? $account->normal_balance
+                : (NormalBalance::tryFrom((string) $account->normal_balance) ?? $section->defaultNormalBalance());
+
+            $balancePoisha = $normalBalance === NormalBalance::DEBIT
+                ? $debitPoisha - $creditPoisha
+                : $creditPoisha - $debitPoisha;
+            $isContra = $normalBalance !== $section->defaultNormalBalance();
+            $amount = $this->normalizeZero($balancePoisha / 100);
+
+            $rows[] = [
+                'code' => (string) $account->code,
+                'name' => (string) $account->name,
+                'amount' => $amount,
+                'is_contra' => $isContra,
+                'formatted_amount' => $isContra ? '('.$this->formatMoney($amount).')' : $this->formatMoney($amount),
+            ];
+
+            $sectionTotalPoisha += $isContra ? -$balancePoisha : $balancePoisha;
+        }
+
+        return ['rows' => $rows, 'total' => $this->normalizeZero($sectionTotalPoisha / 100)];
+    }
+
+    private function normalizeZero(float $value): float
+    {
+        return $value == 0.0 ? 0.0 : round($value, 2);
     }
 
     /**

@@ -132,7 +132,7 @@ class BalanceSheetPage extends Page
                 fputcsv($handle, [
                     $row['code'],
                     $row['name'],
-                    number_format($row['amount'], 2, '.', ''),
+                    number_format($row['is_contra'] ? -$row['amount'] : $row['amount'], 2, '.', ''),
                 ]);
             }
             fputcsv($handle, ['Total Current Assets', '', $data['assets']['formatted_total']]);
@@ -145,7 +145,7 @@ class BalanceSheetPage extends Page
                 fputcsv($handle, [
                     $row['code'],
                     $row['name'],
-                    number_format($row['amount'], 2, '.', ''),
+                    number_format($row['is_contra'] ? -$row['amount'] : $row['amount'], 2, '.', ''),
                 ]);
             }
             fputcsv($handle, ['Total Current Liabilities', '', $data['liabilities']['formatted_total']]);
@@ -158,7 +158,7 @@ class BalanceSheetPage extends Page
                 fputcsv($handle, [
                     $row['code'],
                     $row['name'],
-                    number_format($row['amount'], 2, '.', ''),
+                    number_format($row['is_contra'] ? -$row['amount'] : $row['amount'], 2, '.', ''),
                 ]);
             }
             fputcsv($handle, ['Cumulative Net Income (Unclosed)', '', $data['equity']['formatted_current_net_income']]);
