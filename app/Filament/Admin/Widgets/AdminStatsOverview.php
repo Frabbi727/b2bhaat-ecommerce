@@ -15,6 +15,7 @@ use App\Models\ReturnRequest;
 use App\Models\SellerProfile;
 use App\Models\SellerWallet;
 use App\Models\User;
+use App\Services\Reporting\DailyTotals;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Illuminate\Database\Eloquent\Builder;
@@ -25,6 +26,9 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class AdminStatsOverview extends StatsOverviewWidget
 {
+    /** PERF-2: refresh once a minute rather than Filament's default of every 5 seconds. */
+    protected ?string $pollingInterval = '60s';
+
     protected static ?int $sort = 1;
 
     protected function getColumns(): int
@@ -41,30 +45,40 @@ class AdminStatsOverview extends StatsOverviewWidget
         $approvedMerchants = SellerProfile::where('is_approved', true)->count();
 
         $pendingMerchants = SellerProfile::where('is_approved', false)->whereNull('rejected_at')->count();
-        $pendingWholesale = User::where('is_wholesale_approved', false)
-            ->whereNull('wholesale_rejected_at')
-            ->where(fn ($q) => $q->whereNotNull('trade_license_number')->orWhereNotNull('business_name'))
-            ->count();
+        // PERF-2: one query for the buyer counts
+        $userCounts = User::query()->toBase()
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN is_wholesale_approved = ? AND wholesale_rejected_at IS NULL AND (trade_license_number IS NOT NULL OR business_name IS NOT NULL) THEN 1 ELSE 0 END), 0) as pending_wholesale',
+                [false],
+            )
+            ->selectRaw('COALESCE(SUM(CASE WHEN is_wholesale_approved = ? THEN 1 ELSE 0 END), 0) as wholesale_buyers', [true])
+            ->selectRaw(
+                "COALESCE(SUM(CASE WHEN role_id IN (SELECT id FROM roles WHERE slug IN ('retail_buyer', 'wholesale_buyer')) THEN 1 ELSE 0 END), 0) as customers",
+            )
+            ->first();
+        $pendingWholesale = (int) $userCounts->pending_wholesale;
         $pendingReturns = ReturnRequest::where('status', ReturnRequest::STATUS_PENDING)->count();
         $totalPendingReview = $pendingMerchants + $pendingWholesale + $pendingReturns;
 
-        // 7-day GMV sparkline: one grouped query instead of loading every paid order
-        $since = now()->subDays(6)->startOfDay();
-        $dailyGmv = $paidOrders()
-            ->where('created_at', '>=', $since)
-            ->get(['total_amount', 'created_at'])
-            ->groupBy(fn (Order $order): string => $order->created_at->format('Y-m-d'))
-            ->map(fn ($orders): float => (float) $orders->sum('total_amount'));
-        $sparklineGmv = collect(range(6, 0))
-            ->map(fn (int $i): float => $dailyGmv[now()->subDays($i)->format('Y-m-d')] ?? 0.0)
-            ->all();
+        // 7-day GMV sparkline, by Dhaka day
+        $sparklineGmv = app(DailyTotals::class)->lastDays($paidOrders(), 'total_amount', 7)['values'];
 
-        $ordersLast30Days = Order::where('created_at', '>=', now()->subDays(30))->count();
-        $ordersToday = Order::where('created_at', '>=', now()->startOfDay())->count();
-        $customers = User::whereHas('role', fn (Builder $q) => $q->whereIn('slug', ['retail_buyer', 'wholesale_buyer']))->count();
-        $wholesaleBuyers = User::where('is_wholesale_approved', true)->count();
-        $liveProducts = Product::where('is_active', true)->whereNull('blocked_at')->count();
-        $blockedProducts = Product::whereNotNull('blocked_at')->count();
+        $todayStart = now(config('app.display_timezone'))->startOfDay()->setTimezone(config('app.timezone'));
+        $orderCounts = Order::query()->toBase()
+            ->where('created_at', '>=', now()->subDays(30))
+            ->selectRaw('COUNT(*) as last_30_days')
+            ->selectRaw('COALESCE(SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END), 0) as today', [$todayStart])
+            ->first();
+        $ordersLast30Days = (int) $orderCounts->last_30_days;
+        $ordersToday = (int) $orderCounts->today;
+        $customers = (int) $userCounts->customers;
+        $wholesaleBuyers = (int) $userCounts->wholesale_buyers;
+        $productCounts = Product::query()->toBase()
+            ->selectRaw('COALESCE(SUM(CASE WHEN is_active = ? AND blocked_at IS NULL THEN 1 ELSE 0 END), 0) as live', [true])
+            ->selectRaw('COALESCE(SUM(CASE WHEN blocked_at IS NOT NULL THEN 1 ELSE 0 END), 0) as blocked')
+            ->first();
+        $liveProducts = (int) $productCounts->live;
+        $blockedProducts = (int) $productCounts->blocked;
 
         return [
             Stat::make('Platform Settled GMV', '৳'.number_format($totalGmv, 2))

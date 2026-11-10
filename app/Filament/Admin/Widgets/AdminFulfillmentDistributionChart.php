@@ -9,6 +9,9 @@ use Filament\Widgets\ChartWidget;
 
 class AdminFulfillmentDistributionChart extends ChartWidget
 {
+    /** PERF-2: refresh once a minute rather than Filament's default of every 5 seconds. */
+    protected ?string $pollingInterval = '60s';
+
     protected static ?int $sort = 3;
 
     protected ?string $heading = 'Packages by status';

@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Widgets;
 
 use App\Models\Order;
+use App\Services\Reporting\DailyTotals;
 use Filament\Widgets\ChartWidget;
-use Illuminate\Support\Carbon;
 
 class AdminOrdersRevenueChart extends ChartWidget
 {
+    /** PERF-2: refresh once a minute rather than Filament's default of every 5 seconds. */
+    protected ?string $pollingInterval = '60s';
+
     protected static ?int $sort = 2;
 
     protected ?string $heading = 'Paid order value, last 14 days';
@@ -28,22 +31,13 @@ class AdminOrdersRevenueChart extends ChartWidget
 
     protected function getData(): array
     {
-        $days = collect(range(13, 0))->map(fn ($i) => now()->subDays($i)->format('Y-m-d'));
-
-        $orders = Order::whereHas('paymentStatus', fn ($q) => $q->where('slug', 'paid'))
-            ->where('created_at', '>=', now()->subDays(14)->startOfDay())
-            ->get();
-
-        $dailyGmv = [];
-        $labels = [];
-
-        foreach ($days as $dateStr) {
-            $carbon = Carbon::parse($dateStr);
-            $labels[] = $carbon->format('d M');
-
-            $dayOrders = $orders->filter(fn ($o) => $o->created_at->format('Y-m-d') === $dateStr);
-            $dailyGmv[] = round((float) $dayOrders->sum('total_amount'), 2);
-        }
+        $series = app(DailyTotals::class)->lastDays(
+            Order::query()->whereHas('paymentStatus', fn ($q) => $q->where('slug', 'paid')),
+            'total_amount',
+            14,
+        );
+        $labels = $series['labels'];
+        $dailyGmv = $series['values'];
 
         return [
             'datasets' => [

@@ -10,11 +10,15 @@ use App\Filament\Seller\Resources\SubOrders\SubOrderResource;
 use App\Models\RfqRequest;
 use App\Models\SellerWallet;
 use App\Models\SubOrder;
+use App\Services\Reporting\DailyTotals;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class SellerStatsOverview extends StatsOverviewWidget
 {
+    /** PERF-2: refresh once a minute rather than Filament's default of every 5 seconds. */
+    protected ?string $pollingInterval = '60s';
+
     protected static ?int $sort = 1;
 
     protected function getStats(): array
@@ -36,17 +40,14 @@ class SellerStatsOverview extends StatsOverviewWidget
             ->where('status', 'pending')
             ->count();
 
-        // 7-day sparkline from seller sub-orders
-        $days = collect(range(6, 0))->map(fn ($i) => now()->subDays($i)->format('Y-m-d'));
-        $recentSubOrders = SubOrder::where('seller_id', $sellerId)
-            ->where('created_at', '>=', now()->subDays(7)->startOfDay())
-            ->whereDoesntHave('fulfillmentStatus', fn ($q) => $q->where('slug', 'cancelled'))
-            ->get(['id', 'subtotal', 'created_at']);
-
-        $sparklineEarnings = [];
-        foreach ($days as $dateStr) {
-            $sparklineEarnings[] = (float) $recentSubOrders->filter(fn ($s) => $s->created_at->format('Y-m-d') === $dateStr)->sum('subtotal');
-        }
+        // 7-day sparkline from seller sub-orders, by Dhaka day
+        $sparklineEarnings = app(DailyTotals::class)->lastDays(
+            SubOrder::query()
+                ->where('seller_id', $sellerId)
+                ->whereDoesntHave('fulfillmentStatus', fn ($q) => $q->where('slug', 'cancelled')),
+            'subtotal',
+            7,
+        )['values'];
 
         return [
             Stat::make('Available Payout Balance', '৳'.number_format($availableBalance, 2))

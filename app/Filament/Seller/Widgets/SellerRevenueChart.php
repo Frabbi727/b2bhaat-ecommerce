@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Filament\Seller\Widgets;
 
 use App\Models\SubOrder;
+use App\Services\Reporting\DailyTotals;
 use Filament\Widgets\ChartWidget;
-use Illuminate\Support\Carbon;
 
 class SellerRevenueChart extends ChartWidget
 {
+    /** PERF-2: refresh once a minute rather than Filament's default of every 5 seconds. */
+    protected ?string $pollingInterval = '60s';
+
     protected static ?int $sort = 2;
 
     protected ?string $heading = 'Sales, last 14 days';
@@ -28,23 +31,15 @@ class SellerRevenueChart extends ChartWidget
     protected function getData(): array
     {
         $sellerId = auth()->id();
-        $days = collect(range(13, 0))->map(fn ($i) => now()->subDays($i)->format('Y-m-d'));
-
-        $subOrders = SubOrder::where('seller_id', $sellerId)
-            ->where('created_at', '>=', now()->subDays(13)->startOfDay())
-            ->whereDoesntHave('fulfillmentStatus', fn ($q) => $q->where('slug', 'cancelled'))
-            ->get(['id', 'subtotal', 'created_at']);
-
-        $dailyEarnings = [];
-        $labels = [];
-
-        foreach ($days as $dateStr) {
-            $carbon = Carbon::parse($dateStr);
-            $labels[] = $carbon->format('d M');
-
-            $daySubOrders = $subOrders->filter(fn ($s) => $s->created_at->format('Y-m-d') === $dateStr);
-            $dailyEarnings[] = round((float) $daySubOrders->sum('subtotal'), 2);
-        }
+        $series = app(DailyTotals::class)->lastDays(
+            SubOrder::query()
+                ->where('seller_id', $sellerId)
+                ->whereDoesntHave('fulfillmentStatus', fn ($q) => $q->where('slug', 'cancelled')),
+            'subtotal',
+            14,
+        );
+        $labels = $series['labels'];
+        $dailyEarnings = $series['values'];
 
         return [
             'datasets' => [
