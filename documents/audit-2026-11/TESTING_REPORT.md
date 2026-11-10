@@ -116,6 +116,7 @@ The existing tests of other features were touched only to give their test produc
 | PERF-5 | `tests/Feature/DisplayTimezoneTest.php` (2) | Filament timezone is Asia/Dhaka; the three daily jobs are scheduled in Asia/Dhaka |
 | PERF-4 | `tests/Feature/JobFailureHandlingTest.php` (3), `Audit/AuditServiceTest.php` (1 updated) | A failed audit write throws for retry and `failed()` logs; an SMS retry after a gateway failure is really sent (log: failed, sent); a gateway exception leaves the log `failed`, not `pending` |
 | UX-ACC-3 | `tests/Feature/Accounting/EscrowLedgerPayoutIntegrationTest.php` (+1) | A second payout with the same TrxID typed differently is refused and stays requested; the same reference on another channel is accepted |
+| ACC-12 | n/a (no code change) | Verified by reading `OrderSplitterService` (tax 0) and the admin order schema (VAT disabled, not saved, no edit page) |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
