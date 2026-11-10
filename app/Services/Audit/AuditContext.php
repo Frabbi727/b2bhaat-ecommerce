@@ -33,6 +33,12 @@ class AuditContext
 
     public ?string $authGuard = null;
 
+    /**
+     * AUD-6: what is running when there is no signed-in user, such as "command: escrow:release-matured" or
+     * "queue: App\\Jobs\\SendSmsJob".
+     */
+    public ?string $source = null;
+
     public function initialize(
         ?string $correlationId,
         ?string $ipAddress,
@@ -72,6 +78,7 @@ class AuditContext
         $this->routeName = null;
         $this->actor = null;
         $this->authGuard = null;
+        $this->source = null;
     }
 
     /**

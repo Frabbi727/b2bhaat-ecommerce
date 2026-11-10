@@ -34,7 +34,9 @@ use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Http\Request;
+use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
@@ -102,5 +104,15 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(Login::class, [AuthAuditListener::class, 'handleLogin']);
         Event::listen(Failed::class, [AuthAuditListener::class, 'handleFailed']);
         Event::listen(Logout::class, [AuthAuditListener::class, 'handleLogout']);
+
+        // AUD-6: name what is running, so audit entries written without a signed-in user show their source
+        Event::listen(CommandStarting::class, function (CommandStarting $event): void {
+            if ($event->command !== null) {
+                app(AuditContext::class)->source = 'command: '.$event->command;
+            }
+        });
+        Event::listen(JobProcessing::class, function (JobProcessing $event): void {
+            app(AuditContext::class)->source = 'queue: '.$event->job->resolveName();
+        });
     }
 }
