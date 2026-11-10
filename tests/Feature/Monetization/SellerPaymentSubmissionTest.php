@@ -209,4 +209,77 @@ class SellerPaymentSubmissionTest extends TestCase
 
         $this->assertSame(SellerInvoice::STATUS_PAID, $this->invoice->fresh()->status);
     }
+
+    /**
+     * Review R-3: another seller's waiting TrxID must not reach this seller's browser.
+     */
+    public function test_a_seller_cannot_read_another_sellers_submitted_payment(): void
+    {
+        [$other, $otherInvoice] = $this->otherSellerWithBill('SINV-OTHER-1', 499.00);
+        SellerPayment::create([
+            'invoice_id' => $otherInvoice->id,
+            'seller_id' => $other->id,
+            'amount' => 499.00,
+            'payment_method' => 'bkash',
+            'transaction_reference' => 'SECRETTRX123',
+            'status' => SellerPayment::STATUS_PENDING_VERIFICATION,
+        ]);
+
+        $this->actingAs($this->seller);
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+
+        $component = Livewire::test(SubscriptionBilling::class)->call('getSubmittedPayment', $otherInvoice->id);
+
+        $this->assertStringNotContainsString('SECRETTRX123', json_encode($component->effects['returns'] ?? []));
+    }
+
+    /**
+     * Review R-3: a reference already waiting on another bill can't be sent again, so a copied TrxID can't win the
+     * race to approval and lock out the seller who really paid.
+     */
+    public function test_a_reference_waiting_on_another_bill_is_refused(): void
+    {
+        [$other, $otherInvoice] = $this->otherSellerWithBill('SINV-OTHER-2', 499.00);
+        SellerPayment::create([
+            'invoice_id' => $otherInvoice->id,
+            'seller_id' => $other->id,
+            'amount' => 499.00,
+            'payment_method' => 'bkash',
+            'transaction_reference' => 'TRX777',
+            'status' => SellerPayment::STATUS_PENDING_VERIFICATION,
+        ]);
+
+        try {
+            $this->settlement()->submitPaymentProof($this->seller, $this->invoice->id, [
+                'payment_method' => 'bkash',
+                'transaction_reference' => ' trx777 ',
+                'amount' => 499.00,
+            ]);
+            $this->fail('A reference waiting on another bill should be refused.');
+        } catch (DomainException $exception) {
+            $this->assertStringContainsString('already waiting to be checked', $exception->getMessage());
+            $this->assertStringNotContainsString('SINV-OTHER-2', $exception->getMessage());
+        }
+
+        $this->assertSame(0, SellerPayment::where('invoice_id', $this->invoice->id)->count());
+    }
+
+    /**
+     * @return array{0: User, 1: SellerInvoice}
+     */
+    private function otherSellerWithBill(string $number, float $amount): array
+    {
+        $other = User::factory()->create(['role_id' => $this->seller->role_id, 'is_active' => true]);
+        $invoice = SellerInvoice::create([
+            'invoice_number' => $number,
+            'seller_id' => $other->id,
+            'invoice_type' => SellerInvoice::TYPE_SUBSCRIPTION_FEE,
+            'subtotal' => $amount,
+            'total_amount' => $amount,
+            'status' => SellerInvoice::STATUS_UNPAID,
+            'due_date' => now()->toDateString(),
+        ]);
+
+        return [$other, $invoice];
+    }
 }

@@ -193,9 +193,16 @@ class SubscriptionBilling extends Page
         };
     }
 
+    /**
+     * Only the signed-in seller's own payments: this is callable from the browser (review R-3).
+     */
     public function getSubmittedPayment(int $invoiceId): ?SellerPayment
     {
-        return app(SellerInvoiceSettlementService::class)->pendingSubmissionFor($invoiceId);
+        return SellerPayment::where('invoice_id', $invoiceId)
+            ->where('seller_id', auth()->id())
+            ->where('status', SellerPayment::STATUS_PENDING_VERIFICATION)
+            ->latest('id')
+            ->first();
     }
 
     public function getRejectedPayment(int $invoiceId): ?SellerPayment

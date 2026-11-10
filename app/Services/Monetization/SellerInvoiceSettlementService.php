@@ -307,6 +307,7 @@ class SellerInvoiceSettlementService
             }
 
             $this->assertReferenceUnused($method, $reference, 'Nothing was sent.');
+            $this->assertReferenceNotWaiting($method, $reference);
 
             return SellerPayment::create([
                 'invoice_id' => $invoice->id,
@@ -410,6 +411,23 @@ class SellerInvoiceSettlementService
     /**
      * MON-6: the same bKash, Nagad or bank reference can only pay one bill.
      */
+    /**
+     * Review R-3: a reference already sent for another bill waits for its own check. The message names no bill, so
+     * it tells a seller nothing about anyone else's payments.
+     */
+    private function assertReferenceNotWaiting(string $method, string $reference): void
+    {
+        $waiting = SellerPayment::query()
+            ->where('payment_method', $method)
+            ->whereRaw('LOWER(TRIM(transaction_reference)) = ?', [mb_strtolower(trim($reference))])
+            ->where('status', SellerPayment::STATUS_PENDING_VERIFICATION)
+            ->exists();
+
+        if ($waiting) {
+            throw new DomainException('Reference '.trim($reference).' is already waiting to be checked. Check the reference; nothing was sent.');
+        }
+    }
+
     private function assertReferenceUnused(string $method, string $reference, string $outcome = 'nothing was recorded.'): void
     {
         $usedOn = SellerPayment::query()
