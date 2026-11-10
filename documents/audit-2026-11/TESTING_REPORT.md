@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1568 tests, 1559 passed, 9 skipped, 7124 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1570 tests, 1561 passed, 9 skipped, 7130 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -142,6 +142,7 @@ The existing tests of other features were touched only to give their test produc
 | PAY-6 | `tests/Feature/StockLockOrderTest.php` (4) | Reserve, release and bulk update read variation rows lowest id first, once each (seen in the query log); repeats are added together; two rows of 2 and 1 against stock 2 are refused as 'Requested: 3' |
 | FS-3 | `tests/Feature/FlashSaleFastCounterAllocationTest.php` (+1) | Offer for product A on a line for product B is refused; a correct and a wrong line together are refused; units sold stays 0. Flash checkout integrity tests still pass |
 | ACC-21 | `tests/Feature/Accounting/JournalPostingServiceTest.php` (+1) | Same lines in another order return the first entry; another amount or another account under the key throws with the key and journal number; only one entry exists. Full suite passes, so no existing flow re-posts a key with other amounts |
+| PAY-5 | `tests/Feature/CartMoneySumTest.php` (2) | 0.70 + 3 × 0.10 adds to exactly 1.0 (it was 0.9999999999999999) and is not below a ৳1.00 minimum; poisha conversions. Full suite passes, so checkout, shipping and commission amounts are unchanged |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 

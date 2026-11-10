@@ -134,7 +134,7 @@ All findings come from reading the code; every one cites file:line. Status value
 |---|---|---|
 | MON-13 | Hard-coded rates; the rate used is not stored | Open |
 | ORD-5 | Mock payment path posts no journal | Open |
-| PAY-5 | Money handled as floats | Open |
+| PAY-5 | Money handled as floats | Open | Fixed (bf42207) |
 | PAY-6 | Missing locks; stock rows locked in no fixed order | Open | Fixed (845a999) |
 | FS-3 | Flash claim doesn't check the offer belongs to the product | Open | Fixed (1064337) |
 | ACC-20 | Chart-of-accounts guards are UI-only | Open |
