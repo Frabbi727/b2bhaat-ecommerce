@@ -8,6 +8,7 @@ use App\Filament\Admin\Resources\ReturnRequests\Pages\ListReturnRequests;
 use App\Models\ReturnRequest;
 use App\Services\Orders\OrderDisputeService;
 use BackedEnum;
+use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -91,8 +92,13 @@ class ReturnRequestResource extends Resource
             ->schema([
                 Textarea::make('note')->label('Your note')->required()->minLength(5),
             ])
-            ->action(function (ReturnRequest $record, array $data) use ($status): void {
-                app(OrderDisputeService::class)->resolveReturnRequest($record, $status, $data['note']);
+            ->action(function (ReturnRequest $record, array $data, Action $action) use ($status): void {
+                try {
+                    app(OrderDisputeService::class)->resolveReturnRequest($record, $status, $data['note']);
+                } catch (DomainException $exception) {
+                    Notification::make()->title('Return not approved')->body($exception->getMessage())->danger()->send();
+                    $action->halt();
+                }
                 $record->update(['admin_arbitration_note' => $data['note']]);
 
                 Notification::make()->title($status === ReturnRequest::STATUS_APPROVED ? 'Return approved' : 'Return rejected')->success()->send();

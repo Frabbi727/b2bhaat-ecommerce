@@ -4,6 +4,7 @@ namespace App\Filament\Seller\Resources\ReturnRequests\Tables;
 
 use App\Models\ReturnRequest;
 use App\Services\Orders\OrderDisputeService;
+use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -72,8 +73,13 @@ class ReturnRequestsTable
                             ->default('Return request accepted. Replacement item will be dispatched or refund credited.')
                             ->required(),
                     ])
-                    ->action(function (ReturnRequest $record, array $data): void {
-                        app(OrderDisputeService::class)->resolveReturnRequest($record, ReturnRequest::STATUS_APPROVED, $data['note']);
+                    ->action(function (ReturnRequest $record, array $data, Action $action): void {
+                        try {
+                            app(OrderDisputeService::class)->resolveReturnRequest($record, ReturnRequest::STATUS_APPROVED, $data['note']);
+                        } catch (DomainException $exception) {
+                            Notification::make()->title('Return not approved')->body($exception->getMessage())->danger()->send();
+                            $action->halt();
+                        }
 
                         Notification::make()
                             ->title('Return Approved')

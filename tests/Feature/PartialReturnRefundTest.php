@@ -57,6 +57,8 @@ class PartialReturnRefundTest extends TestCase
 
     private OrderItem $dearItem;
 
+    private float $commission = 100.00;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -93,7 +95,7 @@ class PartialReturnRefundTest extends TestCase
             'courier_name' => $selfDelivered ? 'Factory Direct Fleet' : 'Steadfast Courier',
             'tracking_number' => 'TRK-'.$number,
             'subtotal' => 1000.00,
-            'commission_amount' => 100.00,
+            'commission_amount' => $this->commission,
             'shipping_amount' => 60.00,
             'is_self_delivered' => $selfDelivered,
             'handover_code' => '4321',
@@ -342,6 +344,86 @@ class PartialReturnRefundTest extends TestCase
         $this->assertSame('returned', $parcel->fresh()->fulfillmentStatus->slug);
         $this->assertEqualsWithDelta(1010.00, (float) Refund::where('sub_order_id', $parcel->id)->value('amount'), 0.001);
         $this->assertEqualsWithDelta(1010.00, $this->ledger->getBalanceForSlug('customer_refund_payable'), 0.001);
+        $this->assertBooksBalance();
+    }
+
+    /**
+     * Review R-1: the courier brings the whole parcel back while a return of some items is still waiting. The
+     * parcel is refunded in full once; the waiting request is closed and can't be approved on top.
+     */
+    public function test_a_waiting_return_is_closed_when_the_courier_returns_the_whole_parcel(): void
+    {
+        $parcel = $this->deliveredParcel();
+        $request = $this->disputes->submitReturnRequest($parcel->fresh(), $this->customer, [
+            'reason' => 'damaged_goods',
+            'requested_action' => 'refund',
+            'description' => 'Some pieces arrived cracked.',
+            'items' => [$this->cheapItem->id => 3],
+        ]);
+        $stockAfterRto = null;
+
+        app(CourierStatusService::class)->updateStatus($parcel->fresh(), 'returned');
+        $stockAfterRto = $this->cheapItem->variation->fresh()->stock_quantity;
+        $heldAfterRto = (float) $this->wallet()->escrow_held_balance;
+
+        $this->assertSame(ReturnRequest::STATUS_RESOLVED, $request->fresh()->status);
+
+        // Approving it anyway changes nothing
+        $this->disputes->resolveReturnRequest($request, ReturnRequest::STATUS_APPROVED, 'Accepted');
+
+        $this->assertEqualsWithDelta(1010.00, (float) Refund::where('sub_order_id', $parcel->id)->sum('amount'), 0.001);
+        $this->assertSame($stockAfterRto, $this->cheapItem->variation->fresh()->stock_quantity);
+        $this->assertEqualsWithDelta($heldAfterRto, (float) $this->wallet()->escrow_held_balance, 0.001);
+        $this->assertSame(0, $request->items()->whereNotNull('refund_amount')->count());
+        $this->assertBooksBalance();
+    }
+
+    /**
+     * Review R-1: a parcel no longer with the buyer can't have a refund return approved, even if a request was
+     * left waiting (for example from before this rule).
+     */
+    public function test_a_refund_return_on_a_parcel_no_longer_delivered_is_refused(): void
+    {
+        $parcel = $this->deliveredParcel();
+        $request = $this->disputes->submitReturnRequest($parcel->fresh(), $this->customer, [
+            'reason' => 'damaged_goods',
+            'requested_action' => 'refund',
+            'description' => 'Some pieces arrived cracked.',
+            'items' => [$this->cheapItem->id => 3],
+        ]);
+        $parcel->update(['fulfillment_status_id' => FulfillmentStatus::where('slug', 'returned')->value('id')]);
+
+        try {
+            $this->disputes->resolveReturnRequest($request, ReturnRequest::STATUS_APPROVED, 'Accepted');
+            $this->fail('Approval should be refused.');
+        } catch (\DomainException $exception) {
+            $this->assertStringContainsString('no longer with the buyer', $exception->getMessage());
+        }
+
+        $this->assertSame(ReturnRequest::STATUS_PENDING, $request->fresh()->status);
+        $this->assertSame(0, Refund::where('sub_order_id', $parcel->id)->count());
+    }
+
+    /**
+     * Review R-4: a request with no items chosen, after earlier item returns, means the items still with the
+     * buyer. It settles the rest instead of failing with an unbalanced journal.
+     */
+    public function test_a_request_for_everything_after_an_item_return_settles_the_rest(): void
+    {
+        $parcel = $this->deliveredParcel();
+        $this->returnItems($parcel, [$this->cheapItem->id => 3]);
+
+        $request = $this->disputes->submitReturnRequest($parcel->fresh(), $this->customer, [
+            'reason' => 'damaged_goods',
+            'requested_action' => 'refund',
+            'description' => 'Everything else arrived cracked too.',
+        ]);
+        $this->disputes->resolveReturnRequest($request, ReturnRequest::STATUS_APPROVED, 'Accepted');
+
+        $this->assertSame(ReturnRequest::STATUS_APPROVED, $request->fresh()->status);
+        $this->assertSame([$this->cheapItem->id => 3, $this->dearItem->id => 2], $request->items()->orderBy('order_item_id')->pluck('quantity', 'order_item_id')->map(fn ($quantity): int => (int) $quantity)->all());
+        $this->assertSame('returned', $parcel->fresh()->fulfillmentStatus->slug);
+        $this->assertEqualsWithDelta(1010.00, (float) Refund::where('sub_order_id', $parcel->id)->sum('amount'), 0.001);
         $this->assertBooksBalance();
     }
 }

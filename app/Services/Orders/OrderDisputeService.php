@@ -13,6 +13,7 @@ use App\Services\Inventory\StockReservationService;
 use App\Services\Logistics\CourierStatusService;
 use App\Services\Promotions\FlashSaleAllocationService;
 use App\Services\Settings\StoreConfigurationService;
+use DomainException;
 use Exception;
 use Illuminate\Support\Facades\DB;
 
@@ -212,10 +213,30 @@ class OrderDisputeService
     public function resolveReturnRequest(ReturnRequest $returnRequest, string $status, ?string $note = null): void
     {
         DB::transaction(function () use ($returnRequest, $status, $note) {
+            // Same lock order as the courier path (order, parcel, then request), so the two never deadlock and a
+            // courier return can't land between the check below and the settlement (review R-1)
+            $subOrder = SubOrder::whereKey($returnRequest->sub_order_id)->firstOrFail();
+            Order::whereKey($subOrder->parent_order_id)->lockForUpdate()->first();
+            $subOrder = SubOrder::whereKey($subOrder->id)->lockForUpdate()->with('fulfillmentStatus')->firstOrFail();
+
             // A request is resolved once; re-resolving would restock and refund twice
             $returnRequest = ReturnRequest::whereKey($returnRequest->id)->lockForUpdate()->firstOrFail();
             if ($returnRequest->status !== ReturnRequest::STATUS_PENDING) {
                 return;
+            }
+
+            // A refund is only owed on a parcel the buyer still has; one already returned was refunded in full
+            if ($status === ReturnRequest::STATUS_APPROVED && $returnRequest->requested_action === 'refund'
+                && $subOrder->fulfillmentStatus?->slug !== 'delivered') {
+                throw new DomainException('This parcel is no longer with the buyer (it is marked '.($subOrder->fulfillmentStatus?->name ?? 'changed').'), so this return can\'t be approved. Nothing was changed.');
+            }
+
+            // Review R-4: a request for "everything" after earlier item returns means the items still with the buyer
+            if ($status === ReturnRequest::STATUS_APPROVED && $returnRequest->requested_action === 'refund'
+                && ! $returnRequest->items()->exists() && $this->partialReturns->hasItemReturns($subOrder)) {
+                foreach (array_filter($this->partialReturns->remainingQuantities($subOrder)) as $orderItemId => $quantity) {
+                    $returnRequest->items()->create(['order_item_id' => $orderItemId, 'quantity' => $quantity]);
+                }
             }
 
             $returnRequest->update([

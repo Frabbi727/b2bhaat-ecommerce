@@ -9,6 +9,7 @@ use App\Models\FulfillmentStatus;
 use App\Models\Order;
 use App\Models\OrderTrackingLog;
 use App\Models\PaymentStatus;
+use App\Models\ReturnRequest;
 use App\Models\SubOrder;
 use App\Services\Accounting\EventPipeline\CodDeliveryJournalHandler;
 use App\Services\Accounting\EventPipeline\CommissionRecognitionJournalHandler;
@@ -159,6 +160,18 @@ class CourierStatusService
 
     protected function handleReturnedConsignment(SubOrder $subOrder): void
     {
+        // Review R-1: the whole parcel is back and refunded below, so a return still waiting for the seller is
+        // settled by this one and must never be approved on top of it
+        $subOrder->returnRequests()
+            ->where('status', ReturnRequest::STATUS_PENDING)
+            ->lockForUpdate()
+            ->get()
+            ->each(fn (ReturnRequest $pending) => $pending->update([
+                'status' => ReturnRequest::STATUS_RESOLVED,
+                'seller_note' => 'Closed: the courier brought the whole parcel back, so it is refunded in full.',
+                'resolved_at' => now(),
+            ]));
+
         // PAY-4: some items already came back on their own; settle only what was still with the buyer
         $partialReturns = app(PartialReturnService::class);
         if ($partialReturns->hasItemReturns($subOrder)) {
