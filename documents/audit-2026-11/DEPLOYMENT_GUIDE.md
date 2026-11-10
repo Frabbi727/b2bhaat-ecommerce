@@ -281,3 +281,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 ## ACC-14 (business day, month close)
 - Code only, no migration. If the server stores UTC, journals posted between 00:00 and 06:00 Dhaka now get the Dhaka date (before: the previous day).
 - New screen Admin → Accounting → Accounting Months. Suggested routine: after the month's reconciliation is green, close the month with a reason.
+
+## ACC-15 (rounding)
+- Code only. A journal that would have been stored unbalanced by a poisha now fails with "unbalanced". The ACC-9 database trigger already refused these on PostgreSQL, so this mainly gives a clear message earlier.

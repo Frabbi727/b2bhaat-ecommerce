@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1473 tests, 1464 passed, 9 skipped, 6707 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1475 tests, 1466 passed, 9 skipped, 6710 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -118,6 +118,7 @@ The existing tests of other features were touched only to give their test produc
 | UX-ACC-3 | `tests/Feature/Accounting/EscrowLedgerPayoutIntegrationTest.php` (+1) | A second payout with the same TrxID typed differently is refused and stays requested; the same reference on another channel is accepted |
 | ACC-12 | n/a (no code change) | Verified by reading `OrderSplitterService` (tax 0) and the admin order schema (VAT disabled, not saved, no edit page) |
 | ACC-14 | `tests/Feature/Accounting/PayoutJournalIntegrationTest.php` (+1), `AccountingPeriodCloseTest.php` (4) | At 19:30 UTC on 30 Nov a journal is dated 1 Dec and numbered JRN-202612; a closed month refuses postings and the close is audited; the running month can't be closed; an admin can't reopen but a super admin can; closing from the screen works and the action is hidden for the running month |
+| ACC-15 | `tests/Feature/Accounting/JournalRoundingTest.php` (2) | A journal that balances only before rounding is refused; 0.1 + 0.2 totals exactly 0.30 and is stored as 0.30 |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
