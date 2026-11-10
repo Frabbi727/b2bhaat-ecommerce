@@ -37,6 +37,7 @@ class SellerPanelProvider extends PanelProvider
             ->id('seller')
             ->brandName(fn (): string => app(StoreConfigurationService::class)->getStoreIdentity()['name'].' Seller Center')
             ->path('seller')
+            ->viteTheme('resources/css/filament/seller/theme.css')
             ->login()
             ->databaseNotifications()
             ->navigationGroups([
