@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Monetization;
 
 use App\Models\SellerInvoice;
+use App\Models\SellerPayment;
 use App\Models\SellerWallet;
 use App\Models\WalletTransaction;
 use App\Services\Settings\StoreConfigurationService;
@@ -79,16 +80,19 @@ class CodDeficitBillingService
                     return;
                 }
 
+                // Bill number, due date and key use the Dhaka date the seller sees (review R-7)
+                $today = $now->copy()->timezone(config('app.display_timezone'));
+
                 SellerInvoice::create([
-                    'invoice_number' => 'SINV-'.$now->format('Ymd').'-'.strtoupper(Str::random(6)),
+                    'invoice_number' => 'SINV-'.$today->format('Ymd').'-'.strtoupper(Str::random(6)),
                     'seller_id' => $wallet->seller_id,
                     'invoice_type' => SellerInvoice::TYPE_COD_COMMISSION_DEFICIT,
                     'subtotal' => $owed,
                     'total_amount' => $owed,
                     'status' => SellerInvoice::STATUS_UNPAID,
-                    'due_date' => $now->copy()->addDays($graceDays)->toDateString(),
+                    'due_date' => $today->copy()->addDays($graceDays)->toDateString(),
                     'metadata' => ['deficit_since' => $since->toIso8601String()],
-                    'billing_period_key' => 'cod-deficit:'.$wallet->seller_id.':'.$now->format('Ymd'),
+                    'billing_period_key' => 'cod-deficit:'.$wallet->seller_id.':'.$today->format('Ymd'),
                 ]);
                 $raised++;
             });
@@ -103,14 +107,28 @@ class CodDeficitBillingService
 
         SellerInvoice::where('invoice_type', SellerInvoice::TYPE_COD_COMMISSION_DEFICIT)
             ->where('status', SellerInvoice::STATUS_UNPAID)
-            ->each(function (SellerInvoice $invoice) use (&$withdrawn): void {
-                $balance = (float) SellerWallet::where('seller_id', $invoice->seller_id)->value('available_balance');
+            ->pluck('id')
+            ->each(function (int $invoiceId) use (&$withdrawn): void {
+                // One by one under a lock, so each withdrawn bill leaves an audit entry and an approval made
+                // meanwhile is never overwritten (review R-6)
+                DB::transaction(function () use ($invoiceId, &$withdrawn): void {
+                    $invoice = SellerInvoice::lockForUpdate()->find($invoiceId);
+                    if (! $invoice || $invoice->status !== SellerInvoice::STATUS_UNPAID) {
+                        return;
+                    }
 
-                // One by one so each withdrawn bill leaves an audit entry
-                if ($balance >= 0) {
-                    $invoice->update(['status' => SellerInvoice::STATUS_VOID]);
-                    $withdrawn++;
-                }
+                    // A payment the seller already sent is checked first; withdrawing the bill would leave it
+                    // credited nowhere
+                    if (SellerPayment::where('invoice_id', $invoice->id)->where('status', SellerPayment::STATUS_PENDING_VERIFICATION)->exists()) {
+                        return;
+                    }
+
+                    $balance = (float) SellerWallet::where('seller_id', $invoice->seller_id)->value('available_balance');
+                    if ($balance >= 0) {
+                        $invoice->update(['status' => SellerInvoice::STATUS_VOID]);
+                        $withdrawn++;
+                    }
+                });
             });
 
         return $withdrawn;

@@ -13,11 +13,13 @@ use App\Models\SellerProfile;
 use App\Models\SellerWallet;
 use App\Models\User;
 use App\Models\WalletTransaction;
+use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Monetization\SellerInvoiceSettlementService;
 use Database\Seeders\AccountingChartOfAccountsSeeder;
 use DomainException;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -170,5 +172,70 @@ class CodDeficitBillTest extends TestCase
             ->assertSee('I paid by bKash, Nagad or bank')
             ->assertDontSee('Pay from Wallet')
             ->assertDontSee('Top-up Wallet');
+    }
+
+    /**
+     * Review R-6: earnings cover the deficit while the seller's bKash payment for the bill waits to be checked.
+     * The bill stays, so the admin can still approve the payment and the money is credited.
+     */
+    public function test_a_bill_with_a_payment_waiting_to_be_checked_is_not_withdrawn(): void
+    {
+        $this->goNegative(daysAgo: 8);
+        $this->artisan('monetization:bill-cod-deficits')->assertSuccessful();
+        $bill = $this->deficitBills()->sole();
+
+        $settlement = app(SellerInvoiceSettlementService::class);
+        $payment = $settlement->submitPaymentProof($this->seller, $bill->id, [
+            'payment_method' => SellerPayment::METHOD_BKASH,
+            'amount' => 50,
+            'transaction_reference' => 'BK-COD-WAITING-1',
+        ]);
+
+        $this->walletEntry(WalletTransaction::TYPE_ESCROW_RELEASE, 80, 30, 0);
+        $this->wallet->update(['available_balance' => 30]);
+        $this->artisan('monetization:bill-cod-deficits')->assertSuccessful();
+
+        $this->assertSame(SellerInvoice::STATUS_UNPAID, $bill->fresh()->status);
+
+        $settlement->approveSubmittedPayment($payment, $this->admin);
+        $this->assertSame(SellerInvoice::STATUS_PAID, $bill->fresh()->status);
+        $this->assertEqualsWithDelta(80.0, (float) $this->wallet->fresh()->available_balance, 0.001);
+    }
+
+    /**
+     * Review R-7: at 02:00 in Dhaka (20:00 UTC the day before) the bill is dated, numbered and due by the Dhaka
+     * date the seller sees.
+     */
+    public function test_bill_dates_follow_the_dhaka_date(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-20 20:00:00', 'UTC'));
+        $this->goNegative(daysAgo: 8);
+
+        $this->artisan('monetization:bill-cod-deficits')->assertSuccessful();
+
+        $bill = $this->deficitBills()->sole();
+        $this->assertStringStartsWith('SINV-20261121-', $bill->invoice_number);
+        $this->assertSame('2026-11-28', $bill->due_date->toDateString());
+    }
+
+    /**
+     * Review R-7: a bill due "yesterday" in Dhaka blocks a payout even before midnight UTC.
+     */
+    public function test_a_bill_due_yesterday_in_dhaka_blocks_a_payout_before_midnight_utc(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-20 20:00:00', 'UTC'));
+        SellerInvoice::create([
+            'invoice_number' => 'SINV-DUE-1',
+            'seller_id' => $this->seller->id,
+            'invoice_type' => SellerInvoice::TYPE_SUBSCRIPTION_FEE,
+            'subtotal' => 100,
+            'total_amount' => 100,
+            'status' => SellerInvoice::STATUS_UNPAID,
+            'due_date' => '2026-11-20',
+        ]);
+        $this->wallet->update(['available_balance' => 1000]);
+
+        $this->expectExceptionMessage('SINV-DUE-1');
+        app(EscrowLedgerService::class)->requestPayout($this->seller, 500);
     }
 }

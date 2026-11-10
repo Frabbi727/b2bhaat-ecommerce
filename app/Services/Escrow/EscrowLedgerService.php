@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Escrow;
 
+use App\DTOs\Accounting\JournalEntryData;
 use App\Enums\Accounting\AccountingEvent;
 use App\Enums\Accounting\JournalEntryStatus;
 use App\Events\Finance\PayoutStatusUpdatedEvent;
@@ -376,7 +377,7 @@ class EscrowLedgerService
             // MON-12: an overdue marketplace bill is paid before money leaves the platform.
             $overdue = SellerInvoice::where('seller_id', $seller->id)
                 ->where('status', SellerInvoice::STATUS_UNPAID)
-                ->whereDate('due_date', '<', now()->toDateString())
+                ->whereDate('due_date', '<', JournalEntryData::businessDate())
                 ->orderBy('due_date')
                 ->first();
 
