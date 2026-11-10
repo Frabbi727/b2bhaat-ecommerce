@@ -415,6 +415,13 @@ class ProductBulkImportService
             if ($optionError !== null) {
                 $fail($optionError, $row['line']);
             }
+            // INV-10: option names come from the shared list the admin manages; a sheet can't add new ones
+            foreach (array_keys($options) as $optionName) {
+                if (! Attribute::whereRaw('lower(name) = ?', [Str::lower($optionName)])->exists()) {
+                    $known = Attribute::orderBy('name')->pluck('name')->implode(', ');
+                    $fail("option “{$optionName}” is not in the option list. Use one of: {$known}, or ask B2B Haat to add it.", $row['line']);
+                }
+            }
 
             $signature = collect($options)->map(fn (string $v, string $k): string => Str::lower("{$k}={$v}"))->sort()->implode('|');
             if ($hasOptions && $signature !== '' && isset($seenOptions[$signature])) {
@@ -588,7 +595,8 @@ class ProductBulkImportService
     }
 
     /**
-     * Matches option names and values to the shared attribute list, adding any that do not exist yet.
+     * Matches option names to the shared attribute list (checked during validation, INV-10) and adds a new value
+     * (e.g. a new colour) under an existing name when needed.
      *
      * @param  array<string, string>  $options
      * @return array<int, int>
@@ -596,8 +604,7 @@ class ProductBulkImportService
     protected function attributeValueIds(array $options): array
     {
         return collect($options)->map(function (string $optionValue, string $name): int {
-            $attribute = Attribute::whereRaw('lower(name) = ?', [Str::lower($name)])->first()
-                ?? Attribute::create(['name' => $name, 'slug' => $this->uniqueAttributeSlug($name)]);
+            $attribute = Attribute::whereRaw('lower(name) = ?', [Str::lower($name)])->firstOrFail();
 
             return (AttributeValue::where('attribute_id', $attribute->id)->whereRaw('lower(value) = ?', [Str::lower($optionValue)])->first()
                 ?? AttributeValue::create(['attribute_id' => $attribute->id, 'value' => $optionValue]))->id;
@@ -610,19 +617,6 @@ class ProductBulkImportService
         $slug = $base;
         $suffix = 2;
         while (Product::where('slug', $slug)->exists()) {
-            $slug = "{$base}-{$suffix}";
-            $suffix++;
-        }
-
-        return $slug;
-    }
-
-    protected function uniqueAttributeSlug(string $name): string
-    {
-        $base = Str::slug($name) ?: 'option';
-        $slug = $base;
-        $suffix = 2;
-        while (Attribute::where('slug', $slug)->exists()) {
             $slug = "{$base}-{$suffix}";
             $suffix++;
         }

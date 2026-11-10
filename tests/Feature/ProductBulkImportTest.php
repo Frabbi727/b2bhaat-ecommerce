@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Seller\Resources\Products\Actions\ImportProductsAction;
 use App\Filament\Seller\Resources\Products\Pages\ListProducts;
 use App\Models\Attribute;
+use App\Models\AttributeValue;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\SalesChannel;
@@ -150,8 +151,8 @@ class ProductBulkImportTest extends TestCase
     public function test_rows_with_the_same_title_become_one_product_with_options(): void
     {
         $result = $this->import($this->sheet([
-            $this->row(['options' => 'Color: Nude Sheer, Shape: Almond, Length: Short', 'stock' => '300']),
-            ['product_title' => 'Nude Minimalist Press-On Nails Set', 'options' => 'Color: Nude Sheer, Shape: Coffin, Length: Long', 'stock' => '150', 'cost_price' => '55'],
+            $this->row(['options' => 'Color: Nude Sheer, Length: Short', 'stock' => '300']),
+            ['product_title' => 'Nude Minimalist Press-On Nails Set', 'options' => 'Color: Nude Sheer, Length: Long', 'stock' => '150', 'cost_price' => '55'],
         ]));
 
         $this->assertSame([], $result['errors']);
@@ -167,11 +168,25 @@ class ProductBulkImportTest extends TestCase
         $this->assertSame([300, 150], $variations->pluck('stock_quantity')->all());
         $this->assertSame('55.00', $variations[1]->buy_price);
         $this->assertEqualsCanonicalizing(
-            ['Color: Nude Sheer', 'Shape: Coffin', 'Length: Long'],
+            ['Color: Nude Sheer', 'Length: Long'],
             $variations[1]->attributeValues->map(fn ($v) => "{$v->attribute->name}: {$v->value}")->all(),
         );
-        $this->assertSame(1, Attribute::where('name', 'Shape')->count(), 'A new option name is added once and reused');
+        $this->assertSame(1, AttributeValue::whereRaw('lower(value) = ?', ['nude sheer'])->count(), 'A new value is added once under an existing option and reused');
         $this->assertSame(1, Attribute::whereRaw('lower(name) = ?', ['color'])->count(), 'Existing option names are matched, not duplicated');
+    }
+
+    public function test_an_unknown_option_name_is_reported_and_not_added_to_the_shared_list(): void
+    {
+        // INV-10: option names (Color, Length…) are a platform-wide list; a seller's sheet can't add to it.
+        $result = $this->import($this->sheet([
+            $this->row(['product_title' => 'Shaped Nails', 'options' => 'Color: Pink, Shape: Almond']),
+            ['product_title' => 'Shaped Nails', 'options' => 'Color: Red, Shape: Coffin', 'stock' => '5'],
+        ]));
+
+        $this->assertSame([], $result['created']);
+        $this->assertStringContainsString('option “Shape” is not in the option list', implode("\n", $result['errors']));
+        $this->assertSame(0, Attribute::whereRaw('lower(name) = ?', ['shape'])->count());
+        $this->assertFalse(Product::where('title', 'Shaped Nails')->exists());
     }
 
     public function test_each_product_follows_the_add_product_rules_and_bad_ones_are_reported_not_created(): void
