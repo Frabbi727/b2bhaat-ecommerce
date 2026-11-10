@@ -29,6 +29,7 @@ use App\Services\Audit\AuditContext;
 use App\Services\Promotions\FlashSalePricing;
 use App\Services\Sms\Contracts\SmsGatewayInterface;
 use App\Services\Sms\SmsManager;
+use Filament\Support\Facades\FilamentTimezone;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
@@ -73,6 +74,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // PERF-5: panels show Dhaka time whatever timezone the stored values use
+        FilamentTimezone::set(config('app.display_timezone'));
+
         Gate::policy(AuditLog::class, AuditLogPolicy::class);
 
         // A gate rather than a ProductPolicy: a policy would make Filament deny every other Product ability for sellers.

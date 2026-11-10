@@ -23,14 +23,14 @@ Schedule::command('flash-sales:sync-statuses')->everyMinute()->withoutOverlappin
 // Automatically synchronize active banners and coupon promotions hourly
 Schedule::command('promotions:sync-active-campaigns')->hourly()->withoutOverlapping()->onOneServer();
 
-// Monetization automation: Daily renewals at 00:05
-Schedule::command('monetization:process-renewals')->dailyAt('00:05')->withoutOverlapping()->onOneServer();
+// Monetization automation: Daily renewals at 00:05 Dhaka time (PERF-5)
+Schedule::command('monetization:process-renewals')->dailyAt('00:05')->timezone(config('app.display_timezone'))->withoutOverlapping()->onOneServer();
 
 // Monetization automation: Daily grace period check at 01:00
-Schedule::command('monetization:check-grace-periods')->dailyAt('01:00')->withoutOverlapping()->onOneServer();
+Schedule::command('monetization:check-grace-periods')->dailyAt('01:00')->timezone(config('app.display_timezone'))->withoutOverlapping()->onOneServer();
 
 // Monetization automation: Hourly suspension enforcement for expired grace accounts
 Schedule::command('monetization:enforce-suspensions')->hourly()->withoutOverlapping()->onOneServer();
 
 // Automatically prune historical audit logs older than retention period (default 180 days)
-Schedule::command('audit:prune --force')->dailyAt('03:30')->withoutOverlapping()->onOneServer();
+Schedule::command('audit:prune --force')->dailyAt('03:30')->timezone(config('app.display_timezone'))->withoutOverlapping()->onOneServer();
