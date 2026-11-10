@@ -274,3 +274,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## PERF-4 (job retries)
 - Code only. Keep `QUEUE_CONNECTION=database` and a running worker (`php artisan queue:work --tries=3`; the jobs' own `$tries` override it). Check `php artisan queue:failed` after deploy; a failed audit job can be retried with `php artisan queue:retry <id>`.
+
+## UX-ACC-3 (payout TrxID)
+- Code only. Owner question to answer later: should a second admin approve payouts and manual journals (maker-checker)?
