@@ -132,17 +132,17 @@ All findings come from reading the code; every one cites file:line. Status value
 ## P3 (Wave 3)
 | ID | Title | Status |
 |---|---|---|
-| MON-13 | Hard-coded rates; the rate used is not stored | Open | Fixed (27eeeeb) |
+| MON-13 | Hard-coded rates; the rate used is not stored | Fixed (27eeeeb) |
 | ORD-5 | Mock payment path posts no journal | Already fixed by ACC-2 (115060d): the only mock-payment path (storefront checkout) posts the same journal as a verified payment; covered by `PaymentVerificationTest::test_mock_gateway_payment_posts_the_same_journal_as_a_verified_payment`. No change |
-| PAY-5 | Money handled as floats | Open | Fixed (bf42207) |
-| PAY-6 | Missing locks; stock rows locked in no fixed order | Open | Fixed (845a999) |
-| FS-3 | Flash claim doesn't check the offer belongs to the product | Open | Fixed (1064337) |
-| ACC-20 | Chart-of-accounts guards are UI-only | Open | Fixed (d7eb913) |
-| ACC-21 | Journal idempotency ignores the payload | Open | Fixed (a4e7737) |
-| UX-ACC-4 / UX-ACC-5 | Journal display and format consistency | Open | Fixed (35052f9) |
-| INV-11 | Product SKU uniqueness | Open | Fixed (34c4e6f) |
-| SEC-11 | Courier webhook replay | Open | Fixed (0fb505f) |
-| UX-7 | MOQ shown only at checkout | Open | Fixed (56d410b) |
+| PAY-5 | Money handled as floats | Fixed (bf42207) |
+| PAY-6 | Missing locks; stock rows locked in no fixed order | Fixed (845a999) |
+| FS-3 | Flash claim doesn't check the offer belongs to the product | Fixed (1064337) |
+| ACC-20 | Chart-of-accounts guards are UI-only | Fixed (d7eb913) |
+| ACC-21 | Journal idempotency ignores the payload | Fixed (a4e7737) |
+| UX-ACC-4 / UX-ACC-5 | Journal display and format consistency | Fixed (35052f9) |
+| INV-11 | Product SKU uniqueness | Fixed (34c4e6f) |
+| SEC-11 | Courier webhook replay | Fixed (0fb505f) |
+| UX-7 | MOQ shown only at checkout | Fixed (56d410b) |
 
 ## Needs owner or legal validation
 - VAT and BIN on B2B invoices.
