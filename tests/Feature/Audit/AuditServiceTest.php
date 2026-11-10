@@ -8,6 +8,7 @@ use App\Jobs\LogAuditJob;
 use App\Models\AuditLog;
 use App\Services\Audit\AuditContext;
 use App\Services\Audit\AuditService;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Log;
@@ -203,17 +204,24 @@ class AuditServiceTest extends TestCase
         $this->assertDatabaseHas('audit_logs', ['action' => 'stock_updated', 'module' => 'products']);
     }
 
-    public function test_log_audit_job_catches_exception_and_logs_error(): void
+    public function test_log_audit_job_rethrows_for_retry_and_logs_when_it_finally_fails(): void
     {
-        Log::shouldReceive('error')->once();
-
-        // Missing description will trigger DB exception in AuditLog::create
+        // PERF-4: the queue retries a failed write; only the final failure is logged
         $payload = [
             'module' => 'products',
             'action' => 'stock_updated',
         ];
-
         $job = new LogAuditJob($payload);
-        $job->handle();
+
+        try {
+            // Missing description triggers a DB exception in AuditLog::create
+            $job->handle();
+            $this->fail('The job must rethrow so the queue retries it.');
+        } catch (QueryException) {
+            $this->addToAssertionCount(1);
+        }
+
+        Log::shouldReceive('critical')->once();
+        $job->failed(new \RuntimeException('gave up'));
     }
 }
