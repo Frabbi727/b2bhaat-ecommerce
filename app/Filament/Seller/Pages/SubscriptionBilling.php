@@ -6,6 +6,7 @@ namespace App\Filament\Seller\Pages;
 
 use App\Models\Product;
 use App\Models\SellerInvoice;
+use App\Models\SellerPayment;
 use App\Models\SellerPlan;
 use App\Models\SellerSubscription;
 use App\Services\Monetization\MonetizationEngineService;
@@ -14,6 +15,9 @@ use App\Services\Monetization\SellerTermsSummary;
 use App\Services\Settings\StoreConfigurationService;
 use BackedEnum;
 use DomainException;
+use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
@@ -176,6 +180,68 @@ class SubscriptionBilling extends Page
             ->body('Bill #'.$invoice->invoice_number.' for ৳'.number_format((float) $invoice->total_amount, 2).' is below. The extra listings start as soon as it is paid.')
             ->info()
             ->send();
+    }
+
+    public function getSubmittedPayment(int $invoiceId): ?SellerPayment
+    {
+        return app(SellerInvoiceSettlementService::class)->pendingSubmissionFor($invoiceId);
+    }
+
+    public function getRejectedPayment(int $invoiceId): ?SellerPayment
+    {
+        return SellerPayment::where('invoice_id', $invoiceId)
+            ->where('seller_id', auth()->id())
+            ->where('status', SellerPayment::STATUS_REJECTED)
+            ->latest('id')
+            ->first();
+    }
+
+    /**
+     * MON-11: tell us about a bill paid by bKash, Nagad or bank. An admin checks it before the bill counts as paid.
+     */
+    public function submitPaymentAction(): Action
+    {
+        return Action::make('submitPayment')
+            ->label('I paid by bKash, Nagad or bank')
+            ->link()
+            ->size('xs')
+            ->modalHeading('Send your payment details')
+            ->modalDescription('We check the reference against our statement, usually within one working day. The bill stays unpaid until then.')
+            ->modalSubmitActionLabel('Send for checking')
+            ->fillForm(fn (array $arguments): array => [
+                'amount' => (float) (SellerInvoice::where('seller_id', auth()->id())->find($arguments['invoice'] ?? null)?->total_amount ?? 0),
+            ])
+            ->schema([
+                Select::make('payment_method')
+                    ->label('Paid by')
+                    ->options(SellerInvoiceSettlementService::SUBMITTABLE_METHODS)
+                    ->required(),
+                TextInput::make('transaction_reference')
+                    ->label('TrxID or deposit slip number')
+                    ->maxLength(100)
+                    ->required(),
+                TextInput::make('amount')
+                    ->label('Amount paid')
+                    ->numeric()
+                    ->prefix('৳')
+                    ->helperText('The full bill amount.')
+                    ->required(),
+            ])
+            ->action(function (array $data, array $arguments): void {
+                try {
+                    app(SellerInvoiceSettlementService::class)->submitPaymentProof(auth()->user(), (int) ($arguments['invoice'] ?? 0), $data);
+                } catch (DomainException $exception) {
+                    Notification::make()->title('Payment details not sent')->body($exception->getMessage())->danger()->send();
+
+                    return;
+                }
+
+                Notification::make()
+                    ->title('Payment details sent')
+                    ->body('We will check it and mark the bill paid. You will see it here once it is checked.')
+                    ->success()
+                    ->send();
+            });
     }
 
     public function payWithWallet(int $invoiceId): void

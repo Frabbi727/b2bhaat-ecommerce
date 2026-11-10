@@ -235,35 +235,14 @@ class SellerInvoiceSettlementService
 
             // MON-6: a bill is settled by one payment of exactly its amount; a waiver covers the whole bill.
             $amount = $isWaiver ? $billTotal : round((float) ($payment['amount'] ?? 0), 2);
-            if (bccomp(sprintf('%.2f', $amount), sprintf('%.2f', $billTotal), 2) !== 0) {
-                throw new DomainException(sprintf(
-                    'Bill #%s is ৳%s, but ৳%s was entered. Record the full amount, or waive or reduce the bill first. Nothing was recorded.',
-                    $invoice->invoice_number,
-                    number_format($billTotal, 2),
-                    number_format($amount, 2),
-                ));
-            }
+            $this->assertFullAmount($invoice, $amount, 'Record the full amount, or waive or reduce the bill first.');
 
             if (! $isWaiver) {
                 if ($reference === '') {
                     throw new DomainException('Enter the TrxID or deposit slip number. Nothing was recorded.');
                 }
 
-                // MON-6: the same bKash, Nagad or bank reference can only pay one bill.
-                $usedOn = SellerPayment::query()
-                    ->where('payment_method', $method)
-                    ->whereRaw('LOWER(TRIM(transaction_reference)) = ?', [mb_strtolower($reference)])
-                    ->where('status', SellerPayment::STATUS_SUCCESSFUL)
-                    ->with('invoice:id,invoice_number')
-                    ->first();
-
-                if ($usedOn) {
-                    throw new DomainException(sprintf(
-                        'Reference %s was already recorded for bill #%s. Check the reference; nothing was recorded.',
-                        $reference,
-                        $usedOn->invoice?->invoice_number ?? $usedOn->invoice_id,
-                    ));
-                }
+                $this->assertReferenceUnused($method, $reference);
             }
 
             SellerPayment::create([
@@ -282,6 +261,164 @@ class SellerInvoiceSettlementService
 
             return $invoice;
         });
+    }
+
+    /** MON-11: how a seller can say they paid a bill outside the platform. */
+    public const SUBMITTABLE_METHODS = [
+        SellerPayment::METHOD_BKASH => 'bKash',
+        SellerPayment::METHOD_NAGAD => 'Nagad',
+        SellerPayment::METHOD_BANK_WIRE => 'Bank deposit or transfer',
+    ];
+
+    /**
+     * MON-11: the seller paid a bill by bKash, Nagad or bank and sends the reference. The payment waits for an
+     * admin to check it, and the bill stays unpaid until then, so grace periods and suspensions run as before.
+     *
+     * @param  array{payment_method: string, amount: float|int|string|null, transaction_reference: string|null}  $submission
+     */
+    public function submitPaymentProof(User $seller, int $invoiceId, array $submission): SellerPayment
+    {
+        $method = (string) $submission['payment_method'];
+        $reference = trim((string) ($submission['transaction_reference'] ?? ''));
+
+        if (! array_key_exists($method, self::SUBMITTABLE_METHODS)) {
+            throw new DomainException('Choose bKash, Nagad or bank. Nothing was sent.');
+        }
+
+        if ($reference === '') {
+            throw new DomainException('Enter the TrxID or deposit slip number. Nothing was sent.');
+        }
+
+        return DB::transaction(function () use ($seller, $invoiceId, $submission, $method, $reference): SellerPayment {
+            $invoice = $this->lockUnpaidInvoice($seller, $invoiceId);
+            $amount = round((float) ($submission['amount'] ?? 0), 2);
+            $this->assertFullAmount($invoice, $amount, 'Send the full amount, or ask us to change the bill.', 'Nothing was sent.');
+
+            if ($this->pendingSubmissionFor($invoice->id)) {
+                throw new DomainException("A payment for bill #{$invoice->invoice_number} is already waiting to be checked. We will let you know once it is checked.");
+            }
+
+            $this->assertReferenceUnused($method, $reference, 'Nothing was sent.');
+
+            return SellerPayment::create([
+                'invoice_id' => $invoice->id,
+                'seller_id' => $seller->id,
+                'amount' => $amount,
+                'payment_method' => $method,
+                'transaction_reference' => $reference,
+                'status' => SellerPayment::STATUS_PENDING_VERIFICATION,
+            ]);
+        });
+    }
+
+    /**
+     * MON-11: an admin found the seller's payment in the bKash, Nagad or bank statement. The bill is paid and the
+     * seller gets what it was for, exactly as if the admin had recorded the payment.
+     */
+    public function approveSubmittedPayment(SellerPayment $payment, User $admin): SellerInvoice
+    {
+        $lockKey = 'seller-payment-reference:'.md5((string) $payment->payment_method.'|'.mb_strtolower(trim((string) $payment->transaction_reference)));
+
+        try {
+            return Cache::lock($lockKey, 15)->block(10, fn (): SellerInvoice => DB::transaction(function () use ($payment, $admin): SellerInvoice {
+                $payment = $this->lockPendingSubmission($payment);
+                $seller = User::findOrFail($payment->seller_id);
+                $invoice = $this->lockUnpaidInvoice($seller, (int) $payment->invoice_id);
+                $this->assertFullAmount($invoice, round((float) $payment->amount, 2), 'Reject this payment and ask the seller to send the full amount.');
+                $this->assertReferenceUnused((string) $payment->payment_method, (string) $payment->transaction_reference);
+
+                $payment->update([
+                    'status' => SellerPayment::STATUS_SUCCESSFUL,
+                    'verified_by_user_id' => $admin->id,
+                    'verified_at' => now(),
+                ]);
+
+                $this->applyPaidInvoice($invoice, $seller, $admin);
+
+                return $invoice;
+            }));
+        } catch (LockTimeoutException) {
+            throw new DomainException('A payment with this reference is being recorded by someone else right now. Wait a moment, then check the bill before trying again. Nothing was recorded.');
+        }
+    }
+
+    /**
+     * MON-11: the payment could not be found. The bill stays unpaid and the seller can send another reference.
+     */
+    public function rejectSubmittedPayment(SellerPayment $payment, User $admin, string $reason): SellerPayment
+    {
+        return DB::transaction(function () use ($payment, $admin, $reason): SellerPayment {
+            $payment = $this->lockPendingSubmission($payment);
+
+            $payment->update([
+                'status' => SellerPayment::STATUS_REJECTED,
+                'verified_by_user_id' => $admin->id,
+                'verified_at' => now(),
+                'notes' => trim($reason),
+            ]);
+
+            return $payment;
+        });
+    }
+
+    public function pendingSubmissionFor(int $invoiceId): ?SellerPayment
+    {
+        return SellerPayment::where('invoice_id', $invoiceId)
+            ->where('status', SellerPayment::STATUS_PENDING_VERIFICATION)
+            ->latest('id')
+            ->first();
+    }
+
+    private function lockPendingSubmission(SellerPayment $payment): SellerPayment
+    {
+        $locked = SellerPayment::lockForUpdate()->find($payment->getKey());
+
+        if (! $locked || $locked->status !== SellerPayment::STATUS_PENDING_VERIFICATION) {
+            throw new DomainException('This payment has already been checked. Nothing was changed.');
+        }
+
+        return $locked;
+    }
+
+    /**
+     * MON-6: a bill is settled by one payment of exactly its amount.
+     */
+    private function assertFullAmount(SellerInvoice $invoice, float $amount, string $advice, string $outcome = 'Nothing was recorded.'): void
+    {
+        $billTotal = round((float) $invoice->total_amount, 2);
+
+        if (bccomp(sprintf('%.2f', $amount), sprintf('%.2f', $billTotal), 2) !== 0) {
+            throw new DomainException(sprintf(
+                'Bill #%s is ৳%s, but ৳%s was entered. %s %s',
+                $invoice->invoice_number,
+                number_format($billTotal, 2),
+                number_format($amount, 2),
+                $advice,
+                $outcome,
+            ));
+        }
+    }
+
+    /**
+     * MON-6: the same bKash, Nagad or bank reference can only pay one bill.
+     */
+    private function assertReferenceUnused(string $method, string $reference, string $outcome = 'nothing was recorded.'): void
+    {
+        $usedOn = SellerPayment::query()
+            ->where('payment_method', $method)
+            ->whereRaw('LOWER(TRIM(transaction_reference)) = ?', [mb_strtolower(trim($reference))])
+            ->where('status', SellerPayment::STATUS_SUCCESSFUL)
+            ->with('invoice:id,invoice_number')
+            ->first();
+
+        if ($usedOn) {
+            throw new DomainException(sprintf(
+                'Reference %s was already recorded for bill #%s. Check the reference; %s',
+                trim($reference),
+                $usedOn->invoice?->invoice_number ?? $usedOn->invoice_id,
+                lcfirst($outcome),
+            ));
+        }
     }
 
     /**

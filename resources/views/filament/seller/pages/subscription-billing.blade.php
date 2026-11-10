@@ -401,6 +401,26 @@
                                                 </x-filament::button>
                                             </div>
                                         @endif
+                                        @php
+                                            $submitted = $this->getSubmittedPayment($inv->id);
+                                        @endphp
+                                        <div style="margin-top: 0.375rem;">
+                                            @if ($submitted)
+                                                <x-filament::badge color="warning" icon="heroicon-m-clock">
+                                                    Payment sent, waiting to be checked ({{ \App\Services\Monetization\SellerInvoiceSettlementService::SUBMITTABLE_METHODS[$submitted->payment_method] ?? $submitted->payment_method }} {{ $submitted->transaction_reference }})
+                                                </x-filament::badge>
+                                            @else
+                                                @php
+                                                    $rejected = $this->getRejectedPayment($inv->id);
+                                                @endphp
+                                                @if ($rejected)
+                                                    <div style="font-size: 0.7rem; color: #e11d48; margin-bottom: 0.25rem;">
+                                                        Reference {{ $rejected->transaction_reference }} was not accepted: {{ $rejected->notes }}
+                                                    </div>
+                                                @endif
+                                                {{ ($this->submitPaymentAction)(['invoice' => $inv->id]) }}
+                                            @endif
+                                        </div>
                                     </td>
                                 </tr>
                             @endforeach

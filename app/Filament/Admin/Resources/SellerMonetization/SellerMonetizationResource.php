@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\SellerMonetization;
 
 use App\Filament\Admin\Resources\SellerMonetization\Pages\ListSellerMonetizations;
 use App\Models\SellerInvoice;
+use App\Models\SellerPayment;
 use App\Models\SellerProfile;
 use App\Models\SellerSubscription;
 use App\Services\Formatting\Money;
@@ -15,6 +16,7 @@ use BackedEnum;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -25,6 +27,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use UnitEnum;
 
 class SellerMonetizationResource extends Resource
@@ -99,8 +102,76 @@ class SellerMonetizationResource extends Resource
                         ->sum('total_amount'))
                     ->formatStateUsing(fn ($state): string => Money::taka($state))
                     ->color(fn ($state): string => (float) $state > 0 ? 'danger' : 'gray'),
+
+                TextColumn::make('payments_to_check')
+                    ->label('Payments to check')
+                    ->state(fn (SellerProfile $record): array => self::submittedPayments($record)
+                        ->map(fn (SellerPayment $payment): string => sprintf('%s %s · %s', SellerInvoiceSettlementService::SUBMITTABLE_METHODS[$payment->payment_method] ?? $payment->payment_method, $payment->transaction_reference, Money::taka($payment->amount)))
+                        ->all())
+                    ->badge()
+                    ->color('warning')
+                    ->placeholder('—'),
             ])
             ->recordActions([
+                Action::make('checkSubmittedPayment')
+                    ->label('Check payment')
+                    ->icon(Heroicon::OutlinedShieldCheck)
+                    ->color('warning')
+                    ->visible(fn (SellerProfile $record): bool => self::submittedPayments($record)->isNotEmpty())
+                    ->modalHeading('Check a payment the seller sent')
+                    ->modalDescription('Find the TrxID or deposit in the bKash, Nagad or bank statement before approving. Approving marks the bill paid.')
+                    ->schema([
+                        Select::make('payment_id')
+                            ->label('Payment')
+                            ->options(fn (SellerProfile $record): array => self::submittedPayments($record)
+                                ->mapWithKeys(fn (SellerPayment $payment): array => [$payment->id => sprintf(
+                                    '%s %s · %s · bill #%s',
+                                    SellerInvoiceSettlementService::SUBMITTABLE_METHODS[$payment->payment_method] ?? $payment->payment_method,
+                                    $payment->transaction_reference,
+                                    Money::taka($payment->amount),
+                                    $payment->invoice?->invoice_number ?? $payment->invoice_id,
+                                )])
+                                ->all())
+                            ->default(fn (SellerProfile $record): ?int => self::submittedPayments($record)->first()?->id)
+                            ->required(),
+                        Radio::make('decision')
+                            ->label('Result')
+                            ->options([
+                                'approve' => 'Found it: mark the bill paid',
+                                'reject' => 'Not found: reject it',
+                            ])
+                            ->live()
+                            ->required(),
+                        Textarea::make('reason')
+                            ->label('Why it was rejected (the seller sees this)')
+                            ->maxLength(500)
+                            ->visible(fn (Get $get): bool => $get('decision') === 'reject')
+                            ->required(fn (Get $get): bool => $get('decision') === 'reject'),
+                    ])
+                    ->action(function (SellerProfile $record, array $data): void {
+                        $payment = self::submittedPayments($record)->firstWhere('id', (int) ($data['payment_id'] ?? 0));
+
+                        if (! $payment) {
+                            Notification::make()->title('Payment not found')->body('It may have been checked already. Nothing was changed.')->warning()->send();
+
+                            return;
+                        }
+
+                        $settlement = app(SellerInvoiceSettlementService::class);
+
+                        try {
+                            if ($data['decision'] === 'approve') {
+                                $settlement->approveSubmittedPayment($payment, auth()->user());
+                                Notification::make()->title('Payment approved and bill marked paid')->success()->send();
+                            } else {
+                                $settlement->rejectSubmittedPayment($payment, auth()->user(), (string) $data['reason']);
+                                Notification::make()->title('Payment rejected')->body('The bill stays unpaid and the seller can send another reference.')->warning()->send();
+                            }
+                        } catch (DomainException $exception) {
+                            Notification::make()->title('Payment not checked')->body($exception->getMessage())->danger()->send();
+                        }
+                    }),
+
                 Action::make('suspend')
                     ->label('Suspend')
                     ->icon(Heroicon::OutlinedNoSymbol)
@@ -244,6 +315,36 @@ class SellerMonetizationResource extends Resource
         return [
             'index' => ListSellerMonetizations::route('/'),
         ];
+    }
+
+    /**
+     * MON-11: payments the seller sent for checking, oldest first.
+     *
+     * @return Collection<int, SellerPayment>
+     */
+    public static function submittedPayments(SellerProfile $record): Collection
+    {
+        if (! $record->user_id) {
+            return new Collection;
+        }
+
+        return SellerPayment::with('invoice:id,invoice_number')
+            ->where('seller_id', $record->user_id)
+            ->where('status', SellerPayment::STATUS_PENDING_VERIFICATION)
+            ->oldest('id')
+            ->get();
+    }
+
+    public static function getNavigationBadge(): ?string
+    {
+        $count = SellerPayment::where('status', SellerPayment::STATUS_PENDING_VERIFICATION)->count();
+
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeTooltip(): ?string
+    {
+        return 'Payments sellers sent for checking';
     }
 
     /**
