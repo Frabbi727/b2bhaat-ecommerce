@@ -284,3 +284,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## ACC-15 (rounding)
 - Code only. A journal that would have been stored unbalanced by a poisha now fails with "unbalanced". The ACC-9 database trigger already refused these on PostgreSQL, so this mainly gives a clear message earlier.
+
+## ACC-16 (trial balance check)
+- Code and Blade only. If the Trial Balance shows "Journals that do not balance" on production, that points to a direct database edit: investigate before posting corrections.
