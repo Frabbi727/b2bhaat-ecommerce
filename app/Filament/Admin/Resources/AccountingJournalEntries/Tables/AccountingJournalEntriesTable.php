@@ -7,6 +7,7 @@ namespace App\Filament\Admin\Resources\AccountingJournalEntries\Tables;
 use App\Enums\Accounting\AccountingEvent;
 use App\Enums\Accounting\JournalEntryStatus;
 use App\Exceptions\Accounting\SettlementException;
+use App\Filament\Admin\Resources\AccountingJournalEntries\AccountingJournalEntryResource;
 use App\Models\Accounting\AccountingJournalEntry;
 use App\Services\Accounting\JournalPostingService;
 use App\Services\Accounting\SettlementService;
@@ -58,10 +59,19 @@ class AccountingJournalEntriesTable
                     })
                     ->sortable(),
 
+                // UX-ACC-4: both sides, so a journal reads as debit = credit at a glance
                 TextColumn::make('total_debit')
-                    ->label('Total (৳)')
+                    ->label('Debit (৳)')
                     ->formatStateUsing(fn ($state): string => Money::taka($state))
                     ->state(fn (AccountingJournalEntry $record): float => (float) $record->lines->sum('debit'))
+                    ->alignEnd()
+                    ->weight('bold'),
+
+                TextColumn::make('total_credit')
+                    ->label('Credit (৳)')
+                    ->formatStateUsing(fn ($state): string => Money::taka($state))
+                    ->state(fn (AccountingJournalEntry $record): float => (float) $record->lines->sum('credit'))
+                    ->alignEnd()
                     ->weight('bold'),
 
                 TextColumn::make('description')
@@ -74,7 +84,10 @@ class AccountingJournalEntriesTable
                     ->label('Reversed By')
                     ->placeholder('—')
                     ->badge()
-                    ->color('warning'),
+                    ->color('warning')
+                    ->url(fn (AccountingJournalEntry $record): ?string => $record->reversalJournal
+                        ? AccountingJournalEntryResource::getUrl('view', ['record' => $record->reversalJournal])
+                        : null),
 
                 TextColumn::make('created_at')
                     ->label('Created At')

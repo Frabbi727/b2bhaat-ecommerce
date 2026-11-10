@@ -26,10 +26,13 @@ use App\Models\User;
 use App\Policies\AuditLogPolicy;
 use App\Services\Accounting\AccountResolverService;
 use App\Services\Audit\AuditContext;
+use App\Services\Formatting\DisplayDate;
 use App\Services\Promotions\FlashSalePricing;
 use App\Services\Sms\Contracts\SmsGatewayInterface;
 use App\Services\Sms\SmsManager;
+use Filament\Schemas\Schema;
 use Filament\Support\Facades\FilamentTimezone;
+use Filament\Tables\Table;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
@@ -78,6 +81,14 @@ class AppServiceProvider extends ServiceProvider
     {
         // PERF-5: panels show Dhaka time whatever timezone the stored values use
         FilamentTimezone::set(config('app.display_timezone'));
+
+        // UX-ACC-5: every table and detail page writes dates the same day-first way
+        Table::configureUsing(fn (Table $table): Table => $table
+            ->defaultDateDisplayFormat(DisplayDate::DATE)
+            ->defaultDateTimeDisplayFormat(DisplayDate::DATE_TIME));
+        Schema::configureUsing(fn (Schema $schema): Schema => $schema
+            ->defaultDateDisplayFormat(DisplayDate::DATE)
+            ->defaultDateTimeDisplayFormat(DisplayDate::DATE_TIME));
 
         Gate::policy(AuditLog::class, AuditLogPolicy::class);
 

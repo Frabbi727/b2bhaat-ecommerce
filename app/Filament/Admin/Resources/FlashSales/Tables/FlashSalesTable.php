@@ -78,12 +78,12 @@ class FlashSalesTable
 
                 TextColumn::make('starts_at')
                     ->label('Starts (Dhaka)')
-                    ->dateTime('d M Y, h:i A', 'Asia/Dhaka')
+                    ->dateTime('d M Y, g:i A', 'Asia/Dhaka')
                     ->sortable(),
 
                 TextColumn::make('ends_at')
                     ->label('Ends (Dhaka)')
-                    ->dateTime('d M Y, h:i A', 'Asia/Dhaka')
+                    ->dateTime('d M Y, g:i A', 'Asia/Dhaka')
                     ->sortable(),
 
                 TextColumn::make('products_count')

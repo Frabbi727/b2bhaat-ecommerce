@@ -5,8 +5,16 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\AccountingJournalEntries\Schemas;
 
 use App\Enums\Accounting\JournalEntryStatus;
+use App\Filament\Admin\Resources\AccountingJournalEntries\AccountingJournalEntryResource;
+use App\Filament\Admin\Resources\Orders\OrderResource;
 use App\Models\Accounting\AccountingJournalEntry;
 use App\Models\Accounting\AccountingJournalLine;
+use App\Models\Order;
+use App\Models\Refund;
+use App\Models\ReturnRequest;
+use App\Models\SellerPayment;
+use App\Models\SubOrder;
+use App\Models\WalletTransaction;
 use App\Services\Formatting\Money;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
@@ -51,7 +59,7 @@ class AccountingJournalEntryInfolist
 
                 TextEntry::make('entry_date')
                     ->label('Entry Date')
-                    ->date('d M Y'),
+                    ->date(),
 
                 TextEntry::make('financial_event')
                     ->label('Financial Event')
@@ -80,36 +88,91 @@ class AccountingJournalEntryInfolist
         return Section::make('Audit & Reference')
             ->columns(1)
             ->schema([
-                TextEntry::make('reference_type')
-                    ->label('Reference Type')
-                    ->placeholder('—')
-                    ->formatStateUsing(fn (?string $state): string => $state ? class_basename($state) : '—'),
+                // UX-ACC-4: the business record this journal books, by name, linked where it has a page
+                TextEntry::make('reference_label')
+                    ->label('Records')
+                    ->state(fn (AccountingJournalEntry $record): ?string => self::referenceLabel($record))
+                    ->url(fn (AccountingJournalEntry $record): ?string => self::referenceUrl($record))
+                    ->color(fn (AccountingJournalEntry $record): ?string => self::referenceUrl($record) ? 'primary' : null)
+                    ->placeholder('—'),
 
-                TextEntry::make('reference_id')
-                    ->label('Reference ID')
-                    ->placeholder('—')
-                    ->copyable(),
-
-                TextEntry::make('idempotency_key')
-                    ->label('Idempotency Key')
-                    ->placeholder('—')
-                    ->copyable(),
+                TextEntry::make('reverses')
+                    ->label('Reverses')
+                    ->state(fn (AccountingJournalEntry $record): ?string => $record->reversedEntries->first()?->journal_number)
+                    ->url(fn (AccountingJournalEntry $record): ?string => ($original = $record->reversedEntries->first())
+                        ? AccountingJournalEntryResource::getUrl('view', ['record' => $original])
+                        : null)
+                    ->badge()
+                    ->color('gray')
+                    ->visible(fn (AccountingJournalEntry $record): bool => $record->reversedEntries->isNotEmpty()),
 
                 TextEntry::make('reversalJournal.journal_number')
                     ->label('Reversed By')
+                    ->url(fn (AccountingJournalEntry $record): ?string => $record->reversalJournal
+                        ? AccountingJournalEntryResource::getUrl('view', ['record' => $record->reversalJournal])
+                        : null)
                     ->badge()
                     ->color('warning')
                     ->placeholder('—'),
 
+                TextEntry::make('metadata.reference')
+                    ->label('Supporting reference')
+                    ->visible(fn (AccountingJournalEntry $record): bool => filled($record->metadata['reference'] ?? null)),
+
                 TextEntry::make('created_at')
                     ->label('Created At')
-                    ->dateTime('d M Y, g:i A'),
+                    ->dateTime(),
 
                 TextEntry::make('posting_date')
                     ->label('Posting Date')
-                    ->dateTime('d M Y, g:i A')
+                    ->dateTime()
                     ->placeholder('—'),
+
+                TextEntry::make('idempotency_key')
+                    ->label('Posting key')
+                    ->helperText('Stops the same event being booked twice.')
+                    ->placeholder('—')
+                    ->copyable(),
             ]);
+    }
+
+    /**
+     * The referenced record in words: "Order ORD-1001", "Parcel ORD-1001-A", "Buyer refund #12".
+     */
+    public static function referenceLabel(AccountingJournalEntry $record): ?string
+    {
+        if (! $record->reference_type) {
+            return null;
+        }
+
+        $reference = $record->reference;
+        $id = $record->reference_id;
+
+        return match ($record->reference_type) {
+            Order::class => 'Order '.($reference?->order_number ?? "#{$id}"),
+            SubOrder::class => 'Parcel '.($reference?->sub_order_number ?? "#{$id}"),
+            AccountingJournalEntry::class => 'Journal '.($reference?->journal_number ?? "#{$id}"),
+            Refund::class => "Buyer refund #{$id}",
+            ReturnRequest::class => "Return request #{$id}",
+            SellerPayment::class => "Seller payment #{$id}",
+            WalletTransaction::class => "Seller wallet entry #{$id}",
+            default => str(class_basename($record->reference_type))->headline()->toString()." #{$id}",
+        };
+    }
+
+    /**
+     * A link to the referenced record's admin page, when it has one. A parcel opens its order.
+     */
+    public static function referenceUrl(AccountingJournalEntry $record): ?string
+    {
+        $reference = $record->reference;
+
+        return match (true) {
+            $reference instanceof Order => OrderResource::getUrl('view', ['record' => $reference]),
+            $reference instanceof SubOrder && $reference->parent_order_id !== null => OrderResource::getUrl('view', ['record' => $reference->parent_order_id]),
+            $reference instanceof AccountingJournalEntry => AccountingJournalEntryResource::getUrl('view', ['record' => $reference]),
+            default => null,
+        };
     }
 
     protected static function journalLinesSection(): Section
@@ -192,7 +255,7 @@ class AccountingJournalEntryInfolist
 
                 TextEntry::make('createdByUser.name')
                     ->label('Created By')
-                    ->placeholder('System Automated Pipeline'),
+                    ->placeholder('System (automatic)'),
             ]);
     }
 }

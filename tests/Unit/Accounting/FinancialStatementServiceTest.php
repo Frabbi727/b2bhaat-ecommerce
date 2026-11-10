@@ -427,7 +427,18 @@ class FinancialStatementServiceTest extends TestCase
         $balanceSheet = $this->service->getBalanceSheet();
 
         $this->assertSame(now()->toDateString(), $balanceSheet['as_of_date']);
-        $this->assertSame(now()->format('M d, Y'), $balanceSheet['formatted_as_of_date']);
+        $this->assertSame(now()->format('d M Y'), $balanceSheet['formatted_as_of_date']);
+    }
+
+    /**
+     * UX-ACC-5: statements use the same day-first date as every other admin screen.
+     */
+    public function test_statement_dates_are_day_first(): void
+    {
+        $statement = $this->service->getIncomeStatement('2026-11-01', '2026-11-30');
+
+        $this->assertSame('01 Nov 2026 - 30 Nov 2026', $statement['period_label']);
+        $this->assertSame('07 Nov 2026', $this->service->getBalanceSheet('2026-11-07')['formatted_as_of_date']);
     }
 
     public function test_balance_sheet_detects_out_of_balance_discrepancy(): void

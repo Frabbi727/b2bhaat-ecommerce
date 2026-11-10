@@ -227,7 +227,7 @@ class MerchantVacationModeAndStockAlertsTest extends TestCase
             ->assertStatus(200)
             ->assertSee('This store is taking a break')
             ->assertSee('Our factory is undergoing scheduled maintenance until Nov 15.')
-            ->assertSee('Nov 15, 2026');
+            ->assertSee('15 Nov 2026');
     }
 
     public function test_low_stock_variations_are_listed_on_the_seller_dashboard(): void

@@ -26,7 +26,7 @@
                         </div>
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                             @if ($this->lastAuditedAt)
-                                Last verified: <span class="font-medium text-gray-700 dark:text-gray-300">{{ \Carbon\Carbon::parse($this->lastAuditedAt)->diffForHumans() }}</span> ({{ \Carbon\Carbon::parse($this->lastAuditedAt)->timezone(config('app.display_timezone'))->format('d M Y, h:i A') }})
+                                Last verified: <span class="font-medium text-gray-700 dark:text-gray-300">{{ \Carbon\Carbon::parse($this->lastAuditedAt)->diffForHumans() }}</span> ({{ \Carbon\Carbon::parse($this->lastAuditedAt)->timezone(config('app.display_timezone'))->format('d M Y, g:i A') }})
                             @else
                                 Audit not yet run
                             @endif

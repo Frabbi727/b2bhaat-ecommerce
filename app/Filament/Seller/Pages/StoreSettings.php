@@ -127,7 +127,7 @@ class StoreSettings extends Page
                         DatePicker::make('vacation_ends_at')
                             ->label('Expected reopening date')
                             ->native(false)
-                            ->displayFormat('M j, Y')
+                            ->displayFormat('d M Y')
                             ->minDate(today())
                             ->helperText('Shown to buyers only. Orders stay paused until you switch vacation mode off yourself.')
                             ->visible(fn (Get $get): bool => (bool) $get('is_on_vacation'))

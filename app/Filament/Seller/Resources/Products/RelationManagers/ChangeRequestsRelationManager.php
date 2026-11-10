@@ -46,13 +46,13 @@ class ChangeRequestsRelationManager extends RelationManager
 
                 TextColumn::make('created_at')
                     ->label('Submitted')
-                    ->dateTime('j M Y, H:i', 'Asia/Dhaka')
+                    ->dateTime('d M Y, g:i A', 'Asia/Dhaka')
                     ->sortable(),
 
                 TextColumn::make('reviewed_at')
                     ->visibleFrom('md')
                     ->label('Decided')
-                    ->dateTime('j M Y, H:i', 'Asia/Dhaka')
+                    ->dateTime('d M Y, g:i A', 'Asia/Dhaka')
                     ->placeholder('—'),
 
                 TextColumn::make('reviewer')

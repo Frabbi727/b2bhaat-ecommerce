@@ -26,7 +26,7 @@ class RfqRequestsTable
             ->columns([
                 TextColumn::make('created_at')
                     ->label('Inquiry Date')
-                    ->dateTime('d M, Y')
+                    ->dateTime('d M Y')
                     ->sortable(),
                 TextColumn::make('product.title')
                     ->label('Product')
@@ -86,7 +86,7 @@ class RfqRequestsTable
                 TextColumn::make('valid_until')
                     ->visibleFrom('md')
                     ->label('Quote Validity')
-                    ->dateTime('d M, Y')
+                    ->dateTime('d M Y')
                     ->placeholder('—')
                     ->sortable(),
             ])

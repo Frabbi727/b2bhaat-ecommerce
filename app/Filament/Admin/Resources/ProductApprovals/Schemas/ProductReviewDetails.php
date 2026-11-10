@@ -143,7 +143,7 @@ class ProductReviewDetails
 
         $html = '<div><p class="font-medium">Earlier reasons this was not approved</p><ul class="list-disc ps-5">';
         foreach ($rows as $row) {
-            $html .= '<li>'.e($row->created_at?->timezone('Asia/Dhaka')->format('j M Y').': '.(string) ($row->metadata['reason'] ?? '—')).'</li>';
+            $html .= '<li>'.e($row->created_at?->timezone('Asia/Dhaka')->format('d M Y').': '.(string) ($row->metadata['reason'] ?? '—')).'</li>';
         }
 
         return $html.'</ul></div>';

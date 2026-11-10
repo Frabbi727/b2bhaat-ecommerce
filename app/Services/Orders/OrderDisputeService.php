@@ -167,7 +167,7 @@ class OrderDisputeService
         $windowHours = app(StoreConfigurationService::class)->getEscrowHoldingPeriodHours();
         $deliveredAt = $subOrder->deliveredAt();
         if ($deliveredAt !== null && $deliveredAt->copy()->addHours($windowHours)->isPast()) {
-            throw new Exception("Returns must be requested within {$windowHours} hours of delivery. This consignment was delivered on {$deliveredAt->format('d M Y, h:i A')}.");
+            throw new Exception("Returns must be requested within {$windowHours} hours of delivery. This consignment was delivered on {$deliveredAt->format('d M Y, g:i A')}.");
         }
 
         return DB::transaction(function () use ($subOrder, $customer, $data) {

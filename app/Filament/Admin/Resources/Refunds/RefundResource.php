@@ -62,8 +62,8 @@ class RefundResource extends Resource
                 TextColumn::make('status')->badge()->color(fn (string $state): string => $state === Refund::STATUS_PAID ? 'success' : 'warning'),
                 TextColumn::make('method')->placeholder('—'),
                 TextColumn::make('reference')->label('Refund TrxID')->placeholder('—')->copyable(),
-                TextColumn::make('paid_at')->dateTime('M d, Y h:i A')->placeholder('—')->sortable(),
-                TextColumn::make('created_at')->label('Recorded')->dateTime('M d, Y h:i A')->sortable(),
+                TextColumn::make('paid_at')->dateTime('d M Y, g:i A')->placeholder('—')->sortable(),
+                TextColumn::make('created_at')->label('Recorded')->dateTime('d M Y, g:i A')->sortable(),
             ])
             ->filters([
                 SelectFilter::make('status')->options([

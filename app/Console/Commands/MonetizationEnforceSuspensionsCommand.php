@@ -45,7 +45,7 @@ class MonetizationEnforceSuspensionsCommand extends Command
                 ->exists();
 
             if ($hasUnpaidInvoice) {
-                $reason = "Subscription past grace period (expired on {$subscription->grace_period_ends_at?->format('d M, Y')})";
+                $reason = "Subscription past grace period (expired on {$subscription->grace_period_ends_at?->format('d M Y')})";
 
                 $suspensionService->suspendSeller($seller, $reason, null);
                 $notifications->sendAccountSuspendedNotice($seller, $reason);

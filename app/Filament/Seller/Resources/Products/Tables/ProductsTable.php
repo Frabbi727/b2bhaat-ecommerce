@@ -172,13 +172,13 @@ class ProductsTable
                     ->label('Updated')
                     ->visibleFrom('lg')
                     ->since()
-                    ->dateTimeTooltip('M d, Y H:i')
+                    ->dateTimeTooltip('d M Y, g:i A')
                     ->sortable()
                     ->toggleable(),
 
                 TextColumn::make('created_at')
                     ->label('Added')
-                    ->date('M d, Y')
+                    ->date('d M Y')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])

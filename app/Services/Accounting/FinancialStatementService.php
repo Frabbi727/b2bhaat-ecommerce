@@ -154,7 +154,7 @@ class FinancialStatementService
             $asOf = now(config('app.display_timezone'))->toDateString();
         }
 
-        $formattedAsOfDate = Carbon::parse($asOf)->format('M d, Y');
+        $formattedAsOfDate = Carbon::parse($asOf)->format('d M Y');
 
         /** @var Collection<int, object{account_id: int, total_debit: string, total_credit: string}> $totals */
         $totals = DB::table('accounting_journal_lines')
@@ -462,9 +462,9 @@ class FinancialStatementService
 
         $periodLabel = match (true) {
             $isAllTime => 'All Time',
-            $start !== null && $end !== null => Carbon::parse($start)->format('M d, Y').' - '.Carbon::parse($end)->format('M d, Y'),
-            $start !== null => 'From '.Carbon::parse($start)->format('M d, Y'),
-            $end !== null => 'Up to '.Carbon::parse($end)->format('M d, Y'),
+            $start !== null && $end !== null => Carbon::parse($start)->format('d M Y').' - '.Carbon::parse($end)->format('d M Y'),
+            $start !== null => 'From '.Carbon::parse($start)->format('d M Y'),
+            $end !== null => 'Up to '.Carbon::parse($end)->format('d M Y'),
             default => 'All Time',
         };
 

@@ -53,7 +53,7 @@
 
             <div class="text-left sm:text-right text-xs space-y-1 text-slate-500">
                 <div><span class="font-semibold text-slate-700">Statement ID:</span> <span class="font-mono text-slate-900">STM-{{ now()->format('Y') }}-{{ str_pad((string)$seller->id, 4, '0', STR_PAD_LEFT) }}</span></div>
-                <div><span class="font-semibold text-slate-700">Generated:</span> {{ $generatedAt->format('d M, Y h:i A') }}</div>
+                <div><span class="font-semibold text-slate-700">Generated:</span> {{ $generatedAt->format('d M Y, g:i A') }}</div>
                 <div><span class="font-semibold text-slate-700">Settlement Currency:</span> BDT (Bangladeshi Taka ৳)</div>
                 <div class="pt-1">
                     <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
@@ -139,7 +139,7 @@
                             @endphp
                             <tr class="hover:bg-slate-50/50 transition">
                                 <td class="py-3 px-4 text-slate-600 font-mono text-[11px] whitespace-nowrap">
-                                    {{ $txn->created_at->format('d M, Y h:i A') }}
+                                    {{ $txn->created_at->format('d M Y, g:i A') }}
                                 </td>
                                 <td class="py-3 px-4 font-mono font-bold text-slate-800 whitespace-nowrap">
                                     TXN-{{ str_pad((string)$txn->id, 6, '0', STR_PAD_LEFT) }}

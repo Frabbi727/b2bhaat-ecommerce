@@ -209,7 +209,7 @@ class OrderNotificationService
             return false;
         }
 
-        $message = "Dear {$seller->name}, your B2Bhaat subscription renewal is due on {$invoice->due_date?->format('d M, Y')}. Amount: BDT ".number_format((float) $invoice->total_amount, 2).'. Pay via your seller dashboard.';
+        $message = "Dear {$seller->name}, your B2Bhaat subscription renewal is due on {$invoice->due_date?->format('d M Y')}. Amount: BDT ".number_format((float) $invoice->total_amount, 2).'. Pay via your seller dashboard.';
         SendSmsJob::dispatch(PhoneNormalizer::normalize($seller->phone), $message, 'subscription_renewal', bypassDeduplication: true);
 
         return true;
@@ -278,7 +278,7 @@ class OrderNotificationService
             return false;
         }
 
-        $renewsOn = $subscription->ends_at?->format('d M, Y') ?? 'your next renewal';
+        $renewsOn = $subscription->ends_at?->format('d M Y') ?? 'your next renewal';
         $message = "B2Bhaat: the {$planName} plan's price, limits or commission have changed. Your current terms stay the same until your renewal on {$renewsOn}; the new terms apply from then. See Billing in your seller dashboard.";
         SendSmsJob::dispatch(PhoneNormalizer::normalize($seller->phone), $message, 'plan_terms_changed', bypassDeduplication: true);
 

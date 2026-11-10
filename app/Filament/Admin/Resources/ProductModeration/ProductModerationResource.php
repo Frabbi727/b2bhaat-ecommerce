@@ -67,7 +67,7 @@ class ProductModerationResource extends Resource
                 IconColumn::make('is_active')->label('Seller has it on')->boolean(),
                 IconColumn::make('is_featured')->label('Featured')->boolean(),
                 TextColumn::make('blocked_reason')->label('Hidden by admin')->placeholder('—')->color('danger')->wrap()->limit(60),
-                TextColumn::make('created_at')->label('Added')->date('M d, Y')->sortable(),
+                TextColumn::make('created_at')->label('Added')->date('d M Y')->sortable(),
             ])
             ->filters([
                 TernaryFilter::make('blocked_at')->label('Hidden by admin')->nullable(),

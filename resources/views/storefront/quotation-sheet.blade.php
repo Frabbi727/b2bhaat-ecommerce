@@ -120,16 +120,16 @@
                         PRO-FORMA QUOTATION
                     </div>
                     <div class="font-mono text-[12px] font-bold text-indigo-700">Ref: QT-RFQ-{{ str_pad($rfq->id, 6, '0', STR_PAD_LEFT) }}</div>
-                    <div class="text-[11px] text-slate-600">Issue Date: <strong>{{ $rfq->updated_at->format('d M, Y') }}</strong></div>
+                    <div class="text-[11px] text-slate-600">Issue Date: <strong>{{ $rfq->updated_at->format('d M Y') }}</strong></div>
                     <div class="text-[11px] text-slate-500">
                         Valid Until: 
                         @if ($rfq->valid_until)
-                            <strong class="{{ $rfq->isExpired() ? 'text-rose-600 font-bold' : '' }}">{{ $rfq->valid_until->format('d M, Y') }}</strong>
+                            <strong class="{{ $rfq->isExpired() ? 'text-rose-600 font-bold' : '' }}">{{ $rfq->valid_until->format('d M Y') }}</strong>
                             @if ($rfq->isExpired())
                                 <span class="text-rose-600 font-semibold">(Expired)</span>
                             @endif
                         @else
-                            <strong>{{ $rfq->updated_at->addDays(14)->format('d M, Y') }}</strong>
+                            <strong>{{ $rfq->updated_at->addDays(14)->format('d M Y') }}</strong>
                         @endif
                     </div>
                 </div>

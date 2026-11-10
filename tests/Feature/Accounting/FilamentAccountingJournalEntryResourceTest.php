@@ -11,8 +11,12 @@ use App\Enums\Accounting\JournalEntryStatus;
 use App\Filament\Admin\Resources\AccountingJournalEntries\AccountingJournalEntryResource;
 use App\Filament\Admin\Resources\AccountingJournalEntries\Pages\ListAccountingJournalEntries;
 use App\Filament\Admin\Resources\AccountingJournalEntries\Pages\ViewAccountingJournalEntry;
+use App\Filament\Admin\Resources\Orders\OrderResource;
 use App\Models\Accounting\AccountingJournalEntry;
 use App\Models\Order;
+use App\Models\OrderStatus;
+use App\Models\PaymentMethod;
+use App\Models\PaymentStatus;
 use App\Models\Role;
 use App\Models\SubOrder;
 use App\Models\User;
@@ -368,5 +372,98 @@ class FilamentAccountingJournalEntryResourceTest extends TestCase
         );
 
         $this->assertCount(0, $individualExistenceQueries);
+    }
+
+    /**
+     * UX-ACC-4: the list shows both sides of every journal, not one total.
+     */
+    public function test_the_list_shows_debit_and_credit_totals(): void
+    {
+        $entry = $this->postingService->post(new JournalEntryData(
+            entryDate: '2026-11-07',
+            financialEvent: AccountingEvent::MANUAL_JOURNAL->value,
+            idempotencyKey: 'test_list_debit_credit',
+            description: 'Cash banked',
+            lines: [
+                new JournalLineData(accountSlug: 'bank_operating', debit: 700.00, credit: 0.00),
+                new JournalLineData(accountSlug: 'cash_on_hand', debit: 0.00, credit: 700.00),
+            ],
+        ));
+
+        Livewire::test(ListAccountingJournalEntries::class)
+            ->assertTableColumnExists('total_debit')
+            ->assertTableColumnExists('total_credit')
+            ->assertTableColumnStateSet('total_debit', 700.0, $entry)
+            ->assertTableColumnStateSet('total_credit', 700.0, $entry)
+            ->assertSee('Debit (৳)')
+            ->assertSee('Credit (৳)');
+    }
+
+    /**
+     * UX-ACC-4: the reference reads as a business record, not a class name, and links to it where a page exists.
+     */
+    public function test_the_detail_page_names_the_reference_and_links_to_it(): void
+    {
+        $customer = User::factory()->create();
+        $order = Order::create([
+            'order_number' => 'ORD-4242',
+            'customer_id' => $customer->id,
+            'order_status_id' => OrderStatus::query()->value('id'),
+            'payment_status_id' => PaymentStatus::query()->value('id'),
+            'payment_method_id' => PaymentMethod::query()->value('id'),
+            'shipping_address' => ['address' => 'Dhaka'],
+            'total_amount' => 500.00,
+        ]);
+
+        $entry = $this->postingService->post(new JournalEntryData(
+            entryDate: '2026-11-07',
+            financialEvent: AccountingEvent::ORDER_PREPAID_RECEIVED->value,
+            idempotencyKey: 'test_reference_label',
+            description: 'Order paid',
+            referenceType: Order::class,
+            referenceId: $order->id,
+            lines: [
+                new JournalLineData(accountSlug: 'gateway_clearing', debit: 500.00, credit: 0.00),
+                new JournalLineData(accountSlug: 'commission_revenue', debit: 0.00, credit: 500.00),
+            ],
+        ));
+
+        $this->get(AccountingJournalEntryResource::getUrl('view', ['record' => $entry]))
+            ->assertSuccessful()
+            ->assertSee('Order ORD-4242')
+            ->assertSee(OrderResource::getUrl('view', ['record' => $order]), false)
+            ->assertDontSee('App\\Models\\Order')
+            ->assertSee('System (automatic)');
+    }
+
+    /**
+     * UX-ACC-4: a reversal links back to the journal it reverses, and the original links forward to it.
+     */
+    public function test_a_reversal_and_its_original_link_to_each_other(): void
+    {
+        $entry = $this->postingService->post(new JournalEntryData(
+            entryDate: '2026-11-07',
+            financialEvent: AccountingEvent::MANUAL_JOURNAL->value,
+            idempotencyKey: 'test_reversal_links',
+            description: 'Posted by mistake',
+            lines: [
+                new JournalLineData(accountSlug: 'cash_on_hand', debit: 200.00, credit: 0.00),
+                new JournalLineData(accountSlug: 'bank_operating', debit: 0.00, credit: 200.00),
+            ],
+        ));
+        $reversal = $this->postingService->reverse($entry, 'Wrong account', $this->admin);
+        $entry->refresh();
+
+        $this->get(AccountingJournalEntryResource::getUrl('view', ['record' => $reversal]))
+            ->assertSuccessful()
+            ->assertSee('Reverses')
+            ->assertSee($entry->journal_number)
+            ->assertSee(AccountingJournalEntryResource::getUrl('view', ['record' => $entry]), false)
+            ->assertSee($this->admin->name);
+
+        $this->get(AccountingJournalEntryResource::getUrl('view', ['record' => $entry]))
+            ->assertSuccessful()
+            ->assertSee($reversal->journal_number)
+            ->assertSee(AccountingJournalEntryResource::getUrl('view', ['record' => $reversal]), false);
     }
 }

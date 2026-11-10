@@ -92,7 +92,7 @@ class ChangeRequestApprovalResource extends Resource
                     ->state(fn (ProductChangeRequest $record): string => ChangeRequestSummary::largestChange($record)['text'])
                     ->color(fn (ProductChangeRequest $record): ?string => ChangeRequestSummary::largestChange($record)['alert'] ? 'danger' : null)
                     ->weight(fn (ProductChangeRequest $record) => ChangeRequestSummary::largestChange($record)['alert'] ? 'bold' : null),
-                TextColumn::make('created_at')->label('Submitted')->dateTime('j M Y, H:i', 'Asia/Dhaka')->sortable(),
+                TextColumn::make('created_at')->label('Submitted')->dateTime('d M Y, g:i A', 'Asia/Dhaka')->sortable(),
             ])
             ->recordActions([
                 ViewAction::make()

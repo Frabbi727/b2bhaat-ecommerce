@@ -45,7 +45,7 @@
             </div>
             <div class="text-right text-xs text-gray-600">
                 <p>Period: {{ $data['period_label'] }}</p>
-                <p>Printed: {{ now(config('app.display_timezone'))->format('d M Y, h:i A') }}</p>
+                <p>Printed: {{ now(config('app.display_timezone'))->format('d M Y, g:i A') }}</p>
                 <p>Currency: BDT (৳)</p>
             </div>
         </div>

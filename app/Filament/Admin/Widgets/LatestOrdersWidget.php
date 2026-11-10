@@ -82,7 +82,7 @@ class LatestOrdersWidget extends TableWidget
 
                 TextColumn::make('created_at')
                     ->label('Placed On')
-                    ->dateTime('M d, Y H:i')
+                    ->dateTime('d M Y, g:i A')
                     ->alignment('right'),
             ])
             ->recordActions([

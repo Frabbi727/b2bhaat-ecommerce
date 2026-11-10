@@ -75,7 +75,7 @@
                         DELIVERY CHALLAN
                     </div>
                     <div class="font-mono text-[11px] font-bold text-slate-700">Challan #: CH-{{ $subOrder->sub_order_number }}</div>
-                    <div class="text-[11px] text-slate-500">Date: {{ now()->format('d M Y, h:i A') }}</div>
+                    <div class="text-[11px] text-slate-500">Date: {{ now()->format('d M Y, g:i A') }}</div>
                 </div>
             </div>
         </div>

@@ -135,18 +135,18 @@ class FlashSaleResource extends Resource
                 TextColumn::make('registration_ends_at')
                     ->visibleFrom('md')
                     ->label('Registration Ends')
-                    ->dateTime('d M Y, h:i A', 'Asia/Dhaka')
+                    ->dateTime('d M Y, g:i A', 'Asia/Dhaka')
                     ->sortable(),
 
                 TextColumn::make('starts_at')
                     ->label('Starts')
-                    ->dateTime('d M Y, h:i A', 'Asia/Dhaka')
+                    ->dateTime('d M Y, g:i A', 'Asia/Dhaka')
                     ->sortable(),
 
                 TextColumn::make('ends_at')
                     ->visibleFrom('md')
                     ->label('Ends')
-                    ->dateTime('d M Y, h:i A', 'Asia/Dhaka')
+                    ->dateTime('d M Y, g:i A', 'Asia/Dhaka')
                     ->sortable(),
 
                 TextColumn::make('discount_range')

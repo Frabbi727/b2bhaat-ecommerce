@@ -23,7 +23,7 @@ class WalletTransactionsTable
             ->columns([
                 TextColumn::make('created_at')
                     ->label('Date & Time')
-                    ->dateTime('d M Y, h:i A')
+                    ->dateTime('d M Y, g:i A')
                     ->sortable(),
 
                 TextColumn::make('transaction_type')

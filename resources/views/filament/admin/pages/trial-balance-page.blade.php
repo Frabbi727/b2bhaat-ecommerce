@@ -43,7 +43,7 @@
             </div>
             <div class="text-right text-xs text-gray-600">
                 <p>Period: {{ $this->startDate ?? 'Beginning' }} to {{ $this->endDate ?? 'Present' }}</p>
-                <p>Printed: {{ now()->format('d M Y, h:i A') }}</p>
+                <p>Printed: {{ now()->format('d M Y, g:i A') }}</p>
                 <p>Currency: BDT (৳)</p>
             </div>
         </div>

@@ -73,12 +73,12 @@ class EmailLogResource extends Resource
                     ->placeholder('—'),
                 TextColumn::make('sent_at')
                     ->label('Sent')
-                    ->dateTime('d M, Y h:i A')
+                    ->dateTime('d M Y, g:i A')
                     ->sortable()
                     ->placeholder('—'),
                 TextColumn::make('created_at')
                     ->label('Recorded')
-                    ->dateTime('d M, Y h:i A')
+                    ->dateTime('d M Y, g:i A')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])

@@ -42,6 +42,7 @@ class ViewAccountingJournalEntry extends ViewRecord
             'reversedEntries',
             'period',
             'createdByUser',
+            'reference',
         ]);
     }
 }

@@ -610,7 +610,7 @@ class ProductForm
                             return '';
                         }
 
-                        $dhakaEnd = $offer->flashSale->ends_at?->timezone('Asia/Dhaka')->format('d M Y, h:i A');
+                        $dhakaEnd = $offer->flashSale->ends_at?->timezone('Asia/Dhaka')->format('d M Y, g:i A');
 
                         return "Flash sale: {$offer->flashSale->name} until {$dhakaEnd}";
                     })

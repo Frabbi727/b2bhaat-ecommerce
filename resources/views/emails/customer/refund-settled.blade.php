@@ -23,7 +23,7 @@
         </tr>
         <tr>
             <td style="font-size: 13px; color: #64748B; padding: 4px 8px;">Settled Date:</td>
-            <td style="font-size: 13px; color: #0F172A; font-weight: 600; padding: 4px 8px; text-align: right;">{{ $refund->paid_at?->format('d M, Y h:i A') ?? now()->format('d M, Y') }}</td>
+            <td style="font-size: 13px; color: #0F172A; font-weight: 600; padding: 4px 8px; text-align: right;">{{ $refund->paid_at?->format('d M Y, g:i A') ?? now()->format('d M Y') }}</td>
         </tr>
         @if(filled($refund->reason))
             <tr>

@@ -69,7 +69,7 @@
                 </p>
                 @if ($product->seller?->sellerProfile?->vacation_ends_at)
                     <div class="text-[11px] text-amber-900 font-semibold">
-                        Expected factory reopening: {{ \Carbon\Carbon::parse($product->seller->sellerProfile->vacation_ends_at)->format('M d, Y') }}
+                        Expected factory reopening: {{ \Carbon\Carbon::parse($product->seller->sellerProfile->vacation_ends_at)->format('d M Y') }}
                     </div>
                 @endif
             </div>

@@ -111,7 +111,7 @@
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs text-slate-600">
                     <div>
                         <span class="text-slate-400 block">Placed on</span>
-                        <strong class="text-slate-800">{{ $order->created_at->format('M d, Y h:i A') }}</strong>
+                        <strong class="text-slate-800">{{ $order->created_at->format('d M Y, g:i A') }}</strong>
                     </div>
                     <div>
                         <span class="text-slate-400 block">Payment</span>
@@ -180,7 +180,7 @@
                                         </div>
                                         <p class="text-xs text-slate-600">
                                             @if ($subOrder->fulfillmentStatus?->slug === 'delivered')
-                                                Received on {{ $subOrder->handover_confirmed_at?->format('M d, Y h:i A') ?? 'delivery' }}.
+                                                Received on {{ $subOrder->handover_confirmed_at?->format('d M Y, g:i A') ?? 'delivery' }}.
                                             @else
                                                 Check your parcel first, then give this 6-digit code to the delivery person. Don't share it before you have the parcel.
                                             @endif
@@ -258,7 +258,7 @@
                                         <li class="mb-4 ml-4">
                                             <div class="absolute w-2.5 h-2.5 bg-indigo-600 rounded-full mt-1 -left-1.25 border border-white"></div>
                                             <time class="mb-1 text-[11px] font-normal leading-none text-slate-400">
-                                                {{ $log->logged_at ? $log->logged_at->format('M d, Y h:i A') : $log->created_at->format('M d, Y h:i A') }}
+                                                {{ $log->logged_at ? $log->logged_at->format('d M Y, g:i A') : $log->created_at->format('d M Y, g:i A') }}
                                                 @if ($log->hub_location) • Hub: {{ $log->hub_location }} @endif
                                             </time>
                                             <h6 class="text-xs font-bold text-slate-900">{{ $log->title }}</h6>

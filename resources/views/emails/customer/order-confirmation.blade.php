@@ -11,7 +11,7 @@
     <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; margin: 20px 0; padding: 16px;">
         <tr>
             <td style="font-size: 13px; color: #64748B; padding: 4px 8px;">Order Date:</td>
-            <td style="font-size: 13px; color: #0F172A; font-weight: 600; padding: 4px 8px; text-align: right;">{{ $order->created_at?->format('d M, Y h:i A') }}</td>
+            <td style="font-size: 13px; color: #0F172A; font-weight: 600; padding: 4px 8px; text-align: right;">{{ $order->created_at?->format('d M Y, g:i A') }}</td>
         </tr>
         <tr>
             <td style="font-size: 13px; color: #64748B; padding: 4px 8px;">Payment Method:</td>

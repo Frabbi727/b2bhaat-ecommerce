@@ -21,7 +21,7 @@ class ProductReviewsTable
                 TextColumn::make('created_at')
                     ->visibleFrom('md')
                     ->label('Date')
-                    ->dateTime('d M, Y')
+                    ->dateTime('d M Y')
                     ->sortable(),
                 TextColumn::make('product.title')
                     ->label('Product')

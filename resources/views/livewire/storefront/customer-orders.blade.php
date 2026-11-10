@@ -112,7 +112,7 @@
                         <div>
                             <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider">Order</span>
                             <div class="text-lg font-black text-slate-900 font-mono">{{ $order->order_number }}</div>
-                            <div class="text-xs text-slate-500 mt-0.5">Placed on {{ $order->created_at->format('M d, Y h:i A') }}</div>
+                            <div class="text-xs text-slate-500 mt-0.5">Placed on {{ $order->created_at->format('d M Y, g:i A') }}</div>
                         </div>
 
                         <!-- Actions & Badges -->

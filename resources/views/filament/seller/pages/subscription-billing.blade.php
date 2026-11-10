@@ -172,9 +172,9 @@
                 <div style="margin-top: 0.35rem; font-size: 0.75rem; color: #71717a;">
                     @if ($subscription?->ends_at)
                         @if ($daysRemaining > 0)
-                            Renews on <strong style="color: inherit;">{{ $subscription->ends_at->format('d M, Y') }}</strong> ({{ $daysRemaining }} {{ Str::plural('day', $daysRemaining) }} left)
+                            Renews on <strong style="color: inherit;">{{ $subscription->ends_at->format('d M Y') }}</strong> ({{ $daysRemaining }} {{ Str::plural('day', $daysRemaining) }} left)
                         @else
-                            Cycle expired on <strong style="color: #e11d48;">{{ $subscription->ends_at->format('d M, Y') }}</strong>
+                            Cycle expired on <strong style="color: #e11d48;">{{ $subscription->ends_at->format('d M Y') }}</strong>
                         @endif
                     @else
                         Continuous active tier
@@ -366,7 +366,7 @@
                                         @endif
                                     </td>
                                     <td>
-                                        {{ $inv->due_date?->format('d M, Y') ?? 'Immediate' }}
+                                        {{ $inv->due_date?->format('d M Y') ?? 'Immediate' }}
                                         @if ($inv->due_date && $inv->due_date->isPast())
                                             <span style="color: #e11d48; font-weight: 600; font-size: 0.7rem; margin-left: 0.25rem;">(Overdue)</span>
                                         @endif
@@ -571,7 +571,7 @@
                                         {{ $this->billLabel($paidInv->invoice_type) }}
                                     </td>
                                     <td>
-                                        {{ $paidInv->paid_at?->format('d M, Y (h:i A)') ?? 'Settled' }}
+                                        {{ $paidInv->paid_at?->format('d M Y (g:i A)') ?? 'Settled' }}
                                     </td>
                                     <td style="text-align: right; font-family: monospace; font-weight: 700;">
                                         ৳{{ number_format((float) $paidInv->total_amount, 2) }}

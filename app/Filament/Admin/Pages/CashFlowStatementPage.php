@@ -59,7 +59,7 @@ class CashFlowStatementPage extends IncomeStatementPage
             fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
 
             fputcsv($handle, ['B2Bhaat Marketplace — Cash Flow Statement']);
-            fputcsv($handle, ['Period:', $data['period_label'], 'Currency:', 'BDT (৳)', 'Generated At:', Carbon::now(config('app.display_timezone'))->format('d M Y, h:i A')]);
+            fputcsv($handle, ['Period:', $data['period_label'], 'Currency:', 'BDT (৳)', 'Generated At:', Carbon::now(config('app.display_timezone'))->format('d M Y, g:i A')]);
             fputcsv($handle, []);
             fputcsv($handle, ['Opening cash and bank', number_format($data['opening_cash'], 2, '.', '')]);
             fputcsv($handle, []);

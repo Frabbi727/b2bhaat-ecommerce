@@ -20,7 +20,7 @@ class ReturnRequestsTable
             ->columns([
                 TextColumn::make('created_at')
                     ->label('Request Date')
-                    ->dateTime('d M, Y')
+                    ->dateTime('d M Y')
                     ->sortable(),
                 TextColumn::make('subOrder.sub_order_number')
                     ->label('Package #')

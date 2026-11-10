@@ -42,7 +42,7 @@ class ChangeRequestReviewDetails
         $html = '<div><p class="font-medium">Flash campaigns for this product</p><ul class="list-disc ps-5">';
         foreach ($offers as $offer) {
             $sale = $offer->flashSale;
-            $html .= '<li>'.e($sale->name).' ('.($sale->isLive() ? 'live now' : 'starts '.e($sale->starts_at->timezone('Asia/Dhaka')->format('j M Y, H:i'))).')'
+            $html .= '<li>'.e($sale->name).' ('.($sale->isLive() ? 'live now' : 'starts '.e($sale->starts_at->timezone('Asia/Dhaka')->format('d M Y, g:i A'))).')'
                 .' · offer '.e($offer->campaign_price !== null
                     ? ChangeRequestSummary::money($offer->campaign_price)
                     : (string) $offer->discount_type?->value.' '.$offer->discount_value).'</li>';
@@ -66,7 +66,7 @@ class ChangeRequestReviewDetails
 
         $html = '<div><p class="font-medium">Last approved price changes</p><ul class="list-disc ps-5">';
         foreach ($past as $row) {
-            $html .= '<li>'.e($row->reviewed_at?->timezone('Asia/Dhaka')->format('j M Y').': '.ChangeRequestSummary::heading($row).' ('.ChangeRequestSummary::largestChange($row)['text'].')').'</li>';
+            $html .= '<li>'.e($row->reviewed_at?->timezone('Asia/Dhaka')->format('d M Y').': '.ChangeRequestSummary::heading($row).' ('.ChangeRequestSummary::largestChange($row)['text'].')').'</li>';
         }
 
         return $html.'</ul></div>';

@@ -79,7 +79,7 @@ class SellerRecentOrdersWidget extends TableWidget
                     ->visibleFrom('md')
                     ->label('Received')
                     ->since()
-                    ->dateTimeTooltip('M d, Y H:i')
+                    ->dateTimeTooltip('d M Y, g:i A')
                     ->alignEnd(),
             ])
             ->recordUrl(fn (SubOrder $record): string => SubOrderResource::getUrl('view', ['record' => $record]))

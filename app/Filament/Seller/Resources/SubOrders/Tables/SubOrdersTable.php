@@ -95,7 +95,7 @@ class SubOrdersTable
                 TextColumn::make('created_at')
                     ->label('Received')
                     ->since()
-                    ->dateTimeTooltip('M d, Y h:i A')
+                    ->dateTimeTooltip('d M Y, g:i A')
                     ->sortable(),
             ])
             ->defaultSort('created_at', 'desc')

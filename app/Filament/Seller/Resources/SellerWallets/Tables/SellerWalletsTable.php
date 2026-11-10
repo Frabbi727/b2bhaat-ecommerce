@@ -37,7 +37,7 @@ class SellerWalletsTable
 
                 TextColumn::make('updated_at')
                     ->label('Last Updated')
-                    ->dateTime('M d, Y h:i A'),
+                    ->dateTime('d M Y, g:i A'),
             ])
             ->recordActions([
                 Action::make('requestPayout')

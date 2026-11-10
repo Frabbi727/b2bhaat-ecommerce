@@ -15,7 +15,7 @@
         </tr>
         <tr>
             <td style="font-size: 13px; color: #64748B; padding: 4px 8px;">Order Date:</td>
-            <td style="font-size: 13px; color: #0F172A; font-weight: 600; padding: 4px 8px; text-align: right;">{{ $subOrder->created_at?->format('d M, Y h:i A') }}</td>
+            <td style="font-size: 13px; color: #0F172A; font-weight: 600; padding: 4px 8px; text-align: right;">{{ $subOrder->created_at?->format('d M Y, g:i A') }}</td>
         </tr>
         <tr>
             <td style="font-size: 13px; color: #64748B; padding: 4px 8px;">Delivery Mode:</td>

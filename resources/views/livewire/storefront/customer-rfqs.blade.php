@@ -90,7 +90,7 @@
                             @endif
                             <span class="text-xs text-slate-400">•</span>
                             <span class="text-xs text-slate-500">
-                                {{ $rfq->created_at->format('d M, Y') }}
+                                {{ $rfq->created_at->format('d M Y') }}
                             </span>
                         </div>
 
@@ -195,11 +195,11 @@
                                     <span class="text-slate-400 block text-[11px]">Quotation Validity</span>
                                     @if ($isExpired)
                                         <span class="font-semibold text-rose-600">
-                                            Expired on {{ $rfq->valid_until->format('d M, Y') }}
+                                            Expired on {{ $rfq->valid_until->format('d M Y') }}
                                         </span>
                                     @else
                                         <span class="font-semibold text-emerald-700">
-                                            Valid until {{ $rfq->valid_until->format('d M, Y') }}
+                                            Valid until {{ $rfq->valid_until->format('d M Y') }}
                                         </span>
                                     @endif
                                 </div>

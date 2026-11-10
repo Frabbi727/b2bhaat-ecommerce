@@ -58,7 +58,7 @@
                         TAX INVOICE / CHALLAN
                     </span>
                     <div class="text-xs text-slate-500 mt-1">Invoice #: <strong class="text-slate-900 font-mono">{{ $order->order_number }}</strong></div>
-                    <div class="text-xs text-slate-500">Date: <strong class="text-slate-900">{{ $order->created_at->format('d M, Y') }}</strong></div>
+                    <div class="text-xs text-slate-500">Date: <strong class="text-slate-900">{{ $order->created_at->format('d M Y') }}</strong></div>
                     <div class="text-xs">
                         Payment: 
                         <span class="font-bold uppercase {{ $order->paymentStatus?->slug === 'paid' ? 'text-emerald-600' : 'text-amber-600' }}">
