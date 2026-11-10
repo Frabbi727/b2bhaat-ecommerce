@@ -127,7 +127,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | PERF-3 | N+1 queries | Eager loading | Fixed (57fe846) |
 | PERF-4 | Job failure handling | `failed()` handlers and retries | Fixed (445670d). Email listeners reviewed: `EmailNotificationService` already records failures as `failed` in the email log, so they are visible; left as is |
 | PERF-5 | **APP_TIMEZONE not set (UTC)** | Asia/Dhaka | Fixed (dc15b50). Display and schedule timezone set to Asia/Dhaka; storage timezone intentionally unchanged (see deployment guide) |
-| UX-1 to UX-4, UX-6 | Currency formats; jargon; navigation; confirmations; mobile layout | UI consistency pass | UI consistency pass: UX-1 fixed (38c3683), UX-4 fixed (035e11b), UX-2 fixed (67d677b), UX-3 fixed (fbc3b93); UX-6 open |
+| UX-1 to UX-4, UX-6 | Currency formats; jargon; navigation; confirmations; mobile layout | UI consistency pass | Fixed: UX-1 (38c3683), UX-4 (035e11b), UX-2 (67d677b), UX-3 (fbc3b93), UX-6 (3a156d3) |
 
 ## P3 (Wave 3)
 MON-13 hard-coded rates and rate not stored · ORD-5 mock journal · PAY-5 float money · PAY-6 missing locks and unsorted stock locks · FS-3 claim doesn't verify offer ↔ product · ACC-20 chart-of-accounts guards are UI-only · ACC-21 idempotency ignores the payload · UX-ACC-4 and UX-ACC-5 journal display and format consistency · INV-11 product SKU uniqueness · SEC-11 webhook replay · UX-7 MOQ shown only at checkout.
