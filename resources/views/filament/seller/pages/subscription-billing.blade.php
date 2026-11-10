@@ -3,6 +3,7 @@
         $subscription = $this->getActiveSubscription();
         $usedSlots = $this->getUsedProductSlots();
         $allowedSlots = $this->getAllowedProductSlots();
+        $listingPack = $this->getListingPackOffer();
         $pendingInvoices = $this->getPendingInvoices();
         $paidInvoices = $this->getPaidInvoices();
         $plans = $this->getAvailablePlans();
@@ -240,6 +241,22 @@
                         <span style="font-weight: 600; color: #059669;">Unlimited catalog</span>
                     @endif
                 </div>
+                @if ($listingPack)
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.75rem;">
+                        <span style="font-size: 0.75rem; color: #71717a;">
+                            {{ $listingPack['slots'] }} extra listings for {{ $listingPack['days'] }} days · ৳{{ number_format($listingPack['price'], 2) }}
+                        </span>
+                        <x-filament::button
+                            size="xs"
+                            icon="heroicon-m-plus"
+                            wire:click="buyListingPack"
+                            wire:confirm="Raise a bill of ৳{{ number_format($listingPack['price'], 2) }} for {{ $listingPack['slots'] }} extra listings? They start when the bill is paid and last {{ $listingPack['days'] }} days."
+                            wire:loading.attr="disabled"
+                        >
+                            Buy {{ $listingPack['slots'] }} more listings
+                        </x-filament::button>
+                    </div>
+                @endif
             </x-slot>
         </x-filament::section>
 
@@ -343,6 +360,9 @@
                                         <div style="font-weight: 600; text-transform: capitalize;">{{ str_replace('_', ' ', $inv->invoice_type) }}</div>
                                         @if (!empty($inv->metadata['plan_name']))
                                             <div style="font-size: 0.7rem; color: #71717a;">Plan: {{ $inv->metadata['plan_name'] }}</div>
+                                        @endif
+                                        @if (!empty($inv->metadata['extra_slots']))
+                                            <div style="font-size: 0.7rem; color: #71717a;">{{ $inv->metadata['extra_slots'] }} extra listings for {{ $inv->metadata['valid_days'] ?? 30 }} days</div>
                                         @endif
                                     </td>
                                     <td>

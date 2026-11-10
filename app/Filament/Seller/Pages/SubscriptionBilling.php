@@ -11,6 +11,7 @@ use App\Models\SellerSubscription;
 use App\Services\Monetization\MonetizationEngineService;
 use App\Services\Monetization\SellerInvoiceSettlementService;
 use App\Services\Monetization\SellerTermsSummary;
+use App\Services\Settings\StoreConfigurationService;
 use BackedEnum;
 use DomainException;
 use Filament\Notifications\Notification;
@@ -129,6 +130,50 @@ class SubscriptionBilling extends Page
         Notification::make()
             ->title('Invoice Generated for '.$planName)
             ->body('Invoice #'.$invoice->invoice_number.' generated for ৳'.number_format((float) $invoice->total_amount, 2).'. Your current plan stays as it is until this bill is paid.')
+            ->info()
+            ->send();
+    }
+
+    /**
+     * MON-11: what a listing pack gives and costs, or null when this seller can't buy one.
+     *
+     * @return array{slots: int, price: float, days: int}|null
+     */
+    public function getListingPackOffer(): ?array
+    {
+        $subscription = $this->getActiveSubscription();
+        $config = app(StoreConfigurationService::class);
+
+        if (! $config->isMonetizationEnabled() || ! $subscription?->plan?->allow_listing_addons || ! $subscription->termListingLimitEnabled() || $subscription->termMaxActiveProducts() === null) {
+            return null;
+        }
+
+        return [
+            'slots' => $config->getListingAddonPackSize(),
+            'price' => round($config->getListingAddonPackPrice(), 2),
+            'days' => SellerInvoiceSettlementService::LISTING_PACK_DAYS,
+        ];
+    }
+
+    public function buyListingPack(): void
+    {
+        try {
+            $invoice = app(SellerInvoiceSettlementService::class)->startListingPackPurchase(auth()->user());
+        } catch (DomainException $exception) {
+            Notification::make()->title('Listing pack not added')->body($exception->getMessage())->danger()->send();
+
+            return;
+        }
+
+        if ($invoice->status === SellerInvoice::STATUS_PAID) {
+            Notification::make()->title('Listing pack added')->success()->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title('Bill raised for your listing pack')
+            ->body('Bill #'.$invoice->invoice_number.' for ৳'.number_format((float) $invoice->total_amount, 2).' is below. The extra listings start as soon as it is paid.')
             ->info()
             ->send();
     }

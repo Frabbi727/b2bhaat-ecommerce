@@ -11,6 +11,7 @@ use App\Models\SellerSubscription;
 use App\Models\SellerWallet;
 use App\Models\User;
 use App\Models\WalletTransaction;
+use App\Services\Settings\StoreConfigurationService;
 use DomainException;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
@@ -81,6 +82,70 @@ class SellerInvoiceSettlementService
         });
 
         if ((float) $invoice->total_amount <= 0.00) {
+            $this->settleUnpaidInvoice($invoice->id, $seller);
+        }
+
+        return $invoice->fresh();
+    }
+
+    /** MON-11: how long the extra listings from a paid pack last. */
+    public const LISTING_PACK_DAYS = 30;
+
+    /**
+     * MON-11: raise a bill for a listing pack (extra listings for 30 days from payment). Only a plan with a listing
+     * limit that offers add-ons can buy one, and a second request returns the bill that is still unpaid.
+     */
+    public function startListingPackPurchase(User $seller): SellerInvoice
+    {
+        $config = app(StoreConfigurationService::class);
+
+        if (! $config->isMonetizationEnabled()) {
+            throw new DomainException('Listing limits are switched off, so you can list as many products as you like.');
+        }
+
+        $subscription = app(MonetizationEngineService::class)->getActiveSubscription($seller);
+
+        if (! $subscription) {
+            throw new DomainException('You need an active plan before you can buy a listing pack.');
+        }
+
+        if (! $subscription->termListingLimitEnabled() || $subscription->termMaxActiveProducts() === null) {
+            throw new DomainException('Your plan has no listing limit, so you do not need a listing pack.');
+        }
+
+        if (! $subscription->plan?->allow_listing_addons) {
+            throw new DomainException('Your plan does not offer listing packs. Choose a bigger plan to list more products.');
+        }
+
+        $invoice = DB::transaction(function () use ($seller, $config): SellerInvoice {
+            // Two clicks or two tabs raise one bill, not two.
+            User::whereKey($seller->id)->lockForUpdate()->first();
+
+            $unpaid = SellerInvoice::where('seller_id', $seller->id)
+                ->where('invoice_type', SellerInvoice::TYPE_LISTING_PACK)
+                ->where('status', SellerInvoice::STATUS_UNPAID)
+                ->first();
+
+            if ($unpaid) {
+                return $unpaid;
+            }
+
+            $price = round($config->getListingAddonPackPrice(), 2);
+            $slots = $config->getListingAddonPackSize();
+
+            return SellerInvoice::create([
+                'invoice_number' => 'SINV-'.date('Ymd').'-'.strtoupper(Str::random(6)),
+                'seller_id' => $seller->id,
+                'invoice_type' => SellerInvoice::TYPE_LISTING_PACK,
+                'subtotal' => $price,
+                'total_amount' => $price,
+                'status' => SellerInvoice::STATUS_UNPAID,
+                'due_date' => now()->toDateString(),
+                'metadata' => ['extra_slots' => $slots, 'valid_days' => self::LISTING_PACK_DAYS],
+            ]);
+        });
+
+        if ($invoice->wasRecentlyCreated && (float) $invoice->total_amount <= 0.00) {
             $this->settleUnpaidInvoice($invoice->id, $seller);
         }
 

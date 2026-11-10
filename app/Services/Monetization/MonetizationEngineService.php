@@ -197,7 +197,7 @@ class MonetizationEngineService
         $paidListingPackInvoices = SellerInvoice::where('seller_id', $seller->id)
             ->where('invoice_type', SellerInvoice::TYPE_LISTING_PACK)
             ->where('status', SellerInvoice::STATUS_PAID)
-            ->where('paid_at', '>=', now()->subDays(30))
+            ->where('paid_at', '>=', now()->subDays(SellerInvoiceSettlementService::LISTING_PACK_DAYS))
             ->get();
 
         $totalSlots = 0;
