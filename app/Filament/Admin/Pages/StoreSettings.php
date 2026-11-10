@@ -90,6 +90,7 @@ class StoreSettings extends Page
             'min_payout_amount' => $service->getMinPayoutAmount(),
             'escrow_holding_period_hours' => $service->getEscrowHoldingPeriodHours(),
             'monetization_enabled' => $service->isMonetizationEnabled(),
+            'default_commission_rate' => $service->getDefaultCommissionRate(),
 
             'bkash_merchant_number' => (string) $service->get('bkash_merchant_number', ''),
             'nagad_merchant_number' => (string) $service->get('nagad_merchant_number', ''),
@@ -390,6 +391,15 @@ class StoreSettings extends Page
                         Toggle::make('monetization_enabled')
                             ->label('Charge sellers marketplace fees')
                             ->helperText('When this is off there is no commission on sales, no subscription bills and no listing limits, for every seller. Orders placed while it is off are never charged commission later.'),
+
+                        TextInput::make('default_commission_rate')
+                            ->label('Commission for new sellers')
+                            ->numeric()
+                            ->minValue(0)
+                            ->maxValue(100)
+                            ->suffix('%')
+                            ->helperText('New sellers start on this rate, and it is charged when a seller has no plan and no rate of their own. You can still set each seller\'s rate when approving them. Changing it does not change existing sellers.')
+                            ->required(),
                     ]),
             ]);
     }
@@ -431,6 +441,7 @@ class StoreSettings extends Page
         $service->set('min_payout_amount', (float) $state['min_payout_amount'], 'financial', 'float');
         $service->set('escrow_holding_period_hours', (int) $state['escrow_holding_period_hours'], 'financial', 'integer');
         $service->set('monetization_enabled', (bool) $state['monetization_enabled'], 'monetization', 'boolean');
+        $service->set('default_commission_rate', round((float) $state['default_commission_rate'], 2), 'monetization', 'float');
 
         // An empty number hides that payment method at checkout
         foreach (['bkash_merchant_number', 'nagad_merchant_number'] as $key) {

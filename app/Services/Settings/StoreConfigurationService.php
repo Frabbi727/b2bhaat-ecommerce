@@ -211,6 +211,15 @@ class StoreConfigurationService
         return (bool) $this->get('monetization_allow_wallet_auto_renew', true);
     }
 
+    /**
+     * MON-13: the commission a seller starts on when they sign up, and the rate charged when a seller has no plan
+     * and no own rate. Previously 10% written into the code.
+     */
+    public function getDefaultCommissionRate(): float
+    {
+        return (float) $this->get('default_commission_rate', 10.00);
+    }
+
     public function getListingAddonPackSize(): int
     {
         return (int) $this->get('monetization_addon_pack_size', 25);

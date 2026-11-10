@@ -100,7 +100,7 @@ class MonetizationEngineService
             return $subscription->termCommissionRate($wholesale);
         }
 
-        return (float) ($seller->sellerProfile?->commission_rate_percentage ?? 10.00);
+        return (float) ($seller->sellerProfile?->commission_rate_percentage ?? $this->config->getDefaultCommissionRate());
     }
 
     /**

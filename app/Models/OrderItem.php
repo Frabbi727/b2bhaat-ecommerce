@@ -21,6 +21,7 @@ class OrderItem extends Model
         'original_unit_price',
         'quantity',
         'total_price',
+        'commission_rate',
     ];
 
     protected function casts(): array
@@ -30,6 +31,7 @@ class OrderItem extends Model
             'original_unit_price' => 'decimal:2',
             'quantity' => 'integer',
             'total_price' => 'decimal:2',
+            'commission_rate' => 'decimal:2',
         ];
     }
 

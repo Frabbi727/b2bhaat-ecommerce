@@ -196,7 +196,7 @@ class OrderSplitterService
                 // Calculate subtotal and commission
                 $seller = $sellerItemList[0]['product']->seller;
 
-                foreach ($sellerItemList as $entry) {
+                foreach ($sellerItemList as $index => $entry) {
                     $product = $entry['product'];
                     $itemData = $entry['item_data'];
                     $linePoisha = Money::poisha($itemData['unit_price']) * (int) $itemData['quantity'];
@@ -207,7 +207,8 @@ class OrderSplitterService
                         ?? $product->salesChannel;
                     $rate = $channel
                         ? $this->monetizationEngine->resolveCommissionRate($seller, $product, $channel)
-                        : (float) ($seller?->sellerProfile?->commission_rate_percentage ?? 10.00);
+                        : $this->monetizationEngine->sellerCommissionRate($seller, wholesale: false);
+                    $sellerItemList[$index]['commission_rate'] = $rate;
 
                     $commissionPoisha += $linePoisha * ($rate / 100.0);
                 }
@@ -236,6 +237,7 @@ class OrderSplitterService
                         'original_unit_price' => $itemData['original_unit_price'] ?? null,
                         'quantity' => $itemData['quantity'],
                         'total_price' => Money::lineTotal([$itemData]),
+                        'commission_rate' => round((float) $entry['commission_rate'], 2),
                     ]);
                 }
             }

@@ -76,7 +76,7 @@ class MonetizationEngineServiceTest extends TestCase
         ]);
 
         $category = Category::create(['name' => 'Garments', 'slug' => 'garments']);
-        $unit = Unit::firstOrCreate(['slug' => 'pcs'], ['name' => 'Pieces', 'symbol' => 'pcs']);
+        $unit = Unit::firstOrCreate(['symbol' => 'pcs'], ['name' => 'Pieces']);
         $product = Product::create([
             'seller_id' => $this->seller->id,
             'category_id' => $category->id,
@@ -117,7 +117,7 @@ class MonetizationEngineServiceTest extends TestCase
         ]);
 
         $category = Category::create(['name' => 'Fabrics', 'slug' => 'fabrics']);
-        $unit = Unit::firstOrCreate(['slug' => 'pcs'], ['name' => 'Pieces', 'symbol' => 'pcs']);
+        $unit = Unit::firstOrCreate(['symbol' => 'pcs'], ['name' => 'Pieces']);
         $product = Product::create([
             'seller_id' => $this->seller->id,
             'category_id' => $category->id,
@@ -153,7 +153,7 @@ class MonetizationEngineServiceTest extends TestCase
         ]);
 
         $category = Category::create(['name' => 'Yarn', 'slug' => 'yarn']);
-        $unit = Unit::firstOrCreate(['slug' => 'pcs'], ['name' => 'Pieces', 'symbol' => 'pcs']);
+        $unit = Unit::firstOrCreate(['symbol' => 'pcs'], ['name' => 'Pieces']);
         $product = Product::create([
             'seller_id' => $this->seller->id,
             'category_id' => $category->id,
@@ -188,7 +188,7 @@ class MonetizationEngineServiceTest extends TestCase
         ]);
 
         $category = Category::create(['name' => 'Leather', 'slug' => 'leather']);
-        $unit = Unit::firstOrCreate(['slug' => 'pcs'], ['name' => 'Pieces', 'symbol' => 'pcs']);
+        $unit = Unit::firstOrCreate(['symbol' => 'pcs'], ['name' => 'Pieces']);
         $engine = app(MonetizationEngineService::class);
 
         $this->assertTrue($engine->canActivateMoreProducts($this->seller));
@@ -251,7 +251,7 @@ class MonetizationEngineServiceTest extends TestCase
         ]);
 
         $category = Category::create(['name' => 'Denim', 'slug' => 'denim']);
-        $unit = Unit::firstOrCreate(['slug' => 'pcs'], ['name' => 'Pieces', 'symbol' => 'pcs']);
+        $unit = Unit::firstOrCreate(['symbol' => 'pcs'], ['name' => 'Pieces']);
         $product = Product::create([
             'seller_id' => $this->seller->id,
             'category_id' => $category->id,
@@ -300,5 +300,8 @@ class MonetizationEngineServiceTest extends TestCase
         // Subtotal: 20 * 500 = 10,000. Plan wholesale rate: 2%. Commission = 10,000 * 0.02 = 200.00.
         $this->assertEquals(10000.00, (float) $subOrder->subtotal);
         $this->assertEquals(200.00, (float) $subOrder->commission_amount);
+
+        // MON-13: the line keeps the rate it was charged, whatever the plan says later
+        $this->assertSame('2.00', $subOrder->items()->value('commission_rate'));
     }
 }

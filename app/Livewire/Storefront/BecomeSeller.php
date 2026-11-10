@@ -7,6 +7,7 @@ use App\Models\Role;
 use App\Models\SellerProfile;
 use App\Models\SellerWallet;
 use App\Models\User;
+use App\Services\Settings\StoreConfigurationService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
@@ -76,7 +77,7 @@ class BecomeSeller extends Component
                 'store_slug' => Str::slug($this->storeName).'-'.Str::random(4),
                 'trade_license_number' => $this->tradeLicense ?: null,
                 'tax_id_number' => $this->tinNumber ?: null,
-                'commission_rate_percentage' => 10.00,
+                'commission_rate_percentage' => app(StoreConfigurationService::class)->getDefaultCommissionRate(),
                 'is_approved' => false, // Under admin review
             ]);
 
