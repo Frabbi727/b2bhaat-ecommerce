@@ -111,7 +111,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | AUD-5 | No named finance events | Named events | Fixed (ab26ee7). Finance-module models only; other modules keep created/updated |
 | AUD-6 | No system actor | System actor on automated writes | Fixed (4bca514) |
 | AUD-7 | URL tokens and TrxIDs not redacted | Extend `AuditRedactor` | Fixed (4bca514). TrxIDs are masked to the last four characters rather than removed, so entries can still be matched to MFS statements |
-| AUD-8 | Sellers see raw diffs | Readable change summary |
+| AUD-8 | Sellers see raw diffs | Readable change summary | Fixed (ba51e73) |
 | AUD-9 | Admin filters and export missing | Filters and export |
 | UX-ACC-2 | Reverse action is unsafe | Confirmations | Already fixed by ACC-5 (only manual journals can be reversed; confirmation and a required reason; settlements use the separate Undo action from I-1). No change |
 | UX-ACC-3 | Payout TrxID not unique; no maker-checker | Uniqueness; maker-checker | TrxID uniqueness fixed (e068fdc). **Maker-checker needs an owner decision**: requiring a second admin to approve payouts and manual journals would block a one-admin team, so it is not built |
