@@ -160,6 +160,6 @@ All findings come from reading the code; every one cites file:line. Status value
 - VAT and BIN on B2B invoices.
 - Statutory retention period for financial and audit records.
 - Deferral of subscription revenue.
-- Who bears the courier cost on COD orders.
+- ~~Who bears the courier cost on COD orders.~~ Decided 2026-11-10: the customer pays it as the delivery fee added at checkout (already how checkout works; the courier's charge is the platform's delivery expense, set against that fee). No code change.
 - ~~Whether an unpaid COD commission deficit bill (MON-11) should suspend the seller.~~ Decided 2026-11-10: yes, after the grace days past its due date (656a656).
 - ~~Who pays the buyer back on a self-collected COD return.~~ Decided 2026-11-10: B2Bhaat refunds the buyer through the refund queue and takes it from the seller's balance (daa2118).

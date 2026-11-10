@@ -51,4 +51,4 @@ These were not decided here and need owner or legal input:
 - VAT and BIN on B2B invoices.
 - Statutory retention for financial and audit records.
 - Deferral of subscription revenue.
-- Who bears the courier cost on COD orders.
+- ~~Who bears the courier cost on COD orders.~~ Decided 2026-11-10: the customer pays it as the delivery fee added at checkout (already how checkout works; the courier's charge is the platform's delivery expense, set against that fee). No code change.
