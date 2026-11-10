@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Seller\Resources\WalletTransactions\Widgets;
 
-use App\Models\SellerWallet;
-use App\Models\WalletTransaction;
+use App\Services\Accounting\SellerLedgerStatementService;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -19,29 +18,21 @@ class SellerStatementOverviewWidget extends StatsOverviewWidget
     protected function getStats(): array
     {
         $sellerId = auth()->id();
-        $wallet = $sellerId !== null
-            ? SellerWallet::where('seller_id', $sellerId)->first()
-            : null;
 
-        $availableBalance = (float) ($wallet?->available_balance ?? 0);
-        $escrowHeldBalance = (float) ($wallet?->escrow_held_balance ?? 0);
+        // ACC-19: totals come from the seller's ledger lines, not the wallet table
+        $summary = app(SellerLedgerStatementService::class)->summary((int) $sellerId);
 
-        $lifetimeEarnings = $wallet !== null
-            ? (float) WalletTransaction::where('seller_wallet_id', $wallet->id)
-                ->where('transaction_type', WalletTransaction::TYPE_ESCROW_RELEASE)
-                ->sum('amount')
-            : 0.0;
-
-        $totalWithdrawn = $wallet !== null
-            ? (float) WalletTransaction::where('seller_wallet_id', $wallet->id)
-                ->where('transaction_type', WalletTransaction::TYPE_PAYOUT)
-                ->where('status', WalletTransaction::STATUS_DISBURSED)
-                ->sum('amount')
-            : 0.0;
+        $availableBalance = $summary['available_balance'];
+        $escrowHeldBalance = $summary['escrow_held'];
+        $lifetimeEarnings = $summary['net_earnings'];
+        $totalWithdrawn = $summary['total_withdrawn'];
+        $pendingPayouts = $summary['pending_payouts'];
 
         return [
             Stat::make('Available Balance', '৳'.number_format($availableBalance, 2))
-                ->description('Ready for withdrawal')
+                ->description($pendingPayouts > 0
+                    ? 'Ready for withdrawal · ৳'.number_format($pendingPayouts, 2).' waiting to be paid'
+                    : 'Ready for withdrawal')
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->color('success'),
 
@@ -51,7 +42,7 @@ class SellerStatementOverviewWidget extends StatsOverviewWidget
                 ->color('warning'),
 
             Stat::make('Lifetime Earnings', '৳'.number_format($lifetimeEarnings, 2))
-                ->description('Total sales credited')
+                ->description('Credited to your balance, after refunds')
                 ->descriptionIcon('heroicon-m-arrow-trending-up')
                 ->color('info'),
 

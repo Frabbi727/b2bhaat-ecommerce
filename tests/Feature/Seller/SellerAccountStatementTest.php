@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Seller;
 
+use App\DTOs\Accounting\JournalEntryData;
+use App\DTOs\Accounting\JournalLineData;
 use App\Filament\Seller\Resources\WalletTransactions\Pages\ListWalletTransactions;
 use App\Filament\Seller\Resources\WalletTransactions\WalletTransactionResource;
 use App\Filament\Seller\Resources\WalletTransactions\Widgets\SellerStatementOverviewWidget;
@@ -18,6 +20,8 @@ use App\Models\SellerWallet;
 use App\Models\SubOrder;
 use App\Models\User;
 use App\Models\WalletTransaction;
+use App\Services\Accounting\JournalPostingService;
+use Database\Seeders\AccountingChartOfAccountsSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use Filament\Facades\Filament;
 use Filament\Support\Icons\Heroicon;
@@ -489,63 +493,38 @@ class SellerAccountStatementTest extends TestCase
         $response->assertSee('Account Statement');
     }
 
+    /**
+     * ACC-19: the widget's figures come from the seller's ledger lines (see SellerLedgerStatementTest for the full
+     * breakdown); wallet rows alone no longer drive them.
+     */
+    private function postSellerLedger(User $seller, float $escrowIn, float $released, float $paidOut): void
+    {
+        $this->seed(AccountingChartOfAccountsSeeder::class);
+        $posting = app(JournalPostingService::class);
+        $key = 'widget-'.$seller->id.'-';
+
+        $posting->post(new JournalEntryData(entryDate: '2026-11-05', financialEvent: 'order_prepaid_received', idempotencyKey: $key.'1', description: 'Paid', lines: [
+            new JournalLineData(accountSlug: 'gateway_clearing', debit: $escrowIn),
+            new JournalLineData(accountSlug: 'seller_escrow_payable', credit: $escrowIn, sellerId: $seller->id),
+        ]));
+        $posting->post(new JournalEntryData(entryDate: '2026-11-05', financialEvent: 'escrow_released', idempotencyKey: $key.'2', description: 'Released', lines: [
+            new JournalLineData(accountSlug: 'seller_escrow_payable', debit: $released, sellerId: $seller->id),
+            new JournalLineData(accountSlug: 'seller_wallet_payable', credit: $released, sellerId: $seller->id),
+        ]));
+        $posting->post(new JournalEntryData(entryDate: '2026-11-05', financialEvent: 'payout_requested', idempotencyKey: $key.'3', description: 'Requested', lines: [
+            new JournalLineData(accountSlug: 'seller_wallet_payable', debit: $paidOut, sellerId: $seller->id),
+            new JournalLineData(accountSlug: 'reserved_payout_payable', credit: $paidOut, sellerId: $seller->id),
+        ]));
+        $posting->post(new JournalEntryData(entryDate: '2026-11-05', financialEvent: 'payout_disbursed', idempotencyKey: $key.'4', description: 'Paid out', lines: [
+            new JournalLineData(accountSlug: 'reserved_payout_payable', debit: $paidOut, sellerId: $seller->id),
+            new JournalLineData(accountSlug: 'bank_operating', credit: $paidOut),
+        ]));
+    }
+
     public function test_seller_statement_overview_widget_renders_accurate_kpi_figures(): void
     {
-        [$seller, $wallet] = $this->createSellerWithWallet(7500.50, 2300.00);
-
-        // Lifetime earnings (escrow releases)
-        WalletTransaction::create([
-            'seller_wallet_id' => $wallet->id,
-            'transaction_type' => WalletTransaction::TYPE_ESCROW_RELEASE,
-            'amount' => 10000.00,
-            'running_balance' => 10000.00,
-            'reference_note' => 'Release batch 1',
-        ]);
-        WalletTransaction::create([
-            'seller_wallet_id' => $wallet->id,
-            'transaction_type' => WalletTransaction::TYPE_ESCROW_RELEASE,
-            'amount' => 5000.00,
-            'running_balance' => 15000.00,
-            'reference_note' => 'Release batch 2',
-        ]);
-
-        // Disbursed payouts
-        WalletTransaction::create([
-            'seller_wallet_id' => $wallet->id,
-            'transaction_type' => WalletTransaction::TYPE_PAYOUT,
-            'status' => WalletTransaction::STATUS_DISBURSED,
-            'amount' => 3000.00,
-            'running_balance' => 12000.00,
-            'reference_note' => 'Disbursed payout 1',
-        ]);
-        WalletTransaction::create([
-            'seller_wallet_id' => $wallet->id,
-            'transaction_type' => WalletTransaction::TYPE_PAYOUT,
-            'status' => WalletTransaction::STATUS_DISBURSED,
-            'amount' => 1500.00,
-            'running_balance' => 10500.00,
-            'reference_note' => 'Disbursed payout 2',
-        ]);
-
-        // Requested payout (should NOT count as withdrawn)
-        WalletTransaction::create([
-            'seller_wallet_id' => $wallet->id,
-            'transaction_type' => WalletTransaction::TYPE_PAYOUT,
-            'status' => WalletTransaction::STATUS_REQUESTED,
-            'amount' => 1000.00,
-            'running_balance' => 9500.00,
-            'reference_note' => 'Pending payout',
-        ]);
-
-        // Rejected payout (should NOT count as withdrawn)
-        WalletTransaction::create([
-            'seller_wallet_id' => $wallet->id,
-            'transaction_type' => WalletTransaction::TYPE_PAYOUT,
-            'status' => WalletTransaction::STATUS_REJECTED,
-            'amount' => 500.00,
-            'running_balance' => 9500.00,
-            'reference_note' => 'Rejected payout',
-        ]);
+        [$seller] = $this->createSellerWithWallet(0.00, 0.00);
+        $this->postSellerLedger($seller, escrowIn: 17300.00, released: 15000.00, paidOut: 4500.00);
 
         $this->actingAs($seller);
         Filament::setCurrentPanel(Filament::getPanel('seller'));
@@ -553,14 +532,13 @@ class SellerAccountStatementTest extends TestCase
         Livewire::test(SellerStatementOverviewWidget::class)
             ->assertSuccessful()
             ->assertSee('Available Balance')
-            ->assertSee('৳7,500.50')
+            ->assertSee('৳10,500.00')
             ->assertSee('Ready for withdrawal')
             ->assertSee('Escrow Held Balance')
             ->assertSee('৳2,300.00')
             ->assertSee('Pending delivery clearing')
             ->assertSee('Lifetime Earnings')
             ->assertSee('৳15,000.00')
-            ->assertSee('Total sales credited')
             ->assertSee('Total Withdrawn')
             ->assertSee('৳4,500.00')
             ->assertSee('Disbursed to bank / MFS');
@@ -568,52 +546,22 @@ class SellerAccountStatementTest extends TestCase
 
     public function test_seller_statement_overview_widget_enforces_tenant_isolation(): void
     {
-        [$sellerA, $walletA] = $this->createSellerWithWallet(1000.00, 200.00);
-        [$sellerB, $walletB] = $this->createSellerWithWallet(99999.00, 88888.00);
-
-        WalletTransaction::create([
-            'seller_wallet_id' => $walletA->id,
-            'transaction_type' => WalletTransaction::TYPE_ESCROW_RELEASE,
-            'amount' => 1200.00,
-            'running_balance' => 1200.00,
-            'reference_note' => 'Seller A release',
-        ]);
-        WalletTransaction::create([
-            'seller_wallet_id' => $walletA->id,
-            'transaction_type' => WalletTransaction::TYPE_PAYOUT,
-            'status' => WalletTransaction::STATUS_DISBURSED,
-            'amount' => 300.00,
-            'running_balance' => 900.00,
-            'reference_note' => 'Seller A payout',
-        ]);
-
-        WalletTransaction::create([
-            'seller_wallet_id' => $walletB->id,
-            'transaction_type' => WalletTransaction::TYPE_ESCROW_RELEASE,
-            'amount' => 77777.00,
-            'running_balance' => 77777.00,
-            'reference_note' => 'Seller B release',
-        ]);
-        WalletTransaction::create([
-            'seller_wallet_id' => $walletB->id,
-            'transaction_type' => WalletTransaction::TYPE_PAYOUT,
-            'status' => WalletTransaction::STATUS_DISBURSED,
-            'amount' => 66666.00,
-            'running_balance' => 11111.00,
-            'reference_note' => 'Seller B payout',
-        ]);
+        [$sellerA] = $this->createSellerWithWallet(0.00, 0.00);
+        [$sellerB] = $this->createSellerWithWallet(99999.00, 88888.00);
+        $this->postSellerLedger($sellerA, escrowIn: 1400.00, released: 1200.00, paidOut: 300.00);
+        $this->postSellerLedger($sellerB, escrowIn: 88888.00, released: 77777.00, paidOut: 66666.00);
 
         $this->actingAs($sellerA);
         Filament::setCurrentPanel(Filament::getPanel('seller'));
 
         Livewire::test(SellerStatementOverviewWidget::class)
             ->assertSuccessful()
-            ->assertSee('৳1,000.00')
+            ->assertSee('৳900.00')
             ->assertSee('৳200.00')
             ->assertSee('৳1,200.00')
             ->assertSee('৳300.00')
             ->assertDontSee('৳99,999.00')
-            ->assertDontSee('৳88,888.00')
+            ->assertDontSee('৳11,111.00')
             ->assertDontSee('৳77,777.00')
             ->assertDontSee('৳66,666.00');
     }

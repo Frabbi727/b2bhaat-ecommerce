@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Seller;
 use App\Http\Controllers\Controller;
 use App\Models\SellerWallet;
 use App\Models\User;
+use App\Services\Accounting\SellerLedgerStatementService;
 use App\Services\Audit\AuditService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -31,23 +32,17 @@ class WalletStatementController extends Controller
             ->latest('id')
             ->get();
 
-        $totalReleased = (float) $wallet->transactions()
-            ->where('transaction_type', 'escrow_release')
-            ->sum('amount');
-
-        $totalPayout = (float) $wallet->transactions()
-            ->where('transaction_type', 'payout')
-            ->sum('amount');
-
-        $totalHeld = (float) $wallet->escrow_held_balance;
+        // ACC-19: totals come from the seller's ledger lines
+        $summary = app(SellerLedgerStatementService::class)->summary($seller->id);
 
         return view('seller.wallet-statement', [
             'seller' => $seller,
             'wallet' => $wallet,
             'transactions' => $transactions,
-            'totalReleased' => $totalReleased,
-            'totalPayout' => $totalPayout,
-            'totalHeld' => $totalHeld,
+            'summary' => $summary,
+            'totalReleased' => $summary['net_earnings'],
+            'totalPayout' => $summary['total_withdrawn'],
+            'totalHeld' => $summary['escrow_held'],
             'generatedAt' => now(),
         ]);
     }
@@ -83,7 +78,9 @@ class WalletStatementController extends Controller
 
         \app(AuditService::class)->recordExport('wallet ledger statement', $filename, auth()->id());
 
-        return response()->streamDownload(function () use ($transactions, $seller, $wallet) {
+        $summary = app(SellerLedgerStatementService::class)->summary($seller->id);
+
+        return response()->streamDownload(function () use ($transactions, $seller, $summary) {
             $handle = fopen('php://output', 'w');
 
             // UTF-8 BOM for Excel compatibility
@@ -93,8 +90,12 @@ class WalletStatementController extends Controller
             fputcsv($handle, ['B2B HAAT ESCROW LOGISTICS & SETTLEMENT LEDGER']);
             fputcsv($handle, ['Merchant:', $seller->sellerProfile?->store_name ?? $seller->name]);
             fputcsv($handle, ['Trade License:', $seller->trade_license_number ?? 'N/A']);
-            fputcsv($handle, ['Available Balance (BDT):', number_format($wallet->available_balance, 2)]);
-            fputcsv($handle, ['Escrow Held (BDT):', number_format($wallet->escrow_held_balance, 2)]);
+            fputcsv($handle, ['Available Balance (BDT):', number_format($summary['available_balance'], 2, '.', '')]);
+            fputcsv($handle, ['Escrow Held (BDT):', number_format($summary['escrow_held'], 2, '.', '')]);
+            fputcsv($handle, ['Payouts Waiting (BDT):', number_format($summary['pending_payouts'], 2, '.', '')]);
+            fputcsv($handle, ['Net Earnings Credited (BDT):', number_format($summary['net_earnings'], 2, '.', '')]);
+            fputcsv($handle, ['Fees Paid From Balance (BDT):', number_format($summary['fees_paid_from_balance'], 2, '.', '')]);
+            fputcsv($handle, ['Total Withdrawn (BDT):', number_format($summary['total_withdrawn'], 2, '.', '')]);
             fputcsv($handle, ['Generated At:', now()->toDateTimeString()]);
             fputcsv($handle, []); // empty line
 

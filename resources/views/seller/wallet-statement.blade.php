@@ -87,13 +87,13 @@
             <div class="p-5 rounded-2xl bg-indigo-50/60 border border-indigo-100 space-y-1">
                 <span class="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">Settled Net Earnings</span>
                 <div class="text-2xl font-black text-indigo-950">৳{{ number_format($totalReleased, 2) }}</div>
-                <p class="text-[10px] text-indigo-600">Total credited from completed deliveries</p>
+                <p class="text-[10px] text-indigo-600">Credited from completed deliveries, after refunds @if ($summary['fees_paid_from_balance'] > 0)· ৳{{ number_format($summary['fees_paid_from_balance'], 2) }} fees paid from balance @endif</p>
             </div>
 
             <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
                 <span class="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Payouts Withdrawn</span>
                 <div class="text-2xl font-black text-slate-900">৳{{ number_format($totalPayout, 2) }}</div>
-                <p class="text-[10px] text-slate-500">Disbursed via MFS or Bank Wire</p>
+                <p class="text-[10px] text-slate-500">Disbursed via MFS or Bank Wire @if ($summary['pending_payouts'] > 0)· ৳{{ number_format($summary['pending_payouts'], 2) }} waiting @endif</p>
             </div>
 
             <div class="p-5 rounded-2xl bg-amber-50/60 border border-amber-200 space-y-1">
@@ -104,7 +104,7 @@
 
             <div class="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-1">
                 <span class="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Available Balance</span>
-                <div class="text-2xl font-black text-emerald-950">৳{{ number_format($wallet->available_balance, 2) }}</div>
+                <div class="text-2xl font-black text-emerald-950">৳{{ number_format($summary['available_balance'], 2) }}</div>
                 <p class="text-[10px] text-emerald-700">Ready for immediate withdrawal</p>
             </div>
         </div>
