@@ -192,4 +192,41 @@ class FlashSaleFastCounterAllocationTest extends TestCase
 
         $this->assertSame(0, $offer->fresh()->units_sold);
     }
+
+    /**
+     * FS-3: an offer only prices the product it was approved for. A cart line that names another product's
+     * offer (stale or tampered) is refused and claims nothing.
+     */
+    public function test_an_offer_cannot_be_claimed_for_another_product(): void
+    {
+        $campaign = FlashSale::factory()->live()->create();
+        $offered = Product::query()->firstOrFail();
+        $other = $offered->replicate();
+        $other->forceFill(['title' => 'Other Product', 'slug' => 'other-product-fs3', 'sku' => null])->save();
+        $offer = FlashSaleProduct::factory()->create([
+            'flash_sale_id' => $campaign->id,
+            'product_id' => $offered->id,
+            'stock_limit' => 10,
+            'units_sold' => 0,
+            'status' => FlashSaleSubmissionStatus::Approved,
+        ]);
+
+        foreach ([
+            [['product_id' => $other->id, 'quantity' => 1, 'flash_sale_product_id' => $offer->id]],
+            // A right line cannot carry a wrong one past the check
+            [
+                ['product_id' => $offered->id, 'quantity' => 1, 'flash_sale_product_id' => $offer->id],
+                ['product_id' => $other->id, 'quantity' => 1, 'flash_sale_product_id' => $offer->id],
+            ],
+        ] as $items) {
+            try {
+                app(FlashSaleAllocationService::class)->claim(User::factory()->create(), $items);
+                $this->fail('A mismatched offer was claimed');
+            } catch (FlashSaleUnavailableException $e) {
+                $this->assertStringContainsString($other->title, $e->getMessage());
+            }
+        }
+
+        $this->assertSame(0, $offer->fresh()->units_sold);
+    }
 }

@@ -37,16 +37,21 @@ class FlashSaleAllocationService
 
             $offerId = (int) $offerId;
             $requested[$offerId] = ($requested[$offerId] ?? 0) + (int) $item['quantity'];
-            $productIds[$offerId] = (int) $item['product_id'];
+            $productIds[$offerId][(int) $item['product_id']] = true;
         }
 
         ksort($requested);
 
         foreach ($requested as $offerId => $quantity) {
             $offer = FlashSaleProduct::query()->whereKey($offerId)->lockForUpdate()->first();
-            $title = (string) Product::query()->whereKey($offer?->product_id ?? $productIds[$offerId])->value('title');
+            $lineProductIds = array_keys($productIds[$offerId]);
+
+            // FS-3: an offer prices only the product it was approved for; a line naming another product's offer is refused
+            $mismatched = array_values(array_filter($lineProductIds, fn (int $productId): bool => $productId !== (int) $offer?->product_id));
+            $title = (string) Product::query()->whereKey($mismatched[0] ?? $offer?->product_id ?? $lineProductIds[0])->value('title');
 
             if ($offer === null
+                || $mismatched !== []
                 || $offer->status !== FlashSaleSubmissionStatus::Approved
                 || ! $offer->flashSale()->first()?->isLive()) {
                 throw FlashSaleUnavailableException::ended($title);
