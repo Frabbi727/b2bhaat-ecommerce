@@ -21,6 +21,7 @@ use Database\Seeders\AccountingChartOfAccountsSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Tests\TestCase;
@@ -46,6 +47,35 @@ class FilamentTrialBalancePageTest extends TestCase
         $this->seed(SystemLookupSeeder::class);
         $this->seed(AccountingChartOfAccountsSeeder::class);
         $this->postingService = app(JournalPostingService::class);
+    }
+
+    public function test_the_check_names_journals_that_do_not_balance_even_when_the_totals_do(): void
+    {
+        if (\Illuminate\Support\Facades\DB::getDriverName() === 'pgsql') {
+            $this->markTestSkipped('The PostgreSQL journal guard (ACC-9) refuses the direct edits this test plants.');
+        }
+        // ACC-16: two damaged journals that cancel each other out leave the grand totals equal
+        $post = fn (string $key): AccountingJournalEntry => $this->postingService->post(new JournalEntryData(
+            entryDate: now()->toDateString(),
+            financialEvent: AccountingEvent::MANUAL_JOURNAL->value,
+            idempotencyKey: $key,
+            description: 'Check '.$key,
+            lines: [
+                new JournalLineData(accountSlug: 'bank_operating', debit: 100.00),
+                new JournalLineData(accountSlug: 'owner_equity', credit: 100.00),
+            ],
+        ));
+        $a = $post('tb-a');
+        $b = $post('tb-b');
+        // Direct database edits (the PostgreSQL guard would refuse these; the report must still catch them)
+        DB::table('accounting_journal_lines')->where('journal_entry_id', $a->id)->where('debit', '>', 0)->update(['debit' => 110.00]);
+        DB::table('accounting_journal_lines')->where('journal_entry_id', $b->id)->where('credit', '>', 0)->update(['credit' => 110.00]);
+
+        $data = Livewire::test(TrialBalancePage::class)->instance()->getTrialBalanceData();
+
+        $this->assertSame(0.0, $data['difference']);
+        $this->assertFalse($data['is_balanced']);
+        $this->assertEqualsCanonicalizing([$a->journal_number, $b->journal_number], $data['unbalanced_journals']);
     }
 
     public function test_admin_can_access_trial_balance_page(): void

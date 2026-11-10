@@ -167,7 +167,10 @@ class TrialBalancePage extends Page
             fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
 
             fputcsv($handle, ['B2Bhaat Marketplace — General Ledger Trial Balance']);
-            fputcsv($handle, ['As of Date:', $this->endDate ?? 'All Time', 'Generated At:', Carbon::now()->toDateTimeString()]);
+            // ACC-16: with a start date this is the movement for the range, not balances as of a date
+            fputcsv($handle, $this->startDate
+                ? ['Period:', $this->startDate.' to '.($this->endDate ?? 'today'), 'Generated At:', Carbon::now(config('app.display_timezone'))->toDateTimeString()]
+                : ['As of Date:', $this->endDate ?? 'All Time', 'Generated At:', Carbon::now(config('app.display_timezone'))->toDateTimeString()]);
             fputcsv($handle, ['Currency:', 'Bangladeshi Taka (BDT / ৳)']);
             fputcsv($handle, []);
 
@@ -214,6 +217,9 @@ class TrialBalancePage extends Page
             ]);
 
             fputcsv($handle, ['Equilibrium Status:', $data['grand_total']['is_balanced'] ? 'BALANCED' : 'OUT OF BALANCE']);
+            if ($data['unbalanced_journals'] !== []) {
+                fputcsv($handle, ['Journals that do not balance:', implode(', ', $data['unbalanced_journals'])]);
+            }
             fputcsv($handle, ['Discrepancy Variance:', number_format(abs($data['grand_total']['difference']), 2, '.', '')]);
 
             fclose($handle);
@@ -376,7 +382,10 @@ class TrialBalancePage extends Page
         }
 
         $difference = round($grandDebit - $grandCredit, 2);
-        $isBalanced = abs($difference) < 0.001;
+        $unbalancedJournals = $this->unbalancedJournals();
+        // ACC-16: equal grand totals alone prove little (posting forces each journal to balance), so every journal
+        // in range is also checked on its own
+        $isBalanced = abs($difference) < 0.001 && $unbalancedJournals === [];
 
         $grandTotal = [
             'total_debit' => $grandDebit,
@@ -385,6 +394,7 @@ class TrialBalancePage extends Page
             'total_net_credit' => $grandNetCredit,
             'difference' => $difference,
             'is_balanced' => $isBalanced,
+            'unbalanced_journals' => $unbalancedJournals,
         ];
 
         return [
@@ -396,6 +406,36 @@ class TrialBalancePage extends Page
             'total_net_credit' => $grandNetCredit,
             'difference' => $difference,
             'is_balanced' => $isBalanced,
+            'unbalanced_journals' => $unbalancedJournals,
         ];
+    }
+
+    /**
+     * Journal numbers in the selected range whose own lines don't add up (only possible through a direct database
+     * edit or import, since posting refuses it).
+     *
+     * @return list<string>
+     */
+    private function unbalancedJournals(): array
+    {
+        $query = DB::table('accounting_journal_entries')
+            ->join('accounting_journal_lines', 'accounting_journal_lines.journal_entry_id', '=', 'accounting_journal_entries.id')
+            ->whereIn('accounting_journal_entries.status', [JournalEntryStatus::POSTED->value, JournalEntryStatus::REVERSED->value]);
+
+        if ($this->periodId) {
+            $query->where('accounting_journal_entries.period_id', $this->periodId);
+        }
+        if ($this->startDate) {
+            $query->where('accounting_journal_entries.entry_date', '>=', $this->startDate);
+        }
+        if ($this->endDate) {
+            $query->where('accounting_journal_entries.entry_date', '<=', $this->endDate);
+        }
+
+        return $query->groupBy('accounting_journal_entries.id', 'accounting_journal_entries.journal_number')
+            ->havingRaw('ROUND(SUM(accounting_journal_lines.debit) - SUM(accounting_journal_lines.credit), 2) <> 0')
+            ->orderBy('accounting_journal_entries.journal_number')
+            ->pluck('accounting_journal_entries.journal_number')
+            ->all();
     }
 }

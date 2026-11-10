@@ -111,8 +111,13 @@
                     </span>
                 </div>
                 <p class="mt-1 text-xs {{ $isBalanced ? 'text-emerald-700/90 dark:text-emerald-300/90' : 'text-rose-700/90 dark:text-rose-300/90' }}">
-                    {{ $isBalanced ? 'All posted entries satisfy double-entry mathematical integrity.' : 'Debit & Credit mismatch requires ledger review.' }}
+                    {{ $isBalanced ? 'Totals match and every journal in range balances on its own.' : 'Debit & Credit mismatch requires ledger review.' }}
                 </p>
+                @if ($data['unbalanced_journals'] !== [])
+                    <p class="mt-1 text-xs font-mono text-rose-700 dark:text-rose-300">
+                        Journals that do not balance: {{ implode(', ', array_slice($data['unbalanced_journals'], 0, 10)) }}{{ count($data['unbalanced_journals']) > 10 ? ' and '.(count($data['unbalanced_journals']) - 10).' more' : '' }}
+                    </p>
+                @endif
             </div>
         </div>
 
