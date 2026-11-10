@@ -123,7 +123,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | SEC-8 | Tracking tokens never expire | Expiry or rotation | Fixed (ffbf54a). Default windows (90 days tracking, 365 days invoice) are my call; the owner can change them in `.env` |
 | SEC-9 | Sellers can see other sellers' lines on a shared invoice | Scope the invoice view | Fixed (718f8cd) |
 | SEC-10 | Sensitive fields are mass-assignable | Tighten `$fillable` | Fixed (a2e60e1). Product `blocked_at`, `blocked_reason`, `views_count`, `sales_count`, `was_active_before_suspension` removed from `$fillable`. Reviewed and left as is: User role/approval, SellerProfile approval/billing and wallet balances. Every write to them uses an explicit validated array, and Filament forms drop fields that aren't in the form (now tested) |
-| PERF-2 | Dashboard queries | Aggregate queries |
+| PERF-2 | Dashboard queries | Aggregate queries | Fixed (c26295d) |
 | PERF-3 | N+1 queries | Eager loading |
 | PERF-4 | Job failure handling | `failed()` handlers and retries | Fixed (445670d). Email listeners reviewed: `EmailNotificationService` already records failures as `failed` in the email log, so they are visible; left as is |
 | PERF-5 | **APP_TIMEZONE not set (UTC)** | Asia/Dhaka | Fixed (dc15b50). Display and schedule timezone set to Asia/Dhaka; storage timezone intentionally unchanged (see deployment guide) |
