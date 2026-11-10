@@ -4,6 +4,8 @@ return [
 
     'courier' => [
         'webhook_secret' => env('COURIER_WEBHOOK_SECRET'),
+        // SEC-11: how far a message's X-Courier-Timestamp may be from the server clock
+        'webhook_tolerance_seconds' => (int) env('COURIER_WEBHOOK_TOLERANCE_SECONDS', 300),
     ],
 
     /*
