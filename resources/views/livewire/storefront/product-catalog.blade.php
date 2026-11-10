@@ -149,242 +149,115 @@
             </div>
         @endif
 
-        <!-- ================= CATEGORY ICON SHOWCASE ================= -->
+        <!-- ================= CATEGORY SHOWCASE ================= -->
         @if ($categories->isNotEmpty())
-            <div class="space-y-4">
-                <div class="flex items-center justify-between">
+            <section aria-labelledby="home-categories-heading">
+                <div class="flex items-end justify-between gap-4 mb-4">
                     <div>
-                        <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Browse by Industry Sector</h2>
-                        <p class="text-xs text-slate-500">Explore authentic electronics, gadgets, appliances & wholesale goods</p>
+                        <h2 id="home-categories-heading" class="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900">Browse by Industry Sector</h2>
+                        <p class="mt-0.5 text-xs sm:text-sm text-slate-500">Explore authentic electronics, gadgets, appliances & wholesale goods</p>
                     </div>
-                    <button
-                        wire:click="$set('selectedCategoryId', null)"
-                        class="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition"
-                    >
-                        Browse All &rarr;
-                    </button>
+                    <a href="#all-products" class="shrink-0 text-xs sm:text-sm font-bold text-indigo-600 hover:text-indigo-800 transition">See all products &rarr;</a>
                 </div>
 
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+                <div class="grid grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-3">
                     @foreach ($categories->take(6) as $cat)
                         <button
                             type="button"
                             wire:click="selectCategory({{ $cat->id }})"
-                            class="group p-4 rounded-2xl bg-white border border-slate-200/80 hover:border-indigo-500 hover:shadow-md transition text-center flex flex-col items-center justify-center gap-3 aspect-square"
+                            class="group flex items-center gap-3 p-3 rounded-2xl bg-white border border-slate-200 text-left transition hover:border-indigo-400 hover:shadow-md hover:shadow-slate-900/5 cursor-pointer focus-visible:outline-2 focus-visible:outline-indigo-500"
                         >
-                            <div class="w-16 h-16 rounded-2xl bg-indigo-50/50 group-hover:bg-indigo-100 flex items-center justify-center overflow-hidden transition p-2">
+                            <span class="grid place-items-center w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded-xl bg-indigo-50 overflow-hidden">
                                 @if ($cat->icon_url)
-                                    <img src="{{ $cat->icon_url }}" alt="{{ $cat->name }}" class="w-full h-full object-cover rounded-xl group-hover:scale-110 transition"/>
+                                    <img src="{{ $cat->icon_url }}" alt="" class="w-full h-full object-cover transition group-hover:scale-105"/>
                                 @else
-                                    <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+                                    <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
                                 @endif
-                            </div>
-                            <div>
-                                <span class="text-xs font-bold text-slate-900 group-hover:text-indigo-600 line-clamp-1 block">
-                                    {{ $cat->name }}
+                            </span>
+                            <span class="min-w-0">
+                                <span class="block text-sm font-bold leading-snug text-slate-900 group-hover:text-indigo-600 line-clamp-2">{{ $cat->name }}</span>
+                                <span class="block mt-0.5 text-[11px] font-medium text-slate-500">
+                                    {{ $cat->children->isNotEmpty() ? $cat->children->count().' '.str('sub-category')->plural($cat->children->count()) : 'Shop now' }}
                                 </span>
-                                <span class="text-[10px] text-slate-400 font-medium">Explore &rarr;</span>
-                            </div>
+                            </span>
                         </button>
                     @endforeach
                 </div>
-            </div>
-        @endif
-
-        <!-- ================= VERIFIED FACTORIES & DIRECT IMPORTERS ================= -->
-        @if ($featuredSellers->isNotEmpty())
-            <div class="bg-gradient-to-br from-slate-50 to-indigo-50/40 border border-slate-200 rounded-3xl p-6 shadow-xs">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            <h2 class="text-sm sm:text-base font-black uppercase tracking-wider text-slate-900">Verified Factories & Direct Importers</h2>
-                        </div>
-                        <p class="text-xs text-slate-500 mt-0.5">Vetted suppliers operating with verified Bangladeshi Trade Licenses & BIN certificates</p>
-                    </div>
-                    <a href="{{ route('seller.register') }}" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition flex items-center gap-1 self-start sm:self-auto">
-                        <span>Register as Manufacturer</span>
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                    </a>
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    @foreach ($featuredSellers as $sellerProfile)
-                        <a href="{{ route('store.show', $sellerProfile->store_slug) }}" class="group bg-white rounded-2xl p-4 border border-slate-200/90 shadow-xs hover:border-indigo-500 hover:shadow-md transition flex flex-col justify-between">
-                            <div>
-                                <div class="flex items-start justify-between gap-2">
-                                    <h3 class="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition line-clamp-1">{{ $sellerProfile->store_name }}</h3>
-                                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                                        <svg class="w-3 h-3 text-emerald-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                                        Verified
-                                    </span>
-                                </div>
-                                <div class="mt-2 text-[11px] text-slate-500 space-y-1">
-                                    <div class="flex items-center gap-1 font-mono text-[10px] text-slate-400">
-                                        <span>Lic:</span>
-                                        <span>{{ $sellerProfile->trade_license_number ?? 'Verified Partner' }}</span>
-                                    </div>
-                                    <div class="text-[11px] text-slate-600">
-                                        {{ $sellerProfile->products_count }} active product listings
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-indigo-600 font-semibold group-hover:text-indigo-700">
-                                <span>Visit Factory Store</span>
-                                <span>&rarr;</span>
-                            </div>
-                        </a>
-                    @endforeach
-                </div>
-            </div>
+            </section>
         @endif
 
         <!-- ================= FLASH SALE SECTION WITH LIVE COUNTDOWN ================= -->
         @if ($flashSaleProducts->isNotEmpty() && isset($activeFlashSale) && $activeFlashSale)
-            <div
+            <section
                 id="flash-sales"
-                class="rounded-3xl bg-gradient-to-r from-rose-950 via-slate-900 to-indigo-950 p-6 sm:p-8 text-white shadow-xl border border-rose-900/40 space-y-6"
+                aria-labelledby="home-flash-heading"
+                class="scroll-mt-28 rounded-3xl bg-gradient-to-br from-rose-950 via-slate-900 to-indigo-950 p-4 sm:p-6 lg:p-8 text-white shadow-xl shadow-slate-900/10 lg:grid lg:grid-cols-[18rem_1fr] lg:gap-8"
             >
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-rose-900/30 pb-5">
-                    <div class="flex items-center gap-3">
-                        <span class="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center text-xl font-black shadow-md shadow-rose-600/40">
-                            ⚡
+                <div class="flex flex-col gap-4 mb-5 lg:mb-0">
+                    <div class="flex items-start gap-3 lg:flex-col">
+                        <span class="grid place-items-center w-10 h-10 shrink-0 rounded-xl bg-rose-600 text-white shadow-md shadow-rose-950/40">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12L13 2z"/></svg>
                         </span>
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <h2 class="text-xl sm:text-2xl font-black tracking-tight text-white">{{ $activeFlashSale->name }}</h2>
-                                <span class="px-2 py-0.5 rounded-full bg-rose-500/30 border border-rose-400/40 text-rose-300 text-[10px] font-bold uppercase tracking-wider animate-pulse">
-                                    Live Now
-                                </span>
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h2 id="home-flash-heading" class="text-xl sm:text-2xl font-black tracking-tight text-white text-balance">{{ $activeFlashSale->name }}</h2>
+                                <span class="px-2 py-0.5 rounded-full bg-rose-500/25 border border-rose-400/40 text-rose-200 text-[10px] font-bold uppercase tracking-wider">Live now</span>
                             </div>
-                            <p class="text-xs text-rose-200/80">{{ $activeFlashSale->description ?: 'Massive limited-time price drops on flagship tech & essentials' }}</p>
+                            <p class="mt-1 text-xs sm:text-sm text-rose-100/80">{{ $activeFlashSale->description ?: 'Massive limited-time price drops on flagship tech & essentials' }}</p>
                         </div>
                     </div>
 
-                    <!-- Countdown Clock & Link -->
-                    <div class="flex items-center gap-4 flex-wrap">
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
                         <x-storefront.flash-countdown :ends-at="$activeFlashSale->ends_at" label="Ends in:" />
                         @if (isset($liveCampaignsCount) && $liveCampaignsCount > 1)
-                            <a href="{{ route('flash-sales.index') }}" class="text-xs font-bold text-rose-300 hover:text-white underline">
+                            <a href="{{ route('flash-sales.index') }}" class="text-xs font-bold text-rose-200 hover:text-white underline underline-offset-4">
                                 See all {{ $liveCampaignsCount }} flash sales &rarr;
                             </a>
                         @endif
                     </div>
                 </div>
 
-                <!-- Flash Products Grid -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div class="grid grid-cols-2 {{ $flashSaleProducts->count() >= 3 ? 'xl:grid-cols-3' : '' }} gap-3 sm:gap-4">
                     @foreach ($flashSaleProducts as $product)
-                        <div class="bg-white rounded-2xl p-4 text-slate-800 border border-slate-200 shadow-md hover:shadow-xl transition flex flex-col justify-between group">
-                            <div>
-                                <!-- Image with discount pill & wishlist button -->
-                                <div class="relative rounded-xl overflow-hidden bg-slate-100 aspect-square mb-3">
-                                    @php
-                                        $pImg = $product->primaryImage?->public_url ?? 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=600';
-                                    @endphp
-                                    <a href="{{ route('catalog.show', $product->slug) }}">
-                                        <img src="{{ $pImg }}" alt="{{ $product->title }}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy"/>
-                                    </a>
-
-                                    @if ($product->discount_percentage)
-                                        <span class="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-rose-600 text-white font-black text-xs shadow-md">
-                                            -{{ $product->discount_percentage }}%
-                                        </span>
-                                    @endif
-
-                                    <button
-                                        type="button"
-                                        wire:click="toggleWishlist({{ $product->id }})"
-                                        class="absolute top-2.5 right-2.5 p-2 rounded-xl bg-white/90 backdrop-blur-sm text-slate-600 hover:text-rose-600 shadow-xs transition"
-                                        title="Save to Wishlist"
-                                    >
-                                        <svg class="w-4 h-4 {{ in_array($product->id, $userWishlistIds) ? 'fill-rose-500 text-rose-500' : 'currentColor' }}" viewBox="0 0 24 24"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-                                    </button>
-
-                                    <!-- Quick View Hover Action -->
-                                    <button
-                                        type="button"
-                                        wire:click="openQuickView({{ $product->id }})"
-                                        class="absolute inset-x-3 bottom-3 py-2 px-3 rounded-xl bg-slate-900/90 hover:bg-slate-950 text-white text-xs font-bold backdrop-blur-xs opacity-0 group-hover:opacity-100 transition duration-200 flex items-center justify-center gap-1.5 shadow-md cursor-pointer z-10"
-                                        title="Quick View"
-                                    >
-                                        <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                                        <span>Quick View</span>
-                                    </button>
-                                </div>
-
-                                <!-- Brand & Warranty Badge -->
-                                <div class="flex items-center gap-2 mb-1 text-[11px]">
-                                    <span class="font-bold text-indigo-600 uppercase">{{ $product->brand?->name ?? 'Official Brand' }}</span>
-                                    @if ($product->warranty_period)
-                                        <span class="text-slate-300">•</span>
-                                        <span class="text-emerald-700 font-medium truncate">{{ $product->warranty_period }}</span>
-                                    @endif
-                                </div>
-
-                                <!-- Product Title -->
-                                <h3 class="text-sm font-bold text-slate-900 group-hover:text-indigo-600 line-clamp-2 transition mb-2">
-                                    <a href="{{ route('catalog.show', $product->slug) }}">
-                                        {{ $product->title }}
-                                    </a>
-                                </h3>
-                            </div>
-
-                            <!-- Pricing Block & Quick Add -->
-                            <div class="pt-3 border-t border-slate-100">
-                                <div class="flex items-baseline justify-between mb-3">
-                                    <div>
-                                        <div class="text-base sm:text-lg font-black text-slate-900">
-                                            ৳{{ number_format($product->effective_selling_price, 0) }}
-                                        </div>
-                                        @if ($product->regular_price && (float) $product->regular_price > $product->effective_selling_price)
-                                            <div class="flex items-center gap-1.5 text-xs">
-                                                <span class="text-slate-400 line-through">৳{{ number_format((float) $product->regular_price, 0) }}</span>
-                                                <span class="text-emerald-700 font-semibold">Save ৳{{ number_format($product->savings_amount, 0) }}</span>
-                                            </div>
-                                        @endif
-                                    </div>
-
-                                    @if ($product->model_number)
-                                        <span class="text-[10px] font-mono text-slate-400 uppercase">Mod: {{ $product->model_number }}</span>
-                                    @endif
-                                </div>
-
-                                @php
-                                    $offer = $product->liveFlashOffer();
-                                    $stockLimit = $offer?->stock_limit;
-                                    $unitsSold = $offer ? $offer->unitsSold() : 0;
-                                    $remainingUnits = $stockLimit !== null ? max(0, $stockLimit - $unitsSold) : null;
-                                @endphp
-
-                                @if ($remainingUnits !== null)
-                                    <div class="mb-3 text-[11px] font-bold text-rose-600 flex items-center gap-1.5">
-                                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-                                        <span>{{ $remainingUnits }} left</span>
-                                    </div>
-                                @endif
-
-                                <div class="grid grid-cols-2 gap-2">
-                                    <button
-                                        type="button"
-                                        wire:click="openQuickView({{ $product->id }})"
-                                        class="py-2 text-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
-                                    >
-                                        <span>Quick View</span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        wire:click="quickAddToCart({{ $product->id }})"
-                                        class="py-2 text-center rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs flex items-center justify-center gap-1 cursor-pointer"
-                                    >
-                                        <span>Add to Cart</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                        @php
+                            $offer = $product->liveFlashOffer();
+                            $stockLimit = $offer?->stock_limit;
+                            $remainingUnits = $stockLimit !== null ? max(0, $stockLimit - $offer->unitsSold()) : null;
+                        @endphp
+                        <x-storefront.product-card
+                            :product="$product"
+                            :wishlisted="in_array($product->id, $userWishlistIds)"
+                            :flash="true"
+                            :remaining-units="$remainingUnits"
+                            wire:key="flash-{{ $product->id }}"
+                            class="border-transparent shadow-md shadow-slate-950/30"
+                        />
                     @endforeach
                 </div>
-            </div>
+            </section>
+        @endif
+
+        <!-- ================= FEATURED PRODUCTS SECTION ================= -->
+        @if ($featuredProducts->isNotEmpty())
+            <section aria-labelledby="home-featured-heading">
+                <div class="flex items-end justify-between gap-4 mb-4">
+                    <div>
+                        <h2 id="home-featured-heading" class="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900">Featured Products</h2>
+                        <p class="mt-0.5 text-xs sm:text-sm text-slate-500">Curated top-selling electronics, lifestyle & consumer favorites</p>
+                    </div>
+                    <a href="#all-products" class="shrink-0 text-xs sm:text-sm font-bold text-indigo-600 hover:text-indigo-800 transition">See all products &rarr;</a>
+                </div>
+
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                    @foreach ($featuredProducts as $item)
+                        <x-storefront.product-card
+                            :product="$item"
+                            :wishlisted="in_array($item->id, $userWishlistIds)"
+                            wire:key="featured-{{ $item->id }}"
+                        />
+                    @endforeach
+                </div>
+            </section>
         @endif
 
         <!-- ================= PROMOTIONAL STRIP BANNERS ================= -->
@@ -409,116 +282,46 @@
             </div>
         @endif
 
-        <!-- ================= FEATURED PRODUCTS SECTION ================= -->
-        @if ($featuredProducts->isNotEmpty())
-            <div class="space-y-4">
-                <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+        <!-- ================= VERIFIED FACTORIES & DIRECT IMPORTERS ================= -->
+        @if ($featuredSellers->isNotEmpty())
+            <section aria-labelledby="home-factories-heading">
+                <div class="flex items-end justify-between gap-4 mb-4">
                     <div>
-                        <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Featured Products</h2>
-                        <p class="text-xs text-slate-500">Curated top-selling electronics, lifestyle & consumer favorites</p>
+                        <h2 id="home-factories-heading" class="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900">Verified Factories & Direct Importers</h2>
+                        <p class="mt-0.5 text-xs sm:text-sm text-slate-500">Vetted suppliers operating with verified Bangladeshi Trade Licenses & BIN certificates</p>
                     </div>
-                    <button
-                        wire:click="$set('channelFilter', 'all')"
-                        class="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition"
-                    >
-                        View Full Catalog &rarr;
-                    </button>
+                    <a href="{{ route('seller.register') }}" class="shrink-0 text-xs sm:text-sm font-bold text-indigo-600 hover:text-indigo-800 transition">Register as Manufacturer &rarr;</a>
                 </div>
 
-                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-                    @foreach ($featuredProducts as $item)
-                        <div class="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-xs hover:border-indigo-400 hover:shadow-lg transition flex flex-col justify-between group">
-                            <div>
-                                <!-- Image wrapper with aspect-square -->
-                                <div class="relative rounded-xl overflow-hidden bg-slate-100 aspect-square mb-3">
-                                    @php
-                                        $itemImg = $item->primaryImage?->public_url ?? 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=500';
-                                    @endphp
-                                    <a href="{{ route('catalog.show', $item->slug) }}">
-                                        <img src="{{ $itemImg }}" alt="{{ $item->title }}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy"/>
-                                    </a>
-
-                                    @if ($item->discount_percentage)
-                                        <span class="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-rose-500 text-white font-extrabold text-[11px] shadow-xs">
-                                            -{{ $item->discount_percentage }}%
-                                        </span>
+                <div class="grid grid-cols-1 sm:grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] gap-3">
+                    @foreach ($featuredSellers as $sellerProfile)
+                        <a href="{{ route('store.show', $sellerProfile->store_slug) }}" class="group flex items-center gap-3 p-4 rounded-2xl bg-white border border-slate-200 transition hover:border-indigo-400 hover:shadow-md hover:shadow-slate-900/5 focus-visible:outline-2 focus-visible:outline-indigo-500">
+                            <span class="grid place-items-center w-11 h-11 shrink-0 rounded-xl bg-slate-900 text-white text-base font-black uppercase" aria-hidden="true">
+                                {{ mb_substr($sellerProfile->store_name, 0, 1) }}
+                            </span>
+                            <span class="min-w-0 flex-1">
+                                <span class="flex items-center gap-1.5 min-w-0">
+                                    <span class="text-sm font-bold text-slate-900 group-hover:text-indigo-600 truncate">{{ $sellerProfile->store_name }}</span>
+                                    <svg class="w-4 h-4 shrink-0 text-emerald-600" fill="currentColor" viewBox="0 0 20 20" role="img" aria-label="Verified"><path fill-rule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                                </span>
+                                <span class="block mt-0.5 text-xs text-slate-500">
+                                    {{ $sellerProfile->products_count }} {{ str('product')->plural($sellerProfile->products_count) }}
+                                    @if ($sellerProfile->trade_license_number)
+                                        <span class="text-slate-300" aria-hidden="true">·</span>
+                                        <span class="tabular-nums">Lic. {{ $sellerProfile->trade_license_number }}</span>
                                     @endif
-
-                                    <button
-                                        type="button"
-                                        wire:click="toggleWishlist({{ $item->id }})"
-                                        class="absolute top-2 right-2 p-1.5 rounded-lg bg-white/90 text-slate-600 hover:text-rose-600 shadow-xs transition"
-                                        title="Wishlist"
-                                    >
-                                        <svg class="w-4 h-4 {{ in_array($item->id, $userWishlistIds) ? 'fill-rose-500 text-rose-500' : 'currentColor' }}" viewBox="0 0 24 24"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-                                    </button>
-
-                                    <!-- Quick View Hover Action -->
-                                    <button
-                                        type="button"
-                                        wire:click="openQuickView({{ $item->id }})"
-                                        class="absolute inset-x-2.5 bottom-2.5 py-1.5 px-2 rounded-xl bg-slate-900/90 hover:bg-slate-950 text-white text-[11px] font-bold backdrop-blur-xs opacity-0 group-hover:opacity-100 transition duration-200 flex items-center justify-center gap-1 shadow-md cursor-pointer z-10"
-                                        title="Quick View"
-                                    >
-                                        <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                                        <span>Quick View</span>
-                                    </button>
-                                </div>
-
-                                <div class="text-[11px] font-bold text-indigo-600 uppercase mb-1">
-                                    {{ $item->brand?->name ?? 'Verified Direct' }}
-                                </div>
-
-                                <h3 class="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-indigo-600 line-clamp-2 transition mb-2">
-                                    <a href="{{ route('catalog.show', $item->slug) }}">
-                                        {{ $item->title }}
-                                    </a>
-                                </h3>
-                            </div>
-
-                            <div class="pt-3 border-t border-slate-100">
-                                <div class="flex items-baseline justify-between mb-2">
-                                    <div>
-                                        <div class="text-sm sm:text-base font-extrabold text-slate-900">
-                                            ৳{{ number_format($item->effective_selling_price, 0) }}
-                                        </div>
-                                        @if ($item->regular_price && (float) $item->regular_price > $item->effective_selling_price)
-                                            <div class="text-[11px] text-slate-400 line-through">
-                                                ৳{{ number_format((float) $item->regular_price, 0) }}
-                                            </div>
-                                        @endif
-                                    </div>
-                                    <span class="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-semibold">
-                                        In Stock
-                                    </span>
-                                </div>
-
-                                <div class="grid grid-cols-2 gap-2">
-                                    <button
-                                        type="button"
-                                        wire:click="openQuickView({{ $item->id }})"
-                                        class="py-2 text-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition cursor-pointer"
-                                    >
-                                        Quick View
-                                    </button>
-                                    <button
-                                        type="button"
-                                        wire:click="quickAddToCart({{ $item->id }})"
-                                        class="py-2 text-center rounded-xl bg-slate-900 hover:bg-indigo-600 text-white text-xs font-bold transition shadow-xs cursor-pointer"
-                                    >
-                                        {{ $item->has_variations && $item->variations->count() > 1 ? 'Options' : 'Add' }}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                                </span>
+                            </span>
+                            <svg class="w-4 h-4 shrink-0 text-slate-300 group-hover:text-indigo-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                        </a>
                     @endforeach
                 </div>
-            </div>
+            </section>
         @endif
     @endif
 
     <!-- ================= FULL CATALOG & FILTERING EXPLORER ================= -->
-    <div class="space-y-6 pt-4" x-data="{ showMobileFilters: false }">
+    <section id="all-products" class="space-y-6 scroll-mt-28" x-data="{ showMobileFilters: false }">
         <!-- Section Header / Active Filter Bar -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
             <div>
@@ -635,19 +438,19 @@
                 @endif
                 @if ($onlyFlashSale)
                     <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-100 text-rose-800 font-medium">
-                        ⚡ Flash Sale
+                        Flash Sale
                         <button type="button" wire:click="$set('onlyFlashSale', false)" class="text-rose-600 hover:text-rose-900 text-sm font-bold">&times;</button>
                     </span>
                 @endif
                 @if ($inStockOnly)
                     <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-medium">
-                        📦 In Stock Only
+                        In Stock Only
                         <button type="button" wire:click="$set('inStockOnly', false)" class="text-emerald-600 hover:text-emerald-900 text-sm font-bold">&times;</button>
                     </span>
                 @endif
                 @if ($verifiedSupplierOnly)
                     <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-100 text-teal-800 font-medium">
-                        🛡️ Verified Suppliers
+                        Verified Suppliers
                         <button type="button" wire:click="$set('verifiedSupplierOnly', false)" class="text-teal-600 hover:text-teal-900 text-sm font-bold">&times;</button>
                     </span>
                 @endif
@@ -759,7 +562,7 @@
                                 wire:model.live="onlyFlashSale"
                                 class="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
                             />
-                            <span>⚡ Flash Sale Deals</span>
+                            <span>Flash Sale Deals</span>
                         </label>
                         <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800">
                             <input
@@ -767,7 +570,7 @@
                                 wire:model.live="inStockOnly"
                                 class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                             />
-                            <span>📦 In Stock Only</span>
+                            <span>In Stock Only</span>
                         </label>
                         <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800">
                             <input
@@ -775,7 +578,7 @@
                                 wire:model.live="verifiedSupplierOnly"
                                 class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                             />
-                            <span>🛡️ Verified Suppliers Only</span>
+                            <span>Verified Suppliers Only</span>
                         </label>
                     </div>
                 </div>
@@ -785,8 +588,8 @@
             <div class="lg:col-span-3">
                 @if ($products->isEmpty())
                     <div class="p-12 text-center rounded-3xl bg-white border border-slate-200 space-y-3">
-                        <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto text-xl">
-                            🔍
+                        <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z"/></svg>
                         </div>
                         <h3 class="text-base font-bold text-slate-900">No products match your criteria</h3>
                         <p class="text-xs text-slate-500 max-w-sm mx-auto">
@@ -801,97 +604,13 @@
                         </button>
                     </div>
                 @else
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                         @foreach ($products as $item)
-                            <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs hover:border-indigo-400 hover:shadow-lg transition flex flex-col justify-between group">
-                                <div>
-                                    <div class="relative rounded-xl overflow-hidden bg-slate-100 aspect-square mb-3">
-                                        @php
-                                            $catImg = $item->primaryImage?->public_url ?? 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=500';
-                                        @endphp
-                                        <a href="{{ route('catalog.show', $item->slug) }}">
-                                            <img src="{{ $catImg }}" alt="{{ $item->title }}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy"/>
-                                        </a>
-
-                                        @if ($item->discount_percentage)
-                                            <span class="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-rose-600 text-white font-black text-xs shadow-xs">
-                                                -{{ $item->discount_percentage }}%
-                                            </span>
-                                        @endif
-
-                                        <button
-                                            type="button"
-                                            wire:click="toggleWishlist({{ $item->id }})"
-                                            class="absolute top-2 right-2 p-1.5 rounded-lg bg-white/90 text-slate-600 hover:text-rose-600 shadow-xs transition"
-                                            title="Wishlist"
-                                        >
-                                            <svg class="w-4 h-4 {{ in_array($item->id, $userWishlistIds) ? 'fill-rose-500 text-rose-500' : 'currentColor' }}" viewBox="0 0 24 24"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-                                        </button>
-
-                                        <!-- Quick View Hover Action -->
-                                        <button
-                                            type="button"
-                                            wire:click="openQuickView({{ $item->id }})"
-                                            class="absolute inset-x-2.5 bottom-2.5 py-1.5 px-2 rounded-xl bg-slate-900/90 hover:bg-slate-950 text-white text-[11px] font-bold backdrop-blur-xs opacity-0 group-hover:opacity-100 transition duration-200 flex items-center justify-center gap-1 shadow-md cursor-pointer z-10"
-                                            title="Quick View"
-                                        >
-                                            <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                                            <span>Quick View</span>
-                                        </button>
-                                    </div>
-
-                                    <div class="flex items-center gap-1.5 text-[11px] mb-1">
-                                        <span class="font-bold text-indigo-600 uppercase">{{ $item->brand?->name ?? 'Direct' }}</span>
-                                        @if ($item->salesChannel?->slug === 'both')
-                                            <span class="text-slate-300">•</span>
-                                            <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded">B2B + Retail</span>
-                                        @endif
-                                    </div>
-
-                                    <h3 class="text-sm font-bold text-slate-900 group-hover:text-indigo-600 line-clamp-2 transition mb-2">
-                                        <a href="{{ route('catalog.show', $item->slug) }}">
-                                            {{ $item->title }}
-                                        </a>
-                                    </h3>
-                                </div>
-
-                                <div class="pt-3 border-t border-slate-100">
-                                    <div class="flex items-baseline justify-between mb-3">
-                                        <div>
-                                            <div class="text-base font-black text-slate-900">
-                                                ৳{{ number_format($item->effective_selling_price, 0) }}
-                                            </div>
-                                            @if ($item->regular_price && (float) $item->regular_price > $item->effective_selling_price)
-                                                <div class="text-[11px] text-slate-400 line-through">
-                                                    ৳{{ number_format((float) $item->regular_price, 0) }}
-                                                </div>
-                                            @endif
-                                        </div>
-                                        @if ($item->warranty_period)
-                                            <span class="text-[10px] text-slate-500 truncate max-w-[120px]" title="{{ $item->warranty_period }}">
-                                                🛡️ {{ $item->warranty_period }}
-                                            </span>
-                                        @endif
-                                    </div>
-
-                                    <div class="grid grid-cols-2 gap-2">
-                                        <button
-                                            type="button"
-                                            wire:click="openQuickView({{ $item->id }})"
-                                            class="py-2 text-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition cursor-pointer"
-                                        >
-                                            Quick View
-                                        </button>
-                                        <button
-                                            type="button"
-                                            wire:click="quickAddToCart({{ $item->id }})"
-                                            class="py-2 text-center rounded-xl bg-slate-900 hover:bg-indigo-600 text-white text-xs font-bold transition shadow-xs cursor-pointer"
-                                        >
-                                            Add
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
+                            <x-storefront.product-card
+                                :product="$item"
+                                :wishlisted="in_array($item->id, $userWishlistIds)"
+                                wire:key="catalog-{{ $item->id }}"
+                            />
                         @endforeach
                     </div>
 
@@ -902,7 +621,7 @@
                 @endif
             </div>
         </div>
-    </div>
+    </section>
 
     <!-- ================= QUICK VIEW MODAL ================= -->
     @if ($showQuickView && $quickViewProduct)
@@ -1019,7 +738,7 @@
                         <div class="grid grid-cols-2 gap-2 text-[11px]">
                             @if ($quickViewProduct->warranty_period)
                                 <div class="p-2 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-1.5 text-slate-700">
-                                    <span>🛡️</span>
+                                    <svg class="w-3.5 h-3.5 shrink-0 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
                                     <span class="font-medium truncate">{{ $quickViewProduct->warranty_period }}</span>
                                 </div>
                             @endif

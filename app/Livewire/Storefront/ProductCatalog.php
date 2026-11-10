@@ -380,9 +380,15 @@ class ProductCatalog extends Component
         $featuredProducts = Product::query()
             ->listable()
             ->featured()
+            ->whereNotIn('id', $flashSaleProducts->pluck('id'))
             ->with(['seller.sellerProfile', 'category', 'brand', 'primaryImage', 'retailPrice', 'variations'])
             ->take(8)
             ->get();
+
+        // Keep the featured grid to whole rows of four, so the section never ends on a half-empty row.
+        if ($featuredProducts->count() > 4) {
+            $featuredProducts = $featuredProducts->take(intdiv($featuredProducts->count(), 4) * 4);
+        }
 
         $user = auth()->user();
         $isWholesaleUser = $user && $user->isWholesaleBuyer();

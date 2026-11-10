@@ -135,6 +135,49 @@ class HeaderSearchAndHomepageTest extends TestCase
         $response->assertSee('39,999');
     }
 
+    public function test_featured_products_skip_items_already_shown_in_the_live_flash_sale(): void
+    {
+        $sellerRole = Role::where('slug', 'seller')->firstOrFail();
+        $seller = User::create([
+            'role_id' => $sellerRole->id,
+            'name' => 'Featured Seller',
+            'email' => 'featured@seller.com',
+            'password' => bcrypt('password'),
+        ]);
+        SellerProfile::create(['user_id' => $seller->id, 'store_name' => $seller->name, 'store_slug' => Str::slug($seller->name).'-'.$seller->id, 'is_approved' => true]);
+
+        $channel = SalesChannel::where('slug', SalesChannel::RETAIL)->firstOrFail();
+        $unit = Unit::where('symbol', 'pc')->firstOrFail();
+        $cat = Category::create(['name' => 'Gadgets', 'slug' => 'gadgets', 'is_active' => true]);
+
+        $makeFeatured = fn (string $title): Product => $this->withRetailPrice(tap(Product::create([
+            'seller_id' => $seller->id,
+            'category_id' => $cat->id,
+            'sales_channel_id' => $channel->id,
+            'unit_id' => $unit->id,
+            'title' => $title,
+            'slug' => Str::slug($title),
+            'regular_price' => 5000.00,
+            'buy_price' => 3000.00,
+            'is_active' => true,
+        ]), fn (Product $product) => $product->forceFill(['is_featured' => true])->save()));
+
+        $flashProduct = $makeFeatured('Flash Deal Speaker');
+        $featuredOnly = $makeFeatured('Featured Only Watch');
+        $this->approveProducts($flashProduct, $featuredOnly);
+
+        FlashSaleProduct::factory()->create([
+            'flash_sale_id' => FlashSale::factory()->live()->create()->id,
+            'product_id' => $flashProduct->id,
+            'discount_type' => FlashSaleDiscountType::FixedPrice,
+            'discount_value' => 3999.00,
+        ]);
+
+        Livewire::test(ProductCatalog::class)
+            ->assertViewHas('flashSaleProducts', fn ($products) => $products->contains('id', $flashProduct->id))
+            ->assertViewHas('featuredProducts', fn ($products) => $products->pluck('id')->all() === [$featuredOnly->id]);
+    }
+
     public function test_catalog_sorting_and_quick_cart(): void
     {
         $sellerRole = Role::where('slug', 'seller')->firstOrFail();
