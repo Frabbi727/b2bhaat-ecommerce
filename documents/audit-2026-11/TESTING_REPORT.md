@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1534 tests, 1525 passed, 9 skipped, 6959 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1549 tests, 1540 passed, 9 skipped, 7036 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -136,6 +136,7 @@ The existing tests of other features were touched only to give their test produc
 | UX-2 | `tests/Feature/SellerPlainWordingTest.php` (2) | The seller dashboard, statement, wallet, orders list, printed statement, shipping label and challan show none of: escrow, sub-order, consignment, ledger. Wording assertions in `SellerAccountStatementTest`, `WalletStatementTest`, `FilamentPanelsSmokeTest` and `ShippingLabelTest` were updated to the new text |
 | UX-3 | `tests/Feature/PanelNavigationTest.php` (2) | Every navigation group in both panels is declared in its panel and no two items in a group share a position. Billing, plans, wholesale quotes, cash flow and the seller activity log are in the agreed groups |
 | UX-6 | `tests/Feature/SellerTablesOnPhonesTest.php` (9 data sets) | For each of the nine seller tables, only the agreed key columns show below md; every other column carries `visibleFrom('md')` |
+| MON-11 | `tests/Feature/Monetization/ListingPackPurchaseTest.php` (4), `SellerPaymentSubmissionTest.php` (5), `CodDeficitBillTest.php` (5), `SellerLedgerStatementTest` (+1) | Pack bill, payment adds 25 listings for 30 days, revenue journal, no duplicate bill, refusal without a limit or add-ons, the page button. A submission waits and books nothing; part amount, second submission and used reference refused; approval pays, restores the store and books once; rejection shows the reason and allows a resend; both panels. Deficit bill raised once after 7 days, withdrawn when covered, payment brings the wallet to zero and credits the seller's ledger line, no wallet pay or waiver, seller label. Also passes on scratch PostgreSQL |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 

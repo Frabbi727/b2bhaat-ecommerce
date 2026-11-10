@@ -91,7 +91,7 @@ All findings come from reading the code; every one cites file:line. Status value
 ## P2 (Wave 2)
 | ID | Title (evidence) | Solution summary | Status |
 |---|---|---|---|
-| MON-11 | Listing-pack purchase, COD-deficit invoice and seller TrxID submission are missing | Build the missing flows |
+| MON-11 | Listing-pack purchase, COD-deficit invoice and seller TrxID submission are missing | Build the missing flows | Fixed (90ea25b, 5ad3b30, 702e351); deficit bills do not suspend (owner question) |
 | MON-12 | Delinquent sellers can withdraw; flash-sale submissions ignore suspension (`EscrowLedgerService.php:262`) | Block payouts while invoices are overdue | Fixed (`5193504`) |
 | ORD-2 | Dispatch, self-delivery and booking write status without `canTransition` | Go through `CourierStatusService` with a lock | Fixed (`ffbf60a`) |
 | ORD-3 | Checkout post-split steps are not atomic; coupon limit can be exceeded (`CouponService.php:80`) | Move them inside the transaction; lock the coupon | Fixed (`49d39df`) |

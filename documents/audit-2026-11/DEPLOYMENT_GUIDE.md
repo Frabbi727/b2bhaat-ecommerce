@@ -310,3 +310,5 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 - **`npm ci && npm run build` must run on deploy** (as CI already does). `public/build` is not committed; without a build containing the two theme entries, the admin and seller panels fail with "Unable to locate file in Vite manifest".
 
 UX-2 changes the seller statement CSV headers ('On Hold After Delivery (BDT):', 'Order #'). Tell sellers who import the CSV into their own spreadsheets.
+
+MON-11 adds the scheduled command `monetization:bill-cod-deficits` (daily 01:30 Dhaka); the scheduler must be running. No migration. On the first run, sellers whose wallets have been below zero for 7 days or more get a bill. Check `SellerWallet::where('available_balance', '<', 0)` first to see who will be billed.
