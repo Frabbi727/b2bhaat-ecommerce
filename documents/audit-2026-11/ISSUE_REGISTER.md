@@ -105,7 +105,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | ACC-14 | Entry date is always now(); no period close | Event dates; close-period UI | Fixed (7696ff2, 3790836). Dates: event handlers post on the Dhaka business day. Close: new Accounting Months screen. Entries are still dated the day the event is recorded; back-dating to an earlier event time is not done (e.g. a bKash payment verified the next day is booked on the verification day, when the money is confirmed) |
 | ACC-15 | Float maths; precision mismatch (12,2 vs 14,2) | bcmath / integer poisha helper | Fixed (da762d3). Precision mismatch reviewed, no change: business tables use decimal(12,2) (up to ৳9,999,999,999.99) and journal lines decimal(14,2), so every business amount fits a journal line |
 | ACC-16 | Trial balance check can never fail; date-range labelled "As of" | Opening balances; check per account | Fixed (5beadb8). Opening balances: a range report is now labelled as the movement for the range (page already said "Period"; the CSV said "As of"); a separate opening-balance column was not added |
-| ACC-17 | Reconciliation blind spots | Cover clearing and receivable accounts; store each run |
+| ACC-17 | Reconciliation blind spots | Cover clearing and receivable accounts; store each run | Fixed (5e66cff). Courier COD receivable and gateway clearing are now checked; each run is kept in the audit log |
 | ACC-18 | Statement signs follow account type, not normal balance; no cash flow statement | Use `normal_balance`; add cash flow |
 | ACC-19 | Seller statement totals wrong | Base it on the ledger |
 | AUD-5 | No named finance events | Named events |

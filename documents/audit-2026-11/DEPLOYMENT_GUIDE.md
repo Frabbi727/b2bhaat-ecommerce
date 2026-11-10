@@ -287,3 +287,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## ACC-16 (trial balance check)
 - Code and Blade only. If the Trial Balance shows "Journals that do not balance" on production, that points to a direct database edit: investigate before posting corrections.
+
+## ACC-17 (reconciliation coverage)
+- Code and Blade only. After deploy, run the Reconciliation page once. If Courier COD Receivable shows a variance, compare the unsettled-parcels list on the courier settlement screen with journals that touched account 1040 (for example ACC-1 reclassification or manual journals). A negative Payment Gateway Clearing means more was booked as leaving a gateway than arriving: check gateway transfers and MFS refunds.
