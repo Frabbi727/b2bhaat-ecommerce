@@ -117,7 +117,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | UX-ACC-6 | Found while testing ACC-7. On the Trial Balance and Financial Reconciliation pages (and likely the other custom report pages), icons render at full page width. The custom Blade views use Tailwind classes, but the admin panel has no compiled theme that includes them (`resources/views/filament/admin/pages/*.blade.php`, no `viteTheme` in `AdminPanelProvider`). Unchanged from `production` | Add a Filament admin theme that scans these views, or rewrite them with Filament components |
 | MON-15 | Found while fixing MON-2. The plan's **Charge Subscription Fee** switch is only used by the plan list. Renewal bills and plan-change bills charge the plan price even when the switch is off (`MonetizationProcessRenewalsCommand.php`, `SellerInvoiceSettlementService::startPlanChange`). Unchanged from `production` | Owner to decide: either bill nothing when the switch is off, or remove the switch and use price 0 for free plans | – | Fixed (`2134644`): owner decided switch off = no bill |
 | INV-6 | Price-tier validation gaps | Validate tiers |
-| INV-9 | Sellers can self-feature products | Admin-only featuring |
+| INV-9 | Sellers can self-feature products | Admin-only featuring | Fixed (383ae4d) |
 | INV-10 | Importer creates global attributes | Only use existing attributes |
 | SEC-8 | Tracking tokens never expire | Expiry or rotation | Fixed (ffbf54a). Default windows (90 days tracking, 365 days invoice) are my call; the owner can change them in `.env` |
 | SEC-9 | Sellers can see other sellers' lines on a shared invoice | Scope the invoice view | Fixed (718f8cd) |

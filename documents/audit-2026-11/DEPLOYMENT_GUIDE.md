@@ -256,3 +256,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 ## SEC-8 (link expiry)
 - New optional env keys `ORDER_TRACKING_LINK_DAYS` (default 90) and `ORDER_INVOICE_LINK_DAYS` (default 365). Run `php artisan config:cache` after setting them.
 - **Behaviour change to tell support:** SMS links for orders older than these windows stop working; buyers sign in or use order number + phone.
+
+## INV-9 (featuring)
+- Code only. Products a seller had already featured stay featured; review them under Admin → Product Moderation (Featured column) and use "Stop featuring" where needed.
