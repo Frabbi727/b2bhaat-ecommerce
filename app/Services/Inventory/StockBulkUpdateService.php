@@ -141,6 +141,8 @@ class StockBulkUpdateService
         $errors = [];
 
         DB::transaction(function () use ($seller, $rows, $variationIdIdx, $skuIdx, $newStockIdx, &$updated, &$unchanged, &$errors) {
+            $targets = [];
+
             foreach ($rows as $rowIndex => $row) {
                 $rowNumber = $rowIndex + 2; // +1 for 0-index, +1 for header
                 $varId = ($variationIdIdx !== false && isset($row[$variationIdIdx])) ? trim((string) $row[$variationIdIdx]) : null;
@@ -174,6 +176,15 @@ class StockBulkUpdateService
 
                     continue;
                 }
+
+                // A later row for the same variation wins, as it did when rows were written one by one
+                $targets[$variation->id] = $newQty;
+            }
+
+            // PAY-6: lock and write lowest id first, the same order checkout uses, so the two cannot deadlock
+            ksort($targets);
+            foreach ($targets as $variationId => $newQty) {
+                $variation = ProductVariation::where('id', $variationId)->lockForUpdate()->first();
 
                 if ($variation->stock_quantity === $newQty) {
                     $unchanged++;
