@@ -289,6 +289,7 @@ class FinancialStatementService
         'refund_processed' => 'Refunds',
         'subscription_paid' => 'Subscription payments',
         'listing_pack_paid' => 'Listing pack payments',
+        'cod_deficit_paid' => 'COD commission paid in by sellers',
         'manual_journal' => 'Manual journals',
         'payout_requested' => 'Payout requests',
         'payout_disbursed' => 'Payouts to sellers',

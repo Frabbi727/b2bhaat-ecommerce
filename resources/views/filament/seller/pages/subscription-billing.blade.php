@@ -357,7 +357,7 @@
                                         {{ $inv->invoice_number }}
                                     </td>
                                     <td>
-                                        <div style="font-weight: 600; text-transform: capitalize;">{{ str_replace('_', ' ', $inv->invoice_type) }}</div>
+                                        <div style="font-weight: 600;">{{ $this->billLabel($inv->invoice_type) }}</div>
                                         @if (!empty($inv->metadata['plan_name']))
                                             <div style="font-size: 0.7rem; color: #71717a;">Plan: {{ $inv->metadata['plan_name'] }}</div>
                                         @endif
@@ -375,7 +375,11 @@
                                         ৳{{ number_format((float) $inv->total_amount, 2) }}
                                     </td>
                                     <td style="text-align: right;">
-                                        @if ($walletBalance >= (float) $inv->total_amount)
+                                        @if ($inv->invoice_type === \App\Models\SellerInvoice::TYPE_COD_COMMISSION_DEFICIT)
+                                            <div style="font-size: 0.7rem; color: #71717a; max-width: 18rem; margin-left: auto;">
+                                                Your wallet is below zero, so pay this by bKash, Nagad or bank.
+                                            </div>
+                                        @elseif ($walletBalance >= (float) $inv->total_amount)
                                             <x-filament::button
                                                 color="success"
                                                 size="xs"
@@ -564,7 +568,7 @@
                                         {{ $paidInv->invoice_number }}
                                     </td>
                                     <td style="text-transform: capitalize;">
-                                        {{ str_replace('_', ' ', $paidInv->invoice_type) }}
+                                        {{ $this->billLabel($paidInv->invoice_type) }}
                                     </td>
                                     <td>
                                         {{ $paidInv->paid_at?->format('d M, Y (h:i A)') ?? 'Settled' }}

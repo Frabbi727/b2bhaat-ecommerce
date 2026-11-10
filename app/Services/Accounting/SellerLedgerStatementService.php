@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
  * ACC-19: a seller's statement totals, taken from the seller's lines in the general ledger rather than from the
  * wallet table. A reversal counts against the event it reverses, so a cancelled payout or release drops out.
  *
- * The figures always tie together: net earnings − fees paid from balance − withdrawn − payouts waiting = available.
+ * The figures always tie together: net earnings + paid in − fees paid from balance − withdrawn − payouts waiting = available.
  */
 class SellerLedgerStatementService
 {
@@ -27,6 +27,11 @@ class SellerLedgerStatementService
     private const PAYOUT_EVENTS = [
         AccountingEvent::PAYOUT_REQUESTED->value,
         AccountingEvent::PAYOUT_REJECTED->value,
+    ];
+
+    /** MON-11: money the seller paid in to clear what they owed; not earnings. */
+    private const PAID_IN_EVENTS = [
+        AccountingEvent::COD_DEFICIT_PAID->value,
     ];
 
     /** Platform fees a seller can pay from their balance. */
@@ -43,6 +48,7 @@ class SellerLedgerStatementService
      *     net_earnings: float,
      *     fees_paid_from_balance: float,
      *     total_withdrawn: float,
+     *     paid_in: float,
      *     is_consistent: bool
      * }
      */
@@ -72,6 +78,7 @@ class SellerLedgerStatementService
         $earnings = 0;
         $fees = 0;
         $withdrawn = 0;
+        $paidIn = 0;
 
         foreach ($rows as $row) {
             // All three accounts are liabilities to the seller: credit increases what is owed
@@ -90,6 +97,8 @@ class SellerLedgerStatementService
             if ($row->system_slug === self::WALLET) {
                 if (in_array($row->event, self::FEE_EVENTS, true)) {
                     $fees -= $netPoisha;
+                } elseif (in_array($row->event, self::PAID_IN_EVENTS, true)) {
+                    $paidIn += $netPoisha;
                 } elseif (! in_array($row->event, self::PAYOUT_EVENTS, true)) {
                     $earnings += $netPoisha;
                 }
@@ -103,7 +112,8 @@ class SellerLedgerStatementService
             'net_earnings' => $this->toTaka($earnings),
             'fees_paid_from_balance' => $this->toTaka($fees),
             'total_withdrawn' => $this->toTaka($withdrawn),
-            'is_consistent' => $earnings - $fees - $withdrawn - $pending === $available,
+            'paid_in' => $this->toTaka($paidIn),
+            'is_consistent' => $earnings + $paidIn - $fees - $withdrawn - $pending === $available,
         ];
     }
 

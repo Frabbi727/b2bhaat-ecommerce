@@ -152,6 +152,7 @@ class WalletTransactionsTable
             WalletTransaction::TYPE_ESCROW_REFUND => 'Refunded to buyer from money on hold',
             WalletTransaction::TYPE_COD_SELF_COLLECTED,
             WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL => 'COD Adjustment',
+            WalletTransaction::TYPE_COD_DEFICIT_PAYMENT => 'COD commission you paid in',
             default => str($type)->headline()->toString(),
         };
     }
@@ -174,6 +175,7 @@ class WalletTransactionsTable
             WalletTransaction::TYPE_ESCROW_RELEASE,
             WalletTransaction::TYPE_PAYOUT_REVERSAL,
             WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL,
+            WalletTransaction::TYPE_COD_DEFICIT_PAYMENT,
         ], true)) {
             return '+৳'.$amount;
         }
@@ -196,6 +198,7 @@ class WalletTransactionsTable
             WalletTransaction::TYPE_ESCROW_RELEASE,
             WalletTransaction::TYPE_PAYOUT_REVERSAL,
             WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL,
+            WalletTransaction::TYPE_COD_DEFICIT_PAYMENT,
         ], true)) {
             return 'success';
         }

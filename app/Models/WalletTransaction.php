@@ -36,6 +36,9 @@ class WalletTransaction extends Model
     /** Rejected payout credited back to available balance (PRA-013). */
     public const TYPE_PAYOUT_REVERSAL = 'payout_reversal';
 
+    /** MON-11: the seller paid a COD commission deficit bill, which brings the wallet back up. */
+    public const TYPE_COD_DEFICIT_PAYMENT = 'cod_deficit_payment';
+
     public const STATUS_REQUESTED = 'requested';
 
     public const STATUS_DISBURSED = 'disbursed';

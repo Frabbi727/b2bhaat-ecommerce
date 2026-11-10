@@ -162,6 +162,10 @@ class SellerInvoiceSettlementService
             $invoice = $this->lockUnpaidInvoice($seller, $invoiceId);
             $amount = (float) $invoice->total_amount;
 
+            if ($invoice->invoice_type === SellerInvoice::TYPE_COD_COMMISSION_DEFICIT) {
+                throw new DomainException('This bill is for commission owed while your wallet is below zero, so it cannot be paid from the wallet. Pay it by bKash, Nagad or bank and send us the reference.');
+            }
+
             if ($amount > 0.00) {
                 /** @var SellerWallet|null $wallet */
                 $wallet = SellerWallet::where('seller_id', $seller->id)->lockForUpdate()->first();
@@ -232,6 +236,10 @@ class SellerInvoiceSettlementService
             $billTotal = round((float) $invoice->total_amount, 2);
             $isWaiver = $method === SellerPayment::METHOD_ADMIN_WAIVER;
             $reference = trim((string) ($payment['transaction_reference'] ?? ''));
+
+            if ($isWaiver && $invoice->invoice_type === SellerInvoice::TYPE_COD_COMMISSION_DEFICIT) {
+                throw new DomainException('A COD commission bill cannot be waived here, because the commission is already in the accounts. Post a manual journal to write it off. Nothing was recorded.');
+            }
 
             // MON-6: a bill is settled by one payment of exactly its amount; a waiver covers the whole bill.
             $amount = $isWaiver ? $billTotal : round((float) ($payment['amount'] ?? 0), 2);
@@ -467,7 +475,33 @@ class SellerInvoiceSettlementService
             $this->applySubscriptionPeriod($invoice, $seller);
         }
 
+        if ($invoice->invoice_type === SellerInvoice::TYPE_COD_COMMISSION_DEFICIT) {
+            $this->creditDeficitPayment($invoice, $seller);
+        }
+
         $this->suspensionService->restoreAfterPayment($seller, $actor);
+    }
+
+    /**
+     * MON-11: money the seller paid in for a COD commission bill goes back into their wallet, clearing what they owed.
+     */
+    protected function creditDeficitPayment(SellerInvoice $invoice, User $seller): void
+    {
+        $amount = round((float) $invoice->total_amount, 2);
+        $wallet = SellerWallet::where('seller_id', $seller->id)->lockForUpdate()->first()
+            ?? SellerWallet::create(['seller_id' => $seller->id, 'available_balance' => 0, 'escrow_held_balance' => 0]);
+
+        $wallet->increment('available_balance', $amount);
+        $wallet->refresh();
+
+        WalletTransaction::create([
+            'seller_wallet_id' => $wallet->id,
+            'transaction_type' => WalletTransaction::TYPE_COD_DEFICIT_PAYMENT,
+            'status' => 'disbursed',
+            'amount' => $amount,
+            'running_balance' => (float) $wallet->available_balance,
+            'reference_note' => "Commission owed on collected COD cash paid with bill #{$invoice->invoice_number}",
+        ]);
     }
 
     protected function applySubscriptionPeriod(SellerInvoice $invoice, User $seller): void

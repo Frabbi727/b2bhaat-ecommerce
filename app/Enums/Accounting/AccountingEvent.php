@@ -13,6 +13,7 @@ enum AccountingEvent: string
     case REFUND_PROCESSED = 'refund_processed';
     case SUBSCRIPTION_PAID = 'subscription_paid';
     case LISTING_PACK_PAID = 'listing_pack_paid';
+    case COD_DEFICIT_PAID = 'cod_deficit_paid';
     case MANUAL_JOURNAL = 'manual_journal';
     case PAYOUT_REQUESTED = 'payout_requested';
     case PAYOUT_DISBURSED = 'payout_disbursed';

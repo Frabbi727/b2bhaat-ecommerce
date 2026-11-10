@@ -42,6 +42,12 @@ class MonetizationJournalHandler
         return match ($invoice->invoice_type) {
             SellerInvoice::TYPE_SUBSCRIPTION_FEE => $this->recordSubscriptionPayment($payment),
             SellerInvoice::TYPE_LISTING_PACK => $this->recordListingPackPayment($payment),
+            // MON-11: the commission was booked when the parcel was delivered; this money only clears what the seller owed
+            SellerInvoice::TYPE_COD_COMMISSION_DEFICIT => $this->postMonetizationPayment(
+                payment: $payment,
+                event: AccountingEvent::COD_DEFICIT_PAID,
+                creditAccountSlug: 'seller_wallet_payable',
+            ),
             default => null,
         };
     }
@@ -122,6 +128,7 @@ class MonetizationJournalHandler
         $creditNarration = match ($event) {
             AccountingEvent::SUBSCRIPTION_PAID => "Subscription revenue recognized for {$invoiceNumber}",
             AccountingEvent::LISTING_PACK_PAID => "Listing pack revenue recognized for {$invoiceNumber}",
+            AccountingEvent::COD_DEFICIT_PAID => "Seller paid commission owed on self-collected COD for {$invoiceNumber}",
             default => "Monetization revenue recognized for {$invoiceNumber}",
         };
 
@@ -145,6 +152,7 @@ class MonetizationJournalHandler
         $description = match ($event) {
             AccountingEvent::SUBSCRIPTION_PAID => "Seller subscription payment for invoice {$invoiceNumber} via {$paymentMethod}",
             AccountingEvent::LISTING_PACK_PAID => "Seller listing pack payment for invoice {$invoiceNumber} via {$paymentMethod}",
+            AccountingEvent::COD_DEFICIT_PAID => "Seller COD commission deficit payment for invoice {$invoiceNumber} via {$paymentMethod}",
             default => "Seller monetization payment for invoice {$invoiceNumber} via {$paymentMethod}",
         };
 

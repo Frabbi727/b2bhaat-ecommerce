@@ -29,6 +29,9 @@ Schedule::command('monetization:process-renewals')->dailyAt('00:05')->timezone(c
 // Monetization automation: Daily grace period check at 01:00
 Schedule::command('monetization:check-grace-periods')->dailyAt('01:00')->timezone(config('app.display_timezone'))->withoutOverlapping()->onOneServer();
 
+// MON-11: bill sellers whose wallet stayed below zero after collecting COD cash themselves
+Schedule::command('monetization:bill-cod-deficits')->dailyAt('01:30')->timezone(config('app.display_timezone'))->withoutOverlapping()->onOneServer();
+
 // Monetization automation: Hourly suspension enforcement for expired grace accounts
 Schedule::command('monetization:enforce-suspensions')->hourly()->withoutOverlapping()->onOneServer();
 

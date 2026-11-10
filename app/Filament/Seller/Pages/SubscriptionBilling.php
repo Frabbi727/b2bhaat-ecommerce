@@ -182,6 +182,17 @@ class SubscriptionBilling extends Page
             ->send();
     }
 
+    public function billLabel(?string $type): string
+    {
+        return match ($type) {
+            SellerInvoice::TYPE_SUBSCRIPTION_FEE => 'Plan subscription',
+            SellerInvoice::TYPE_LISTING_PACK => 'Listing pack',
+            SellerInvoice::TYPE_COD_COMMISSION_DEFICIT => 'Commission owed on cash you collected',
+            SellerInvoice::TYPE_MANUAL_FEE => 'Platform fee',
+            default => str((string) $type)->replace('_', ' ')->ucfirst()->toString(),
+        };
+    }
+
     public function getSubmittedPayment(int $invoiceId): ?SellerPayment
     {
         return app(SellerInvoiceSettlementService::class)->pendingSubmissionFor($invoiceId);

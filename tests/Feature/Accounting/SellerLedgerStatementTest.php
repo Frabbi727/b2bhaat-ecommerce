@@ -157,6 +157,26 @@ class SellerLedgerStatementTest extends TestCase
         $this->assertTrue($summary['is_consistent']);
     }
 
+    public function test_a_cod_deficit_payment_counts_as_paid_in_not_earnings(): void
+    {
+        $id = $this->seller->id;
+        $this->postEntry('cod_self_delivered', [
+            new JournalLineData(accountSlug: 'seller_wallet_payable', debit: 150.00, sellerId: $id),
+            new JournalLineData(accountSlug: 'commission_revenue', credit: 150.00, sellerId: $id),
+        ]);
+        $this->postEntry('cod_deficit_paid', [
+            new JournalLineData(accountSlug: 'gateway_clearing', debit: 150.00),
+            new JournalLineData(accountSlug: 'seller_wallet_payable', credit: 150.00, sellerId: $id),
+        ]);
+
+        $summary = app(SellerLedgerStatementService::class)->summary($id);
+
+        $this->assertSame(0.0, $summary['available_balance']);
+        $this->assertSame(150.0, $summary['paid_in']);
+        $this->assertSame(-150.0, $summary['net_earnings']);
+        $this->assertTrue($summary['is_consistent']);
+    }
+
     /**
      * The wallet table says something else; the statement follows the ledger.
      */
