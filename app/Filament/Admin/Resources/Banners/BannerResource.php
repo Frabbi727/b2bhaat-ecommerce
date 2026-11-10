@@ -23,7 +23,7 @@ class BannerResource extends Resource
 
     protected static UnitEnum|string|null $navigationGroup = 'Marketing';
 
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 3;
 
     protected static ?string $modelLabel = 'banner';
 

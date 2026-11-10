@@ -23,9 +23,9 @@ class TrialBalancePage extends Page
 {
     protected static UnitEnum|string|null $navigationGroup = 'Accounting';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 2;
 
-    protected static ?string $navigationLabel = 'Trial Balance';
+    protected static ?string $navigationLabel = 'Trial balance';
 
     protected static ?string $title = 'Trial Balance';
 

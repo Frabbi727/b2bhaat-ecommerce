@@ -18,9 +18,9 @@ class IncomeStatementPage extends Page
 {
     protected static UnitEnum|string|null $navigationGroup = 'Accounting';
 
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 3;
 
-    protected static ?string $navigationLabel = 'Income Statement (P&L)';
+    protected static ?string $navigationLabel = 'Income statement (P&L)';
 
     protected static ?string $title = 'Income Statement (Profit & Loss)';
 

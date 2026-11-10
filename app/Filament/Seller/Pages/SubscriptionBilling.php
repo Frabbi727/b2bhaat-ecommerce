@@ -22,11 +22,11 @@ class SubscriptionBilling extends Page
 {
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCreditCard;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Store';
+    protected static UnitEnum|string|null $navigationGroup = 'Finance';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 3;
 
-    protected static ?string $navigationLabel = 'Subscription & Billing';
+    protected static ?string $navigationLabel = 'Subscription & billing';
 
     protected static ?string $title = 'Subscription & Billing';
 

@@ -18,9 +18,9 @@ class BalanceSheetPage extends Page
 {
     protected static UnitEnum|string|null $navigationGroup = 'Accounting';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 4;
 
-    protected static ?string $navigationLabel = 'Balance Sheet';
+    protected static ?string $navigationLabel = 'Balance sheet';
 
     protected static ?string $title = 'Balance Sheet';
 

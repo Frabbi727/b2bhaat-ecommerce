@@ -33,9 +33,9 @@ class SellerActivityResource extends Resource
 
     protected static UnitEnum|string|null $navigationGroup = 'Store';
 
-    protected static ?int $navigationSort = 15;
+    protected static ?int $navigationSort = 2;
 
-    protected static ?string $navigationLabel = 'Audit & Activity Log';
+    protected static ?string $navigationLabel = 'Activity log';
 
     protected static ?string $modelLabel = 'Activity Log';
 

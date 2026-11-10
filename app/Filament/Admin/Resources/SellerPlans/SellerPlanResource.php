@@ -28,11 +28,11 @@ class SellerPlanResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSparkles;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Monetization & Plans';
+    protected static UnitEnum|string|null $navigationGroup = 'Finance';
 
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 4;
 
-    protected static ?string $navigationLabel = 'Seller Plans';
+    protected static ?string $navigationLabel = 'Seller plans';
 
     protected static ?string $modelLabel = 'plan';
 

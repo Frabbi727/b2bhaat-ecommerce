@@ -32,9 +32,9 @@ class AccountingPeriodResource extends Resource
 
     protected static UnitEnum|string|null $navigationGroup = 'Accounting';
 
-    protected static ?int $navigationSort = 9;
+    protected static ?int $navigationSort = 8;
 
-    protected static ?string $navigationLabel = 'Accounting Months';
+    protected static ?string $navigationLabel = 'Accounting months';
 
     protected static ?string $modelLabel = 'Accounting month';
 

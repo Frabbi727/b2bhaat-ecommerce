@@ -35,11 +35,11 @@ class SellerMonetizationResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Monetization & Plans';
+    protected static UnitEnum|string|null $navigationGroup = 'Finance';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 3;
 
-    protected static ?string $navigationLabel = 'Seller Monetization & Billing';
+    protected static ?string $navigationLabel = 'Seller billing';
 
     protected static ?string $modelLabel = 'seller billing';
 

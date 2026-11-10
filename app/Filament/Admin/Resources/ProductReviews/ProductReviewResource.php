@@ -33,7 +33,7 @@ class ProductReviewResource extends Resource
 
     protected static UnitEnum|string|null $navigationGroup = 'Catalog';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 4;
 
     protected static ?string $navigationLabel = 'Reviews';
 

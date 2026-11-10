@@ -24,7 +24,7 @@ class FinancialReconciliationPage extends Page
 {
     protected static UnitEnum|string|null $navigationGroup = 'Accounting';
 
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 6;
 
     protected static ?string $navigationLabel = 'Reconciliation';
 

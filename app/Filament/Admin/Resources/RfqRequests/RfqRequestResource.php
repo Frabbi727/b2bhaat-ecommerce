@@ -24,11 +24,11 @@ class RfqRequestResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-chat-bubble-left-right';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Catalog';
+    protected static UnitEnum|string|null $navigationGroup = 'Orders & Fulfilment';
 
     protected static ?int $navigationSort = 4;
 
-    protected static ?string $navigationLabel = 'Quote requests';
+    protected static ?string $navigationLabel = 'Wholesale quotes';
 
     protected static ?string $modelLabel = 'quote request';
 

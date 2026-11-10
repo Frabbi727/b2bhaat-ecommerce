@@ -17,9 +17,11 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class CashFlowStatementPage extends IncomeStatementPage
 {
-    protected static ?int $navigationSort = 6;
+    protected static string|\UnitEnum|null $navigationGroup = 'Accounting';
 
-    protected static ?string $navigationLabel = 'Cash Flow Statement';
+    protected static ?int $navigationSort = 5;
+
+    protected static ?string $navigationLabel = 'Cash flow statement';
 
     protected static ?string $title = 'Cash Flow Statement';
 

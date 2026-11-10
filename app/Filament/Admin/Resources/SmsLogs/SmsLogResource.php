@@ -26,7 +26,7 @@ class SmsLogResource extends Resource
 
     protected static ?int $navigationSort = 3;
 
-    protected static ?string $navigationLabel = 'SMS Logs';
+    protected static ?string $navigationLabel = 'SMS logs';
 
     protected static ?string $modelLabel = 'SMS';
 

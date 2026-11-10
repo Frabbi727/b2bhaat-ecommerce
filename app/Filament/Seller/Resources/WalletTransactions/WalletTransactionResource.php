@@ -22,7 +22,7 @@ class WalletTransactionResource extends Resource
 
     protected static ?string $slug = 'account-statement';
 
-    protected static ?string $navigationLabel = 'Account Statement';
+    protected static ?string $navigationLabel = 'Account statement';
 
     protected static ?string $modelLabel = 'Account Statement';
 

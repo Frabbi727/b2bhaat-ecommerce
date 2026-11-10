@@ -25,9 +25,9 @@ class AccountingAccountResource extends Resource
 
     protected static UnitEnum|string|null $navigationGroup = 'Accounting';
 
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 7;
 
-    protected static ?string $navigationLabel = 'Chart of Accounts';
+    protected static ?string $navigationLabel = 'Chart of accounts';
 
     protected static ?string $modelLabel = 'Account';
 
