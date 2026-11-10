@@ -8,6 +8,7 @@ use App\DTOs\Accounting\JournalEntryData;
 use App\DTOs\Accounting\JournalLineData;
 use App\Enums\Accounting\AccountingEvent;
 use App\Models\Accounting\AccountingJournalEntry;
+use App\Models\ReturnRequest;
 use App\Models\SubOrder;
 use App\Models\WalletTransaction;
 use App\Services\Accounting\JournalPostingService;
@@ -238,5 +239,126 @@ class RefundJournalHandler
         );
 
         return $this->journalPostingService->post($entryData);
+    }
+
+    /**
+     * PAY-4: a return of some items. The seller gives up the items' price less their commission share (from money
+     * on hold, or from the balance once released); the commission share comes back out of the books; the coupon
+     * share is no longer spent; the buyer is owed the rest. The last return of a parcel also reverses the delivery
+     * fee (courier fee from shipping revenue; a self-delivery fee is already inside the seller amount).
+     *
+     * @param  array{seller: float, commission: float, discount: float, refund: float, courier_fee: float, completes: bool}  $amounts
+     */
+    public function recordPartialReturnRefund(SubOrder $subOrder, ReturnRequest $returnRequest, bool $released, array $amounts, string $reason): ?AccountingJournalEntry
+    {
+        $orderId = $subOrder->parent_order_id;
+        $customerId = $subOrder->order?->customer_id;
+        $label = "items returned from Sub-Order #{$subOrder->sub_order_number}";
+        $lines = [];
+
+        if ($amounts['seller'] > 0.0) {
+            $lines[] = new JournalLineData(
+                accountSlug: $released ? 'seller_wallet_payable' : 'seller_escrow_payable',
+                debit: round($amounts['seller'], 2),
+                sellerId: $subOrder->seller_id,
+                subOrderId: $subOrder->id,
+                orderId: $orderId,
+                narration: ($released ? 'Take back released money for ' : 'Reduce money on hold for ').$label.": {$reason}",
+            );
+        }
+
+        array_push($lines, ...$this->commissionRecognition->commissionReversalLines(
+            $subOrder,
+            $amounts['commission'],
+            $orderId,
+            "Give back commission on {$label}",
+        ));
+
+        if ($amounts['courier_fee'] > 0.0) {
+            $lines[] = new JournalLineData(
+                accountSlug: 'shipping_service_revenue',
+                debit: round($amounts['courier_fee'], 2),
+                subOrderId: $subOrder->id,
+                orderId: $orderId,
+                narration: "Reverse delivery fee: the whole of Sub-Order #{$subOrder->sub_order_number} came back",
+            );
+        }
+
+        if ($amounts['discount'] > 0.0) {
+            $lines[] = new JournalLineData(
+                accountSlug: 'promotional_discount_expense',
+                credit: round($amounts['discount'], 2),
+                customerId: $customerId,
+                subOrderId: $subOrder->id,
+                orderId: $orderId,
+                narration: "Coupon share of {$label}",
+            );
+        }
+
+        if ($amounts['refund'] > 0.0) {
+            $lines[] = new JournalLineData(
+                accountSlug: 'customer_refund_payable',
+                credit: round($amounts['refund'], 2),
+                customerId: $customerId,
+                subOrderId: $subOrder->id,
+                orderId: $orderId,
+                narration: "Refund owed to the buyer for {$label}: {$reason}",
+            );
+        }
+
+        if ($lines === []) {
+            return null;
+        }
+
+        return $this->journalPostingService->post(new JournalEntryData(
+            entryDate: JournalEntryData::businessDate(),
+            financialEvent: AccountingEvent::REFUND_PROCESSED->value,
+            idempotencyKey: "return_request_refund_{$returnRequest->id}",
+            description: "Refund for {$label}: {$reason}",
+            lines: $lines,
+            referenceType: ReturnRequest::class,
+            referenceId: $returnRequest->id,
+        ));
+    }
+
+    /**
+     * PAY-4: items returned from a parcel whose COD cash the seller kept. Mirrors the whole-parcel case: the
+     * commission charge on those items (less their coupon share) goes back to the seller's balance.
+     */
+    public function recordSelfCollectedPartialReturn(SubOrder $subOrder, ReturnRequest $returnRequest, float $amount, string $reason): ?AccountingJournalEntry
+    {
+        $amount = round($amount, 2);
+        if ($amount <= 0.0) {
+            return null;
+        }
+
+        $label = "items returned from self-collected COD Sub-Order #{$subOrder->sub_order_number}";
+
+        return $this->journalPostingService->post(new JournalEntryData(
+            entryDate: JournalEntryData::businessDate(),
+            financialEvent: AccountingEvent::REFUND_PROCESSED->value,
+            idempotencyKey: "return_request_cod_giveback_{$returnRequest->id}",
+            description: "Commission given back for {$label}: {$reason}",
+            lines: [
+                new JournalLineData(
+                    accountSlug: 'commission_revenue',
+                    debit: $amount,
+                    sellerId: $subOrder->seller_id,
+                    subOrderId: $subOrder->id,
+                    orderId: $subOrder->parent_order_id,
+                    narration: "Reverse commission on {$label}: {$reason}",
+                ),
+                new JournalLineData(
+                    accountSlug: 'seller_wallet_payable',
+                    credit: $amount,
+                    sellerId: $subOrder->seller_id,
+                    subOrderId: $subOrder->id,
+                    orderId: $subOrder->parent_order_id,
+                    narration: "Give back commission charge on {$label}: {$reason}",
+                ),
+            ],
+            referenceType: ReturnRequest::class,
+            referenceId: $returnRequest->id,
+        ));
     }
 }

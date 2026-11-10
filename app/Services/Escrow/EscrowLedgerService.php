@@ -8,6 +8,7 @@ use App\Enums\Accounting\AccountingEvent;
 use App\Enums\Accounting\JournalEntryStatus;
 use App\Events\Finance\PayoutStatusUpdatedEvent;
 use App\Models\Accounting\AccountingJournalEntry;
+use App\Models\ReturnRequest;
 use App\Models\SellerInvoice;
 use App\Models\SellerWallet;
 use App\Models\SubOrder;
@@ -62,7 +63,7 @@ class EscrowLedgerService
                     "Escrow hold for Sub-Order #{$subOrder->sub_order_number}");
             }
 
-            $shortfall = round($payable - $this->heldAmountFor($subOrder), 2);
+            $shortfall = round($payable - $this->grossHeldFor($subOrder), 2);
             $alreadySettled = $this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_RELEASE)
                 || $this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_REFUND);
 
@@ -104,13 +105,96 @@ class EscrowLedgerService
     }
 
     /**
-     * Total currently attributed to this sub-order's hold (hold plus any self-delivery top-up).
+     * Total currently attributed to this sub-order's hold (hold plus any self-delivery top-up), less what item
+     * returns already took back out of it (PAY-4).
      */
     public function heldAmountFor(SubOrder $subOrder): float
+    {
+        $returned = (float) WalletTransaction::where('sub_order_id', $subOrder->id)
+            ->where('transaction_type', WalletTransaction::TYPE_PARTIAL_RETURN_HELD)
+            ->sum('amount');
+
+        return round($this->grossHeldFor($subOrder) - $returned, 2);
+    }
+
+    private function grossHeldFor(SubOrder $subOrder): float
     {
         return round((float) WalletTransaction::where('sub_order_id', $subOrder->id)
             ->whereIn('transaction_type', [WalletTransaction::TYPE_ESCROW_HOLD, WalletTransaction::TYPE_ESCROW_HOLD_ADJUSTMENT])
             ->sum('amount'), 2);
+    }
+
+    /**
+     * PAY-4: undo the seller side of a return of some items. Still on hold → the hold shrinks; already released →
+     * the available balance drops (it may go negative); self-collected COD → the commission share, less the
+     * coupon share, is given back. One wallet row and one journal per return.
+     *
+     * @param  array{seller: float, commission: float, discount: float, refund: float, courier_fee: float, completes: bool}  $amounts
+     */
+    public function reversePartialReturn(SubOrder $subOrder, ReturnRequest $returnRequest, array $amounts, string $reason): ?WalletTransaction
+    {
+        return DB::transaction(function () use ($subOrder, $returnRequest, $amounts, $reason): ?WalletTransaction {
+            $wallet = $this->lockWallet($subOrder->seller_id, createIfMissing: true);
+
+            $existing = WalletTransaction::where('return_request_id', $returnRequest->id)->first();
+            if ($existing) {
+                return $existing;
+            }
+
+            if ($selfCollected = $this->findTransaction($subOrder, WalletTransaction::TYPE_COD_SELF_COLLECTED)) {
+                $givenBack = (float) WalletTransaction::where('sub_order_id', $subOrder->id)
+                    ->where('transaction_type', WalletTransaction::TYPE_PARTIAL_RETURN_COD)
+                    ->sum('amount');
+                $amount = $amounts['completes']
+                    ? round((float) $selfCollected->amount - $givenBack, 2)
+                    : round($amounts['commission'] - $amounts['discount'], 2);
+
+                if ($amount <= 0) {
+                    return null;
+                }
+
+                $wallet->increment('available_balance', $amount);
+                $wallet->refresh();
+
+                $tx = $this->recordForReturn($wallet, $subOrder, $returnRequest, WalletTransaction::TYPE_PARTIAL_RETURN_COD, $amount,
+                    "Commission given back for items returned from Sub-Order #{$subOrder->sub_order_number}: {$reason}");
+                $this->refundJournalHandler->recordSelfCollectedPartialReturn($subOrder, $returnRequest, $amount, $reason);
+
+                return $tx;
+            }
+
+            $released = $this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_RELEASE) !== null;
+            $amount = round($amounts['seller'], 2);
+
+            if ($released) {
+                $wallet->decrement('available_balance', $amount);
+            } else {
+                $wallet->decrement('escrow_held_balance', $amount);
+            }
+            $wallet->refresh();
+
+            $tx = $this->recordForReturn($wallet, $subOrder, $returnRequest,
+                $released ? WalletTransaction::TYPE_PARTIAL_RETURN_RELEASED : WalletTransaction::TYPE_PARTIAL_RETURN_HELD,
+                $amount,
+                "Items returned from Sub-Order #{$subOrder->sub_order_number}: {$reason}");
+
+            $this->refundJournalHandler->recordPartialReturnRefund($subOrder, $returnRequest, $released, $amounts, $reason);
+
+            return $tx;
+        });
+    }
+
+    private function recordForReturn(SellerWallet $wallet, SubOrder $subOrder, ReturnRequest $returnRequest, string $type, float $amount, string $note): WalletTransaction
+    {
+        return WalletTransaction::create([
+            'seller_wallet_id' => $wallet->id,
+            'sub_order_id' => $subOrder->id,
+            'return_request_id' => $returnRequest->id,
+            'transaction_type' => $type,
+            'amount' => $amount,
+            'running_balance' => $wallet->available_balance,
+            'reference_note' => $note,
+        ]);
     }
 
     /**

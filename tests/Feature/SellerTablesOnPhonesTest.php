@@ -24,7 +24,7 @@ class SellerTablesOnPhonesTest extends TestCase
             'wholesale quotes' => [$base.'Resources/RfqRequests/Tables/RfqRequestsTable.php', ['created_at', 'product.title', 'target_quantity', 'status']],
             'flash sale submissions' => [$base.'Resources/FlashSales/RelationManagers/MySubmissionsRelationManager.php', ['product.title', 'campaign_price', 'status']],
             'reviews' => [$base.'Resources/ProductReviews/Tables/ProductReviewsTable.php', ['product.title', 'rating', 'comment']],
-            'returns' => [$base.'Resources/ReturnRequests/Tables/ReturnRequestsTable.php', ['created_at', 'subOrder.sub_order_number', 'requested_action', 'status']],
+            'returns' => [$base.'Resources/ReturnRequests/Tables/ReturnRequestsTable.php', ['created_at', 'subOrder.sub_order_number', 'items_summary', 'requested_action', 'status']],
             'flash sales' => [$base.'Resources/FlashSales/FlashSaleResource.php', ['name', 'registration_status', 'starts_at']],
             'recent orders' => [$base.'Widgets/SellerRecentOrdersWidget.php', ['sub_order_number', 'fulfillmentStatus.name', 'net_earnings']],
             'account statement' => [$base.'Resources/WalletTransactions/Tables/WalletTransactionsTable.php', ['created_at', 'transaction_type', 'amount']],

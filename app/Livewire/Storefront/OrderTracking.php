@@ -5,6 +5,7 @@ namespace App\Livewire\Storefront;
 use App\Models\Order;
 use App\Models\SubOrder;
 use App\Services\Orders\OrderDisputeService;
+use App\Services\Orders\PartialReturnService;
 use App\Services\Settings\StoreConfigurationService;
 use Exception;
 use Illuminate\Support\Facades\RateLimiter;
@@ -56,6 +57,9 @@ class OrderTracking extends Component
     public string $returnRequestedAction = 'refund';
 
     public string $returnDescription = '';
+
+    /** @var array<int|string, int|string|null> PAY-4: order item id => units the buyer is sending back */
+    public array $returnQuantities = [];
 
     public function mount(?string $token = null): void
     {
@@ -231,6 +235,7 @@ class OrderTracking extends Component
     public function openReturnModal(int $subOrderId): void
     {
         $this->selectedSubOrderId = $subOrderId;
+        $this->returnQuantities = array_map(fn (array $line): int => $line['remaining'], $this->returnableItems());
         $this->showReturnModal = true;
         $this->returnDescription = '';
         $this->actionError = '';
@@ -240,6 +245,40 @@ class OrderTracking extends Component
     {
         $this->showReturnModal = false;
         $this->selectedSubOrderId = null;
+        $this->returnQuantities = [];
+    }
+
+    /**
+     * Items of the chosen parcel the buyer still has, for the return form.
+     *
+     * @return array<int, array{name: string, remaining: int, unit_price: float}>
+     */
+    public function returnableItems(): array
+    {
+        if ($this->order === null || $this->selectedSubOrderId === null) {
+            return [];
+        }
+
+        $subOrder = SubOrder::with('items.product:id,title')
+            ->where('parent_order_id', $this->order->id)
+            ->find($this->selectedSubOrderId);
+        if (! $subOrder) {
+            return [];
+        }
+
+        $remaining = app(PartialReturnService::class)->remainingQuantities($subOrder);
+        $items = [];
+        foreach ($subOrder->items as $item) {
+            if (($remaining[$item->id] ?? 0) > 0) {
+                $items[$item->id] = [
+                    'name' => $item->product?->title ?? 'Item',
+                    'remaining' => $remaining[$item->id],
+                    'unit_price' => (float) $item->unit_price,
+                ];
+            }
+        }
+
+        return $items;
     }
 
     public function submitReturnRequest(OrderDisputeService $disputeService): void
@@ -248,6 +287,8 @@ class OrderTracking extends Component
             'returnReason' => 'required|string',
             'returnRequestedAction' => 'required|string|in:refund,replacement',
             'returnDescription' => 'required|string|min:10|max:1000',
+            'returnQuantities' => 'array',
+            'returnQuantities.*' => 'nullable|integer|min:0',
         ], [
             'returnDescription.min' => 'Please provide at least 10 characters explaining the issue.',
         ]);
@@ -279,7 +320,7 @@ class OrderTracking extends Component
                 'reason' => $this->returnReason,
                 'requested_action' => $this->returnRequestedAction,
                 'description' => $this->returnDescription,
-            ]);
+            ] + ($this->returnQuantities !== [] ? ['items' => $this->returnQuantities] : []));
 
             $this->showReturnModal = false;
             $this->actionFeedback = "Return request initiated for #{$subOrder->sub_order_number}. Escrow payout held pending resolution.";
@@ -294,6 +335,7 @@ class OrderTracking extends Component
         return view('livewire.storefront.order-tracking', [
             'order' => $this->order,
             'returnWindowHours' => app(StoreConfigurationService::class)->getEscrowHoldingPeriodHours(),
+            'returnableItems' => $this->showReturnModal ? $this->returnableItems() : [],
         ]);
     }
 }

@@ -37,6 +37,8 @@ class WalletTransactionsTable
                         WalletTransaction::TYPE_ESCROW_HOLD_ADJUSTMENT => 'warning',
                         WalletTransaction::TYPE_PAYOUT => 'info',
                         WalletTransaction::TYPE_RETURN_REVERSAL,
+                        WalletTransaction::TYPE_PARTIAL_RETURN_HELD,
+                        WalletTransaction::TYPE_PARTIAL_RETURN_RELEASED,
                         WalletTransaction::TYPE_ESCROW_REFUND => 'danger',
                         WalletTransaction::TYPE_COD_SELF_COLLECTED,
                         WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL => 'gray',
@@ -153,6 +155,9 @@ class WalletTransactionsTable
             WalletTransaction::TYPE_COD_SELF_COLLECTED,
             WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL => 'COD Adjustment',
             WalletTransaction::TYPE_COD_DEFICIT_PAYMENT => 'COD commission you paid in',
+            WalletTransaction::TYPE_PARTIAL_RETURN_HELD => 'Items returned (taken from money on hold)',
+            WalletTransaction::TYPE_PARTIAL_RETURN_RELEASED => 'Items returned (taken from your balance)',
+            WalletTransaction::TYPE_PARTIAL_RETURN_COD => 'Commission given back for returned items',
             default => str($type)->headline()->toString(),
         };
     }
@@ -176,6 +181,7 @@ class WalletTransactionsTable
             WalletTransaction::TYPE_PAYOUT_REVERSAL,
             WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL,
             WalletTransaction::TYPE_COD_DEFICIT_PAYMENT,
+            WalletTransaction::TYPE_PARTIAL_RETURN_COD,
         ], true)) {
             return '+৳'.$amount;
         }
@@ -185,6 +191,8 @@ class WalletTransactionsTable
             WalletTransaction::TYPE_RETURN_REVERSAL,
             WalletTransaction::TYPE_COD_SELF_COLLECTED,
             WalletTransaction::TYPE_ESCROW_REFUND,
+            WalletTransaction::TYPE_PARTIAL_RETURN_HELD,
+            WalletTransaction::TYPE_PARTIAL_RETURN_RELEASED,
         ], true)) {
             return '-৳'.$amount;
         }
@@ -199,6 +207,7 @@ class WalletTransactionsTable
             WalletTransaction::TYPE_PAYOUT_REVERSAL,
             WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL,
             WalletTransaction::TYPE_COD_DEFICIT_PAYMENT,
+            WalletTransaction::TYPE_PARTIAL_RETURN_COD,
         ], true)) {
             return 'success';
         }
@@ -207,6 +216,8 @@ class WalletTransactionsTable
             WalletTransaction::TYPE_PAYOUT,
             WalletTransaction::TYPE_RETURN_REVERSAL,
             WalletTransaction::TYPE_ESCROW_REFUND,
+            WalletTransaction::TYPE_PARTIAL_RETURN_HELD,
+            WalletTransaction::TYPE_PARTIAL_RETURN_RELEASED,
         ], true)) {
             return 'danger';
         }

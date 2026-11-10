@@ -16,6 +16,7 @@ class ReturnRequestsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn ($query) => $query->with('items.orderItem.product:id,title'))
             ->columns([
                 TextColumn::make('created_at')
                     ->label('Request Date')
@@ -35,6 +36,10 @@ class ReturnRequestsTable
                     ->label('Reason')
                     ->badge()
                     ->formatStateUsing(fn ($state) => ucfirst(str_replace('_', ' ', $state))),
+                TextColumn::make('items_summary')
+                    ->label('Items coming back')
+                    ->state(fn (ReturnRequest $record): string => $record->itemsSummary())
+                    ->wrap(),
                 TextColumn::make('requested_action')
                     ->label('Desired Resolution')
                     ->badge()

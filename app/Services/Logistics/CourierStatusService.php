@@ -15,6 +15,7 @@ use App\Services\Accounting\EventPipeline\CommissionRecognitionJournalHandler;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Orders\OrderStatusReconciler;
+use App\Services\Orders\PartialReturnService;
 use App\Services\Orders\RefundRecorder;
 use App\Services\Promotions\FlashSaleAllocationService;
 use Carbon\Carbon;
@@ -158,6 +159,14 @@ class CourierStatusService
 
     protected function handleReturnedConsignment(SubOrder $subOrder): void
     {
+        // PAY-4: some items already came back on their own; settle only what was still with the buyer
+        $partialReturns = app(PartialReturnService::class);
+        if ($partialReturns->hasItemReturns($subOrder)) {
+            $partialReturns->returnRemainder($subOrder, 'Returned to origin (RTO) by courier service');
+
+            return;
+        }
+
         // 1. Release reserved stock back to variation catalog
         $stockItems = [];
         foreach ($subOrder->items as $item) {

@@ -48,13 +48,14 @@ class ReturnRequestResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['subOrder.seller.sellerProfile', 'customer']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['subOrder.seller.sellerProfile', 'customer', 'items.orderItem.product:id,title']))
             ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('subOrder.sub_order_number')->label('Parcel')->searchable()->copyable(),
                 TextColumn::make('subOrder.seller.sellerProfile.store_name')->label('Seller'),
                 TextColumn::make('customer.name')->label('Buyer')->searchable(),
                 TextColumn::make('reason')->formatStateUsing(fn (string $state): string => str_replace('_', ' ', ucfirst($state))),
+                TextColumn::make('items_summary')->label('Items coming back')->state(fn (ReturnRequest $record): string => $record->itemsSummary())->wrap(),
                 TextColumn::make('requested_action')->label('Wants'),
                 TextColumn::make('description')->label('Buyer says')->wrap()->limit(80),
                 TextColumn::make('status')->badge()->color(fn (string $state): string => match ($state) {

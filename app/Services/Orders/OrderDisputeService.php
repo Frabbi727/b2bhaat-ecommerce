@@ -23,6 +23,7 @@ class OrderDisputeService
         protected EscrowLedgerService $escrowLedgerService,
         protected RefundRecorder $refundRecorder,
         protected OrderStatusReconciler $statusReconciler,
+        protected PartialReturnService $partialReturns,
     ) {}
 
     /**
@@ -146,8 +147,9 @@ class OrderDisputeService
      *     reason: string,
      *     requested_action: string,
      *     description: string,
-     *     image_proof_url?: ?string
-     * } $data
+     *     image_proof_url?: ?string,
+     *     items?: array<int|string, int|string|null>
+     * } $data  items: order item id => units coming back (PAY-4); left out, the whole parcel
      *
      * @throws Exception
      */
@@ -169,6 +171,14 @@ class OrderDisputeService
         }
 
         return DB::transaction(function () use ($subOrder, $customer, $data) {
+            // One open request at a time, so two returns can never claim the same units (PAY-4)
+            SubOrder::whereKey($subOrder->id)->lockForUpdate()->first();
+            if ($subOrder->returnRequests()->where('status', ReturnRequest::STATUS_PENDING)->exists()) {
+                throw new Exception('A return for this parcel is already waiting for the seller. You can ask about other items once it is decided.');
+            }
+
+            $items = isset($data['items']) ? $this->partialReturns->validatedQuantities($subOrder, $data['items']) : [];
+
             $returnRequest = ReturnRequest::create([
                 'sub_order_id' => $subOrder->id,
                 'customer_id' => $customer->id,
@@ -178,6 +188,10 @@ class OrderDisputeService
                 'image_proof_url' => $data['image_proof_url'] ?? null,
                 'status' => ReturnRequest::STATUS_PENDING,
             ]);
+
+            foreach ($items as $orderItemId => $quantity) {
+                $returnRequest->items()->create(['order_item_id' => $orderItemId, 'quantity' => $quantity]);
+            }
 
             OrderTrackingLog::create([
                 'sub_order_id' => $subOrder->id,
@@ -221,6 +235,13 @@ class OrderDisputeService
                     'hub_location' => 'Merchant Hub',
                     'logged_at' => now(),
                 ]);
+
+                return;
+            }
+
+            // PAY-4: some items, or the rest after earlier item returns, are settled item by item
+            if ($status === ReturnRequest::STATUS_APPROVED && $this->partialReturns->settlesItemByItem($returnRequest)) {
+                $this->partialReturns->settle($returnRequest, 'Return approved: '.($note ?? $returnRequest->reason));
 
                 return;
             }

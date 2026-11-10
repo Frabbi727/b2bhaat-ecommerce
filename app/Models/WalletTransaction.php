@@ -39,6 +39,15 @@ class WalletTransaction extends Model
     /** MON-11: the seller paid a COD commission deficit bill, which brings the wallet back up. */
     public const TYPE_COD_DEFICIT_PAYMENT = 'cod_deficit_payment';
 
+    /** PAY-4: items returned while the money was still on hold; the hold shrinks by this much. */
+    public const TYPE_PARTIAL_RETURN_HELD = 'partial_return_held';
+
+    /** PAY-4: items returned after the money was released; taken from the available balance. */
+    public const TYPE_PARTIAL_RETURN_RELEASED = 'partial_return_released';
+
+    /** PAY-4: items returned from a parcel whose COD cash the seller kept; commission share given back. */
+    public const TYPE_PARTIAL_RETURN_COD = 'partial_return_cod';
+
     public const STATUS_REQUESTED = 'requested';
 
     public const STATUS_DISBURSED = 'disbursed';
@@ -48,6 +57,7 @@ class WalletTransaction extends Model
     protected $fillable = [
         'seller_wallet_id',
         'sub_order_id',
+        'return_request_id',
         'transaction_type',
         'status',
         'amount',

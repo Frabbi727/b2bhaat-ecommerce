@@ -9,7 +9,8 @@ use App\Models\SubOrder;
 
 /**
  * Records money owed back to a customer for one consignment of a paid order (PRA-027). Shared by buyer
- * cancellation, approved refund returns and courier returns; at most one refund per sub-order.
+ * cancellation, approved refund returns and courier returns; at most one whole-parcel refund per sub-order.
+ * Returns of some items record their own refunds (PAY-4, PartialReturnService).
  */
 class RefundRecorder
 {
@@ -21,7 +22,7 @@ class RefundRecorder
         }
 
         return Refund::firstOrCreate(
-            ['sub_order_id' => $subOrder->id],
+            ['sub_order_id' => $subOrder->id, 'return_request_id' => null],
             [
                 'order_id' => $order->id,
                 'amount' => $subOrder->paidAmount(),

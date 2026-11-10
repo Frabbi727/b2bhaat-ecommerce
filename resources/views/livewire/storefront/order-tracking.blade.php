@@ -316,6 +316,33 @@
                         </select>
                     </div>
 
+                    @if (count($returnableItems) > 0)
+                        <fieldset>
+                            <legend class="block font-semibold text-slate-700 mb-1">Which items are you sending back? *</legend>
+                            <p class="text-[11px] text-slate-500 mb-2">Set an item to 0 to keep it. The delivery charge is refunded only when the whole parcel comes back.</p>
+                            <ul class="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                                @foreach ($returnableItems as $itemId => $line)
+                                    <li wire:key="return-item-{{ $itemId }}" class="flex items-center justify-between gap-3 p-3">
+                                        <label for="return-qty-{{ $itemId }}" class="min-w-0">
+                                            <span class="block font-semibold text-slate-900 truncate">{{ $line['name'] }}</span>
+                                            <span class="text-[11px] text-slate-500">{{ $line['remaining'] }} with you · {{ \App\Services\Formatting\Money::taka($line['unit_price']) }} each</span>
+                                        </label>
+                                        <input
+                                            id="return-qty-{{ $itemId }}"
+                                            type="number"
+                                            min="0"
+                                            max="{{ $line['remaining'] }}"
+                                            inputmode="numeric"
+                                            wire:model="returnQuantities.{{ $itemId }}"
+                                            class="w-20 py-2 px-2 border border-slate-300 rounded-lg text-right focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                    </li>
+                                @endforeach
+                            </ul>
+                            @error('returnQuantities.*') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
+                        </fieldset>
+                    @endif
+
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">What would you like? *</label>
                         <div class="grid grid-cols-2 gap-3">
@@ -347,6 +374,10 @@
                         ></textarea>
                         @error('returnDescription') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
                     </div>
+
+                    @if ($actionError)
+                        <p role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-rose-700">{{ $actionError }}</p>
+                    @endif
 
                     <div class="pt-2 flex items-center justify-end gap-3">
                         <button 
