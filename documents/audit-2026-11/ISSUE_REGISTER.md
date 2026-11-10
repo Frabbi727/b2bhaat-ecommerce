@@ -133,7 +133,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | ID | Title | Status |
 |---|---|---|
 | MON-13 | Hard-coded rates; the rate used is not stored | Open | Fixed (27eeeeb) |
-| ORD-5 | Mock payment path posts no journal | Open |
+| ORD-5 | Mock payment path posts no journal | Already fixed by ACC-2 (115060d): the only mock-payment path (storefront checkout) posts the same journal as a verified payment; covered by `PaymentVerificationTest::test_mock_gateway_payment_posts_the_same_journal_as_a_verified_payment`. No change |
 | PAY-5 | Money handled as floats | Open | Fixed (bf42207) |
 | PAY-6 | Missing locks; stock rows locked in no fixed order | Open | Fixed (845a999) |
 | FS-3 | Flash claim doesn't check the offer belongs to the product | Open | Fixed (1064337) |
