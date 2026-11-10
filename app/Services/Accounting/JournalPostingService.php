@@ -94,6 +94,13 @@ class JournalPostingService
                     }
                 }
 
+                // Review R-8: the month may have been closed since it was checked above. A shared lock makes a
+                // close wait for this posting, and this posting see a close that committed first.
+                $currentPeriod = AccountingPeriod::whereKey($period->id)->sharedLock()->first();
+                if ($currentPeriod?->is_closed) {
+                    throw ClosedPeriodException::forPeriod($currentPeriod->name);
+                }
+
                 $yearMonth = Carbon::parse($data->entryDate)->format('Ym');
                 $prefix = sprintf('JRN-%s-', $yearMonth);
 

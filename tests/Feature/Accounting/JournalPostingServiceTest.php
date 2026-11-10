@@ -21,6 +21,7 @@ use App\Services\Accounting\GeneralLedgerService;
 use App\Services\Accounting\JournalPostingService;
 use Database\Seeders\AccountingChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class JournalPostingServiceTest extends TestCase
@@ -127,6 +128,40 @@ class JournalPostingServiceTest extends TestCase
                 new JournalLineData(accountSlug: 'commission_revenue', debit: 0.00, credit: 100.00),
             ]
         ));
+    }
+
+    /**
+     * Review R-8: the month is closed after posting checked it but before the journal is written. The journal is
+     * refused, not written into the closed month.
+     */
+    public function test_a_month_closed_while_a_journal_is_being_posted_refuses_it(): void
+    {
+        $idempotencyLookups = 0;
+        DB::listen(function ($query) use (&$idempotencyLookups): void {
+            // The second lookup is the one inside the posting transaction, after the first period check
+            if (str_contains($query->sql, 'from "accounting_journal_entries"') && str_contains($query->sql, '"idempotency_key"')
+                && ++$idempotencyLookups === 2) {
+                DB::table('accounting_periods')->where('id', $this->activePeriod->id)->update(['is_closed' => true]);
+            }
+        });
+
+        try {
+            app(JournalPostingService::class)->post(new JournalEntryData(
+                entryDate: '2026-11-30',
+                financialEvent: 'manual_journal',
+                idempotencyKey: 'closed_meanwhile_key',
+                description: 'Posted as the month closes',
+                lines: [
+                    new JournalLineData(accountSlug: 'gateway_clearing', debit: 100.00, credit: 0.00),
+                    new JournalLineData(accountSlug: 'commission_revenue', debit: 0.00, credit: 100.00),
+                ]
+            ));
+            $this->fail('A journal for a month closed meanwhile should be refused.');
+        } catch (ClosedPeriodException) {
+            $this->assertSame(2, $idempotencyLookups);
+        }
+
+        $this->assertFalse(AccountingJournalEntry::where('idempotency_key', 'closed_meanwhile_key')->exists());
     }
 
     public function test_reversing_posted_entry_creates_inverse_entry_and_zeros_balances(): void
