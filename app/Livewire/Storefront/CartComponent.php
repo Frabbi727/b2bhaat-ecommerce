@@ -128,6 +128,8 @@ class CartComponent extends Component
             'appliedCoupon' => $appliedCoupon,
             'discountAmount' => $discountAmount,
             'subtotalAfterDiscount' => $subtotalAfterDiscount,
+            // Wholesale lots below their minimum, by product id; checkout refuses them, so say so here first (UX-7)
+            'wholesaleShortfalls' => collect($cart->wholesaleMoqViolations())->keyBy('product_id')->all(),
         ]);
     }
 }

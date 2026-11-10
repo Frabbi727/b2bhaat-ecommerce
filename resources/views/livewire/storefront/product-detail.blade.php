@@ -411,9 +411,22 @@
                     </div>
                 @endif
 
+                @if ($wholesaleMinimum)
+                    <div class="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
+                        <svg class="w-4 h-4 mt-px shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <p><strong>Minimum order: {{ $wholesaleMinimum }} {{ $product->unit?->symbol }}</strong>, all options together. Mix colours and sizes as you like.</p>
+                    </div>
+                @endif
+
                 <!-- If Wholesale Buyer is logged in, show Bulk Variation Matrix Table -->
                 @if ($isWholesaleUser && $product->variations->isNotEmpty())
-                    <div class="space-y-3 pt-2">
+                    <div
+                        class="space-y-3 pt-2"
+                        x-data="{
+                            minimum: {{ (int) ($wholesaleMinimum ?? 1) }},
+                            get chosen() { return Object.values($wire.matrixQuantities ?? {}).reduce((sum, quantity) => sum + Math.max(0, parseInt(quantity) || 0), 0) },
+                        }"
+                    >
                         <div class="text-xs font-bold text-slate-900">B2B Bulk Variation Order Matrix</div>
                         <div class="border border-slate-200 rounded-2xl overflow-hidden">
                             <table class="w-full text-left text-xs">
@@ -453,6 +466,12 @@
                                 Factory dispatches paused in Vacation Mode
                             </button>
                         @else
+                            <div class="flex items-center justify-between text-xs" aria-live="polite">
+                                <span class="text-slate-500">Chosen so far</span>
+                                <span class="font-bold" :class="chosen >= minimum ? 'text-emerald-700' : 'text-slate-800'">
+                                    <span x-text="chosen">0</span> of {{ (int) ($wholesaleMinimum ?? 1) }} {{ $product->unit?->symbol }} minimum
+                                </span>
+                            </div>
                             <button
                                 type="button"
                                 wire:click="addBulkMatrixToCart"
@@ -472,7 +491,7 @@
                         <p>You will see bulk prices for this product once your business account is approved.</p>
                     @else
                         <div class="font-bold text-indigo-900">Lower prices for bulk orders</div>
-                        <p>Business buyers get lower prices when they buy in bulk.
+                        <p>Business buyers get lower prices when they buy in bulk.@if ($wholesaleMinimum) Bulk orders start at {{ $wholesaleMinimum }} {{ $product->unit?->symbol }}.@endif
                             <a href="{{ route('wholesale.upgrade') }}" class="font-bold text-indigo-600 hover:underline">Apply for wholesale prices &rarr;</a>
                         </p>
                     @endif

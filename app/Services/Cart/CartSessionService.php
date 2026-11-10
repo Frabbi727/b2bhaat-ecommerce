@@ -55,7 +55,7 @@ class CartSessionService
     {
         $variationQuantities = array_filter(array_map('intval', $variationQuantities), fn (int $qty) => $qty > 0);
         $lotTotal = $this->lotQuantity($productId) + array_sum($variationQuantities);
-        $moq = $this->wholesaleMoqFor($productId);
+        $moq = $this->wholesaleMinimumQuantity($productId);
 
         if ($moq !== null && $lotTotal < $moq) {
             throw new Exception("Wholesale minimum order quantity is {$moq}. You requested {$lotTotal}.");
@@ -451,7 +451,11 @@ class CartSessionService
             && ($productId === null || (int) $item['product_id'] === $productId);
     }
 
-    private function wholesaleMoqFor(int $productId): ?int
+    /**
+     * A product's wholesale minimum order: its lowest wholesale tier, for all options together. Null when the
+     * product has no wholesale price. Every screen that states or checks the minimum uses this (UX-7).
+     */
+    public function wholesaleMinimumQuantity(int $productId): ?int
     {
         $moq = ProductPrice::where('product_id', $productId)
             ->whereHas('salesChannel', fn ($q) => $q->where('slug', SalesChannel::WHOLESALE))

@@ -62,10 +62,17 @@
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <!-- Left: Cart Items List -->
             <div class="lg:col-span-8 space-y-4">
+                @php $shortfallShown = []; @endphp
                 @foreach ($items as $item)
                     @php
                         $lineTotal = $item['unit_price'] * $item['quantity'];
                         $isWholesale = $item['sales_channel_slug'] === 'wholesale';
+                        $shortfall = $isWholesale && ! ($item['is_quoted'] ?? false) && ! isset($shortfallShown[$item['product_id']])
+                            ? ($wholesaleShortfalls[$item['product_id']] ?? null)
+                            : null;
+                        if ($shortfall) {
+                            $shortfallShown[$item['product_id']] = true;
+                        }
                     @endphp
                     <div class="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div class="space-y-1">
@@ -88,6 +95,12 @@
                             <div class="text-xs text-slate-500">
                                 Sold by <strong class="text-slate-700">{{ $item['seller_name'] }}</strong>
                             </div>
+
+                            @if ($shortfall)
+                                <p class="mt-1 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1" role="status">
+                                    Wholesale minimum for this product is {{ $shortfall['moq'] }} units, all options together. You have {{ $shortfall['quantity'] }}. Add {{ $shortfall['moq'] - $shortfall['quantity'] }} more to check out.
+                                </p>
+                            @endif
                         </div>
 
                         <!-- Quantity and Line Pricing -->

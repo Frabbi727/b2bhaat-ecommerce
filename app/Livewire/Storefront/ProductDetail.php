@@ -263,15 +263,8 @@ class ProductDetail extends Component
 
         $cart = app(CartSessionService::class);
 
-        $wholesalePrice = $this->product->prices
-            ->first(fn ($p) => $p->salesChannel?->slug === SalesChannel::WHOLESALE && is_null($p->variation_id));
-
-        $wholesaleTiers = $this->product->prices
-            ->filter(fn ($p) => $p->salesChannel?->slug === SalesChannel::WHOLESALE && is_null($p->variation_id))
-            ->sortBy('min_quantity')
-            ->values();
-
-        $moq = $wholesalePrice?->min_quantity ?? 1;
+        // The cart's rule: the lowest wholesale tier, all options together (UX-7)
+        $moq = $cart->wholesaleMinimumQuantity($this->product->id) ?? 1;
 
         $totalUnits = array_sum(array_map('intval', $this->matrixQuantities));
 
@@ -471,6 +464,8 @@ class ProductDetail extends Component
             ->sortBy('min_quantity')
             ->values();
 
+        $wholesaleMinimum = app(CartSessionService::class)->wholesaleMinimumQuantity($this->product->id);
+
         // Reviews calculations
         $approvedReviewsQuery = $this->product->reviews()->where('is_approved', true);
         $totalReviews = (clone $approvedReviewsQuery)->count();
@@ -553,6 +548,7 @@ class ProductDetail extends Component
             'retailPrice' => $retailPrice,
             'wholesalePrice' => $wholesalePrice,
             'wholesaleTiers' => $wholesaleTiers,
+            'wholesaleMinimum' => $wholesaleMinimum,
             'totalReviews' => $totalReviews,
             'averageRating' => $averageRating,
             'ratingDistribution' => $ratingDistribution,
