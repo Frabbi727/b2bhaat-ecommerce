@@ -65,6 +65,7 @@ class ProductModerationResource extends Resource
                     ->formatStateUsing(fn (ProductApprovalStatus $state): string => $state->label())
                     ->color(fn (ProductApprovalStatus $state): string => $state->color()),
                 IconColumn::make('is_active')->label('Seller has it on')->boolean(),
+                IconColumn::make('is_featured')->label('Featured')->boolean(),
                 TextColumn::make('blocked_reason')->label('Hidden by admin')->placeholder('—')->color('danger')->wrap()->limit(60),
                 TextColumn::make('created_at')->label('Added')->date('M d, Y')->sortable(),
             ])
@@ -95,6 +96,26 @@ class ProductModerationResource extends Resource
                         $record->forceFill(['blocked_at' => now(), 'blocked_reason' => $data['blocked_reason']])->save();
 
                         Notification::make()->title('Product hidden from the shop')->success()->send();
+                    }),
+                Action::make('feature')
+                    ->label('Feature on homepage')
+                    ->icon('heroicon-o-star')
+                    ->color('warning')
+                    ->visible(fn (Product $record): bool => ! $record->is_featured)
+                    ->action(function (Product $record): void {
+                        $record->forceFill(['is_featured' => true])->save();
+
+                        Notification::make()->title('Product featured on the homepage')->success()->send();
+                    }),
+                Action::make('unfeature')
+                    ->label('Stop featuring')
+                    ->icon('heroicon-o-star')
+                    ->color('gray')
+                    ->visible(fn (Product $record): bool => (bool) $record->is_featured)
+                    ->action(function (Product $record): void {
+                        $record->forceFill(['is_featured' => false])->save();
+
+                        Notification::make()->title('Product no longer featured')->success()->send();
                     }),
                 Action::make('unhide')
                     ->label('Show in shop again')

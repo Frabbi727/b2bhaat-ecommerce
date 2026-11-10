@@ -595,9 +595,12 @@ class ProductForm
         return Section::make('Promotions')
             ->collapsible()
             ->schema([
-                Toggle::make('is_featured')
-                    ->label('Feature on homepage')
-                    ->default(false),
+                // INV-9: B2B Haat chooses featured products; the seller only sees the result
+                Placeholder::make('featured_status')
+                    ->label('Homepage feature')
+                    ->content(fn (?Product $record): string => $record?->is_featured
+                        ? 'Featured on the homepage by B2B Haat'
+                        : 'Not featured. B2B Haat chooses featured products.'),
 
                 Placeholder::make('flash_sale_status')
                     ->label('Flash Sale')

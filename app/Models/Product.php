@@ -18,7 +18,7 @@ class Product extends Model
     use Auditable;
 
     /**
-     * SEC-10: moderation (blocked_*), counters and the suspension flag are set only by platform code with forceFill().
+     * SEC-10: moderation (blocked_*), featuring (INV-9), counters and the suspension flag are set only by platform code with forceFill().
      */
     protected $fillable = [
         'seller_id',
@@ -41,7 +41,6 @@ class Product extends Model
         'warranty_policy',
         'delivery_info',
         'has_variations',
-        'is_featured',
         'is_active',
     ];
 
