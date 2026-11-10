@@ -305,3 +305,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## AUD-5 (named finance events)
 - Code only. Saved audit-log filters or reports that looked for action `created`/`updated` on finance records need the new names (see IMPLEMENTATION_LOG). Older rows keep their old action names.
+
+## UX-ACC-6 (panel themes)
+- **`npm ci && npm run build` must run on deploy** (as CI already does). `public/build` is not committed; without a build containing the two theme entries, the admin and seller panels fail with "Unable to locate file in Vite manifest".

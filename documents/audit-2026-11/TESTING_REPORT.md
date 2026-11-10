@@ -128,6 +128,7 @@ The existing tests of other features were touched only to give their test produc
 | AUD-5 | `tests/Feature/Audit/FinanceAuditEventNamesTest.php` (5) | Invoice created/voided under named events with a readable description; payout requested/disbursed and escrow release named; wallet balance change named; payment reference masked; products keep created/updated |
 | AUD-8 | `tests/Feature/Audit/SellerActivityChangeSummaryTest.php` (3) | Title/price/flag/reference/list/hidden changes summarised and timestamps skipped; a new record lists set fields; the seller detail page shows the summary and no raw columns |
 | AUD-9 | `tests/Feature/Audit/AdminAuditLogFiltersExportTest.php` (3) | Date filter uses Dhaka days (a 20:00 UTC entry falls on the next day); event/actor-type/seller/record-type filters; export holds only filtered rows in Dhaka time and is logged. All audit tests also pass on scratch PostgreSQL |
+| UX-ACC-6 | Full suite (panels render with the Vite theme) plus a visual check of rendered Reconciliation and Cash Flow snapshots | Icons at normal size, cards in a grid |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
