@@ -308,3 +308,5 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## UX-ACC-6 (panel themes)
 - **`npm ci && npm run build` must run on deploy** (as CI already does). `public/build` is not committed; without a build containing the two theme entries, the admin and seller panels fail with "Unable to locate file in Vite manifest".
+
+UX-2 changes the seller statement CSV headers ('On Hold After Delivery (BDT):', 'Order #'). Tell sellers who import the CSV into their own spreadsheets.
