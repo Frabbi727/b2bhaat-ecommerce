@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1566 tests, 1557 passed, 9 skipped, 7115 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1567 tests, 1558 passed, 9 skipped, 7118 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -140,6 +140,7 @@ The existing tests of other features were touched only to give their test produc
 | PAY-4 | `tests/Feature/PartialReturnRefundTest.php` (9), `SellerTablesOnPhonesTest` (updated) | 3 of 6 items: refund ৳285, line amounts stored, hold down ৳270, parcel stays delivered, stock +3, commission ৳70 left, fee stays earned, books balance, release pays ৳630. Last return: ৳725 with the fee, refunds total ৳1,010, parcel returned, nothing held, commission and shipping revenue back to 0. After release: balance −৳180. Self-collected COD: +৳15. Too many, zero and unknown items refused; 'only 2 left' after an earlier return; one waiting request at a time. Tracking page picker, seller list shows 'title × 2'. Courier return after an item return settles only the rest. A request without items is unchanged. Also passes on scratch PostgreSQL with the escrow, refund, return, dispute and lookup test files |
 | SEC-11 | `tests/Feature/CourierWebhookSecurityTest.php` (+4, 12 in all) | Same message twice → 409 and no second tracking entry; 10 minutes old or ahead → 401; old body-only signature, with or without a timestamp, → 401; a timestamp changed after signing → 401; a message that got 404 succeeds when retried. All other webhook tests (lifecycle, fraud, escrow cron) pass with the new signing helper |
 | PAY-6 | `tests/Feature/StockLockOrderTest.php` (4) | Reserve, release and bulk update read variation rows lowest id first, once each (seen in the query log); repeats are added together; two rows of 2 and 1 against stock 2 are refused as 'Requested: 3' |
+| FS-3 | `tests/Feature/FlashSaleFastCounterAllocationTest.php` (+1) | Offer for product A on a line for product B is refused; a correct and a wrong line together are refused; units sold stays 0. Flash checkout integrity tests still pass |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
