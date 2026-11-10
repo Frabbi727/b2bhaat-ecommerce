@@ -96,7 +96,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | ORD-2 | Dispatch, self-delivery and booking write status without `canTransition` | Go through `CourierStatusService` with a lock | Fixed (`ffbf60a`) |
 | ORD-3 | Checkout post-split steps are not atomic; coupon limit can be exceeded (`CouponService.php:80`) | Move them inside the transaction; lock the coupon | Fixed (`49d39df`) |
 | ORD-4 | Splitter doesn't re-check seller suspension | Check `sellable` inside the transaction | Already handled (test added in `49d39df`): `Product::sellable()` inside the order transaction refuses a suspended seller's items |
-| PAY-4 | Refunds are whole sub-order only | Line-level partial refunds |
+| PAY-4 | Refunds are whole sub-order only | Line-level partial refunds | Fixed (f6c223c). Owner rules 2026-11-10 applied; the self-collected COD refund gap is now an owner question |
 | FS-1 / INV-7 | Flash `units_sold` not returned on reject, expiry or return; expiry job can release twice | Central release helper; lock and re-check | Fixed (`d5b7dea`); payment rejection and PAY-2 expiry were already fixed in 4787c36 |
 | FS-2 | Admin approve bypasses the conflict checker | Approve through the service | Fixed (719e111) |
 | ACC-2 | Mock gateway marks orders paid with no journal (local/testing only) | Post the journal; never seed it as active | Fixed (115060d) |
@@ -138,3 +138,4 @@ MON-13 hard-coded rates and rate not stored · ORD-5 mock journal · PAY-5 float
 - Deferral of subscription revenue.
 - Who bears the courier cost on COD orders.
 - Whether an unpaid COD commission deficit bill (MON-11) should put the seller into grace and suspension, like an unpaid subscription bill. Today it does not.
+- Self-collected COD returns, found while fixing PAY-4: the seller kept the buyer's cash, so the platform owes the buyer nothing in its books. Returns give the seller back the commission charge, and a refund row is raised only if the order shows as paid. Who pays the buyer back (the seller directly, or the platform after taking it from the seller), and how that is recorded, is not decided. This is unchanged from whole-parcel returns.
