@@ -318,3 +318,8 @@ PAY-4 has one migration, `2026_11_10_080658_add_line_level_returns`. It creates 
 SEC-11: courier webhooks must send `X-Courier-Timestamp` and sign `{timestamp}.{body}`; tell the courier when it is connected. The cache must be shared by all web servers (`CACHE_STORE=database` or redis, not `array` or `file` on several servers), or a replay could reach a server that has not seen it. Optional env `COURIER_WEBHOOK_TOLERANCE_SECONDS` (default 300). No migration.
 
 MON-13 adds one migration, `add_commission_rate_to_order_items_table` (a nullable column, no data change; rollback drops it). Optional: set 'Commission for new sellers' in Store settings; until then it is 10%, as before.
+
+## INV-11: unique product SKU (one migration)
+- Before migrating, check production for shared SKUs: `SELECT sku, COUNT(*) FROM products WHERE sku IS NOT NULL GROUP BY sku HAVING COUNT(*) > 1;`
+- No rows: the migration just adds the index. Rows: the migration stops and lists them; ask the sellers which product keeps the SKU, change the other, then run `php artisan migrate` again. Nothing else in the deploy depends on this index.
+- Rollback drops the index only.

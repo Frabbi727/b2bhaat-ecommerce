@@ -140,7 +140,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | ACC-20 | Chart-of-accounts guards are UI-only | Open | Fixed (d7eb913) |
 | ACC-21 | Journal idempotency ignores the payload | Open | Fixed (a4e7737) |
 | UX-ACC-4 / UX-ACC-5 | Journal display and format consistency | Open |
-| INV-11 | Product SKU uniqueness | Open |
+| INV-11 | Product SKU uniqueness | Open | Fixed (34c4e6f) |
 | SEC-11 | Courier webhook replay | Open | Fixed (0fb505f) |
 | UX-7 | MOQ shown only at checkout | Open |
 
