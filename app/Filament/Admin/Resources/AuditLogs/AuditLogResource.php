@@ -11,6 +11,7 @@ use App\Models\AuditLog;
 use App\Models\User;
 use BackedEnum;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\KeyValueEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -21,11 +22,14 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use UnitEnum;
 
 class AuditLogResource extends Resource
@@ -184,6 +188,51 @@ class AuditLogResource extends Resource
                         'failed' => 'Failed',
                         'blocked' => 'Blocked',
                     ]),
+
+                // AUD-9: narrow by Dhaka day, event, who acted, seller and record type
+                Filter::make('created_at')
+                    ->label('Date')
+                    ->schema([
+                        DatePicker::make('from')->label('From (Dhaka date)'),
+                        DatePicker::make('until')->label('Until (Dhaka date)'),
+                    ])
+                    ->columns(2)
+                    ->query(fn (Builder $query, array $data): Builder => $query
+                        ->when($data['from'] ?? null, fn (Builder $q, $date) => $q->where('created_at', '>=', Carbon::parse($date, config('app.display_timezone'))->startOfDay()->utc()))
+                        ->when($data['until'] ?? null, fn (Builder $q, $date) => $q->where('created_at', '<=', Carbon::parse($date, config('app.display_timezone'))->endOfDay()->utc())))
+                    ->indicateUsing(fn (array $data): ?string => ($data['from'] ?? null) || ($data['until'] ?? null)
+                        ? 'Date '.trim(($data['from'] ?? '…').' – '.($data['until'] ?? '…'))
+                        : null),
+
+                SelectFilter::make('action')
+                    ->label('Event')
+                    ->searchable()
+                    ->options(fn (): array => AuditLog::query()->distinct()->orderBy('action')->pluck('action', 'action')
+                        ->map(fn (string $action): string => Str::headline($action))
+                        ->all()),
+
+                SelectFilter::make('actor_type')
+                    ->label('Who acted')
+                    ->options([
+                        'user' => 'Signed-in user',
+                        'guest' => 'Visitor (not signed in)',
+                        'system' => 'System (scheduler, queue, command)',
+                    ]),
+
+                SelectFilter::make('seller_id')
+                    ->label('Seller')
+                    ->searchable()
+                    ->options(fn (): array => User::query()
+                        ->whereHas('role', fn (Builder $q) => $q->where('slug', 'seller'))
+                        ->orderBy('name')
+                        ->pluck('name', 'id')
+                        ->all()),
+
+                SelectFilter::make('auditable_type')
+                    ->label('Record type')
+                    ->options(fn (): array => AuditLog::query()->whereNotNull('auditable_type')->distinct()->orderBy('auditable_type')->pluck('auditable_type', 'auditable_type')
+                        ->map(fn (string $type): string => Str::headline(class_basename($type)))
+                        ->all()),
 
                 TernaryFilter::make('is_suspicious')
                     ->label('Suspicious events')

@@ -23,13 +23,13 @@ class AuditImmutabilityTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function entry(string $module = 'finance'): AuditLog
+    private function entry(string $module = 'finance', ?\DateTimeInterface $createdAt = null): AuditLog
     {
         return AuditLog::create([
             'module' => $module,
             'action' => 'payout_released',
             'description' => 'Released ৳500 to a seller',
-            'created_at' => now(),
+            'created_at' => $createdAt ?? now(),
         ]);
     }
 
@@ -62,8 +62,8 @@ class AuditImmutabilityTest extends TestCase
 
     public function test_routine_pruning_still_works(): void
     {
-        $old = $this->entry('products');
-        DB::table('audit_logs')->where('id', $old->id)->update(['created_at' => now()->subDays(400)]);
+        // Written already old: the PostgreSQL trigger (rightly) refuses to back-date an existing row
+        $old = $this->entry('products', now()->subDays(400));
 
         $this->artisan('audit:prune', ['--force' => true])->assertSuccessful();
 
