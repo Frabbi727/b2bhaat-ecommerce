@@ -296,3 +296,9 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## ACC-19 (seller statement)
 - Code and Blade only. Sellers may see different "Payouts Withdrawn" and "Settled Net Earnings" figures on the printed statement: rejected and waiting payouts no longer count as withdrawn. If a seller's figures look wrong, run the Reconciliation page: a wallet/ledger mismatch for that seller shows there.
+
+## AUD-6 (system actor)
+- Code only. Older audit rows keep `actor_type` = user (the column default) even when no one was signed in; only new rows are labelled.
+
+## AUD-7 (audit redaction)
+- Code only. Existing audit rows are append-only (AUD-2) and are not rewritten; they still hold the full values written before this change.

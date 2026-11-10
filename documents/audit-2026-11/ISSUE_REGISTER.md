@@ -109,8 +109,8 @@ All findings come from reading the code; every one cites file:line. Status value
 | ACC-18 | Statement signs follow account type, not normal balance; no cash flow statement | Use `normal_balance`; add cash flow | Fixed (3202c00). Review: totals were already right for contra accounts (no contra accounts exist in the seeded chart, but admins can add them); the lines are now shown by normal balance and marked. Cash flow statement added |
 | ACC-19 | Seller statement totals wrong | Base it on the ledger | Fixed (ad77137). Widget, printed statement and CSV now use the ledger |
 | AUD-5 | No named finance events | Named events |
-| AUD-6 | No system actor | System actor on automated writes |
-| AUD-7 | URL tokens and TrxIDs not redacted | Extend `AuditRedactor` |
+| AUD-6 | No system actor | System actor on automated writes | Fixed (4bca514) |
+| AUD-7 | URL tokens and TrxIDs not redacted | Extend `AuditRedactor` | Fixed (4bca514). TrxIDs are masked to the last four characters rather than removed, so entries can still be matched to MFS statements |
 | AUD-8 | Sellers see raw diffs | Readable change summary |
 | AUD-9 | Admin filters and export missing | Filters and export |
 | UX-ACC-2 | Reverse action is unsafe | Confirmations | Already fixed by ACC-5 (only manual journals can be reversed; confirmation and a required reason; settlements use the separate Undo action from I-1). No change |
