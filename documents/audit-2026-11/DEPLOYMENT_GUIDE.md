@@ -271,3 +271,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 - **Before deploying, read-only check on production:** `php artisan config:show app.timezone`. Whatever it shows, **do not change `APP_TIMEZONE`**: stored times are written in that zone, and changing it would shift every existing order, payment and escrow time by 6 hours.
 - Optionally set `APP_DISPLAY_TIMEZONE=Asia/Dhaka` (that is already the default), then `php artisan config:cache`.
 - If `app.timezone` is already `Asia/Dhaka`, nothing changes visibly. If it is `UTC`, panel times move from UTC to Dhaka, and the daily renewal, grace and prune jobs move to 00:05, 01:00 and 03:30 Dhaka time.
+
+## PERF-4 (job retries)
+- Code only. Keep `QUEUE_CONNECTION=database` and a running worker (`php artisan queue:work --tries=3`; the jobs' own `$tries` override it). Check `php artisan queue:failed` after deploy; a failed audit job can be retried with `php artisan queue:retry <id>`.
