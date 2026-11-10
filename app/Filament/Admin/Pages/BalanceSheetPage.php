@@ -43,7 +43,7 @@ class BalanceSheetPage extends Page
 
     public function mount(): void
     {
-        $this->asOfDate = Carbon::now()->toDateString();
+        $this->asOfDate = Carbon::now(config('app.display_timezone'))->toDateString();
         $this->preset = 'today';
     }
 
@@ -52,12 +52,12 @@ class BalanceSheetPage extends Page
         $this->preset = $preset;
 
         $this->asOfDate = match ($preset) {
-            'today' => Carbon::now()->toDateString(),
-            'month' => Carbon::now()->endOfMonth()->toDateString(),
-            'last_month' => Carbon::now()->subMonthNoOverflow()->endOfMonth()->toDateString(),
-            'quarter' => Carbon::now()->endOfQuarter()->toDateString(),
-            'year' => Carbon::now()->endOfYear()->toDateString(),
-            default => Carbon::now()->toDateString(),
+            'today' => Carbon::now(config('app.display_timezone'))->toDateString(),
+            'month' => Carbon::now(config('app.display_timezone'))->endOfMonth()->toDateString(),
+            'last_month' => Carbon::now(config('app.display_timezone'))->subMonthNoOverflow()->endOfMonth()->toDateString(),
+            'quarter' => Carbon::now(config('app.display_timezone'))->endOfQuarter()->toDateString(),
+            'year' => Carbon::now(config('app.display_timezone'))->endOfYear()->toDateString(),
+            default => Carbon::now(config('app.display_timezone'))->toDateString(),
         };
 
         if (! in_array($preset, ['today', 'month', 'last_month', 'quarter', 'year'], true)) {
@@ -108,7 +108,7 @@ class BalanceSheetPage extends Page
     public function exportCsv(): StreamedResponse
     {
         $data = $this->getStatementData();
-        $filename = 'balance-sheet-'.($this->asOfDate ?? Carbon::now()->toDateString()).'.csv';
+        $filename = 'balance-sheet-'.($this->asOfDate ?? Carbon::now(config('app.display_timezone'))->toDateString()).'.csv';
 
         \app(AuditService::class)->recordExport('balance sheet', $filename, null);
 

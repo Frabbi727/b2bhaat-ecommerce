@@ -30,6 +30,15 @@ readonly class JournalEntryData
         }
     }
 
+    /**
+     * ACC-14: today's date in the business timezone (Dhaka), so a payment at 01:30 on the 1st is booked on the 1st
+     * whatever timezone the server stores times in.
+     */
+    public static function businessDate(): string
+    {
+        return now()->timezone((string) config('app.display_timezone', 'Asia/Dhaka'))->toDateString();
+    }
+
     public function totalDebit(): float
     {
         $sum = 0.0;

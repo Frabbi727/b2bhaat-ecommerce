@@ -42,8 +42,8 @@ class FinancialStatementService
         $isAllTime = ($startDate === 'all' || $startDate === 'all-time');
 
         if (! $isAllTime && empty($startDate) && empty($endDate)) {
-            $startDate = now()->startOfMonth()->toDateString();
-            $endDate = now()->endOfMonth()->toDateString();
+            $startDate = now(config('app.display_timezone'))->startOfMonth()->toDateString();
+            $endDate = now(config('app.display_timezone'))->endOfMonth()->toDateString();
         }
 
         $start = null;
@@ -216,9 +216,9 @@ class FinancialStatementService
         try {
             $asOf = ! empty($asOfDate)
                 ? Carbon::parse($asOfDate)->toDateString()
-                : now()->toDateString();
+                : now(config('app.display_timezone'))->toDateString();
         } catch (\Throwable) {
-            $asOf = now()->toDateString();
+            $asOf = now(config('app.display_timezone'))->toDateString();
         }
 
         $formattedAsOfDate = Carbon::parse($asOf)->format('M d, Y');

@@ -103,16 +103,16 @@ class TrialBalancePage extends Page
 
         match ($preset) {
             'month' => (function (): void {
-                $this->startDate = Carbon::now()->startOfMonth()->toDateString();
-                $this->endDate = Carbon::now()->endOfMonth()->toDateString();
+                $this->startDate = Carbon::now(config('app.display_timezone'))->startOfMonth()->toDateString();
+                $this->endDate = Carbon::now(config('app.display_timezone'))->endOfMonth()->toDateString();
             })(),
             'quarter' => (function (): void {
-                $this->startDate = Carbon::now()->startOfQuarter()->toDateString();
-                $this->endDate = Carbon::now()->endOfQuarter()->toDateString();
+                $this->startDate = Carbon::now(config('app.display_timezone'))->startOfQuarter()->toDateString();
+                $this->endDate = Carbon::now(config('app.display_timezone'))->endOfQuarter()->toDateString();
             })(),
             'year' => (function (): void {
-                $this->startDate = Carbon::now()->startOfYear()->toDateString();
-                $this->endDate = Carbon::now()->endOfYear()->toDateString();
+                $this->startDate = Carbon::now(config('app.display_timezone'))->startOfYear()->toDateString();
+                $this->endDate = Carbon::now(config('app.display_timezone'))->endOfYear()->toDateString();
             })(),
             default => (function (): void {
                 $this->startDate = null;

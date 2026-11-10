@@ -106,7 +106,7 @@ class OrderPaymentJournalHandler
         }
 
         $entryData = new JournalEntryData(
-            entryDate: now()->toDateString(),
+            entryDate: JournalEntryData::businessDate(),
             financialEvent: AccountingEvent::ORDER_PREPAID_RECEIVED->value,
             idempotencyKey: "order_prepaid_received_{$order->id}",
             description: "Online prepaid payment verified for Order #{$order->order_number}",

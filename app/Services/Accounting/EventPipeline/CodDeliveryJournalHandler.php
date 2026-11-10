@@ -87,7 +87,7 @@ class CodDeliveryJournalHandler
         }
 
         $entryData = new JournalEntryData(
-            entryDate: now()->toDateString(),
+            entryDate: JournalEntryData::businessDate(),
             financialEvent: AccountingEvent::COD_DELIVERED->value,
             idempotencyKey: "suborder_cod_delivered_{$subOrder->id}",
             description: "Courier COD delivery recorded for Sub-Order #{$subOrder->sub_order_number}",
@@ -158,7 +158,7 @@ class CodDeliveryJournalHandler
         }
 
         $entryData = new JournalEntryData(
-            entryDate: now()->toDateString(),
+            entryDate: JournalEntryData::businessDate(),
             financialEvent: AccountingEvent::COD_SELF_DELIVERED->value,
             idempotencyKey: "suborder_self_cod_delivered_{$subOrder->id}",
             description: "Seller self-collected COD delivery recorded for Sub-Order #{$subOrder->sub_order_number}",

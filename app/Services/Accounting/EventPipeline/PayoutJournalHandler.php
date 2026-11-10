@@ -58,7 +58,7 @@ class PayoutJournalHandler
         ];
 
         $entryData = new JournalEntryData(
-            entryDate: now()->toDateString(),
+            entryDate: JournalEntryData::businessDate(),
             financialEvent: AccountingEvent::PAYOUT_REQUESTED->value,
             idempotencyKey: "payout_requested_{$payout->id}",
             description: "Payout requested for wallet transaction #{$payout->id}",
@@ -121,7 +121,7 @@ class PayoutJournalHandler
         ];
 
         $entryData = new JournalEntryData(
-            entryDate: now()->toDateString(),
+            entryDate: JournalEntryData::businessDate(),
             financialEvent: AccountingEvent::PAYOUT_DISBURSED->value,
             idempotencyKey: "payout_disbursed_{$payout->id}",
             description: "Payout disbursed for wallet transaction #{$payout->id} via {$channel}{$trxSuffix}",
@@ -176,7 +176,7 @@ class PayoutJournalHandler
         ];
 
         $entryData = new JournalEntryData(
-            entryDate: now()->toDateString(),
+            entryDate: JournalEntryData::businessDate(),
             financialEvent: AccountingEvent::PAYOUT_REJECTED->value,
             idempotencyKey: "payout_rejected_{$payout->id}",
             description: "Payout rejected for wallet transaction #{$payout->id}. Reason: {$reason}",

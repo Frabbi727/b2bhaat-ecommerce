@@ -20,6 +20,7 @@ use App\Services\Accounting\EventPipeline\PayoutJournalHandler;
 use Database\Seeders\AccountingChartOfAccountsSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class PayoutJournalIntegrationTest extends TestCase
@@ -61,6 +62,26 @@ class PayoutJournalIntegrationTest extends TestCase
         ]);
 
         $this->handler = app(PayoutJournalHandler::class);
+    }
+
+    public function test_journals_are_dated_by_the_dhaka_business_day(): void
+    {
+        // ACC-14: 01:30 on 1 December in Dhaka is still 30 November in UTC
+        $this->travelTo(Carbon::parse('2026-11-30 19:30:00', 'UTC'));
+        config(['app.timezone' => 'UTC']);
+
+        $payout = WalletTransaction::create([
+            'seller_wallet_id' => $this->wallet->id,
+            'transaction_type' => WalletTransaction::TYPE_PAYOUT,
+            'status' => WalletTransaction::STATUS_REQUESTED,
+            'amount' => 100.00,
+            'running_balance' => 4900.00,
+        ]);
+
+        $entry = $this->handler->recordPayoutRequested($payout);
+
+        $this->assertSame('2026-12-01', $entry->entry_date->toDateString());
+        $this->assertStringStartsWith('JRN-202612-', $entry->journal_number);
     }
 
     /**

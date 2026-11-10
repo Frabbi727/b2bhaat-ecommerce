@@ -101,7 +101,7 @@ class RefundJournalHandler
         }
 
         $entryData = new JournalEntryData(
-            entryDate: now()->toDateString(),
+            entryDate: JournalEntryData::businessDate(),
             financialEvent: AccountingEvent::REFUND_PROCESSED->value,
             idempotencyKey: "suborder_cancel_refund_{$subOrder->id}",
             description: "Cancellation refund processed for Sub-Order #{$subOrder->sub_order_number}: {$reason}",
@@ -228,7 +228,7 @@ class RefundJournalHandler
         }
 
         $entryData = new JournalEntryData(
-            entryDate: now()->toDateString(),
+            entryDate: JournalEntryData::businessDate(),
             financialEvent: AccountingEvent::REFUND_PROCESSED->value,
             idempotencyKey: "suborder_return_refund_{$subOrder->id}",
             description: "Returned sub-order refund processed for Sub-Order #{$subOrder->sub_order_number}: {$reason}",

@@ -54,7 +54,7 @@ class EscrowReleaseJournalHandler
         ];
 
         $entryData = new JournalEntryData(
-            entryDate: now()->toDateString(),
+            entryDate: JournalEntryData::businessDate(),
             financialEvent: AccountingEvent::ESCROW_RELEASED->value,
             idempotencyKey: "suborder_escrow_release_{$subOrder->id}",
             description: "Escrow release recorded for Sub-Order #{$subOrder->sub_order_number}",
@@ -81,7 +81,7 @@ class EscrowReleaseJournalHandler
         $orderId = $subOrder->order?->id ?? $subOrder->parent_order_id;
 
         return $this->journalPostingService->post(new JournalEntryData(
-            entryDate: now()->toDateString(),
+            entryDate: JournalEntryData::businessDate(),
             financialEvent: AccountingEvent::SELF_DELIVERY_FEE_MOVED->value,
             idempotencyKey: "suborder_self_delivery_fee_{$subOrder->id}",
             description: "Delivery fee moved to the seller for self-delivered Sub-Order #{$subOrder->sub_order_number}",

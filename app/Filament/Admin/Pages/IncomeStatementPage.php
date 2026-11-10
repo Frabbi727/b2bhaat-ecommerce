@@ -45,8 +45,8 @@ class IncomeStatementPage extends Page
 
     public function mount(): void
     {
-        $this->startDate = Carbon::now()->startOfMonth()->toDateString();
-        $this->endDate = Carbon::now()->endOfMonth()->toDateString();
+        $this->startDate = Carbon::now(config('app.display_timezone'))->startOfMonth()->toDateString();
+        $this->endDate = Carbon::now(config('app.display_timezone'))->endOfMonth()->toDateString();
         $this->preset = 'month';
     }
 
@@ -55,10 +55,10 @@ class IncomeStatementPage extends Page
         $this->preset = $preset;
 
         [$this->startDate, $this->endDate] = match ($preset) {
-            'month' => [Carbon::now()->startOfMonth()->toDateString(), Carbon::now()->endOfMonth()->toDateString()],
-            'last_month' => [Carbon::now()->subMonthNoOverflow()->startOfMonth()->toDateString(), Carbon::now()->subMonthNoOverflow()->endOfMonth()->toDateString()],
-            'quarter' => [Carbon::now()->startOfQuarter()->toDateString(), Carbon::now()->endOfQuarter()->toDateString()],
-            'year' => [Carbon::now()->startOfYear()->toDateString(), Carbon::now()->endOfYear()->toDateString()],
+            'month' => [Carbon::now(config('app.display_timezone'))->startOfMonth()->toDateString(), Carbon::now(config('app.display_timezone'))->endOfMonth()->toDateString()],
+            'last_month' => [Carbon::now(config('app.display_timezone'))->subMonthNoOverflow()->startOfMonth()->toDateString(), Carbon::now(config('app.display_timezone'))->subMonthNoOverflow()->endOfMonth()->toDateString()],
+            'quarter' => [Carbon::now(config('app.display_timezone'))->startOfQuarter()->toDateString(), Carbon::now(config('app.display_timezone'))->endOfQuarter()->toDateString()],
+            'year' => [Carbon::now(config('app.display_timezone'))->startOfYear()->toDateString(), Carbon::now(config('app.display_timezone'))->endOfYear()->toDateString()],
             default => [null, null],
         };
 

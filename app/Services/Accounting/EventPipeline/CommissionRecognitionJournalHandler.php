@@ -62,7 +62,7 @@ class CommissionRecognitionJournalHandler
         $orderId = $subOrder->order?->id ?? $subOrder->parent_order_id;
 
         return $this->journalPostingService->post(new JournalEntryData(
-            entryDate: now()->toDateString(),
+            entryDate: JournalEntryData::businessDate(),
             financialEvent: AccountingEvent::COMMISSION_EARNED->value,
             idempotencyKey: "suborder_commission_earned_{$subOrder->id}",
             description: "Commission earned on delivery of Sub-Order #{$subOrder->sub_order_number}",

@@ -99,7 +99,7 @@ class ReclassifyShippingRevenueCommand extends Command
             }
 
             $journalPostingService->post(new JournalEntryData(
-                entryDate: now()->toDateString(),
+                entryDate: JournalEntryData::businessDate(),
                 financialEvent: AccountingEvent::SHIPPING_RECLASSIFIED->value,
                 idempotencyKey: $key,
                 description: "Shipping fee moved from courier expense to shipping revenue for {$entry->journal_number}",
