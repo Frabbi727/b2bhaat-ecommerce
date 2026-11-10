@@ -259,3 +259,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## INV-9 (featuring)
 - Code only. Products a seller had already featured stay featured; review them under Admin → Product Moderation (Featured column) and use "Stop featuring" where needed.
+
+## INV-10 (import option names)
+- Code only. **Behaviour change for sellers:** a product sheet that uses an option name the admin hasn't created (Admin → Attributes) is refused for that product, with the list of valid names.
