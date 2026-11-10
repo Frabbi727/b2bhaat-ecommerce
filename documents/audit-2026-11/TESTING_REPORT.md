@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1567 tests, 1558 passed, 9 skipped, 7118 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1568 tests, 1559 passed, 9 skipped, 7124 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -141,6 +141,7 @@ The existing tests of other features were touched only to give their test produc
 | SEC-11 | `tests/Feature/CourierWebhookSecurityTest.php` (+4, 12 in all) | Same message twice → 409 and no second tracking entry; 10 minutes old or ahead → 401; old body-only signature, with or without a timestamp, → 401; a timestamp changed after signing → 401; a message that got 404 succeeds when retried. All other webhook tests (lifecycle, fraud, escrow cron) pass with the new signing helper |
 | PAY-6 | `tests/Feature/StockLockOrderTest.php` (4) | Reserve, release and bulk update read variation rows lowest id first, once each (seen in the query log); repeats are added together; two rows of 2 and 1 against stock 2 are refused as 'Requested: 3' |
 | FS-3 | `tests/Feature/FlashSaleFastCounterAllocationTest.php` (+1) | Offer for product A on a line for product B is refused; a correct and a wrong line together are refused; units sold stays 0. Flash checkout integrity tests still pass |
+| ACC-21 | `tests/Feature/Accounting/JournalPostingServiceTest.php` (+1) | Same lines in another order return the first entry; another amount or another account under the key throws with the key and journal number; only one entry exists. Full suite passes, so no existing flow re-posts a key with other amounts |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
