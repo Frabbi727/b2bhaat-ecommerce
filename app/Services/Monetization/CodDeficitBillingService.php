@@ -7,8 +7,10 @@ namespace App\Services\Monetization;
 use App\Models\SellerInvoice;
 use App\Models\SellerPayment;
 use App\Models\SellerWallet;
+use App\Models\User;
 use App\Models\WalletTransaction;
 use App\Services\Settings\StoreConfigurationService;
+use App\Services\Sms\OrderNotificationService;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -17,20 +19,26 @@ use Illuminate\Support\Str;
  * MON-11: a seller who collects cash on delivery themselves is charged the platform's commission from their wallet,
  * which can take it below zero. Once it has stayed below zero for the grace days, the seller gets one bill for what is
  * still owed. The bill is withdrawn if later earnings cover the shortfall before it is paid.
+ *
+ * Owner decision (item 7): the bill is due after the same grace days. If it is still unpaid the monetization grace
+ * days after its due date, the store is suspended (products hidden, payouts already blocked) until it is paid or
+ * earnings cover it.
  */
 class CodDeficitBillingService
 {
     public function __construct(
         protected StoreConfigurationService $config,
+        protected MonetizationSuspensionService $suspensions,
+        protected OrderNotificationService $notifications,
     ) {}
 
     /**
-     * @return array{raised: int, withdrawn: int}
+     * @return array{raised: int, withdrawn: int, suspended: int}
      */
     public function run(?CarbonInterface $now = null): array
     {
         if (! $this->config->isMonetizationEnabled()) {
-            return ['raised' => 0, 'withdrawn' => 0];
+            return ['raised' => 0, 'withdrawn' => 0, 'suspended' => 0];
         }
 
         $now ??= now();
@@ -38,6 +46,7 @@ class CodDeficitBillingService
         return [
             'raised' => $this->raiseDueBills($now),
             'withdrawn' => $this->withdrawCoveredBills(),
+            'suspended' => $this->suspendOverdueStores($now),
         ];
     }
 
@@ -127,11 +136,48 @@ class CodDeficitBillingService
                     if ($balance >= 0) {
                         $invoice->update(['status' => SellerInvoice::STATUS_VOID]);
                         $withdrawn++;
+
+                        // A store suspended over this bill comes back once nothing else is owed
+                        if ($seller = User::find($invoice->seller_id)) {
+                            $this->suspensions->restoreAfterPayment($seller);
+                        }
                     }
                 });
             });
 
         return $withdrawn;
+    }
+
+    /**
+     * Suspend the stores whose deficit bill is still unpaid more than the grace days after its due date. A bill with
+     * a payment waiting to be checked is left alone, and a store already suspended is not suspended again.
+     */
+    private function suspendOverdueStores(CarbonInterface $now): int
+    {
+        $lastDueDate = $now->copy()->timezone(config('app.display_timezone'))->startOfDay()
+            ->subDays($this->config->getMonetizationGracePeriodDays())
+            ->toDateString();
+        $suspended = 0;
+
+        SellerInvoice::with('seller.sellerProfile')
+            ->where('invoice_type', SellerInvoice::TYPE_COD_COMMISSION_DEFICIT)
+            ->where('status', SellerInvoice::STATUS_UNPAID)
+            ->whereDate('due_date', '<', $lastDueDate)
+            ->whereDoesntHave('payments', fn ($query) => $query->where('status', SellerPayment::STATUS_PENDING_VERIFICATION))
+            ->get()
+            ->each(function (SellerInvoice $invoice) use (&$suspended): void {
+                $seller = $invoice->seller;
+                if (! $seller || ! $seller->sellerProfile || $seller->sellerProfile->monetization_status === 'suspended') {
+                    return;
+                }
+
+                $reason = "Commission owed on cash you collected (bill {$invoice->invoice_number}) is unpaid past its due date";
+                $this->suspensions->suspendSeller($seller, $reason);
+                $this->notifications->sendAccountSuspendedNotice($seller, $reason);
+                $suspended++;
+            });
+
+        return $suspended;
     }
 
     private function unpaidBill(int $sellerId): ?SellerInvoice

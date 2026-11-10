@@ -9,12 +9,14 @@ use App\Models\SellerInvoice;
 use App\Models\SellerSubscription;
 use App\Models\SellerSuspensionEvent;
 use App\Models\User;
+use App\Services\Settings\StoreConfigurationService;
 use Illuminate\Support\Facades\DB;
 
 class MonetizationSuspensionService
 {
     public function __construct(
-        protected MonetizationEngineService $monetizationEngine
+        protected MonetizationEngineService $monetizationEngine,
+        protected StoreConfigurationService $config,
     ) {}
 
     /**
@@ -61,7 +63,7 @@ class MonetizationSuspensionService
     /**
      * After a bill is paid, put the store back to normal (MON-1): a store in its grace period returns to
      * active, and a store suspended *for non-payment* gets its products back. Nothing changes while another
-     * subscription bill is still unpaid, and a suspension an admin imposed is only lifted by an admin.
+     * subscription or COD commission bill is still unpaid, and a suspension an admin imposed is only lifted by an admin.
      */
     public function restoreAfterPayment(User $seller, ?User $actor = null): void
     {
@@ -77,7 +79,10 @@ class MonetizationSuspensionService
             ->whereHas('subscription', fn ($query) => $query->where('status', '!=', SellerSubscription::STATUS_PAYMENT_DUE))
             ->exists();
 
-        if ($stillOwesSubscription) {
+        // A COD commission bill unpaid past its due date and grace days keeps the store suspended until it is settled
+        $stillOwesCodDeficit = $this->hasOverdueCodDeficitBill($seller);
+
+        if ($stillOwesSubscription || $stillOwesCodDeficit) {
             return;
         }
 
@@ -161,5 +166,28 @@ class MonetizationSuspensionService
 
             return $productsToRestore;
         });
+    }
+
+    /**
+     * Whether the seller has a COD commission bill still unpaid more than the grace days after its Dhaka due date:
+     * the bills that suspend a store (CodDeficitBillingService).
+     */
+    public function hasOverdueCodDeficitBill(User $seller): bool
+    {
+        return SellerInvoice::where('seller_id', $seller->id)
+            ->where('invoice_type', SellerInvoice::TYPE_COD_COMMISSION_DEFICIT)
+            ->where('status', SellerInvoice::STATUS_UNPAID)
+            ->whereDate('due_date', '<', $this->lastAllowedCodDeficitDueDate())
+            ->exists();
+    }
+
+    /**
+     * A COD commission bill due before this Dhaka date is overdue past its grace days.
+     */
+    public function lastAllowedCodDeficitDueDate(): string
+    {
+        return now()->timezone(config('app.display_timezone'))->startOfDay()
+            ->subDays($this->config->getMonetizationGracePeriodDays())
+            ->toDateString();
     }
 }

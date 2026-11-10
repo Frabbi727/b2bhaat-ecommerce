@@ -5,21 +5,25 @@ declare(strict_types=1);
 namespace Tests\Feature\Monetization;
 
 use App\Filament\Seller\Pages\SubscriptionBilling;
+use App\Jobs\SendSmsJob;
 use App\Models\Accounting\AccountingJournalLine;
 use App\Models\Role;
 use App\Models\SellerInvoice;
 use App\Models\SellerPayment;
 use App\Models\SellerProfile;
+use App\Models\SellerSuspensionEvent;
 use App\Models\SellerWallet;
 use App\Models\User;
 use App\Models\WalletTransaction;
 use App\Services\Escrow\EscrowLedgerService;
+use App\Services\Monetization\MonetizationSuspensionService;
 use App\Services\Monetization\SellerInvoiceSettlementService;
 use Database\Seeders\AccountingChartOfAccountsSeeder;
 use DomainException;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -49,6 +53,7 @@ class CodDeficitBillTest extends TestCase
         $this->seller = User::factory()->create([
             'role_id' => Role::firstOrCreate(['slug' => 'seller'], ['name' => 'Seller'])->id,
             'is_active' => true,
+            'phone' => '01712345678',
         ]);
         SellerProfile::create([
             'user_id' => $this->seller->id,
@@ -237,5 +242,116 @@ class CodDeficitBillTest extends TestCase
 
         $this->expectExceptionMessage('SINV-DUE-1');
         app(EscrowLedgerService::class)->requestPayout($this->seller, 500);
+    }
+
+    /**
+     * Owner decision (item 7): a deficit bill is due 7 days after it is raised. If it is still unpaid the monetization
+     * grace days (3 by default) after that, the store is suspended and the seller is told by SMS.
+     */
+    private function raiseBill(): SellerInvoice
+    {
+        $this->goNegative(daysAgo: 8);
+        $this->artisan('monetization:bill-cod-deficits')->assertSuccessful();
+
+        return $this->deficitBills()->sole();
+    }
+
+    private function storeStatus(): string
+    {
+        return (string) $this->seller->sellerProfile()->value('monetization_status');
+    }
+
+    public function test_an_overdue_bill_suspends_the_store_after_the_grace_days(): void
+    {
+        Queue::fake();
+        $this->raiseBill();
+
+        $this->travel(7 + 3)->days();
+        $this->artisan('monetization:bill-cod-deficits')->assertSuccessful();
+        $this->assertSame('active', $this->storeStatus(), 'Still inside the grace days after the due date');
+
+        $this->travel(1)->days();
+        $this->artisan('monetization:bill-cod-deficits')->assertSuccessful();
+        $this->artisan('monetization:bill-cod-deficits')->assertSuccessful();
+
+        $this->assertSame('suspended', $this->storeStatus());
+        $event = SellerSuspensionEvent::where('seller_id', $this->seller->id)->sole();
+        $this->assertSame(SellerSuspensionEvent::TRIGGER_AUTOMATED_BILLING, $event->trigger_type);
+        $this->assertStringContainsString('cash you collected', $event->reason);
+        Queue::assertPushed(SendSmsJob::class, 1);
+    }
+
+    public function test_paying_the_overdue_bill_restores_the_store(): void
+    {
+        Queue::fake();
+        $bill = $this->raiseBill();
+        $this->travel(11)->days();
+        $this->artisan('monetization:bill-cod-deficits')->assertSuccessful();
+        $this->assertSame('suspended', $this->storeStatus());
+
+        $settlement = app(SellerInvoiceSettlementService::class);
+        $payment = $settlement->submitPaymentProof($this->seller, $bill->id, [
+            'payment_method' => SellerPayment::METHOD_BKASH,
+            'amount' => 50,
+            'transaction_reference' => 'BK-COD-RESTORE-1',
+        ]);
+        $settlement->approveSubmittedPayment($payment, $this->admin);
+
+        $this->assertSame('active', $this->storeStatus());
+        $this->assertNotNull(SellerSuspensionEvent::where('seller_id', $this->seller->id)->sole()->restored_at);
+    }
+
+    public function test_a_store_stays_suspended_while_a_deficit_bill_is_unpaid(): void
+    {
+        Queue::fake();
+        $this->raiseBill();
+        $this->travel(11)->days();
+        $this->artisan('monetization:bill-cod-deficits')->assertSuccessful();
+
+        // Paying some other bill does not lift a suspension the deficit bill caused
+        app(MonetizationSuspensionService::class)->restoreAfterPayment($this->seller);
+
+        $this->assertSame('suspended', $this->storeStatus());
+    }
+
+    public function test_a_store_is_restored_when_earnings_cover_the_deficit(): void
+    {
+        Queue::fake();
+        $this->raiseBill();
+        $this->travel(11)->days();
+        $this->artisan('monetization:bill-cod-deficits')->assertSuccessful();
+
+        $this->walletEntry(WalletTransaction::TYPE_ESCROW_RELEASE, 80, 30, 0);
+        $this->wallet->update(['available_balance' => 30]);
+        $this->artisan('monetization:bill-cod-deficits')->assertSuccessful();
+
+        $this->assertSame(SellerInvoice::STATUS_VOID, $this->deficitBills()->sole()->status);
+        $this->assertSame('active', $this->storeStatus());
+    }
+
+    public function test_a_store_whose_payment_waits_to_be_checked_is_not_suspended(): void
+    {
+        Queue::fake();
+        $bill = $this->raiseBill();
+        app(SellerInvoiceSettlementService::class)->submitPaymentProof($this->seller, $bill->id, [
+            'payment_method' => SellerPayment::METHOD_BKASH,
+            'amount' => 50,
+            'transaction_reference' => 'BK-COD-PENDING-1',
+        ]);
+
+        $this->travel(11)->days();
+        $this->artisan('monetization:bill-cod-deficits')->assertSuccessful();
+
+        $this->assertSame('active', $this->storeStatus());
+    }
+
+    public function test_a_deficit_bill_not_yet_overdue_does_not_hold_back_a_store_in_its_grace_period(): void
+    {
+        $this->raiseBill();
+        $this->seller->sellerProfile()->update(['monetization_status' => 'grace_period']);
+
+        app(MonetizationSuspensionService::class)->restoreAfterPayment($this->seller);
+
+        $this->assertSame('active', $this->storeStatus());
     }
 }
