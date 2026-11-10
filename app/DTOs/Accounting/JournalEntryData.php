@@ -39,31 +39,25 @@ readonly class JournalEntryData
         return now()->timezone((string) config('app.display_timezone', 'Asia/Dhaka'))->toDateString();
     }
 
+    /**
+     * ACC-15: totals are the sum of each line rounded to whole poisha, i.e. exactly what is stored, so a journal
+     * that only balances before rounding is refused. Integer maths avoids float drift (0.1 + 0.2).
+     */
     public function totalDebit(): float
     {
-        $sum = 0.0;
-        foreach ($this->lines as $line) {
-            $sum += $line->debit;
-        }
-
-        return round($sum, 2);
+        return $this->totalPoisha('debit') / 100;
     }
 
     public function totalCredit(): float
     {
-        $sum = 0.0;
-        foreach ($this->lines as $line) {
-            $sum += $line->credit;
-        }
-
-        return round($sum, 2);
+        return $this->totalPoisha('credit') / 100;
     }
 
     public function isBalanced(): bool
     {
         return count($this->lines) >= 2
-            && $this->totalDebit() > 0.00
-            && bccomp(sprintf('%.2f', $this->totalDebit()), sprintf('%.2f', $this->totalCredit()), 2) === 0;
+            && $this->totalPoisha('debit') > 0
+            && $this->totalPoisha('debit') === $this->totalPoisha('credit');
     }
 
     public function validate(): void
@@ -72,12 +66,30 @@ readonly class JournalEntryData
             throw new UnbalancedJournalException('Journal entry must have at least 2 lines.');
         }
 
-        if ($this->totalDebit() <= 0.00) {
+        if ($this->totalPoisha('debit') <= 0) {
             throw new UnbalancedJournalException('Journal entry total debit must be greater than zero.');
         }
 
-        if (bccomp(sprintf('%.2f', $this->totalDebit()), sprintf('%.2f', $this->totalCredit()), 2) !== 0) {
+        if ($this->totalPoisha('debit') !== $this->totalPoisha('credit')) {
             throw UnbalancedJournalException::forAmounts($this->totalDebit(), $this->totalCredit());
         }
+    }
+
+    /**
+     * Amount in whole poisha, rounded the same way the stored line is (half away from zero, 2 decimals).
+     */
+    public static function toPoisha(float $amount): int
+    {
+        return (int) round(round($amount, 2) * 100);
+    }
+
+    private function totalPoisha(string $side): int
+    {
+        $sum = 0;
+        foreach ($this->lines as $line) {
+            $sum += self::toPoisha($line->{$side});
+        }
+
+        return $sum;
     }
 }
