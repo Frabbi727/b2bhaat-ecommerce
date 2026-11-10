@@ -82,6 +82,31 @@ There is one commit per issue. Each commit was test-first: a failing test, then 
 - **Reclassify command after later reversals.** If a journal that was already corrected is reversed later, run `accounting:reclassify-shipping` again so the reversal is corrected too.
 - **Customer refunds after PAY-1.** They appear as *pending* Refund rows for the finance team to pay out, exactly like other cancellations.
 
+**Later waves (what people will notice after the full deploy):**
+
+- **Buyer links expire (SEC-8).** The tracking link in the SMS works for 90 days, and the tokenised invoice link for 365 days, both counted from the order date. After that the buyer signs in or looks the order up by number and phone. The limits are set in `.env`.
+- **Featuring is admin-only (INV-9).** Sellers can no longer mark their own products as featured. Admins do it from Product Moderation. Products already featured stay featured.
+- **Import uses existing option names (INV-10).** A product import that names an option such as "Colour" that isn't already set up is refused, and the row error lists the names that exist. New values under an existing option are still created.
+- **Wholesale tiers must get cheaper (INV-6).** A tier with a higher minimum quantity can't cost more per unit than the tier before it. Equal prices are allowed.
+- **Dhaka time on screen (PERF-5).** Panel times show in Dhaka time. The daily jobs run at 00:05, 01:00, 01:30 and 03:30 Dhaka time. Stored times are not changed.
+- **One date style (UX-ACC-5).** Dates read "07 Nov 2026" and "07 Nov 2026, 3:05 PM" everywhere: panels, storefront, emails, SMS and printouts.
+- **Finance audit entries have names (AUD-5).** Audit entries for money records are named after what happened (`escrow_release`, `payout_disbursed`, `seller_invoice_void`) rather than `created` or `updated`. Saved filters on the old names need updating, and old rows keep their old names.
+- **Seller statement figures (ACC-19).** The printed statement and the wallet overview now come from the ledger. "Payouts withdrawn" counts only payouts actually paid, so rejected or waiting payouts no longer reduce it. Some sellers will see different figures than before.
+- **Panel build step (UX-ACC-6).** `npm ci && npm run build` must run on every deploy, or the panels fail to load.
+- **Seller CSV headers (UX-2).** The wallet statement CSV says "On Hold After Delivery (BDT)" and "Order #". Sellers who import it into a spreadsheet may need to adjust it.
+- **New seller billing (MON-11).** Sellers can buy listing packs. They can submit a bKash, Nagad or bank TrxID for a bill, which an admin then checks. A seller whose wallet stays below zero for 7 days after collecting COD cash gets a bill, from a daily job at 01:30.
+- **Overdue bills block payouts (MON-12).** A seller with a marketplace bill past its due date can't request a payout until it is paid. Payouts already requested go ahead.
+- **Marketplace fees switch (MON-8, MON-15).** With the switch off: no commission, no bills and no listing limits. A plan with its fee turned off bills ৳0.
+- **Commission for new sellers (MON-13).** The rate is set in Store settings (default 10%). Each order line now records the commission rate it was charged.
+- **Item-by-item returns (PAY-4).** Buyers can return some items of a delivered parcel. They get back those items' price less their share of any coupon. The commission on them is given back to the seller in proportion. The delivery fee is refunded only when the whole parcel comes back.
+- **Courier signing (SEC-11).** A courier status update must carry a timestamp and a signature over "timestamp.body". Old or repeated messages are refused, so the courier must be told when it is connected.
+- **Dispatch rules (ORD-2).** A cancelled, returned or delivered parcel can't be dispatched, and neither can an order whose payment isn't cleared. Sellers see the reason.
+- **Month close (ACC-14).** Admins close a finished month under Accounting → Periods. Only a super admin can reopen it.
+- **Journals are strict (ACC-20, ACC-21).** The type or balance side of an account that has postings can't be changed from anywhere, and system accounts can't be switched off. A journal key reused with different amounts is refused instead of being silently skipped.
+- **Clearer journal pages (UX-ACC-4).** The journal list shows Debit and Credit. A journal page names what it records ("Order ORD-1001") and links to it, and a reversal links back to the journal it reverses.
+- **Wholesale minimum shown early (UX-7).** The product page states the minimum order and counts the units chosen so far. The cart warns when a lot is below the minimum.
+- **Unique product SKUs (INV-11).** The database refuses two products with one SKU. The deploy stops if production already has shared SKUs; see the deployment guide.
+
 # Implementation Log: INV-8 product and price approval, branch `feat/product-approval`
 
 New products and price changes now wait for admin approval. No production commands were run. The four migrations were only run against the test database.

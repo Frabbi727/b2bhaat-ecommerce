@@ -1,3 +1,119 @@
+# Deploying everything at once (`fix/audit-wave-1` → `production`)
+
+This branch contains Wave 0, INV-8 (product and price approval), Wave 1, Wave 2 and Wave 3. This runbook covers the whole deploy in one pass. The sections after it hold the detail for each fix and are referred to by ID. Nothing here has been run on production.
+
+## 1. Before the deploy (read-only checks on production)
+
+Take a **database backup and a copy of `.env`** first. Then run these checks. Each one only reads.
+
+| Check | Command | What to do with the answer |
+|---|---|---|
+| Timezone (PERF-5) | `php artisan config:show app.timezone` | Note it and **do not change `APP_TIMEZONE`**. |
+| Shared SKUs (INV-11) | `SELECT sku, COUNT(*) FROM products WHERE sku IS NOT NULL GROUP BY sku HAVING COUNT(*) > 1;` | Rows found: the last migration will stop. Ask the sellers which product keeps each SKU and change the other first. |
+| Old unchecked bKash/Nagad orders (PAY-2) | The query under **PAY-2** below | Verify or reject them, or they are cancelled on the first hourly run. |
+| Chart of accounts (ACC-6) | The query under **ACC-6** below | Add any missing standard account. |
+| Bad journal lines (ACC-9) | The query under **ACC-9** below | Not 0: tell the accountant. The migration still runs. |
+| Default plan (MON-3) | Admin → Seller Plans | Exactly one active plan marked as the default for new sellers. |
+| Sellers in COD deficit (MON-11) | `SELECT seller_id, available_balance FROM seller_wallets WHERE available_balance < 0;` | These sellers may get a bill on the first 01:30 run. |
+| Proxy (SEC-6, SMS, logins) | See **Proxies** below | Usually nothing to change. |
+
+## 2. Deploy
+
+```bash
+composer install --no-dev --optimize-autoloader
+npm ci && npm run build          # required: panel themes (UX-ACC-6) and storefront views
+php artisan migrate --pretend    # expect the 20 migrations listed below, nothing else
+php artisan migrate              # at a quiet time
+php artisan config:cache && php artisan route:cache && php artisan view:cache
+php artisan queue:restart
+```
+
+**Migrations, in the order they run.** Run them at a quiet time. Watch the output for the messages named in the last column.
+
+| Migration | What it does | Watch for |
+|---|---|---|
+| `2026_11_08_140001_add_validity_and_rejection_to_rfq_requests_table` | 4 empty columns on `rfq_requests` | |
+| `2026_11_08_153554` … `153557` (INV-8) | Approval columns, change-request table, notifications table, backfill of products as approved | Takes a moment on a large catalog |
+| `2026_11_09_044216_add_performance_indexes` (PERF-1) | 72 indexes, built concurrently | Interrupted run: see PERF-1 |
+| `2026_11_09_045325_make_audit_logs_append_only` (AUD-2) | Trigger | |
+| `2026_11_09_080335_add_journal_integrity_guards` (ACC-9) | Triggers and amount rule; briefly locks journal lines | Count of old bad lines |
+| `2026_11_09_082101_change_notifications_data_to_json` (INV-8b) | `notifications.data` to JSON | Must ship with INV-8 |
+| `2026_11_09_091139_add_courier_settlement_to_sub_orders_table` (ACC-7) | 2 empty columns | |
+| `2026_11_09_095029_add_deferred_commission_revenue_account` (ACC-11) | Account 2070 if missing | |
+| `2026_11_09_095816_add_term_snapshot_to_seller_subscriptions_table` (MON-2) | Copies today's plan terms onto each subscription | Run before anyone edits a plan |
+| `2026_11_09_104236_add_billing_period_key_to_seller_invoices_table` (MON-10) | Unique bill key | "MON-10: N renewal bill(s) repeat a period" |
+| `2026_11_09_110445_add_mfs_verification_timeout_support` (PAY-2) | Column and "Not Confirmed" status | |
+| `2026_11_09_135916_add_mfs_transaction_columns_to_orders_table` (PAY-3) | TrxID columns, unique; reads every order | "PAY-3: N order(s) reuse a TrxID" |
+| `2026_11_09_141813_restrict_deleting_ordered_variations` (INV-4) | Foreign key rebuilt; briefly locks two tables | "INV-4: N order line(s) already lost their option" |
+| `2026_11_09_160646_create_accounting_journal_sequences_table` (ACC-13) | Journal number counter | |
+| `2026_11_10_080658_add_line_level_returns` (PAY-4) | Item returns table and index changes | |
+| `2026_11_10_163137_add_commission_rate_to_order_items_table` (MON-13) | 1 empty column | |
+| `2026_11_10_163717_add_unique_index_to_products_sku` (INV-11) | Unique SKU | Stops and lists shared SKUs; fix them and run `migrate` again |
+
+Each migration commits on its own. If one stops, the earlier ones stay done: fix the cause and run `php artisan migrate` again.
+
+**Environment keys** (all optional, defaults shown):
+
+```env
+APP_DISPLAY_TIMEZONE=Asia/Dhaka           # do NOT change APP_TIMEZONE
+COURIER_WEBHOOK_TOLERANCE_SECONDS=300
+ORDER_TRACKING_LINK_DAYS=90
+ORDER_INVOICE_LINK_DAYS=365
+SMS_OTP_MAX_PER_IP_PER_HOUR=10
+SMS_OTP_MAX_PER_PHONE_PER_DAY=10
+AUDIT_RETENTION_DAYS=180
+```
+
+`CACHE_STORE` must be shared by all web servers (`database` or `redis`). The SMS limits, lookup limits, payout locks and courier replay protection rely on it.
+
+**Scheduler and queue.** The scheduler (`php artisan schedule:run` every minute) and a queue worker must be running. New or changed jobs:
+- `payments:expire-unverified`: hourly.
+- `monetization:bill-cod-deficits`: daily at 01:30 Dhaka time.
+- Renewals, grace checks and audit pruning now run at Dhaka times (00:05, 01:00 and 03:30).
+
+## 3. After the deploy
+
+- **Database guards:** the AUD-2 and ACC-9 checks must fail as described in their sections.
+- **Plan terms:** `SELECT count(*) FROM seller_subscriptions WHERE terms_captured_at IS NULL;` must return 0.
+- **Reconciliation:** open Accounting → Reconciliation and run the full audit. Any seller listed is a past self-delivery case for the accountant (ACC-3/4/8).
+- **Accountant:** record the past courier remittances and gateway transfers (ACC-7).
+- **Smoke tests:** follow the Wave 0 and INV-8 smoke tests below, then place one wholesale order. The product page should show the minimum order.
+- **Failed jobs:** check `php artisan queue:failed`.
+
+## 4. Only with the owner's separate go-ahead
+
+- `php artisan accounting:reclassify-shipping --dry-run`, then without `--dry-run`. Take a fresh backup first (ACC-1, Wave 0 step 6).
+- `php artisan monetization:assign-default-plan --dry-run`, then without it (MON-3).
+
+## 5. Tell people
+
+- **Sellers:**
+  - new products and price changes wait for review (INV-8);
+  - stock changes go through Adjust stock (INV-3);
+  - the statement CSV headers changed (UX-2);
+  - COD-deficit bills (MON-11);
+  - item-by-item returns (PAY-4);
+  - plan edits send an SMS (MON-2).
+- **Courier:** messages must be signed with a timestamp (SEC-11).
+- **Buyers:** tracking links work for 90 days and invoice links for 365 days from the order date (SEC-8).
+
+## 6. Rollback
+
+Revert the merge and redeploy, which is enough for most fixes. Each migration rolls back with `php artisan migrate:rollback --step=1`, newest first. Read the fix's own section before rolling one back, because a few only roll back cleanly while their new feature is unused (PAY-4, ACC-11, PAY-2). Posted journals are permanent: undo them with reversing journals, never by deleting.
+
+## Proxies (owner decision: leave untrusted)
+
+The app trusts no proxy, so it uses the address that connects to the web server as the visitor's address. That address drives the per-visitor limits (OTP SMS per IP, order lookups, logins) and the IP in the audit log.
+
+- **The server takes visitors directly** (Nginx or Apache on the server, no Cloudflare proxy, no load balancer): this is correct. Nothing to do.
+- **The site sits behind Cloudflare (orange cloud) or a load balancer:** every visitor then appears as the proxy's address. They all share one OTP and lookup limit, so one busy hour can block everyone, and the audit log shows proxy addresses.
+
+**How to check, read-only:**
+1. `SELECT ip_address, count(*) FROM audit_logs WHERE created_at > now() - interval '7 days' GROUP BY 1 ORDER BY 2 DESC LIMIT 5;`
+2. If almost every row has one or a few addresses that belong to Cloudflare (cloudflare.com/ips) or to your hosting load balancer, the site is proxied.
+
+**If it is proxied,** trust only that proxy in `bootstrap/app.php`, inside `withMiddleware`: `$middleware->trustProxies(at: ['<load balancer IP>']);`. For Cloudflare, list Cloudflare's published ranges. Never use `'*'` unless the server refuses all traffic that does not come through the proxy; otherwise anyone can fake their address and slip past the limits. Test on staging first: the audit log should then show real visitor addresses.
+
 # Deployment Guide: Wave 0 (`fix/audit-wave-0` → `production`)
 
 ## Risk summary
