@@ -131,6 +131,7 @@ final readonly class PriceSet
         }
 
         array_push($errors, ...$this->overlapErrors());
+        array_push($errors, ...$this->risingPriceErrors());
 
         $slugs = SalesChannel::pluck('slug', 'id');
         $rowChannels = collect($this->rows)->map(fn (array $row): ?string => $slugs[$row['sales_channel_id']] ?? null);
@@ -182,6 +183,37 @@ final readonly class PriceSet
                     }
                 }
             }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * INV-6: within one channel and variation, a tier for bigger quantities may not cost more per unit than a
+     * tier for smaller ones (rows are already sorted by minimum quantity).
+     *
+     * @return list<string>
+     */
+    private function risingPriceErrors(): array
+    {
+        $errors = [];
+        $previous = [];
+
+        foreach ($this->rows as $row) {
+            $group = $row['sales_channel_id'].':'.($row['variation_id'] ?? 'null');
+            $before = $previous[$group] ?? null;
+
+            if ($before !== null && $row['min_quantity'] > $before['min_quantity'] && (float) $row['unit_price'] > (float) $before['unit_price']) {
+                $errors[] = sprintf(
+                    'The %s tier (৳%s) costs more per unit than the %s tier (৳%s). Bigger orders must get the same or a lower price.',
+                    self::range($row),
+                    $row['unit_price'],
+                    self::range($before),
+                    $before['unit_price'],
+                );
+            }
+
+            $previous[$group] = $row;
         }
 
         return $errors;

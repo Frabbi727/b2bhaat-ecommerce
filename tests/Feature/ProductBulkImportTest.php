@@ -197,6 +197,7 @@ class ProductBulkImportTest extends TestCase
             $this->row(['product_title' => 'Unknown Category', 'category' => 'Spaceships']),
             $this->row(['product_title' => 'Bad Unit', 'unit' => 'barrel']),
             $this->row(['product_title' => 'Overlapping Tiers', 'wholesale_tiers' => '50+:110; 100+:95']),
+            $this->row(['product_title' => 'Dearer Tiers', 'wholesale_tiers' => '50-99:85; 100+:110']),
             $this->row(['product_title' => 'Bad Stock', 'stock' => '-4']),
             $this->row(['product_title' => 'Bad Channel', 'sell_to' => 'everyone']),
             $this->row(['product_title' => 'Duplicate Options', 'options' => 'Color: Pink']),
@@ -211,12 +212,13 @@ class ProductBulkImportTest extends TestCase
         $this->assertStringContainsString('Row 4: category “Spaceships” was not found', $errors);
         $this->assertStringContainsString('Row 5: unit “barrel” was not found', $errors);
         $this->assertStringContainsString('Row 6: wholesale tiers overlap', $errors);
-        $this->assertStringContainsString('Row 7: stock “-4” must be a whole number', $errors);
-        $this->assertStringContainsString('Row 8: sell_to “everyone” is not valid', $errors);
-        $this->assertStringContainsString('Row 10: the options “color: pink” appear twice', $errors);
-        $this->assertStringContainsString('Row 12: this product has 2 rows, so every row needs options', $errors);
+        $this->assertStringContainsString('Row 7: wholesale tiers must not get dearer', $errors);
+        $this->assertStringContainsString('Row 8: stock “-4” must be a whole number', $errors);
+        $this->assertStringContainsString('Row 9: sell_to “everyone” is not valid', $errors);
+        $this->assertStringContainsString('Row 11: the options “color: pink” appear twice', $errors);
+        $this->assertStringContainsString('Row 13: this product has 2 rows, so every row needs options', $errors);
 
-        $this->assertSame(1, Product::where('seller_id', $this->seller->id)->whereIn('title', ['Good Product', 'No Retail Price', 'Unknown Category', 'Bad Unit', 'Overlapping Tiers', 'Bad Stock', 'Bad Channel', 'Duplicate Options', 'Missing Options'])->count());
+        $this->assertSame(1, Product::where('seller_id', $this->seller->id)->whereIn('title', ['Good Product', 'No Retail Price', 'Unknown Category', 'Bad Unit', 'Overlapping Tiers', 'Dearer Tiers', 'Bad Stock', 'Bad Channel', 'Duplicate Options', 'Missing Options'])->count());
     }
 
     public function test_wholesale_only_product_needs_tiers_but_no_retail_price(): void

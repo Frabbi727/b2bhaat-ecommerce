@@ -515,6 +515,10 @@ class ProductBulkImportService
             if ($next !== null && ($tier['max_quantity'] === null || $next['min_quantity'] <= $tier['max_quantity'])) {
                 return [[], 'wholesale tiers overlap: each tier must start above the previous one’s maximum, and only the last tier may use “+”.'];
             }
+            // INV-6: a bigger tier may not cost more per unit
+            if ($next !== null && $next['unit_price'] > $tier['unit_price']) {
+                return [[], 'wholesale tiers must not get dearer: a bigger tier needs the same or a lower price per unit.'];
+            }
         }
 
         return [$tiers, null];

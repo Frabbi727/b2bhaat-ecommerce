@@ -52,6 +52,25 @@ class PriceSetTest extends TestCase
         ];
     }
 
+    public function test_a_bigger_tier_cannot_cost_more_per_unit(): void
+    {
+        // INV-6: volume tiers are discounts, so buying more must never raise the unit price.
+        $inverted = PriceSet::fromInput([
+            $this->row($this->wholesale, 50, 99, '85'),
+            $this->row($this->wholesale, 100, null, '110'),
+        ], null)->validate($this->wholesale);
+
+        $this->assertContains('The 100+ tier (৳110.00) costs more per unit than the 50–99 tier (৳85.00). Bigger orders must get the same or a lower price.', $inverted);
+
+        $fine = PriceSet::fromInput([
+            $this->row($this->wholesale, 50, 99, '110'),
+            $this->row($this->wholesale, 100, 249, '95'),
+            $this->row($this->wholesale, 250, null, '95'),
+        ], null)->validate($this->wholesale);
+
+        $this->assertSame([], $fine);
+    }
+
     public function test_formatting_and_order_differences_are_equal(): void
     {
         $a = PriceSet::fromInput([
