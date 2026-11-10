@@ -51,7 +51,7 @@ class FilamentTrialBalancePageTest extends TestCase
 
     public function test_the_check_names_journals_that_do_not_balance_even_when_the_totals_do(): void
     {
-        if (\Illuminate\Support\Facades\DB::getDriverName() === 'pgsql') {
+        if (DB::getDriverName() === 'pgsql') {
             $this->markTestSkipped('The PostgreSQL journal guard (ACC-9) refuses the direct edits this test plants.');
         }
         // ACC-16: two damaged journals that cancel each other out leave the grand totals equal
