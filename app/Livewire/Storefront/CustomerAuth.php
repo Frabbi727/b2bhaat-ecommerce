@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Livewire\Storefront;
 
+use App\Actions\Checkout\ResolveCheckoutCustomer;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\Sms\OtpService;
@@ -254,6 +255,10 @@ class CustomerAuth extends Component
             return;
         }
 
+        if ($user->phone_verified_at === null) {
+            $user->update(['phone_verified_at' => now()]);
+        }
+
         Auth::login($user, $this->remember);
         if (request()->hasSession()) {
             request()->session()->regenerate();
@@ -270,6 +275,14 @@ class CustomerAuth extends Component
     private static function mayUseOtpLogin(User $user): bool
     {
         return ! $user->isSuperAdmin() && ! $user->isSeller();
+    }
+
+    /**
+     * Registering with a phone that only has a hidden guest-checkout account takes that account over.
+     */
+    private static function mayClaimByRegistration(User $user): bool
+    {
+        return $user->is_active && ResolveCheckoutCustomer::isUnclaimedGuest($user);
     }
 
     /**
@@ -310,8 +323,8 @@ class CustomerAuth extends Component
 
                         return;
                     }
-                    $normalized = PhoneNormalizer::normalize($value);
-                    if (User::wherePhone($normalized)->exists()) {
+                    $existing = User::wherePhone(PhoneNormalizer::normalize($value))->first();
+                    if ($existing && ! self::mayClaimByRegistration($existing)) {
                         $fail('An account with this phone number already exists.');
                     }
                 },
@@ -373,15 +386,26 @@ class CustomerAuth extends Component
         $retailRole = Role::where('slug', 'retail_buyer')->first()
             ?? Role::where('slug', 'retail')->firstOrFail();
 
-        $user = User::create([
-            'role_id' => $retailRole->id,
+        $account = [
             'name' => trim($this->registerName),
-            'phone' => $normalized,
             'email' => strtolower(trim($this->registerEmail)),
             'password' => Hash::make($this->registerPassword),
-            'is_active' => true,
             'phone_verified_at' => now(),
-        ]);
+        ];
+
+        // A guest who ordered with this phone before takes over that account, so their orders stay with them.
+        $user = User::wherePhone($normalized)->first();
+        if ($user && ! self::mayClaimByRegistration($user)) {
+            $this->errorMessage = 'An account with this phone number already exists. Please sign in instead.';
+
+            return;
+        }
+
+        if ($user) {
+            $user->update($account);
+        } else {
+            $user = User::create([...$account, 'role_id' => $retailRole->id, 'phone' => $normalized, 'is_active' => true]);
+        }
 
         Auth::login($user, true);
         if (request()->hasSession()) {
