@@ -181,7 +181,8 @@ class JournalPostingServiceTest extends TestCase
     public function test_inactive_account_throws_inactive_account_exception(): void
     {
         $account = AccountingAccount::where('system_slug', 'gateway_clearing')->firstOrFail();
-        $account->update(['is_active' => false]);
+        // A system account cannot be switched off through the model (ACC-20); simulate one switched off in the database
+        $account->updateQuietly(['is_active' => false]);
 
         $service = app(JournalPostingService::class);
 

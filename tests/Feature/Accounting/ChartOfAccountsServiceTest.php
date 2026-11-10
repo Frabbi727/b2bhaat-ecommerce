@@ -60,7 +60,8 @@ class ChartOfAccountsServiceTest extends TestCase
 
         $resolver = app(AccountResolverService::class);
         $account = $resolver->resolveBySlug('gateway_clearing');
-        $account->update(['is_active' => false]);
+        // A system account cannot be switched off through the model (ACC-20); simulate one switched off in the database
+        $account->updateQuietly(['is_active' => false]);
         $resolver->clearCache();
 
         $this->expectException(InactiveAccountException::class);
@@ -79,7 +80,8 @@ class ChartOfAccountsServiceTest extends TestCase
         $this->assertSame($gatewayAccount->code, $resolvedById->code);
 
         // Deactivating without clearing cache returns cached active model
-        $gatewayAccount->update(['is_active' => false]);
+        // A system account cannot be switched off through the model (ACC-20); simulate one switched off in the database
+        $gatewayAccount->updateQuietly(['is_active' => false]);
         $cached = $resolver->resolveById($gatewayAccount->id);
         $this->assertSame($gatewayAccount->id, $cached->id);
 
