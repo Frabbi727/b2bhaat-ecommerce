@@ -112,7 +112,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | AUD-6 | No system actor | System actor on automated writes | Fixed (4bca514) |
 | AUD-7 | URL tokens and TrxIDs not redacted | Extend `AuditRedactor` | Fixed (4bca514). TrxIDs are masked to the last four characters rather than removed, so entries can still be matched to MFS statements |
 | AUD-8 | Sellers see raw diffs | Readable change summary | Fixed (ba51e73) |
-| AUD-9 | Admin filters and export missing | Filters and export |
+| AUD-9 | Admin filters and export missing | Filters and export | Fixed (4d6aed7) |
 | UX-ACC-2 | Reverse action is unsafe | Confirmations | Already fixed by ACC-5 (only manual journals can be reversed; confirmation and a required reason; settlements use the separate Undo action from I-1). No change |
 | UX-ACC-3 | Payout TrxID not unique; no maker-checker | Uniqueness; maker-checker | TrxID uniqueness fixed (e068fdc). **Maker-checker needs an owner decision**: requiring a second admin to approve payouts and manual journals would block a one-admin team, so it is not built |
 | UX-ACC-6 | Found while testing ACC-7. On the Trial Balance and Financial Reconciliation pages (and likely the other custom report pages), icons render at full page width. The custom Blade views use Tailwind classes, but the admin panel has no compiled theme that includes them (`resources/views/filament/admin/pages/*.blade.php`, no `viteTheme` in `AdminPanelProvider`). Unchanged from `production` | Add a Filament admin theme that scans these views, or rewrite them with Filament components |
