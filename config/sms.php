@@ -11,8 +11,8 @@ return [
         'bulksmsbd' => [
             'api_key' => env('BULKSMSBD_API_KEY', ''),
             'sender_id' => env('BULKSMSBD_SENDER_ID', ''),
-            'base_url' => env('BULKSMSBD_BASE_URL', 'http://bulksmsbd.net/api/smsapi'),
-            'balance_url' => env('BULKSMSBD_BALANCE_URL', 'http://bulksmsbd.net/api/getBalanceApi'),
+            'base_url' => env('BULKSMSBD_BASE_URL', 'https://bulksmsbd.net/api/smsapi'),
+            'balance_url' => env('BULKSMSBD_BALANCE_URL', 'https://bulksmsbd.net/api/getBalanceApi'),
         ],
 
         'log' => [],

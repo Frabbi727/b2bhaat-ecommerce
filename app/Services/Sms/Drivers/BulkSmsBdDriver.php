@@ -15,8 +15,8 @@ class BulkSmsBdDriver implements SmsGatewayInterface
     public function __construct(
         protected string $apiKey,
         protected string $senderId,
-        protected string $baseUrl = 'http://bulksmsbd.net/api/smsapi',
-        protected string $balanceUrl = 'http://bulksmsbd.net/api/getBalanceApi'
+        protected string $baseUrl = 'https://bulksmsbd.net/api/smsapi',
+        protected string $balanceUrl = 'https://bulksmsbd.net/api/getBalanceApi'
     ) {}
 
     public function send(string $to, string $message, ?string $purpose = null): SmsResponse
@@ -42,7 +42,7 @@ class BulkSmsBdDriver implements SmsGatewayInterface
             $isSuccess = ($code === '202');
 
             $messageId = isset($json['message_id']) ? (string) $json['message_id'] : null;
-            $errorMessage = $isSuccess ? null : ($json['error_message'] ?? $json['message'] ?? 'SMS dispatch error code: '.$code);
+            $errorMessage = $isSuccess ? null : self::errorText($json['error_message'] ?? $json['message'] ?? null, 'SMS dispatch error code: '.$code);
 
             return new SmsResponse(
                 isSuccessful: $isSuccess,
@@ -92,9 +92,21 @@ class BulkSmsBdDriver implements SmsGatewayInterface
                 return (float) $json['balance'];
             }
 
-            return $json['error_message'] ?? 'Unable to retrieve balance';
+            return self::errorText($json['error_message'] ?? null, 'Unable to retrieve balance');
         } catch (Throwable $e) {
             return 'Unavailable: '.$e->getMessage();
         }
+    }
+
+    /**
+     * BulkSMSBD sends error_message as text or as a list of texts (e.g. ["The api key field is required."]).
+     */
+    private static function errorText(mixed $error, string $fallback): string
+    {
+        if (is_array($error)) {
+            $error = implode(' ', array_filter(array_map(fn (mixed $part): string => is_scalar($part) ? (string) $part : '', $error)));
+        }
+
+        return is_scalar($error) && (string) $error !== '' ? (string) $error : $fallback;
     }
 }

@@ -29,8 +29,8 @@ class SmsManager extends Manager
 
         $apiKey = SmsSetting::get('bulksmsbd_api_key', $config['api_key'] ?? '');
         $senderId = SmsSetting::get('bulksmsbd_sender_id', $config['sender_id'] ?? '');
-        $baseUrl = SmsSetting::get('bulksmsbd_base_url', $config['base_url'] ?? 'http://bulksmsbd.net/api/smsapi');
-        $balanceUrl = SmsSetting::get('bulksmsbd_balance_url', $config['balance_url'] ?? 'http://bulksmsbd.net/api/getBalanceApi');
+        $baseUrl = SmsSetting::get('bulksmsbd_base_url', $config['base_url'] ?? 'https://bulksmsbd.net/api/smsapi');
+        $balanceUrl = SmsSetting::get('bulksmsbd_balance_url', $config['balance_url'] ?? 'https://bulksmsbd.net/api/getBalanceApi');
 
         return new BulkSmsBdDriver(
             apiKey: (string) $apiKey,

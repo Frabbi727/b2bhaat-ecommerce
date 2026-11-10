@@ -51,9 +51,9 @@ class SmsSettings extends Page
 
     public string $bulksmsbd_sender_id = '';
 
-    public string $bulksmsbd_base_url = 'http://bulksmsbd.net/api/smsapi';
+    public string $bulksmsbd_base_url = 'https://bulksmsbd.net/api/smsapi';
 
-    public string $bulksmsbd_balance_url = 'http://bulksmsbd.net/api/getBalanceApi';
+    public string $bulksmsbd_balance_url = 'https://bulksmsbd.net/api/getBalanceApi';
 
     public int $otp_length = 6;
 
@@ -87,8 +87,8 @@ class SmsSettings extends Page
         $this->sms_driver = (string) SmsSetting::get('sms_driver', config('sms.default', 'bulksmsbd'));
         $this->bulksmsbd_api_key = (string) SmsSetting::get('bulksmsbd_api_key', config('sms.drivers.bulksmsbd.api_key', ''));
         $this->bulksmsbd_sender_id = (string) SmsSetting::get('bulksmsbd_sender_id', config('sms.drivers.bulksmsbd.sender_id', ''));
-        $this->bulksmsbd_base_url = (string) SmsSetting::get('bulksmsbd_base_url', config('sms.drivers.bulksmsbd.base_url', 'http://bulksmsbd.net/api/smsapi'));
-        $this->bulksmsbd_balance_url = (string) SmsSetting::get('bulksmsbd_balance_url', config('sms.drivers.bulksmsbd.balance_url', 'http://bulksmsbd.net/api/getBalanceApi'));
+        $this->bulksmsbd_base_url = (string) SmsSetting::get('bulksmsbd_base_url', config('sms.drivers.bulksmsbd.base_url', 'https://bulksmsbd.net/api/smsapi'));
+        $this->bulksmsbd_balance_url = (string) SmsSetting::get('bulksmsbd_balance_url', config('sms.drivers.bulksmsbd.balance_url', 'https://bulksmsbd.net/api/getBalanceApi'));
 
         $this->otp_length = (int) SmsSetting::get('otp_length', config('sms.otp.length', 6));
         $this->otp_expiry_minutes = (int) SmsSetting::get('otp_expiry_minutes', config('sms.otp.expiry_minutes', 5));
