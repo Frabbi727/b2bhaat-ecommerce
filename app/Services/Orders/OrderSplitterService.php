@@ -12,6 +12,7 @@ use App\Models\ProductVariation;
 use App\Models\SalesChannel;
 use App\Models\SubOrder;
 use App\Models\User;
+use App\Services\Formatting\Money;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Logistics\ShippingCalculatorService;
 use App\Services\Monetization\MonetizationEngineService;
@@ -123,10 +124,7 @@ class OrderSplitterService
             $unfulfilledStatus = FulfillmentStatus::where('slug', 'unfulfilled')->firstOrFail();
 
             // Calculate total amount & shipping fee breakdown (Decision D6)
-            $itemsTotal = 0.0;
-            foreach ($data['items'] as $item) {
-                $itemsTotal += ($item['unit_price'] * $item['quantity']);
-            }
+            $itemsTotal = Money::lineTotal($data['items']);
 
             $hasExplicitZone = isset($data['shipping_address']['delivery_zone']);
             $hasExplicitShipping = isset($data['shipping_amount']);
@@ -192,8 +190,8 @@ class OrderSplitterService
                 $subOrderNumber = $orderNumber.'-'.($alphabet[$suffixIndex % 26]);
                 $suffixIndex++;
 
-                $subtotal = 0.0;
-                $commissionAmount = 0.0;
+                $subtotalPoisha = 0;
+                $commissionPoisha = 0.0;
 
                 // Calculate subtotal and commission
                 $seller = $sellerItemList[0]['product']->seller;
@@ -201,8 +199,8 @@ class OrderSplitterService
                 foreach ($sellerItemList as $entry) {
                     $product = $entry['product'];
                     $itemData = $entry['item_data'];
-                    $lineTotal = $itemData['unit_price'] * $itemData['quantity'];
-                    $subtotal += $lineTotal;
+                    $linePoisha = Money::poisha($itemData['unit_price']) * (int) $itemData['quantity'];
+                    $subtotalPoisha += $linePoisha;
 
                     // Dynamically resolve commission rate through MonetizationEngine
                     $channel = SalesChannel::find($itemData['sales_channel_id'])
@@ -211,7 +209,7 @@ class OrderSplitterService
                         ? $this->monetizationEngine->resolveCommissionRate($seller, $product, $channel)
                         : (float) ($seller?->sellerProfile?->commission_rate_percentage ?? 10.00);
 
-                    $commissionAmount += ($lineTotal * ($rate / 100.0));
+                    $commissionPoisha += $linePoisha * ($rate / 100.0);
                 }
 
                 $vendorShipping = $shippingResult['vendors'][$sellerId]['shipping_fee'] ?? 0.00;
@@ -221,8 +219,8 @@ class OrderSplitterService
                     'seller_id' => $sellerId,
                     'sub_order_number' => $subOrderNumber,
                     'fulfillment_status_id' => $unfulfilledStatus->id,
-                    'subtotal' => $subtotal,
-                    'commission_amount' => round($commissionAmount, 2),
+                    'subtotal' => Money::fromPoisha($subtotalPoisha),
+                    'commission_amount' => Money::fromPoisha((int) round($commissionPoisha)),
                     'shipping_amount' => round($vendorShipping, 2),
                 ]);
 
@@ -237,7 +235,7 @@ class OrderSplitterService
                         'flash_sale_product_id' => $itemData['flash_sale_product_id'] ?? null,
                         'original_unit_price' => $itemData['original_unit_price'] ?? null,
                         'quantity' => $itemData['quantity'],
-                        'total_price' => round($itemData['unit_price'] * $itemData['quantity'], 2),
+                        'total_price' => Money::lineTotal([$itemData]),
                     ]);
                 }
             }

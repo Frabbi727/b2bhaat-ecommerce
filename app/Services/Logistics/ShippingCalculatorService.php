@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Logistics;
 
 use App\Models\Product;
+use App\Services\Formatting\Money;
 use App\Services\Settings\StoreConfigurationService;
 
 class ShippingCalculatorService
@@ -90,10 +91,7 @@ class ShippingCalculatorService
             $seller = $product->seller;
             $profile = $seller?->sellerProfile;
 
-            $vendorSubtotal = 0.00;
-            foreach ($group['items'] as $item) {
-                $vendorSubtotal += ($item['unit_price'] * $item['quantity']);
-            }
+            $vendorSubtotal = Money::lineTotal($group['items']);
 
             // Resolve threshold: seller override, or dynamic platform default
             $threshold = $profile?->free_shipping_threshold !== null

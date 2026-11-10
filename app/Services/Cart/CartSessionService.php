@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\ProductPrice;
 use App\Models\ProductVariation;
 use App\Models\SalesChannel;
+use App\Services\Formatting\Money;
 use App\Services\Promotions\FlashSalePricing;
 use DomainException;
 use Exception;
@@ -592,12 +593,7 @@ class CartSessionService
 
     public function getSubtotal(): float
     {
-        $total = 0.0;
-        foreach ($this->getItems() as $item) {
-            $total += ($item['unit_price'] * $item['quantity']);
-        }
-
-        return $total;
+        return Money::lineTotal($this->getItems());
     }
 
     public function getItemCount(): int
