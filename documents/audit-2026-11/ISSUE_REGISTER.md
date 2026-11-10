@@ -144,6 +144,18 @@ All findings come from reading the code; every one cites file:line. Status value
 | SEC-11 | Courier webhook replay | Fixed (0fb505f) |
 | UX-7 | MOQ shown only at checkout | Fixed (56d410b) |
 
+## Final review of Waves 2 and 3 (2026-11-10)
+| ID | Title | Status |
+|---|---|---|
+| R-1 | A return still waiting when the courier brought the whole parcel back was settled again on approval (escrow taken from other orders, refund above what was paid, stock added twice) | Fixed (2e1a87f) |
+| R-2 | Self-collected COD with a coupon bigger than the commission: the seller kept the platform's coupon credit after items came back; the whole-parcel journal had the same gap | Fixed (85f5116) |
+| R-3 | A seller could read another seller's waiting TrxID through a browser-callable method and submit it as their own | Fixed (461710b) |
+| R-4 | A request with no items after earlier item returns failed on approval with an unbalanced journal and stayed stuck | Fixed (2e1a87f) |
+| R-5 | Stock rows and flash offers locked in opposite orders by checkout and the undo paths (possible PostgreSQL deadlock) | Fixed (67ec9a5) |
+| R-6 | A COD deficit bill could be withdrawn while the seller's payment for it waited to be checked | Fixed (cb3cec1) |
+| R-7 | COD deficit bill dates and the payout block's overdue check used the UTC date | Fixed (cb3cec1) |
+| R-8 | A journal could be posted into a month closed a moment earlier | Fixed (1034735) |
+
 ## Needs owner or legal validation
 - VAT and BIN on B2B invoices.
 - Statutory retention period for financial and audit records.
