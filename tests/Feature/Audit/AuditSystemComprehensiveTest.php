@@ -428,7 +428,7 @@ class AuditSystemComprehensiveTest extends TestCase
 
         $this->assertNotNull($log, 'Synchronous financial audit log was not found in database');
         $this->assertSame('finance', $log->module);
-        $this->assertSame('created', $log->action);
+        $this->assertSame('refund_created', $log->action);
         $this->assertSame($admin->id, $log->actor_id);
         $this->assertEquals(500.00, (float) $log->new_values['amount']);
 

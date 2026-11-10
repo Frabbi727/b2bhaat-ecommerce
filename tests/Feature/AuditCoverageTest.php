@@ -109,12 +109,13 @@ class AuditCoverageTest extends TestCase
         ]);
 
         $invoiceEntries = $this->entriesFor(SellerInvoice::class, $invoice->id);
-        $this->assertSame(['created', 'updated'], $invoiceEntries->pluck('action')->all());
+        // AUD-5: finance records use named events
+        $this->assertSame(['seller_invoice_created', 'seller_invoice_void'], $invoiceEntries->pluck('action')->all());
         $this->assertSame('finance', $invoiceEntries->first()->module);
         $this->assertSame($seller->id, $invoiceEntries->first()->seller_id);
         $this->assertSame(['status'], $invoiceEntries->last()->changed_fields);
 
-        $this->assertSame('created', $this->entriesFor(SellerPayment::class, $payment->id)->sole()->action);
+        $this->assertSame('seller_payment_created', $this->entriesFor(SellerPayment::class, $payment->id)->sole()->action);
     }
 
     public function test_a_suspension_records_the_store_status_change_and_the_event(): void

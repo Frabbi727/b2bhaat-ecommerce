@@ -38,6 +38,7 @@ class AuditRedactor
         'transaction_id',
         'trx_id',
         'trx_key',
+        'transaction_reference',
     ];
 
     /** AUD-7: path segments that carry a secret link token. */

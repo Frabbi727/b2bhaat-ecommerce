@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\SubOrder;
 use App\Services\Audit\AuditService;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 trait Auditable
 {
@@ -53,11 +54,15 @@ trait Auditable
         $module = $this->getAuditModule();
         $label = $this->getAuditRecordLabel();
         $sellerId = $this->resolveAuditSellerId();
+        $eventName = $module === 'finance' ? $this->financeAuditEventName($action, $old, $new) : $action;
 
         app(AuditService::class)->record([
             'module' => $module,
-            'action' => $action,
-            'description' => class_basename($this)." #{$this->getKey()} {$action}",
+            'action' => $eventName,
+            'description' => $module === 'finance'
+                ? $this->financeAuditDescription($action, $old, $new, $label)
+                : class_basename($this)." #{$this->getKey()} {$action}",
+            'metadata' => $eventName !== $action ? ['change' => $action] : null,
             'auditable_type' => static::class,
             'auditable_id' => $this->getKey(),
             'record_label' => $label,
@@ -67,6 +72,68 @@ trait Auditable
             'changed_fields' => $new ? array_keys($new) : null,
             'status' => 'success',
         ]);
+    }
+
+    /**
+     * AUD-5: money records are logged under a named event rather than a bare created/updated.
+     * - Wallet transactions use their type (`escrow_release`, `payout_requested`, `payout_disbursed` …).
+     * - A status change is `<record>_<new status>` (`seller_invoice_void`, `refund_paid`).
+     * - A wallet balance change is `seller_wallet_balance_changed`.
+     *
+     * @param  array<string, mixed>|null  $old
+     * @param  array<string, mixed>|null  $new
+     */
+    protected function financeAuditEventName(string $action, ?array $old, ?array $new): string
+    {
+        $base = Str::snake(class_basename($this));
+        $type = $this->getAttribute('transaction_type');
+
+        if (is_string($type) && $type !== '') {
+            if ($type === 'payout') {
+                return match ($action) {
+                    'created' => 'payout_requested',
+                    'updated' => isset($new['status']) ? 'payout_'.$new['status'] : 'payout_updated',
+                    default => 'payout_'.$action,
+                };
+            }
+
+            return $action === 'created' ? $type : "{$type}_{$action}";
+        }
+
+        if ($action === 'updated' && isset($new['status']) && is_string($new['status'])) {
+            return "{$base}_{$new['status']}";
+        }
+
+        if ($action === 'updated' && $base === 'seller_wallet') {
+            return 'seller_wallet_balance_changed';
+        }
+
+        return "{$base}_{$action}";
+    }
+
+    /**
+     * AUD-5: a plain sentence for a finance entry, such as "Seller invoice INV-1: status unpaid → void".
+     *
+     * @param  array<string, mixed>|null  $old
+     * @param  array<string, mixed>|null  $new
+     */
+    protected function financeAuditDescription(string $action, ?array $old, ?array $new, ?string $label): string
+    {
+        $subject = Str::ucfirst(Str::lower(Str::headline(class_basename($this)))).' '.($label ?? '#'.$this->getKey());
+
+        if ($action === 'updated' && isset($new['status'])) {
+            $from = $old['status'] ?? null;
+
+            return $from !== null
+                ? "{$subject}: status {$from} → {$new['status']}"
+                : "{$subject}: status set to {$new['status']}";
+        }
+
+        return match ($action) {
+            'created' => "{$subject} created",
+            'deleted' => "{$subject} deleted",
+            default => "{$subject} changed: ".implode(', ', array_keys($new ?? [])),
+        };
     }
 
     public function getAuditModule(): string
@@ -99,6 +166,7 @@ trait Auditable
             ?? $this->sku
             ?? $this->order_number
             ?? $this->sub_order_number
+            ?? $this->invoice_number
             ?? $this->title
             ?? $this->store_name
             ?? $this->subject

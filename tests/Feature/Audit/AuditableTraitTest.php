@@ -220,7 +220,7 @@ class AuditableTraitTest extends TestCase
 
         $refundLog = AuditLog::where('auditable_type', Refund::class)
             ->where('auditable_id', $refund->id)
-            ->where('action', 'created')
+            ->where('action', 'refund_created')
             ->first();
 
         $this->assertNotNull($refundLog);
