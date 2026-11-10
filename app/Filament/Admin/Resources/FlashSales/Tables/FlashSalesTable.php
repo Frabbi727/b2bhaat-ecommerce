@@ -16,6 +16,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class FlashSalesTable
 {
@@ -24,6 +25,7 @@ class FlashSalesTable
         $service = app(FlashSaleLifecycleService::class);
 
         return $table
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->withUnitsSold())
             ->defaultSort('starts_at', 'desc')
             ->columns([
                 TextColumn::make('name')
@@ -90,7 +92,7 @@ class FlashSalesTable
 
                 TextColumn::make('units_sold')
                     ->label('Units Sold')
-                    ->state(fn (FlashSale $record): int => (int) $record->items->sum(fn ($item) => $item->unitsSold())),
+                    ->state(fn (FlashSale $record): int => (int) $record->units_sold_total),
 
                 IconColumn::make('is_featured')
                     ->label('Featured')

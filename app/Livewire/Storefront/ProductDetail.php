@@ -77,18 +77,29 @@ class ProductDetail extends Component
 
     public bool $showFullscreenGallery = false;
 
+    /**
+     * PERF-3: what the page shows for a product. Livewire does not bring nested relations back between requests,
+     * so they are loaded again on every update instead of one query per price or variation.
+     */
+    private const PRODUCT_RELATIONS = [
+        'seller.sellerProfile',
+        'category',
+        'brand',
+        'salesChannel',
+        'unit',
+        'images',
+        'prices.salesChannel',
+        'variations.attributeValues.attribute',
+    ];
+
+    public function hydrate(): void
+    {
+        $this->product->loadMissing(self::PRODUCT_RELATIONS);
+    }
+
     public function mount(string $slug): void
     {
-        $this->product = Product::with([
-            'seller.sellerProfile',
-            'category',
-            'brand',
-            'salesChannel',
-            'unit',
-            'images',
-            'prices.salesChannel',
-            'variations.attributeValues.attribute',
-        ])->sellable()->where('slug', $slug)->firstOrFail();
+        $this->product = Product::with(self::PRODUCT_RELATIONS)->sellable()->where('slug', $slug)->firstOrFail();
 
         // Initialize default selected variation for retail
         if ($this->product->variations->isNotEmpty()) {

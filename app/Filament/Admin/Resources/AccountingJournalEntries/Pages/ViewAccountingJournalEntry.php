@@ -7,6 +7,7 @@ namespace App\Filament\Admin\Resources\AccountingJournalEntries\Pages;
 use App\Filament\Admin\Resources\AccountingJournalEntries\AccountingJournalEntryResource;
 use App\Filament\Admin\Resources\AccountingJournalEntries\Tables\AccountingJournalEntriesTable;
 use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Database\Eloquent\Model;
 
 class ViewAccountingJournalEntry extends ViewRecord
 {
@@ -25,9 +26,13 @@ class ViewAccountingJournalEntry extends ViewRecord
         ];
     }
 
-    protected function mutateFormDataBeforeFill(array $data): array
+    /**
+     * PERF-3: the page lists every line with its account, seller, customer and order, so load them all at once.
+     * A view page never fills a form, so this has to happen when the record is resolved.
+     */
+    protected function resolveRecord(int|string $key): Model
     {
-        $this->getRecord()->loadMissing([
+        return parent::resolveRecord($key)->loadMissing([
             'lines.account',
             'lines.seller',
             'lines.customer',
@@ -38,7 +43,5 @@ class ViewAccountingJournalEntry extends ViewRecord
             'period',
             'createdByUser',
         ]);
-
-        return $data;
     }
 }

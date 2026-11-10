@@ -367,7 +367,7 @@ class ProductCatalog extends Component
         $flashSaleProducts = $activeFlashSale
             ? $activeFlashSale->products()
                 ->listable()
-                ->with(['seller.sellerProfile', 'category', 'brand', 'primaryImage', 'retailPrice'])
+                ->with(['seller.sellerProfile', 'category', 'brand', 'primaryImage', 'retailPrice', 'variations'])
                 ->take(6)
                 ->get()
             : collect();
@@ -380,7 +380,7 @@ class ProductCatalog extends Component
         $featuredProducts = Product::query()
             ->listable()
             ->featured()
-            ->with(['seller.sellerProfile', 'category', 'brand', 'primaryImage', 'retailPrice'])
+            ->with(['seller.sellerProfile', 'category', 'brand', 'primaryImage', 'retailPrice', 'variations'])
             ->take(8)
             ->get();
 

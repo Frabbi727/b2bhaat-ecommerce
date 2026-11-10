@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class FlashSale extends Model
 {
@@ -124,6 +125,27 @@ class FlashSale extends Model
     public function items(): HasMany
     {
         return $this->hasMany(FlashSaleProduct::class);
+    }
+
+    /**
+     * PERF-3: adds `units_sold_total`, the units sold across all the campaign's products in parcels that were not
+     * cancelled, so a list of campaigns needs one query instead of one per product.
+     */
+    public function scopeWithUnitsSold(Builder $query): Builder
+    {
+        $unitsSold = DB::table('order_items')
+            ->join('flash_sale_products', 'flash_sale_products.id', '=', 'order_items.flash_sale_product_id')
+            ->join('sub_orders', 'sub_orders.id', '=', 'order_items.sub_order_id')
+            ->join('fulfillment_statuses', 'fulfillment_statuses.id', '=', 'sub_orders.fulfillment_status_id')
+            ->whereColumn('flash_sale_products.flash_sale_id', 'flash_sales.id')
+            ->where('fulfillment_statuses.slug', '!=', FlashSaleProduct::CANCELLED_FULFILLMENT_SLUG)
+            ->selectRaw('COALESCE(SUM(order_items.quantity), 0)');
+
+        if ($query->getQuery()->columns === null) {
+            $query->select('flash_sales.*');
+        }
+
+        return $query->selectSub($unitsSold, 'units_sold_total');
     }
 
     /**

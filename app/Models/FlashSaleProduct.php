@@ -20,7 +20,7 @@ class FlashSaleProduct extends Model
     use Auditable;
     use HasFactory;
 
-    private const CANCELLED_FULFILLMENT_SLUG = 'cancelled';
+    public const CANCELLED_FULFILLMENT_SLUG = 'cancelled';
 
     protected $fillable = [
         'flash_sale_id',
