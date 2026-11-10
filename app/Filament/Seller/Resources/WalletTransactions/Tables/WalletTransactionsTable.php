@@ -44,6 +44,7 @@ class WalletTransactionsTable
                     }),
 
                 TextColumn::make('reference_note')
+                    ->visibleFrom('md')
                     ->label('Reference / Details')
                     ->wrap()
                     ->description(fn (WalletTransaction $record): ?string => $record->subOrder ? 'Package #'.$record->subOrder->sub_order_number : null)
@@ -62,6 +63,7 @@ class WalletTransactionsTable
                     ->color(fn (WalletTransaction $record): string => self::amountColor($record)),
 
                 TextColumn::make('running_balance')
+                    ->visibleFrom('md')
                     ->label('Running Balance')
                     ->fontFamily('mono')
                     ->formatStateUsing(function ($state): string {
@@ -72,6 +74,7 @@ class WalletTransactionsTable
                     ->sortable(),
 
                 TextColumn::make('status')
+                    ->visibleFrom('md')
                     ->label('Payout Status')
                     ->badge()
                     ->placeholder('—')

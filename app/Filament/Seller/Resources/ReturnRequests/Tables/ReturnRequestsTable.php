@@ -27,9 +27,11 @@ class ReturnRequestsTable
                     ->weight('bold')
                     ->searchable(),
                 TextColumn::make('customer.name')
+                    ->visibleFrom('md')
                     ->label('Buyer')
                     ->searchable(),
                 TextColumn::make('reason')
+                    ->visibleFrom('md')
                     ->label('Reason')
                     ->badge()
                     ->formatStateUsing(fn ($state) => ucfirst(str_replace('_', ' ', $state))),
@@ -49,6 +51,7 @@ class ReturnRequestsTable
                         default => Color::Amber,
                     }),
                 TextColumn::make('description')
+                    ->visibleFrom('md')
                     ->label('Buyer Details')
                     ->limit(35),
             ])

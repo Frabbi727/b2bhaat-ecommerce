@@ -50,16 +50,19 @@ class ChangeRequestsRelationManager extends RelationManager
                     ->sortable(),
 
                 TextColumn::make('reviewed_at')
+                    ->visibleFrom('md')
                     ->label('Decided')
                     ->dateTime('j M Y, H:i', 'Asia/Dhaka')
                     ->placeholder('—'),
 
                 TextColumn::make('reviewer')
+                    ->visibleFrom('md')
                     ->label('Reviewer')
                     ->state(fn (ProductChangeRequest $record): ?string => $record->reviewed_at === null ? null : 'B2Bhaat team')
                     ->placeholder('—'),
 
                 TextColumn::make('rejection_reason')
+                    ->visibleFrom('md')
                     ->label('Reason')
                     ->wrap()
                     ->placeholder('—'),

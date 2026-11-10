@@ -34,13 +34,16 @@ class RfqRequestsTable
                     ->weight('bold')
                     ->limit(28),
                 TextColumn::make('buyer_name')
+                    ->visibleFrom('md')
                     ->label('Buyer')
                     ->searchable(),
                 TextColumn::make('buyer_phone')
+                    ->visibleFrom('md')
                     ->label('Contact')
                     ->fontFamily('mono')
                     ->searchable(),
                 TextColumn::make('company_name')
+                    ->visibleFrom('md')
                     ->label('Company / Shop')
                     ->placeholder('Individual')
                     ->searchable(),
@@ -50,11 +53,13 @@ class RfqRequestsTable
                     ->sortable()
                     ->weight('bold'),
                 TextColumn::make('target_unit_price')
+                    ->visibleFrom('md')
                     ->label('Target Price')
                     ->formatStateUsing(fn ($state): string => Money::taka($state))
                     ->placeholder('Open to quote')
                     ->sortable(),
                 TextColumn::make('destination_district')
+                    ->visibleFrom('md')
                     ->label('District')
                     ->searchable(),
                 TextColumn::make('status')
@@ -67,16 +72,19 @@ class RfqRequestsTable
                         default => Color::Gray,
                     }),
                 TextColumn::make('seller_quoted_price')
+                    ->visibleFrom('md')
                     ->label('Your Quoted Price')
                     ->formatStateUsing(fn ($state): string => Money::taka($state))
                     ->placeholder('Awaiting quote')
                     ->sortable(),
                 TextColumn::make('dispatch_days')
+                    ->visibleFrom('md')
                     ->label('Lead Time')
                     ->suffix(' days')
                     ->placeholder('—')
                     ->sortable(),
                 TextColumn::make('valid_until')
+                    ->visibleFrom('md')
                     ->label('Quote Validity')
                     ->dateTime('d M, Y')
                     ->placeholder('—')

@@ -133,6 +133,7 @@ class FlashSaleResource extends Resource
                     }),
 
                 TextColumn::make('registration_ends_at')
+                    ->visibleFrom('md')
                     ->label('Registration Ends')
                     ->dateTime('d M Y, h:i A', 'Asia/Dhaka')
                     ->sortable(),
@@ -143,15 +144,18 @@ class FlashSaleResource extends Resource
                     ->sortable(),
 
                 TextColumn::make('ends_at')
+                    ->visibleFrom('md')
                     ->label('Ends')
                     ->dateTime('d M Y, h:i A', 'Asia/Dhaka')
                     ->sortable(),
 
                 TextColumn::make('discount_range')
+                    ->visibleFrom('md')
                     ->label('Discount Range')
                     ->state(fn (FlashSale $record): string => (int) ($record->min_discount_percentage ?? 5).'% - '.(int) ($record->max_discount_percentage ?? 80).'%'),
 
                 TextColumn::make('max_products_per_seller')
+                    ->visibleFrom('md')
                     ->label('Max Products')
                     ->placeholder('Unlimited')
                     ->sortable(),

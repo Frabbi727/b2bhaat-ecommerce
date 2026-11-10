@@ -19,6 +19,7 @@ class ProductReviewsTable
         return $table
             ->columns([
                 TextColumn::make('created_at')
+                    ->visibleFrom('md')
                     ->label('Date')
                     ->dateTime('d M, Y')
                     ->sortable(),
@@ -28,6 +29,7 @@ class ProductReviewsTable
                     ->searchable()
                     ->limit(25),
                 TextColumn::make('user.name')
+                    ->visibleFrom('md')
                     ->label('Buyer')
                     ->searchable(),
                 TextColumn::make('rating')
@@ -41,9 +43,11 @@ class ProductReviewsTable
                     })
                     ->sortable(),
                 IconColumn::make('is_verified_purchase')
+                    ->visibleFrom('md')
                     ->label('Verified')
                     ->boolean(),
                 TextColumn::make('title')
+                    ->visibleFrom('md')
                     ->label('Headline')
                     ->limit(20)
                     ->placeholder('-'),
@@ -51,6 +55,7 @@ class ProductReviewsTable
                     ->label('Review')
                     ->limit(35),
                 TextColumn::make('seller_reply')
+                    ->visibleFrom('md')
                     ->label('Factory Reply')
                     ->limit(25)
                     ->placeholder('Pending Reply')

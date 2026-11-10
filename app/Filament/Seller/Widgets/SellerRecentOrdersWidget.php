@@ -46,6 +46,7 @@ class SellerRecentOrdersWidget extends TableWidget
                     ->weight('medium'),
 
                 TextColumn::make('order.customer.name')
+                    ->visibleFrom('md')
                     ->label('Customer')
                     ->placeholder('Guest'),
 
@@ -62,6 +63,7 @@ class SellerRecentOrdersWidget extends TableWidget
                     }),
 
                 TextColumn::make('courier_name')
+                    ->visibleFrom('md')
                     ->label('Courier')
                     ->placeholder('Not booked')
                     ->color('gray'),
@@ -74,6 +76,7 @@ class SellerRecentOrdersWidget extends TableWidget
                     ->alignEnd(),
 
                 TextColumn::make('created_at')
+                    ->visibleFrom('md')
                     ->label('Received')
                     ->since()
                     ->dateTimeTooltip('M d, Y H:i')

@@ -102,6 +102,7 @@ class SellerActivityResource extends Resource
                     ->sortable(),
 
                 TextColumn::make('module')
+                    ->visibleFrom('md')
                     ->badge()
                     ->color(fn (?string $state): string => static::getModuleBadgeColor($state))
                     ->sortable(),
@@ -118,11 +119,13 @@ class SellerActivityResource extends Resource
                     ->wrap(),
 
                 TextColumn::make('record_label')
+                    ->visibleFrom('md')
                     ->label('Record')
                     ->searchable()
                     ->placeholder('—'),
 
                 TextColumn::make('status')
+                    ->visibleFrom('md')
                     ->badge()
                     ->color(fn (?string $state): string => match ($state) {
                         'success' => 'success',

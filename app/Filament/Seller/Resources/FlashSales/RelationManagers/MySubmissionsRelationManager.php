@@ -77,6 +77,7 @@ class MySubmissionsRelationManager extends RelationManager
                     ->weight('bold'),
 
                 TextColumn::make('original_retail_price')
+                    ->visibleFrom('md')
                     ->label('Original Price')
                     ->formatStateUsing(fn ($state): string => Money::taka($state)),
 
@@ -85,6 +86,7 @@ class MySubmissionsRelationManager extends RelationManager
                     ->formatStateUsing(fn ($state): string => Money::taka($state)),
 
                 TextColumn::make('discount_value')
+                    ->visibleFrom('md')
                     ->label('Discount')
                     ->formatStateUsing(function ($state, FlashSaleProduct $record): string {
                         $type = $record->discount_type instanceof FlashSaleDiscountType
@@ -99,12 +101,15 @@ class MySubmissionsRelationManager extends RelationManager
                     }),
 
                 TextColumn::make('stock_limit')
+                    ->visibleFrom('md')
                     ->label('Allocated Quota'),
 
                 TextColumn::make('units_sold')
+                    ->visibleFrom('md')
                     ->label('Sold'),
 
                 TextColumn::make('revenue')
+                    ->visibleFrom('md')
                     ->label('Revenue Generated')
                     ->state(fn (FlashSaleProduct $record): float => (float) ($record->campaign_price * $record->units_sold))
                     ->formatStateUsing(fn ($state): string => Money::taka($state)),
@@ -113,6 +118,7 @@ class MySubmissionsRelationManager extends RelationManager
                     ->badge(),
 
                 TextColumn::make('rejection_reason')
+                    ->visibleFrom('md')
                     ->label('Admin Feedback')
                     ->placeholder('—')
                     ->tooltip(fn (FlashSaleProduct $record): ?string => $record->rejection_reason)
