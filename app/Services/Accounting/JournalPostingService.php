@@ -8,8 +8,10 @@ use App\DTOs\Accounting\JournalEntryData;
 use App\DTOs\Accounting\JournalLineData;
 use App\Enums\Accounting\JournalEntryStatus;
 use App\Exceptions\Accounting\ClosedPeriodException;
+use App\Exceptions\Accounting\IdempotencyConflictException;
 use App\Exceptions\Accounting\InactiveAccountException;
 use App\Exceptions\Accounting\UnbalancedJournalException;
+use App\Models\Accounting\AccountingAccount;
 use App\Models\Accounting\AccountingFiscalYear;
 use App\Models\Accounting\AccountingJournalEntry;
 use App\Models\Accounting\AccountingJournalLine;
@@ -45,7 +47,7 @@ class JournalPostingService
                 ->first();
 
             if ($existing) {
-                return $existing;
+                return $this->replayOf($data, $existing);
             }
         }
 
@@ -88,7 +90,7 @@ class JournalPostingService
                         ->first();
 
                     if ($existing) {
-                        return $existing;
+                        return $this->replayOf($data, $existing);
                     }
                 }
 
@@ -132,12 +134,40 @@ class JournalPostingService
                     ->first();
 
                 if ($existing) {
-                    return $existing;
+                    return $this->replayOf($data, $existing);
                 }
             }
 
             throw $e;
         }
+    }
+
+    /**
+     * ACC-21: a repeat under an existing key is harmless only when it posts the same accounts and amounts (in any
+     * order). Anything else is a different event that was given the same key, and is refused.
+     *
+     * @throws IdempotencyConflictException
+     */
+    private function replayOf(JournalEntryData $data, AccountingJournalEntry $existing): AccountingJournalEntry
+    {
+        $requested = array_map(function (JournalLineData $line): string {
+            $accountId = $line->accountId ?? AccountingAccount::where('system_slug', trim((string) $line->accountSlug))->value('id');
+
+            return $accountId.'|'.JournalEntryData::toPoisha($line->debit).'|'.JournalEntryData::toPoisha($line->credit);
+        }, $data->lines);
+
+        $posted = $existing->lines
+            ->map(fn ($line): string => $line->account_id.'|'.JournalEntryData::toPoisha((float) $line->debit).'|'.JournalEntryData::toPoisha((float) $line->credit))
+            ->all();
+
+        sort($requested);
+        sort($posted);
+
+        if ($requested !== $posted) {
+            throw IdempotencyConflictException::forKey($data->idempotencyKey, (string) $existing->journal_number);
+        }
+
+        return $existing;
     }
 
     /**

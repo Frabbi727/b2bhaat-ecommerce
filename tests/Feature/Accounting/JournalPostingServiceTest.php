@@ -8,6 +8,7 @@ use App\DTOs\Accounting\JournalEntryData;
 use App\DTOs\Accounting\JournalLineData;
 use App\Enums\Accounting\JournalEntryStatus;
 use App\Exceptions\Accounting\ClosedPeriodException;
+use App\Exceptions\Accounting\IdempotencyConflictException;
 use App\Exceptions\Accounting\ImmutableJournalException;
 use App\Exceptions\Accounting\InactiveAccountException;
 use App\Exceptions\Accounting\UnbalancedJournalException;
@@ -257,5 +258,41 @@ class JournalPostingServiceTest extends TestCase
         $reversal2 = $service->reverse($entry->fresh(), 'Second reversal attempt');
 
         $this->assertSame($reversal1->id, $reversal2->id);
+    }
+
+    /**
+     * ACC-21: posting again with the same key returns the first entry only when it says the same thing. Different
+     * accounts or amounts under one key mean two different events were given one name, so it stops loudly.
+     */
+    public function test_a_repeat_with_the_same_key_must_match_the_first_posting(): void
+    {
+        $service = app(JournalPostingService::class);
+        $post = fn (float $amount, string $creditSlug = 'commission_revenue', array $order = [0, 1]) => $service->post(new JournalEntryData(
+            entryDate: '2026-11-07',
+            financialEvent: 'order_prepaid_received',
+            idempotencyKey: 'acc21_key',
+            description: 'Order payment',
+            lines: array_map(fn (int $i) => [
+                new JournalLineData(accountSlug: 'gateway_clearing', debit: $amount),
+                new JournalLineData(accountSlug: $creditSlug, credit: $amount),
+            ][$i], $order),
+        ));
+
+        $first = $post(100.00);
+
+        // The same lines, even listed in another order, are a harmless repeat
+        $this->assertSame($first->id, $post(100.00, order: [1, 0])->id);
+
+        foreach ([fn () => $post(120.00), fn () => $post(100.00, 'shipping_service_revenue')] as $conflicting) {
+            try {
+                $conflicting();
+                $this->fail('A different posting under the same key was accepted');
+            } catch (IdempotencyConflictException $e) {
+                $this->assertStringContainsString('acc21_key', $e->getMessage());
+                $this->assertStringContainsString($first->journal_number, $e->getMessage());
+            }
+        }
+
+        $this->assertSame(1, AccountingJournalEntry::where('idempotency_key', 'acc21_key')->count());
     }
 }
