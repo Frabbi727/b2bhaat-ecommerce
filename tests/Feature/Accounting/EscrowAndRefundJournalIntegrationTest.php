@@ -229,8 +229,9 @@ class EscrowAndRefundJournalIntegrationTest extends TestCase
         $gl = app(GeneralLedgerService::class);
         // Commission revenue reversed back to 0
         $this->assertSame(0.00, $gl->getBalanceForSlug('commission_revenue'));
-        // Seller wallet payable restored back to 0
-        $this->assertSame(0.00, $gl->getBalanceForSlug('seller_wallet_payable', sellerId: $seller->id));
+        // Item 8: the seller kept the buyer's ৳1,050, so they are charged it and the platform owes the buyer the refund
+        $this->assertSame(-1050.00, $gl->getBalanceForSlug('seller_wallet_payable', sellerId: $seller->id));
+        $this->assertSame(1050.00, $gl->getBalanceForSlug('customer_refund_payable'));
     }
 
     public function test_cancelling_discounted_prepaid_suborder_reverses_discount_expense_and_balances(): void

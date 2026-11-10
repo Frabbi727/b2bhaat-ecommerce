@@ -67,6 +67,10 @@ class ReturnRequestsTable
                     ->icon('heroicon-o-check')
                     ->color('success')
                     ->visible(fn (ReturnRequest $record) => $record->isPending())
+                    // Item 8: on a parcel whose COD cash the seller kept, B2Bhaat refunds the buyer and charges the seller
+                    ->modalDescription(fn (ReturnRequest $record): ?string => $record->requested_action === 'refund' && $record->subOrder?->is_self_delivered && $record->subOrder->order?->paymentMethod?->slug === 'cod'
+                        ? 'You collected this buyer\'s cash yourself. B2Bhaat refunds the buyer and takes the refund from your balance, which can go below zero.'
+                        : null)
                     ->form([
                         Textarea::make('note')
                             ->label('Seller Approval Note & Return Instructions')

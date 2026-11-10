@@ -158,6 +158,7 @@ class WalletTransactionsTable
             WalletTransaction::TYPE_PARTIAL_RETURN_HELD => 'Items returned (taken from money on hold)',
             WalletTransaction::TYPE_PARTIAL_RETURN_RELEASED => 'Items returned (taken from your balance)',
             WalletTransaction::TYPE_PARTIAL_RETURN_COD => 'Commission given back for returned items',
+            WalletTransaction::TYPE_COD_RETURN_REFUND => 'Refund to the buyer for items returned (you kept the cash)',
             default => str($type)->headline()->toString(),
         };
     }
@@ -193,6 +194,7 @@ class WalletTransactionsTable
             WalletTransaction::TYPE_ESCROW_REFUND,
             WalletTransaction::TYPE_PARTIAL_RETURN_HELD,
             WalletTransaction::TYPE_PARTIAL_RETURN_RELEASED,
+            WalletTransaction::TYPE_COD_RETURN_REFUND,
         ], true)) {
             return '-৳'.$amount;
         }
@@ -218,6 +220,7 @@ class WalletTransactionsTable
             WalletTransaction::TYPE_ESCROW_REFUND,
             WalletTransaction::TYPE_PARTIAL_RETURN_HELD,
             WalletTransaction::TYPE_PARTIAL_RETURN_RELEASED,
+            WalletTransaction::TYPE_COD_RETURN_REFUND,
         ], true)) {
             return 'danger';
         }

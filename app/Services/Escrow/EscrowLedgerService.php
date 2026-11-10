@@ -153,17 +153,32 @@ class EscrowLedgerService
                     ? round((float) $selfCollected->amount - $givenBack, 2)
                     : round($commission - $amounts['discount'], 2);
                 $discount = round($commission - $amount, 2);
+                $refund = $this->buyerRefundForSelfCollected($subOrder, $amounts['refund']);
 
-                if ($commission == 0.0 && $discount == 0.0) {
+                if ($commission == 0.0 && $discount == 0.0 && $refund == 0.0) {
                     return null;
                 }
 
-                $wallet->increment('available_balance', $amount);
-                $wallet->refresh();
+                $tx = null;
+                if ($commission != 0.0 || $discount != 0.0) {
+                    $wallet->increment('available_balance', $amount);
+                    $wallet->refresh();
 
-                $tx = $this->recordForReturn($wallet, $subOrder, $returnRequest, WalletTransaction::TYPE_PARTIAL_RETURN_COD, $amount,
-                    "Commission and coupon share settled for items returned from Sub-Order #{$subOrder->sub_order_number}: {$reason}");
-                $this->refundJournalHandler->recordSelfCollectedPartialReturn($subOrder, $returnRequest, $commission, $discount, $reason);
+                    $tx = $this->recordForReturn($wallet, $subOrder, $returnRequest, WalletTransaction::TYPE_PARTIAL_RETURN_COD, $amount,
+                        "Commission and coupon share settled for items returned from Sub-Order #{$subOrder->sub_order_number}: {$reason}");
+                }
+
+                // Item 8: the seller kept the buyer's cash, so the buyer's refund comes out of the seller's balance
+                if ($refund > 0.0) {
+                    $wallet->decrement('available_balance', $refund);
+                    $wallet->refresh();
+
+                    $refundTx = $this->recordForReturn($wallet, $subOrder, $returnRequest, WalletTransaction::TYPE_COD_RETURN_REFUND, $refund,
+                        "Refund to the buyer for items returned from Sub-Order #{$subOrder->sub_order_number} (you kept the COD cash): {$reason}");
+                    $tx ??= $refundTx;
+                }
+
+                $this->refundJournalHandler->recordSelfCollectedPartialReturn($subOrder, $returnRequest, $commission, $discount, $refund, $reason);
 
                 return $tx;
             }
@@ -306,6 +321,16 @@ class EscrowLedgerService
                 $tx = $this->record($wallet, $subOrder, WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL, $amount,
                     "Commission charge reversed for returned Sub-Order #{$subOrder->sub_order_number}: {$reason}");
 
+                // Item 8: the seller kept the buyer's cash, so the buyer's refund comes out of the seller's balance
+                $refund = $this->buyerRefundForSelfCollected($subOrder, $subOrder->paidAmount());
+                if ($refund > 0.0) {
+                    $wallet->decrement('available_balance', $refund);
+                    $wallet->refresh();
+
+                    $this->record($wallet, $subOrder, WalletTransaction::TYPE_COD_RETURN_REFUND, $refund,
+                        "Refund to the buyer for returned Sub-Order #{$subOrder->sub_order_number} (you kept the COD cash): {$reason}");
+                }
+
                 $this->refundJournalHandler->recordReturnedSubOrderRefund($subOrder, $reason);
 
                 return $tx;
@@ -327,6 +352,17 @@ class EscrowLedgerService
 
             return $tx;
         });
+    }
+
+    /**
+     * What the buyer is refunded for a self-collected COD return: the refund owed when the order counts as paid
+     * (the same rule that raises the buyer's Refund row), otherwise nothing.
+     */
+    public function buyerRefundForSelfCollected(SubOrder $subOrder, float $refund): float
+    {
+        $paid = $subOrder->order()->with('paymentStatus')->first()?->paymentStatus?->slug === 'paid';
+
+        return $paid ? max(0.0, round($refund, 2)) : 0.0;
     }
 
     private function lockWallet(int $sellerId, bool $createIfMissing = false): ?SellerWallet

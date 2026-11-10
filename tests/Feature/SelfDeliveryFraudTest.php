@@ -172,10 +172,13 @@ class SelfDeliveryFraudTest extends TestCase
         app(EscrowLedgerService::class)->reverseReturnedSubOrder($this->selfDelivered->fresh(), 'Returned');
         app(EscrowLedgerService::class)->reverseReturnedSubOrder($this->selfDelivered->fresh(), 'Returned again');
 
+        // Commission charge given back; item 8: the buyer's ৳1,036.67 refund comes out of the seller's balance, once
         $wallet = SellerWallet::where('seller_id', $this->sellerA->id)->firstOrFail();
-        $this->assertEqualsWithDelta(0.0, (float) $wallet->available_balance, 0.001);
+        $this->assertEqualsWithDelta(-1036.67, (float) $wallet->available_balance, 0.001);
         $this->assertSame(1, WalletTransaction::where('sub_order_id', $this->selfDelivered->id)
             ->where('transaction_type', WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL)->count());
+        $this->assertSame(1, WalletTransaction::where('sub_order_id', $this->selfDelivered->id)
+            ->where('transaction_type', WalletTransaction::TYPE_COD_RETURN_REFUND)->where('amount', 1036.67)->count());
     }
 
     public function test_courier_delivered_cod_is_still_held_then_released(): void

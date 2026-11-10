@@ -48,6 +48,12 @@ class WalletTransaction extends Model
     /** PAY-4: items returned from a parcel whose COD cash the seller kept; commission share given back. */
     public const TYPE_PARTIAL_RETURN_COD = 'partial_return_cod';
 
+    /**
+     * Owner decision (item 8): items came back from a parcel whose COD cash the seller kept. B2Bhaat refunds the
+     * buyer through the refund queue and takes the same amount from the seller's balance (it may go below zero).
+     */
+    public const TYPE_COD_RETURN_REFUND = 'cod_return_refund';
+
     public const STATUS_REQUESTED = 'requested';
 
     public const STATUS_DISBURSED = 'disbursed';

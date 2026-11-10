@@ -133,12 +133,15 @@ class RefundJournalHandler
             // coupon bigger than the commission is taken back too. The wallet moves by the net, as at delivery.
             $commission = round((float) $subOrder->commission_amount, 2);
             $discount = round($commission - (float) $selfCollected->amount, 2);
-            array_push($lines, ...$this->selfCollectedGiveBackLines(
-                $subOrder,
-                $commission,
-                $discount,
-                "returned self-collected COD for Sub-Order #{$subOrder->sub_order_number}: {$reason}",
-            ));
+            $label = "returned self-collected COD for Sub-Order #{$subOrder->sub_order_number}: {$reason}";
+            array_push($lines, ...$this->selfCollectedGiveBackLines($subOrder, $commission, $discount, $label));
+
+            // Item 8: the buyer is refunded by the platform and the seller, who kept the cash, is charged for it
+            $refund = WalletTransaction::where('sub_order_id', $subOrder->id)
+                ->where('transaction_type', WalletTransaction::TYPE_COD_RETURN_REFUND)
+                ->whereNull('return_request_id')
+                ->value('amount');
+            array_push($lines, ...$this->selfCollectedBuyerRefundLines($subOrder, round((float) $refund, 2), $label));
         } else {
             $releaseTx = WalletTransaction::where('sub_order_id', $subOrder->id)
                 ->where('transaction_type', WalletTransaction::TYPE_ESCROW_RELEASE)
@@ -311,17 +314,15 @@ class RefundJournalHandler
     }
 
     /**
-     * PAY-4: items returned from a parcel whose COD cash the seller kept. Mirrors the whole-parcel case: the
-     * commission charge on those items (less their coupon share) goes back to the seller's balance.
-     */
-    /**
      * PAY-4 / review R-2: give back the commission share of returned items and take back the platform's coupon
-     * share, mirroring the delivery journal line for line. The net may go either way.
+     * share, mirroring the delivery journal line for line. The net may go either way. Item 8: the buyer's refund
+     * is owed by the platform and charged to the seller, who kept the cash.
      */
-    public function recordSelfCollectedPartialReturn(SubOrder $subOrder, ReturnRequest $returnRequest, float $commission, float $discount, string $reason): ?AccountingJournalEntry
+    public function recordSelfCollectedPartialReturn(SubOrder $subOrder, ReturnRequest $returnRequest, float $commission, float $discount, float $refund, string $reason): ?AccountingJournalEntry
     {
         $label = "items returned from self-collected COD Sub-Order #{$subOrder->sub_order_number}: {$reason}";
         $lines = $this->selfCollectedGiveBackLines($subOrder, round($commission, 2), round($discount, 2), $label);
+        array_push($lines, ...$this->selfCollectedBuyerRefundLines($subOrder, round($refund, 2), $label));
 
         if ($lines === []) {
             return null;
@@ -368,5 +369,39 @@ class RefundJournalHandler
         }
 
         return $lines;
+    }
+
+    /**
+     * Item 8: Dr seller wallet (the seller kept the buyer's cash) / Cr customer refund payable (the platform owes
+     * the buyer, paid out through the refund queue).
+     *
+     * @return list<JournalLineData>
+     */
+    private function selfCollectedBuyerRefundLines(SubOrder $subOrder, float $refund, string $label): array
+    {
+        if ($refund <= 0.0) {
+            return [];
+        }
+
+        return [
+            new JournalLineData(
+                accountSlug: 'seller_wallet_payable',
+                debit: $refund,
+                credit: 0.00,
+                sellerId: $subOrder->seller_id,
+                subOrderId: $subOrder->id,
+                orderId: $subOrder->parent_order_id,
+                narration: "Charge the seller the buyer's refund (they kept the cash) for {$label}",
+            ),
+            new JournalLineData(
+                accountSlug: 'customer_refund_payable',
+                debit: 0.00,
+                credit: $refund,
+                customerId: $subOrder->order?->customer_id,
+                subOrderId: $subOrder->id,
+                orderId: $subOrder->parent_order_id,
+                narration: "Refund owed to the buyer for {$label}",
+            ),
+        ];
     }
 }

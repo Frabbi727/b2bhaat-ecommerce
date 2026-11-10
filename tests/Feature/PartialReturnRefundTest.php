@@ -248,11 +248,16 @@ class PartialReturnRefundTest extends TestCase
     {
         $parcel = $this->deliveredParcel('cod', selfDelivered: true);
         $availableBefore = (float) $this->wallet()->available_balance;
+        $owedToBuyersBefore = $this->ledger->getBalanceForSlug('customer_refund_payable');
 
-        $this->returnItems($parcel, [$this->cheapItem->id => 3]);
+        $request = $this->returnItems($parcel, [$this->cheapItem->id => 3]);
 
-        // Commission share ৳30 − coupon share ৳15
-        $this->assertEqualsWithDelta($availableBefore + 15.00, (float) $this->wallet()->available_balance, 0.001);
+        // Commission share ৳30 − coupon share ৳15 comes back; item 8: the seller kept the cash, so the buyer's
+        // ৳285 refund (৳300 of goods − ৳15 coupon share) is charged to them and paid out by B2Bhaat
+        $this->assertEqualsWithDelta($availableBefore + 15.00 - 285.00, (float) $this->wallet()->available_balance, 0.001);
+        $this->assertEqualsWithDelta(285.00, (float) Refund::where('return_request_id', $request->id)->value('amount'), 0.001);
+        $this->assertEqualsWithDelta($owedToBuyersBefore + 285.00, $this->ledger->getBalanceForSlug('customer_refund_payable'), 0.001);
+        $this->assertSame(1, WalletTransaction::where('return_request_id', $request->id)->where('transaction_type', WalletTransaction::TYPE_COD_RETURN_REFUND)->count());
         $this->assertSame('delivered', $parcel->fresh()->fulfillmentStatus->slug);
         $this->assertBooksBalance();
     }
@@ -462,8 +467,10 @@ class PartialReturnRefundTest extends TestCase
             ]));
         }
 
-        $this->assertEqualsWithDelta($walletBefore, (float) $this->wallet()->available_balance, 0.001);
-        $this->assertEqualsWithDelta($ledgerBefore, $this->ledger->getBalanceForSlug('seller_wallet_payable'), 0.001);
+        // The ৳40 credit is taken back, and (item 8) the buyer's ৳1,010 refund is charged to the seller who kept the cash
+        $this->assertEqualsWithDelta($walletBefore - 1010.00, (float) $this->wallet()->available_balance, 0.001);
+        $this->assertEqualsWithDelta($ledgerBefore - 1010.00, $this->ledger->getBalanceForSlug('seller_wallet_payable'), 0.001);
+        $this->assertEqualsWithDelta(1010.00, (float) Refund::where('sub_order_id', $parcel->id)->sum('amount'), 0.001);
         $this->assertEqualsWithDelta(0.00, $this->commissionLeft(), 0.001);
         $this->assertEqualsWithDelta(0.00, $this->ledger->getBalanceForSlug('promotional_discount_expense'), 0.001);
         $this->assertBooksBalance();
