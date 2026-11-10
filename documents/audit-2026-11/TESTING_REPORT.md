@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1516 tests, 1507 passed, 9 skipped, 6876 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1519 tests, 1510 passed, 9 skipped, 6883 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -131,6 +131,7 @@ The existing tests of other features were touched only to give their test produc
 | UX-ACC-6 | Full suite (panels render with the Vite theme) plus a visual check of rendered Reconciliation and Cash Flow snapshots | Icons at normal size, cards in a grid |
 | PERF-2 | `tests/Feature/DashboardQueryEfficiencyTest.php` (3) | All five widgets poll every 60s; admin stats use at most 9 queries; a 20:00 UTC order shows on the next Dhaka day in the revenue chart. Dashboard tests also pass on scratch PostgreSQL |
 | PERF-3 | `tests/Feature/NoLazyLoadingQueriesTest.php` (4) | With lazy loading disabled, the product page and its updates, the catalog, the flash-sale list and the journal entry view all render. Units sold is 7 (4 + 3, with the 5 cancelled left out) and no per-product query runs. Also passes on scratch PostgreSQL |
+| UX-1 | `tests/Feature/TakaFormattingTest.php` (3) | The formatter handles amounts, zero, negatives and empty values; the admin order list shows ৳ and not "BDT"; no Filament file uses `->money('BDT')` or a (Tk) label. `FilamentSmsManagementTest` now expects ৳420.75 |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
