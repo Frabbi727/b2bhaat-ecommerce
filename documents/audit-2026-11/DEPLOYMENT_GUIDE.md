@@ -266,3 +266,8 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 ## INV-6 (rising tiers)
 - Code only; existing prices are not changed. Optional read-only check for products that would now fail validation the next time they are edited:
   `select a.product_id, a.min_quantity, a.unit_price, b.min_quantity, b.unit_price from product_prices a join product_prices b on b.product_id = a.product_id and b.sales_channel_id = a.sales_channel_id and coalesce(b.variation_id,0) = coalesce(a.variation_id,0) and b.min_quantity > a.min_quantity and b.unit_price > a.unit_price;`
+
+## PERF-5 (timezone)
+- **Before deploying, read-only check on production:** `php artisan config:show app.timezone`. Whatever it shows, **do not change `APP_TIMEZONE`**: stored times are written in that zone, and changing it would shift every existing order, payment and escrow time by 6 hours.
+- Optionally set `APP_DISPLAY_TIMEZONE=Asia/Dhaka` (that is already the default), then `php artisan config:cache`.
+- If `app.timezone` is already `Asia/Dhaka`, nothing changes visibly. If it is `UTC`, panel times move from UTC to Dhaka, and the daily renewal, grace and prune jobs move to 00:05, 01:00 and 03:30 Dhaka time.

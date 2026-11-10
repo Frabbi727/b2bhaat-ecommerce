@@ -125,7 +125,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | PERF-2 | Dashboard queries | Aggregate queries |
 | PERF-3 | N+1 queries | Eager loading |
 | PERF-4 | Job failure handling | `failed()` handlers and retries |
-| PERF-5 | **APP_TIMEZONE not set (UTC)** | Asia/Dhaka |
+| PERF-5 | **APP_TIMEZONE not set (UTC)** | Asia/Dhaka | Fixed (dc15b50). Display and schedule timezone set to Asia/Dhaka; storage timezone intentionally unchanged (see deployment guide) |
 | UX-1 to UX-4, UX-6 | Currency formats; jargon; navigation; confirmations; mobile layout | UI consistency pass |
 
 ## P3 (Wave 3)
