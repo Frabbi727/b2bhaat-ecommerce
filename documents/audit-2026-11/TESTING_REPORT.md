@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1486 tests, 1477 passed, 9 skipped, 6766 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1490 tests, 1481 passed, 9 skipped, 6790 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -122,6 +122,7 @@ The existing tests of other features were touched only to give their test produc
 | ACC-16 | `tests/Feature/Accounting/FilamentTrialBalancePageTest.php` (+1) | Two damaged journals that cancel out: grand difference 0 but the check fails and names both journals (SQLite; skipped on PostgreSQL where the ACC-9 trigger blocks the planted edit). Trial balance tests also pass on scratch PostgreSQL |
 | ACC-17 | `tests/Feature/Accounting/ReconciliationCoverageTest.php` (5) | Delivered courier parcel matches the receivable; a receivable with no parcel is flagged; a negative gateway clearing is flagged; the page shows both new checks and the overall status turns to Discrepancy; two runs are stored with actor, counts, failed checks and figures, and the page shows the last stored run |
 | ACC-18 | `tests/Feature/Accounting/FinancialStatementSignsAndCashFlowTest.php` (5) | Contra revenue shown as (৳200.00) and deducted; contra asset deducted and the balance sheet still balances; cash flow opening/operating/financing/closing with transfers and gateway money excluded; admin opens the page; customer gets 403. Also passes on scratch PostgreSQL |
+| ACC-19 | `tests/Feature/Accounting/SellerLedgerStatementTest.php` (4) | Ledger totals with paid, waiting and rejected payouts, a fee paid from the balance and another seller's money; a reversed disbursement drops out of withdrawn; the widget and the printed statement and CSV show ledger totals when wallet rows disagree. Also passes on scratch PostgreSQL |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 

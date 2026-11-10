@@ -107,7 +107,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | ACC-16 | Trial balance check can never fail; date-range labelled "As of" | Opening balances; check per account | Fixed (5beadb8). Opening balances: a range report is now labelled as the movement for the range (page already said "Period"; the CSV said "As of"); a separate opening-balance column was not added |
 | ACC-17 | Reconciliation blind spots | Cover clearing and receivable accounts; store each run | Fixed (5e66cff). Courier COD receivable and gateway clearing are now checked; each run is kept in the audit log |
 | ACC-18 | Statement signs follow account type, not normal balance; no cash flow statement | Use `normal_balance`; add cash flow | Fixed (3202c00). Review: totals were already right for contra accounts (no contra accounts exist in the seeded chart, but admins can add them); the lines are now shown by normal balance and marked. Cash flow statement added |
-| ACC-19 | Seller statement totals wrong | Base it on the ledger |
+| ACC-19 | Seller statement totals wrong | Base it on the ledger | Fixed (ad77137). Widget, printed statement and CSV now use the ledger |
 | AUD-5 | No named finance events | Named events |
 | AUD-6 | No system actor | System actor on automated writes |
 | AUD-7 | URL tokens and TrxIDs not redacted | Extend `AuditRedactor` |

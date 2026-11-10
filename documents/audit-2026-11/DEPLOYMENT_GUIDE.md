@@ -293,3 +293,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## ACC-18 (statements and cash flow)
 - Code and Blade only; a new admin page "Cash Flow Statement" appears under Accounting. If its closing cash differs from the bank statement, the gap is usually gateway or courier money not yet settled (ACC-7) or bank charges not yet booked.
+
+## ACC-19 (seller statement)
+- Code and Blade only. Sellers may see different "Payouts Withdrawn" and "Settled Net Earnings" figures on the printed statement: rejected and waiting payouts no longer count as withdrawn. If a seller's figures look wrong, run the Reconciliation page: a wallet/ledger mismatch for that seller shows there.
