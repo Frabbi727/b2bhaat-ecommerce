@@ -145,11 +145,15 @@ class EscrowLedgerService
                 $givenBack = (float) WalletTransaction::where('sub_order_id', $subOrder->id)
                     ->where('transaction_type', WalletTransaction::TYPE_PARTIAL_RETURN_COD)
                     ->sum('amount');
+                // Net = commission share given back − coupon share taken back; negative when the coupon is bigger
+                // (review R-2). The last return settles whatever is left of the delivery charge.
+                $commission = round($amounts['commission'], 2);
                 $amount = $amounts['completes']
                     ? round((float) $selfCollected->amount - $givenBack, 2)
-                    : round($amounts['commission'] - $amounts['discount'], 2);
+                    : round($commission - $amounts['discount'], 2);
+                $discount = round($commission - $amount, 2);
 
-                if ($amount <= 0) {
+                if ($commission == 0.0 && $discount == 0.0) {
                     return null;
                 }
 
@@ -157,8 +161,8 @@ class EscrowLedgerService
                 $wallet->refresh();
 
                 $tx = $this->recordForReturn($wallet, $subOrder, $returnRequest, WalletTransaction::TYPE_PARTIAL_RETURN_COD, $amount,
-                    "Commission given back for items returned from Sub-Order #{$subOrder->sub_order_number}: {$reason}");
-                $this->refundJournalHandler->recordSelfCollectedPartialReturn($subOrder, $returnRequest, $amount, $reason);
+                    "Commission and coupon share settled for items returned from Sub-Order #{$subOrder->sub_order_number}: {$reason}");
+                $this->refundJournalHandler->recordSelfCollectedPartialReturn($subOrder, $returnRequest, $commission, $discount, $reason);
 
                 return $tx;
             }

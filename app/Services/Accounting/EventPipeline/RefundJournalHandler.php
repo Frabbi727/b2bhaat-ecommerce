@@ -129,27 +129,16 @@ class RefundJournalHandler
             ->first();
 
         if ($subOrder->is_self_delivered && $selfCollected !== null) {
-            $commission = round((float) $selfCollected->amount, 2);
-            if ($commission > 0.0) {
-                $lines[] = new JournalLineData(
-                    accountSlug: 'commission_revenue',
-                    debit: $commission,
-                    credit: 0.00,
-                    sellerId: $subOrder->seller_id,
-                    subOrderId: $subOrder->id,
-                    orderId: $orderId,
-                    narration: "Reverse platform commission on returned self-collected COD for Sub-Order #{$subOrder->sub_order_number}: {$reason}",
-                );
-                $lines[] = new JournalLineData(
-                    accountSlug: 'seller_wallet_payable',
-                    debit: 0.00,
-                    credit: $commission,
-                    sellerId: $subOrder->seller_id,
-                    subOrderId: $subOrder->id,
-                    orderId: $orderId,
-                    narration: "Refund commission charge on returned self-collected COD for Sub-Order #{$subOrder->sub_order_number}: {$reason}",
-                );
-            }
+            // Review R-2: undo both halves of the delivery charge, commission and the platform's coupon share, so a
+            // coupon bigger than the commission is taken back too. The wallet moves by the net, as at delivery.
+            $commission = round((float) $subOrder->commission_amount, 2);
+            $discount = round($commission - (float) $selfCollected->amount, 2);
+            array_push($lines, ...$this->selfCollectedGiveBackLines(
+                $subOrder,
+                $commission,
+                $discount,
+                "returned self-collected COD for Sub-Order #{$subOrder->sub_order_number}: {$reason}",
+            ));
         } else {
             $releaseTx = WalletTransaction::where('sub_order_id', $subOrder->id)
                 ->where('transaction_type', WalletTransaction::TYPE_ESCROW_RELEASE)
@@ -325,40 +314,59 @@ class RefundJournalHandler
      * PAY-4: items returned from a parcel whose COD cash the seller kept. Mirrors the whole-parcel case: the
      * commission charge on those items (less their coupon share) goes back to the seller's balance.
      */
-    public function recordSelfCollectedPartialReturn(SubOrder $subOrder, ReturnRequest $returnRequest, float $amount, string $reason): ?AccountingJournalEntry
+    /**
+     * PAY-4 / review R-2: give back the commission share of returned items and take back the platform's coupon
+     * share, mirroring the delivery journal line for line. The net may go either way.
+     */
+    public function recordSelfCollectedPartialReturn(SubOrder $subOrder, ReturnRequest $returnRequest, float $commission, float $discount, string $reason): ?AccountingJournalEntry
     {
-        $amount = round($amount, 2);
-        if ($amount <= 0.0) {
+        $label = "items returned from self-collected COD Sub-Order #{$subOrder->sub_order_number}: {$reason}";
+        $lines = $this->selfCollectedGiveBackLines($subOrder, round($commission, 2), round($discount, 2), $label);
+
+        if ($lines === []) {
             return null;
         }
-
-        $label = "items returned from self-collected COD Sub-Order #{$subOrder->sub_order_number}";
 
         return $this->journalPostingService->post(new JournalEntryData(
             entryDate: JournalEntryData::businessDate(),
             financialEvent: AccountingEvent::REFUND_PROCESSED->value,
             idempotencyKey: "return_request_cod_giveback_{$returnRequest->id}",
-            description: "Commission given back for {$label}: {$reason}",
-            lines: [
-                new JournalLineData(
-                    accountSlug: 'commission_revenue',
-                    debit: $amount,
-                    sellerId: $subOrder->seller_id,
-                    subOrderId: $subOrder->id,
-                    orderId: $subOrder->parent_order_id,
-                    narration: "Reverse commission on {$label}: {$reason}",
-                ),
-                new JournalLineData(
-                    accountSlug: 'seller_wallet_payable',
-                    credit: $amount,
-                    sellerId: $subOrder->seller_id,
-                    subOrderId: $subOrder->id,
-                    orderId: $subOrder->parent_order_id,
-                    narration: "Give back commission charge on {$label}: {$reason}",
-                ),
-            ],
+            description: "Commission and coupon share settled for {$label}",
+            lines: $lines,
             referenceType: ReturnRequest::class,
             referenceId: $returnRequest->id,
         ));
+    }
+
+    /**
+     * Reverse of the self-collected COD delivery journal: Dr commission revenue / Cr seller wallet for the
+     * commission, Dr seller wallet / Cr promotional discount expense for the coupon share.
+     *
+     * @return list<JournalLineData>
+     */
+    private function selfCollectedGiveBackLines(SubOrder $subOrder, float $commission, float $discount, string $label): array
+    {
+        $lines = [];
+        $line = fn (string $slug, float $debit, float $credit, string $narration): JournalLineData => new JournalLineData(
+            accountSlug: $slug,
+            debit: $debit,
+            credit: $credit,
+            sellerId: $subOrder->seller_id,
+            subOrderId: $subOrder->id,
+            orderId: $subOrder->parent_order_id,
+            narration: $narration,
+        );
+
+        if ($commission > 0.0) {
+            $lines[] = $line('commission_revenue', $commission, 0.00, "Reverse commission on {$label}");
+            $lines[] = $line('seller_wallet_payable', 0.00, $commission, "Give back commission charge on {$label}");
+        }
+
+        if ($discount > 0.0) {
+            $lines[] = $line('seller_wallet_payable', $discount, 0.00, "Take back platform coupon share on {$label}");
+            $lines[] = $line('promotional_discount_expense', 0.00, $discount, "Reverse platform-funded coupon share on {$label}");
+        }
+
+        return $lines;
     }
 }

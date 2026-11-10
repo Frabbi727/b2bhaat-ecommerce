@@ -32,6 +32,7 @@ use Exception;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -424,6 +425,47 @@ class PartialReturnRefundTest extends TestCase
         $this->assertSame([$this->cheapItem->id => 3, $this->dearItem->id => 2], $request->items()->orderBy('order_item_id')->pluck('quantity', 'order_item_id')->map(fn ($quantity): int => (int) $quantity)->all());
         $this->assertSame('returned', $parcel->fresh()->fulfillmentStatus->slug);
         $this->assertEqualsWithDelta(1010.00, (float) Refund::where('sub_order_id', $parcel->id)->sum('amount'), 0.001);
+        $this->assertBooksBalance();
+    }
+
+    /**
+     * Review R-2: the seller collected the cash and the coupon (৳50) is bigger than the commission (৳10), so
+     * delivery credited the seller ৳40. Once every item is back, item by item or all at once, that credit is
+     * taken back and the wallet and the books agree.
+     *
+     * @return array<string, array{0: list<array<string, int>>}>
+     */
+    public static function couponBiggerThanCommissionReturns(): array
+    {
+        return [
+            'item by item' => [[['cheap' => 3], ['cheap' => 3, 'dear' => 2]]],
+            'all at once' => [[['cheap' => 6, 'dear' => 2]]],
+        ];
+    }
+
+    /**
+     * @param  list<array<string, int>>  $returns
+     */
+    #[DataProvider('couponBiggerThanCommissionReturns')]
+    public function test_a_coupon_bigger_than_the_commission_is_taken_back_when_everything_returns(array $returns): void
+    {
+        $this->commission = 10.00;
+        $walletBefore = (float) (SellerWallet::where('seller_id', $this->seller->id)->value('available_balance') ?? 0);
+        $ledgerBefore = $this->ledger->getBalanceForSlug('seller_wallet_payable');
+        $parcel = $this->deliveredParcel('cod', selfDelivered: true);
+        $this->assertEqualsWithDelta($walletBefore + 40.00, (float) $this->wallet()->available_balance, 0.001);
+
+        foreach ($returns as $return) {
+            $this->returnItems($parcel, array_filter([
+                $this->cheapItem->id => $return['cheap'] ?? 0,
+                $this->dearItem->id => $return['dear'] ?? 0,
+            ]));
+        }
+
+        $this->assertEqualsWithDelta($walletBefore, (float) $this->wallet()->available_balance, 0.001);
+        $this->assertEqualsWithDelta($ledgerBefore, $this->ledger->getBalanceForSlug('seller_wallet_payable'), 0.001);
+        $this->assertEqualsWithDelta(0.00, $this->commissionLeft(), 0.001);
+        $this->assertEqualsWithDelta(0.00, $this->ledger->getBalanceForSlug('promotional_discount_expense'), 0.001);
         $this->assertBooksBalance();
     }
 }
