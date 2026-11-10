@@ -8,9 +8,9 @@ use App\Filament\Seller\Resources\Activities\Pages\ListSellerActivities;
 use App\Filament\Seller\Resources\Activities\Pages\ViewSellerActivity;
 use App\Models\AuditLog;
 use App\Models\User;
+use App\Services\Audit\AuditChangeSummary;
 use BackedEnum;
 use Filament\Actions\ViewAction;
-use Filament\Infolists\Components\KeyValueEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
@@ -20,6 +20,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 use UnitEnum;
 
 class SellerActivityResource extends Resource
@@ -108,6 +109,7 @@ class SellerActivityResource extends Resource
                 TextColumn::make('action')
                     ->badge()
                     ->color('gray')
+                    ->formatStateUsing(fn (?string $state): string => Str::headline((string) $state))
                     ->sortable(),
 
                 TextColumn::make('description')
@@ -134,6 +136,7 @@ class SellerActivityResource extends Resource
                         'products' => 'Products',
                         'orders' => 'Orders',
                         'finance' => 'Finance',
+                        'sellers' => 'Store & Billing',
                         'marketing' => 'Marketing',
                         'settings' => 'Settings',
                     ]),
@@ -167,7 +170,8 @@ class SellerActivityResource extends Resource
 
                         TextEntry::make('action')
                             ->badge()
-                            ->color('gray'),
+                            ->color('gray')
+                            ->formatStateUsing(fn (?string $state): string => Str::headline((string) $state)),
 
                         TextEntry::make('record_label')
                             ->label('Record Label')
@@ -187,17 +191,16 @@ class SellerActivityResource extends Resource
                             ->placeholder('—'),
                     ]),
 
-                Section::make('Change Details')
+                // AUD-8: a plain summary instead of raw before/after columns
+                Section::make('What changed')
                     ->schema([
-                        KeyValueEntry::make('old_values')
-                            ->label('Before (Old Values)')
-                            ->placeholder('No previous values recorded'),
-
-                        KeyValueEntry::make('new_values')
-                            ->label('After (New Values)')
-                            ->placeholder('No updated values recorded'),
-                    ])
-                    ->columns(['default' => 1, 'md' => 2]),
+                        TextEntry::make('change_summary')
+                            ->hiddenLabel()
+                            ->state(fn (AuditLog $record): array => app(AuditChangeSummary::class)->lines($record))
+                            ->listWithLineBreaks()
+                            ->bulleted()
+                            ->placeholder('No field changes recorded for this activity'),
+                    ]),
             ]);
     }
 
