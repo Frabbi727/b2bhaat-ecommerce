@@ -302,3 +302,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## AUD-7 (audit redaction)
 - Code only. Existing audit rows are append-only (AUD-2) and are not rewritten; they still hold the full values written before this change.
+
+## AUD-5 (named finance events)
+- Code only. Saved audit-log filters or reports that looked for action `created`/`updated` on finance records need the new names (see IMPLEMENTATION_LOG). Older rows keep their old action names.
