@@ -35,7 +35,7 @@ class ShippingLabelTest extends TestCase
         $response->assertSee($subOrder->order->order_number);
         $response->assertSee('NailsFactory Ltd.');
         $response->assertSee('SHIP TO');
-        $response->assertSee('B2B HAAT ESCROW LOGISTICS');
+        $response->assertSee('B2B HAAT');
     }
 
     public function test_other_seller_cannot_view_foreign_sellers_shipping_label(): void

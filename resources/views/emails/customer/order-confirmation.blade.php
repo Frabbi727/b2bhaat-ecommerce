@@ -25,13 +25,13 @@
 
     <!-- Multi-Vendor Consignments Breakdown -->
     <h3 style="color: #0F172A; font-size: 15px; margin: 24px 0 12px 0; border-bottom: 2px solid #E2E8F0; padding-bottom: 6px;">
-        Order Items & Consignments
+        Order Items & Parcels
     </h3>
 
     @foreach($order->subOrders as $subOrder)
         <div style="margin-bottom: 20px; border: 1px solid #CBD5E1; border-radius: 6px; overflow: hidden;">
             <div style="background-color: #F1F5F9; padding: 10px 14px; font-size: 13px; font-weight: 600; color: #334155;">
-                Consignment #{{ $subOrder->sub_order_number }} &bull; Seller: {{ $subOrder->seller?->sellerProfile?->store_name ?? 'Factory Merchant' }}
+                Parcel #{{ $subOrder->sub_order_number }} &bull; Seller: {{ $subOrder->seller?->sellerProfile?->store_name ?? 'Factory Merchant' }}
             </div>
             <table width="100%" cellspacing="0" cellpadding="8" border="0" style="font-size: 13px;">
                 @foreach($subOrder->items as $item)
@@ -81,7 +81,7 @@
                     Download Tax Invoice
                 </a>
                 <a href="{{ $trackingUrl }}" style="display: inline-block; background-color: #0F172A; color: #FFFFFF; font-weight: 600; font-size: 13px; text-decoration: none; padding: 12px 20px; border-radius: 6px; margin: 4px;">
-                    Track Consignments Live
+                    Track Your Parcels
                 </a>
             </td>
         </tr>

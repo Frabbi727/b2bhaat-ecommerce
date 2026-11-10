@@ -145,7 +145,7 @@ class SubOrdersTable
                                 ])
                                 ->required(),
                             TextInput::make('tracking_number')
-                                ->label('Consignment / Tracking Number')
+                                ->label('Tracking number')
                                 ->placeholder('e.g. ST-992381')
                                 ->required(),
                             TextInput::make('hub_location')
@@ -153,7 +153,7 @@ class SubOrdersTable
                                 ->default('Vendor Warehouse')
                                 ->required(),
                             Textarea::make('note')
-                                ->label('Consignment Notes')
+                                ->label('Notes for the courier')
                                 ->default('Parcel handed over to courier hub for last-mile transit.'),
                         ])
                         ->action(function (SubOrder $record, array $data): void {
@@ -173,8 +173,8 @@ class SubOrdersTable
                             }
 
                             Notification::make()
-                                ->title('Consignment Dispatched')
-                                ->body("Sub-Order #{$record->sub_order_number} assigned to {$data['courier_name']}.")
+                                ->title('Parcel handed to the courier')
+                                ->body("Order #{$record->sub_order_number} assigned to {$data['courier_name']}.")
                                 ->success()
                                 ->send();
                         }),
@@ -195,7 +195,7 @@ class SubOrdersTable
                                 ->options([
                                     'in_transit' => '🚚 In Transit (Sorting Hub)',
                                     'out_for_delivery' => '🛵 Out for Delivery (Rider Dispatched)',
-                                    'delivered' => '✅ Delivered (earnings held in escrow)',
+                                    'delivered' => '✅ Delivered (money on hold for 48 hours)',
                                     'returned' => '↩️ Returned / Customer Refused (RTO)',
                                 ])
                                 ->default(fn (SubOrder $record) => match ($record->fulfillmentStatus?->slug) {
@@ -226,8 +226,8 @@ class SubOrdersTable
 
                             $statusName = ucfirst(str_replace('_', ' ', $data['status']));
                             $message = $data['status'] === 'delivered'
-                                ? "Sub-Order #{$record->sub_order_number} delivered. ৳{$record->sellerPayableAmount()} is held in escrow and released after the holding period."
-                                : "Sub-Order #{$record->sub_order_number} updated to {$statusName}.";
+                                ? "Order #{$record->sub_order_number} delivered. ৳{$record->sellerPayableAmount()} is on hold for 48 hours in case the buyer reports a problem, then moves to your balance."
+                                : "Order #{$record->sub_order_number} updated to {$statusName}.";
 
                             Notification::make()
                                 ->title('Courier Status Updated')
@@ -318,7 +318,7 @@ class SubOrdersTable
 
                                 Notification::make()
                                     ->title('Handover Confirmed & Package Delivered!')
-                                    ->body("Handover code verified successfully. Sub-Order #{$record->sub_order_number} marked as Delivered. ৳{$record->sellerPayableAmount()} is held in escrow and released after the holding period.")
+                                    ->body("Handover code verified. Order #{$record->sub_order_number} marked as delivered. ৳{$record->sellerPayableAmount()} is on hold for 48 hours in case the buyer reports a problem, then moves to your balance.")
                                     ->success()
                                     ->send();
                             } catch (\Exception $e) {
@@ -341,7 +341,7 @@ class SubOrdersTable
                             Select::make('courier_name')
                                 ->label('Courier Provider')
                                 ->options([
-                                    'Steadfast Courier' => 'Steadfast Courier (Automated Consignment API)',
+                                    'Steadfast Courier' => 'Steadfast Courier (booked automatically)',
                                     'Pathao Courier' => 'Pathao Courier (Express Last-Mile)',
                                     'RedX Delivery' => 'RedX Delivery (Nationwide Hubs)',
                                     'Paperfly' => 'Paperfly (Doorstep Delivery)',
@@ -372,7 +372,7 @@ class SubOrdersTable
 
                             TextInput::make('instructions')
                                 ->label('Special Handling Instructions')
-                                ->default('Wholesale goods consignment, handle with care.')
+                                ->default('Wholesale goods, handle with care.')
                                 ->required(),
                         ])
                         ->action(function (SubOrder $record, array $data): void {
@@ -386,7 +386,7 @@ class SubOrdersTable
 
                             Notification::make()
                                 ->title('Courier Pickup Scheduled!')
-                                ->body("Consignment tracking #{$updated->tracking_number} assigned via {$data['courier_name']}.")
+                                ->body("Tracking number {$updated->tracking_number} assigned by {$data['courier_name']}.")
                                 ->success()
                                 ->send();
                         }),

@@ -19,13 +19,13 @@
     <!-- Action Bar (Hidden in Print) -->
     <div class="max-w-5xl mx-auto mb-6 flex flex-wrap items-center justify-between gap-3 no-print">
         <a href="/seller/seller-wallets" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-50 transition shadow-xs">
-            &larr; Back to Wallet Portal
+            &larr; Back to wallet
         </a>
 
         <div class="flex items-center gap-2">
             <a href="{{ route('seller.wallet.statement.csv') }}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-xs">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                Download CSV Ledger
+                Download CSV
             </a>
 
             <button onclick="window.print()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition shadow-xs cursor-pointer">
@@ -43,11 +43,11 @@
             <div class="space-y-1.5">
                 <div class="flex items-center gap-2">
                     <span class="text-xl font-black text-indigo-600 tracking-tight">B2B HAAT</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 uppercase tracking-wider">Escrow Settlement Division</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 uppercase tracking-wider">Seller statement</span>
                 </div>
                 <h1 class="text-2xl font-black text-slate-900 tracking-tight">Merchant Financial Statement</h1>
                 <p class="text-xs text-slate-500">
-                    Official Escrow Settlement Report &amp; Double-Entry Balance Ledger
+                    Your balance, money on hold and payouts
                 </p>
             </div>
 
@@ -97,7 +97,7 @@
             </div>
 
             <div class="p-5 rounded-2xl bg-amber-50/60 border border-amber-200 space-y-1">
-                <span class="text-[11px] font-bold text-amber-800 uppercase tracking-wider">In-Transit Escrow</span>
+                <span class="text-[11px] font-bold text-amber-800 uppercase tracking-wider">On hold after delivery</span>
                 <div class="text-2xl font-black text-amber-950">৳{{ number_format($totalHeld, 2) }}</div>
                 <p class="text-[10px] text-amber-700">Held during courier fulfillment transit</p>
             </div>
@@ -112,7 +112,7 @@
         <!-- Detailed Transaction Ledger Table -->
         <div class="space-y-4">
             <div class="flex items-center justify-between">
-                <h3 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Itemized Transaction Ledger</h3>
+                <h3 class="text-sm font-bold text-slate-900 uppercase tracking-wider">All transactions</h3>
                 <span class="text-xs text-slate-500 font-mono">{{ $transactions->count() }} Record(s)</span>
             </div>
 
@@ -123,7 +123,7 @@
                             <th class="py-3 px-4">Date &amp; Time</th>
                             <th class="py-3 px-4">Transaction #</th>
                             <th class="py-3 px-4">Type</th>
-                            <th class="py-3 px-4">Consignment #</th>
+                            <th class="py-3 px-4">Order #</th>
                             <th class="py-3 px-4">Reference &amp; Note</th>
                             <th class="py-3 px-4 text-right">Amount (৳)</th>
                             <th class="py-3 px-4 text-right">Running Balance (৳)</th>
@@ -151,11 +151,11 @@
                                         </span>
                                     @elseif ($isHold)
                                         <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                                            ⏳ Escrow Hold
+                                            ⏳ On hold after delivery
                                         </span>
                                     @elseif ($isRefund)
                                         <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800">
-                                            ↺ Escrow Refund
+                                            ↺ Refunded to buyer
                                         </span>
                                     @elseif ($isPayout)
                                         <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-800">
@@ -171,7 +171,7 @@
                                     {{ $txn->subOrder?->sub_order_number ?? '—' }}
                                 </td>
                                 <td class="py-3 px-4 text-slate-600 max-w-xs truncate">
-                                    {{ $txn->reference_note ?? 'Automated Ledger Entry' }}
+                                    {{ $txn->reference_note ?? 'Automatic entry' }}
                                 </td>
                                 <td class="py-3 px-4 text-right font-mono font-bold whitespace-nowrap {{ $isCredit ? 'text-emerald-600' : ($isPayout ? 'text-rose-600' : 'text-slate-800') }}">
                                     {{ $isCredit ? '+' : ($isPayout ? '-' : '') }}৳{{ number_format($txn->amount, 2) }}
@@ -183,7 +183,7 @@
                         @empty
                             <tr>
                                 <td colspan="7" class="py-8 text-center text-slate-400">
-                                    No ledger transactions recorded yet for this merchant wallet.
+                                    No transactions recorded yet.
                                 </td>
                             </tr>
                         @endforelse
@@ -195,8 +195,8 @@
         <!-- Footer Audit Stamp -->
         <div class="border-t border-slate-200 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
             <div class="space-y-0.5 text-center sm:text-left">
-                <div class="font-bold text-slate-700">B2B Haat Multi-Vendor Escrow Protocol</div>
-                <div>Automated double-entry settlement engine. Tax &amp; VAT compliant in Bangladesh.</div>
+                <div class="font-bold text-slate-700">B2B Haat seller statement</div>
+                <div>Buyer payments are held for 48 hours after delivery, then move to your balance.</div>
             </div>
 
             <div class="text-center sm:text-right font-mono text-[11px] text-slate-400">

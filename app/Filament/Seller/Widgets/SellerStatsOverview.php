@@ -57,7 +57,7 @@ class SellerStatsOverview extends StatsOverviewWidget
                 ->color('success')
                 ->url(SellerWalletResource::getUrl('index')),
 
-            Stat::make('Escrow In-Transit Reserve', '৳'.number_format($escrowBalance, 2))
+            Stat::make('On hold after delivery', '৳'.number_format($escrowBalance, 2))
                 ->description('Released 48 hours after delivery')
                 ->descriptionIcon('heroicon-m-shield-check')
                 ->color('gray')

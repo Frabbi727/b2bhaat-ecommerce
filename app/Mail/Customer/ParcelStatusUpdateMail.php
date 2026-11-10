@@ -29,12 +29,12 @@ class ParcelStatusUpdateMail extends BaseMailable
             'shipped' => 'Dispatched with Courier',
             'out_for_delivery' => 'Out for Delivery',
             'delivered' => 'Delivered Successfully',
-            'cancelled' => 'Consignment Cancelled',
+            'cancelled' => 'Parcel Cancelled',
             default => 'Status Update',
         };
 
         return new Envelope(
-            subject: "Consignment #{$this->subOrder->sub_order_number}: {$statusWord} - B2B Haat",
+            subject: "Parcel #{$this->subOrder->sub_order_number}: {$statusWord} - B2B Haat",
         );
     }
 

@@ -87,7 +87,7 @@ class FilamentPanelsSmokeTest extends TestCase
         Livewire::test(SellerStatsOverview::class)
             ->assertSuccessful()
             ->assertSee('Available Payout Balance')
-            ->assertSee('Escrow In-Transit Reserve');
+            ->assertSee('On hold after delivery');
 
         Livewire::test(SellerRecentOrdersWidget::class)
             ->assertSuccessful();

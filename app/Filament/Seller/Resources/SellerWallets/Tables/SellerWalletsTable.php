@@ -29,7 +29,7 @@ class SellerWalletsTable
                     ->size('lg'),
 
                 TextColumn::make('escrow_held_balance')
-                    ->label('Escrow Held Balance (৳)')
+                    ->label('On hold after delivery (৳)')
                     ->formatStateUsing(fn ($state): string => Money::taka($state))
                     ->weight('bold')
                     ->color('warning')
@@ -101,7 +101,7 @@ class SellerWalletsTable
                     ->openUrlInNewTab(),
 
                 Action::make('downloadCsv')
-                    ->label('Export CSV Ledger')
+                    ->label('Download statement (CSV)')
                     ->icon('heroicon-o-arrow-down-tray')
                     ->color('gray')
                     ->url(fn () => route('seller.wallet.statement.csv')),

@@ -97,12 +97,12 @@ class WalletTransactionsTable
                 SelectFilter::make('transaction_type')
                     ->label('Transaction Type')
                     ->options([
-                        WalletTransaction::TYPE_ESCROW_RELEASE => 'Escrow Released',
-                        WalletTransaction::TYPE_ESCROW_HOLD => 'Held in Escrow',
+                        WalletTransaction::TYPE_ESCROW_RELEASE => 'Released to your balance',
+                        WalletTransaction::TYPE_ESCROW_HOLD => 'On hold after delivery',
                         WalletTransaction::TYPE_PAYOUT => 'Payout Withdrawal',
                         WalletTransaction::TYPE_PAYOUT_REVERSAL => 'Payout Refunded',
                         WalletTransaction::TYPE_RETURN_REVERSAL => 'Return / Refund Reversal',
-                        WalletTransaction::TYPE_ESCROW_REFUND => 'Escrow Refund',
+                        WalletTransaction::TYPE_ESCROW_REFUND => 'Refunded to buyer from money on hold',
                         WalletTransaction::TYPE_COD_SELF_COLLECTED => 'COD Adjustment',
                     ])
                     ->query(function (Builder $query, array $data): Builder {
@@ -134,19 +134,19 @@ class WalletTransactionsTable
             ])
             ->emptyStateIcon(Heroicon::OutlinedDocumentText)
             ->emptyStateHeading('No transactions recorded yet')
-            ->emptyStateDescription('All escrow releases, commission withholdings, and payout withdrawals will appear here automatically.');
+            ->emptyStateDescription('Money released after delivery, commission and payouts will appear here automatically.');
     }
 
     public static function typeLabel(string $type): string
     {
         return match ($type) {
-            WalletTransaction::TYPE_ESCROW_RELEASE => 'Escrow Released',
+            WalletTransaction::TYPE_ESCROW_RELEASE => 'Released to your balance',
             WalletTransaction::TYPE_ESCROW_HOLD,
-            WalletTransaction::TYPE_ESCROW_HOLD_ADJUSTMENT => 'Held in Escrow',
+            WalletTransaction::TYPE_ESCROW_HOLD_ADJUSTMENT => 'On hold after delivery',
             WalletTransaction::TYPE_PAYOUT => 'Payout Withdrawal',
             WalletTransaction::TYPE_PAYOUT_REVERSAL => 'Payout Refunded',
             WalletTransaction::TYPE_RETURN_REVERSAL => 'Return / Refund Reversal',
-            WalletTransaction::TYPE_ESCROW_REFUND => 'Escrow Refund',
+            WalletTransaction::TYPE_ESCROW_REFUND => 'Refunded to buyer from money on hold',
             WalletTransaction::TYPE_COD_SELF_COLLECTED,
             WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL => 'COD Adjustment',
             default => str($type)->headline()->toString(),

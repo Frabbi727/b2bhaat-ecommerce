@@ -25,7 +25,7 @@ class NewConsignmentOrderMail extends BaseMailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: "New Consignment Order #{$this->subOrder->sub_order_number} - B2B Haat",
+            subject: "New Order #{$this->subOrder->sub_order_number} - B2B Haat",
         );
     }
 

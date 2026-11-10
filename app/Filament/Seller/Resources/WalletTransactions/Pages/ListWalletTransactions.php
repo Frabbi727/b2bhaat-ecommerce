@@ -83,7 +83,7 @@ class ListWalletTransactions extends ListRecords
             fputcsv($handle, ['B2Bhaat Marketplace — Merchant Account Statement']);
             fputcsv($handle, ['Merchant:', $seller->sellerProfile?->store_name ?? $seller->name, 'Phone:', $seller->phone ?? 'N/A']);
             fputcsv($handle, ['Trade License:', $seller->trade_license_number ?? 'N/A', 'Generated At:', now()->toDateTimeString()]);
-            fputcsv($handle, ['Available Balance (BDT):', number_format((float) $wallet->available_balance, 2), 'Escrow Held (BDT):', number_format((float) $wallet->escrow_held_balance, 2)]);
+            fputcsv($handle, ['Available Balance (BDT):', number_format((float) $wallet->available_balance, 2), 'On Hold After Delivery (BDT):', number_format((float) $wallet->escrow_held_balance, 2)]);
             fputcsv($handle, []);
 
             // Column headers
@@ -91,7 +91,7 @@ class ListWalletTransactions extends ListRecords
                 'Transaction ID',
                 'Date & Time',
                 'Type',
-                'Sub-Order #',
+                'Order #',
                 'Amount (BDT)',
                 'Running Balance (BDT)',
                 'Status',

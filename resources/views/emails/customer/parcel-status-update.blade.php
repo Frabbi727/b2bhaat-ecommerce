@@ -27,7 +27,7 @@
             @elseif($statusSlug === 'delivered')
                 Delivered successfully!
             @elseif($statusSlug === 'cancelled')
-                Consignment cancelled
+                Parcel cancelled
             @else
                 {{ ucfirst($statusSlug) }}
             @endif
@@ -60,7 +60,7 @@
 
     @if($statusSlug === 'delivered')
         <p style="font-size: 13px; color: #64748B; background-color: #FEF3C7; padding: 12px; border-radius: 6px; border: 1px solid #FDE68A;">
-            <strong>48-Hour Guarantee:</strong> If there is any issue with your consignment, you may request a return or report a discrepancy within 48 hours via your order tracking page.
+            <strong>48-Hour Guarantee:</strong> If there is any issue with your parcel, you may request a return or report a discrepancy within 48 hours via your order tracking page.
         </p>
     @endif
 

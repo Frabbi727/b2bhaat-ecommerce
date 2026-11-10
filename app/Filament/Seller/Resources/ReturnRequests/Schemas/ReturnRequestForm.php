@@ -13,7 +13,7 @@ class ReturnRequestForm
         return $schema
             ->components([
                 TextInput::make('subOrder.sub_order_number')
-                    ->label('Consignment #')
+                    ->label('Order #')
                     ->disabled(),
                 TextInput::make('customer.name')
                     ->label('Customer')

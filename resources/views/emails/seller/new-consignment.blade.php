@@ -1,16 +1,16 @@
-<x-emails.layouts.master :headerBadge="'New Consignment Order'">
+<x-emails.layouts.master :headerBadge="'New Order'">
     <h2 style="color: #0F172A; margin: 0 0 16px 0; font-size: 18px; font-weight: 700;">
         Hello {{ $sellerName }}, you have a new order to fulfill!
     </h2>
 
     <p style="margin: 0 0 16px 0; font-size: 14px; color: #475569;">
-        A new consignment <strong>#{{ $subOrder->sub_order_number }}</strong> has been placed for <strong>{{ $storeName }}</strong>. Please prepare the items for courier dispatch or store handover.
+        A new order <strong>#{{ $subOrder->sub_order_number }}</strong> has been placed for <strong>{{ $storeName }}</strong>. Please prepare the items for courier dispatch or store handover.
     </p>
 
     <!-- Consignment Details -->
     <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; margin: 20px 0; padding: 16px;">
         <tr>
-            <td style="font-size: 13px; color: #64748B; padding: 4px 8px;">Consignment Number:</td>
+            <td style="font-size: 13px; color: #64748B; padding: 4px 8px;">Order Number:</td>
             <td style="font-size: 13px; color: #0F172A; font-weight: 600; padding: 4px 8px; text-align: right;">{{ $subOrder->sub_order_number }}</td>
         </tr>
         <tr>
@@ -57,7 +57,7 @@
     <!-- Financial Breakdown for Seller -->
     <table width="100%" cellspacing="0" cellpadding="6" border="0" style="margin: 20px 0; font-size: 14px; border-top: 1px solid #E2E8F0;">
         <tr>
-            <td style="color: #64748B;">Consignment Total:</td>
+            <td style="color: #64748B;">Order Total:</td>
             <td align="right" style="color: #0F172A; font-weight: 500;">৳{{ number_format((float) $subOrder->subtotal, 2) }}</td>
         </tr>
         <tr>

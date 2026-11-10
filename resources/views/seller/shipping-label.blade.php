@@ -33,7 +33,7 @@
     <!-- Non-print Action Bar -->
     <div class="no-print w-full max-w-md mb-4 flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-300 shadow-sm">
         <a href="/seller/sub-orders" class="text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1">
-            &larr; Back to Sub-Orders
+            &larr; Back to orders
         </a>
         <button 
             onclick="window.print()" 
@@ -82,7 +82,7 @@
         <!-- Section 2: Consignment References -->
         <div class="grid grid-cols-2 border-b-2 border-slate-900 py-1.5 text-[10px]">
             <div>
-                <span class="text-slate-500 block">Package Sub-Order:</span>
+                <span class="text-slate-500 block">Package:</span>
                 <strong class="font-mono text-xs">{{ $subOrder->sub_order_number }}</strong>
             </div>
             <div class="text-right">
@@ -159,7 +159,7 @@
 
         <!-- Section 7: Footer Routing Footer -->
         <div class="border-t-2 border-slate-900 pt-1 flex justify-between items-center text-[8px] font-mono text-slate-500">
-            <span>B2B HAAT ESCROW LOGISTICS</span>
+            <span>B2B HAAT</span>
             <span>GEN: {{ now()->format('Y-m-d H:i') }}</span>
         </div>
     </div>

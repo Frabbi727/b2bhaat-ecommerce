@@ -261,7 +261,7 @@ class SellerAccountStatementTest extends TestCase
 
         Livewire::test(ListWalletTransactions::class)
             ->assertCanSeeTableRecords([$txRelease, $txPayout, $txReturn, $txReversal, $txCod, $txRejectedPayout])
-            ->assertSee('Escrow Released')
+            ->assertSee('Released to your balance')
             ->assertSee('Payout Withdrawal')
             ->assertSee('Return / Refund Reversal')
             ->assertSee('Payout Refunded')
@@ -385,7 +385,7 @@ class SellerAccountStatementTest extends TestCase
 
         Livewire::test(ListWalletTransactions::class)
             ->assertCanSeeTableRecords([$txRefund])
-            ->assertSee('Escrow Refund')
+            ->assertSee('Refunded to buyer from money on hold')
             ->assertSee('-৳50.00');
     }
 
@@ -475,7 +475,7 @@ class SellerAccountStatementTest extends TestCase
 
         Livewire::test(ListWalletTransactions::class)
             ->assertSee('No transactions recorded yet')
-            ->assertSee('All escrow releases, commission withholdings, and payout withdrawals will appear here automatically.');
+            ->assertSee('Money released after delivery, commission and payouts will appear here automatically.');
     }
 
     public function test_list_wallet_transactions_renders_statement_overview_widget(): void
@@ -534,9 +534,9 @@ class SellerAccountStatementTest extends TestCase
             ->assertSee('Available Balance')
             ->assertSee('৳10,500.00')
             ->assertSee('Ready for withdrawal')
-            ->assertSee('Escrow Held Balance')
+            ->assertSee('On hold after delivery')
             ->assertSee('৳2,300.00')
-            ->assertSee('Pending delivery clearing')
+            ->assertSee('Moves to your balance 48 hours after delivery')
             ->assertSee('Lifetime Earnings')
             ->assertSee('৳15,000.00')
             ->assertSee('Total Withdrawn')
@@ -586,7 +586,7 @@ class SellerAccountStatementTest extends TestCase
         Livewire::test(SellerStatementOverviewWidget::class)
             ->assertSuccessful()
             ->assertSee('Available Balance')
-            ->assertSee('Escrow Held Balance')
+            ->assertSee('On hold after delivery')
             ->assertSee('Lifetime Earnings')
             ->assertSee('Total Withdrawn')
             ->assertSee('৳0.00');
@@ -712,14 +712,14 @@ class SellerAccountStatementTest extends TestCase
         $this->assertStringContainsString('TRD-SELLER-A-999', $content);
         $this->assertStringContainsString('Available Balance (BDT):', $content);
         $this->assertStringContainsString('5,000.00', $content);
-        $this->assertStringContainsString('Escrow Held (BDT):', $content);
+        $this->assertStringContainsString('On Hold After Delivery (BDT):', $content);
         $this->assertStringContainsString('1,200.00', $content);
 
         // Column headers
         $this->assertStringContainsString('Transaction ID', $content);
         $this->assertStringContainsString('Date & Time', $content);
         $this->assertStringContainsString('Type', $content);
-        $this->assertStringContainsString('Sub-Order #', $content);
+        $this->assertStringContainsString('Order #', $content);
         $this->assertStringContainsString('Amount (BDT)', $content);
         $this->assertStringContainsString('Running Balance (BDT)', $content);
         $this->assertStringContainsString('Status', $content);
@@ -728,7 +728,7 @@ class SellerAccountStatementTest extends TestCase
         // Seller A transactions
         $this->assertStringContainsString('Confidential Note Seller A Only', $content);
         $this->assertStringContainsString('PKG-SELLER-A-001', $content);
-        $this->assertStringContainsString('Escrow Released', $content);
+        $this->assertStringContainsString('Released to your balance', $content);
 
         // Strict tenant isolation - Seller B data MUST NOT exist
         $this->assertStringNotContainsString('Secret Note Seller B Data', $content);

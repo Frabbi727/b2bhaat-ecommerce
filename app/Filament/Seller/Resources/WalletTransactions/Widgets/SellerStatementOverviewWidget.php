@@ -36,8 +36,8 @@ class SellerStatementOverviewWidget extends StatsOverviewWidget
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->color('success'),
 
-            Stat::make('Escrow Held Balance', '৳'.number_format($escrowHeldBalance, 2))
-                ->description('Pending delivery clearing')
+            Stat::make('On hold after delivery', '৳'.number_format($escrowHeldBalance, 2))
+                ->description('Moves to your balance 48 hours after delivery')
                 ->descriptionIcon('heroicon-m-lock-closed')
                 ->color('warning'),
 
