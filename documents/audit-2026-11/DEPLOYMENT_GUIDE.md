@@ -277,3 +277,7 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## UX-ACC-3 (payout TrxID)
 - Code only. Owner question to answer later: should a second admin approve payouts and manual journals (maker-checker)?
+
+## ACC-14 (business day, month close)
+- Code only, no migration. If the server stores UTC, journals posted between 00:00 and 06:00 Dhaka now get the Dhaka date (before: the previous day).
+- New screen Admin → Accounting → Accounting Months. Suggested routine: after the month's reconciliation is green, close the month with a reason.

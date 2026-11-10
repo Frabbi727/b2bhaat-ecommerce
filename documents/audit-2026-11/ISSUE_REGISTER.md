@@ -102,7 +102,7 @@ All findings come from reading the code; every one cites file:line. Status value
 | ACC-2 | Mock gateway marks orders paid with no journal (local/testing only) | Post the journal; never seed it as active | Fixed (115060d) |
 | ACC-12 | No subscription deferral; any tax amount unbalances posting | **Needs legal/tax validation** | **Flagged, not changed: needs legal/tax validation.** Checked: orders are always created with `tax_amount = 0` (`OrderSplitterService`), and the admin order screen shows VAT read-only with no edit page, so no posting can be unbalanced today. Before VAT is charged or subscription revenue is deferred (IFRS 15), a tax adviser must confirm the rate, BIN/invoice rules and the deferral policy; the journal handlers then need a VAT-payable line |
 | ACC-13 | Journal-number race rolls back the business action | Sequence table or retry on collision | Fixed (13b48c2) |
-| ACC-14 | Entry date is always now(); no period close | Event dates; close-period UI |
+| ACC-14 | Entry date is always now(); no period close | Event dates; close-period UI | Fixed (7696ff2, 3790836). Dates: event handlers post on the Dhaka business day. Close: new Accounting Months screen. Entries are still dated the day the event is recorded; back-dating to an earlier event time is not done (e.g. a bKash payment verified the next day is booked on the verification day, when the money is confirmed) |
 | ACC-15 | Float maths; precision mismatch (12,2 vs 14,2) | bcmath / integer poisha helper |
 | ACC-16 | Trial balance check can never fail; date-range labelled "As of" | Opening balances; check per account |
 | ACC-17 | Reconciliation blind spots | Cover clearing and receivable accounts; store each run |
