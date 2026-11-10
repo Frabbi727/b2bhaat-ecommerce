@@ -136,6 +136,53 @@ class AccountingReconciliationService
     }
 
     /**
+     * ACC-17: the courier COD receivable must equal the cash still owed on delivered courier COD parcels that have
+     * not been settled. A gap means a receivable was booked or cleared without a parcel behind it.
+     *
+     * @return array{
+     *     is_reconciled: bool,
+     *     unsettled_parcels_total: float,
+     *     ledger_balance: float,
+     *     discrepancy: float
+     * }
+     */
+    public function verifyCourierCodReceivable(): array
+    {
+        $parcelsTotal = round((float) app(SettlementService::class)->unsettledCourierParcels()->sum('amount'), 2);
+        $ledgerBalance = round($this->generalLedgerService->getBalanceForSlug('courier_cod_receivable'), 2);
+        $discrepancy = $this->normalizeZero(round($parcelsTotal - $ledgerBalance, 2));
+
+        return [
+            'is_reconciled' => $discrepancy === 0.00,
+            'unsettled_parcels_total' => $this->normalizeZero($parcelsTotal),
+            'ledger_balance' => $this->normalizeZero($ledgerBalance),
+            'discrepancy' => $discrepancy,
+        ];
+    }
+
+    /**
+     * ACC-17: payment gateways can't hold less than nothing for the platform. A negative clearing balance means more
+     * was recorded as transferred, refunded or paid out through a gateway than was ever received into it.
+     *
+     * @return array{
+     *     is_reconciled: bool,
+     *     ledger_balance: float,
+     *     discrepancy: float
+     * }
+     */
+    public function verifyGatewayClearing(): array
+    {
+        $ledgerBalance = $this->normalizeZero(round($this->generalLedgerService->getBalanceForSlug('gateway_clearing'), 2));
+        $discrepancy = $ledgerBalance < 0 ? $ledgerBalance : 0.00;
+
+        return [
+            'is_reconciled' => $discrepancy === 0.00,
+            'ledger_balance' => $ledgerBalance,
+            'discrepancy' => $discrepancy,
+        ];
+    }
+
+    /**
      * Reconcile wallet balances against general ledger liability accounts for all sellers having a wallet.
      *
      * @return array{

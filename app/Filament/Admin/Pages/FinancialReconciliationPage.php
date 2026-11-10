@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Pages;
 
+use App\Models\AuditLog;
 use App\Models\SellerWallet;
 use App\Models\User;
 use App\Services\Accounting\AccountingReconciliationService;
@@ -41,6 +42,8 @@ class FinancialReconciliationPage extends Page
 
     public string $sortBy = 'discrepancy_desc';
 
+    public const RUN_ACTION = 'reconciliation_run';
+
     public ?string $lastAuditedAt = null;
 
     protected ?array $cachedMetrics = null;
@@ -59,7 +62,54 @@ class FinancialReconciliationPage extends Page
 
     public function mount(): void
     {
-        $this->lastAuditedAt = Carbon::now()->toDateTimeString();
+        $this->lastAuditedAt = AuditLog::query()
+            ->where('module', 'accounting')
+            ->where('action', self::RUN_ACTION)
+            ->latest('id')
+            ->first()
+            ?->created_at
+            ?->toDateTimeString();
+    }
+
+    /**
+     * ACC-17: keeps each run in the finance audit log, so there is a record of when the books were checked and what
+     * was found.
+     *
+     * @param  array<string, array{title: string, sub_ledger_total: float, gl_total: float, discrepancy: float, is_reconciled: bool}>  $metrics
+     * @param  array{total_sellers: int, unreconciled_count: int}  $sellersData
+     * @param  list<string>  $failedChecks
+     */
+    private function recordRun(array $metrics, array $sellersData, array $failedChecks, int $discrepancyCount): void
+    {
+        $user = auth()->user();
+
+        $log = app(AuditService::class)->record([
+            'module' => 'accounting',
+            'action' => self::RUN_ACTION,
+            'description' => $discrepancyCount === 0
+                ? 'Reconciliation run: everything matched'
+                : "Reconciliation run: {$discrepancyCount} discrepancy item(s)",
+            'actor_id' => $user?->id,
+            'actor_name' => $user?->name,
+            'actor_email' => $user?->email,
+            'actor_role' => $user?->role?->slug,
+            'status' => 'success',
+            'metadata' => [
+                'discrepancy_count' => $discrepancyCount,
+                'failed_checks' => $failedChecks,
+                'sellers_checked' => $sellersData['total_sellers'],
+                'sellers_unreconciled' => $sellersData['unreconciled_count'],
+                'checks' => array_map(fn (array $metric): array => [
+                    'sub_ledger_total' => $metric['sub_ledger_total'],
+                    'gl_total' => $metric['gl_total'],
+                    'discrepancy' => $metric['discrepancy'],
+                    'is_reconciled' => $metric['is_reconciled'],
+                ], $metrics),
+            ],
+            'sync' => true,
+        ]);
+
+        $this->lastAuditedAt = $log?->created_at?->toDateTimeString() ?? Carbon::now()->toDateTimeString();
     }
 
     /**
@@ -94,20 +144,10 @@ class FinancialReconciliationPage extends Page
         $metrics = $this->getReconciliationMetrics();
         $sellersData = $this->getSellersAuditData();
 
-        $discrepancyCount = 0;
-        if (! $metrics['seller_wallet']['is_reconciled']) {
-            $discrepancyCount++;
-        }
-        if (! $metrics['seller_escrow']['is_reconciled']) {
-            $discrepancyCount++;
-        }
-        if (! $metrics['reserved_payouts']['is_reconciled']) {
-            $discrepancyCount++;
-        }
-        if (! $metrics['customer_refunds']['is_reconciled']) {
-            $discrepancyCount++;
-        }
-        $discrepancyCount += $sellersData['unreconciled_count'];
+        $failedChecks = array_keys(array_filter($metrics, fn (array $metric): bool => ! $metric['is_reconciled']));
+        $discrepancyCount = count($failedChecks) + $sellersData['unreconciled_count'];
+
+        $this->recordRun($metrics, $sellersData, $failedChecks, $discrepancyCount);
 
         $body = $discrepancyCount === 0
             ? 'All sub-ledgers and general ledger liability balances are fully reconciled.'
@@ -211,38 +251,17 @@ class FinancialReconciliationPage extends Page
     }
 
     /**
-     * Compile the 4 core reconciliation metrics.
+     * Compile the core reconciliation checks, keyed by check name.
      *
-     * @return array{
-     *     seller_wallet: array{
-     *         title: string,
-     *         sub_ledger_total: float,
-     *         gl_total: float,
-     *         discrepancy: float,
-     *         is_reconciled: bool
-     *     },
-     *     seller_escrow: array{
-     *         title: string,
-     *         sub_ledger_total: float,
-     *         gl_total: float,
-     *         discrepancy: float,
-     *         is_reconciled: bool
-     *     },
-     *     reserved_payouts: array{
-     *         title: string,
-     *         sub_ledger_total: float,
-     *         gl_total: float,
-     *         discrepancy: float,
-     *         is_reconciled: bool
-     *     },
-     *     customer_refunds: array{
-     *         title: string,
-     *         sub_ledger_total: float,
-     *         gl_total: float,
-     *         discrepancy: float,
-     *         is_reconciled: bool
-     *     }
-     * }
+     * @return array<string, array{
+     *     title: string,
+     *     hint: string,
+     *     sub_ledger_label: string,
+     *     sub_ledger_total: float,
+     *     gl_total: float,
+     *     discrepancy: float,
+     *     is_reconciled: bool
+     * }>
      */
     public function getReconciliationMetrics(): array
     {
@@ -287,9 +306,17 @@ class FinancialReconciliationPage extends Page
         $refundDiscrepancy = $refundResult['discrepancy'];
         $refundIsReconciled = $refundResult['is_reconciled'];
 
+        // 5. Courier COD Receivable (ACC-17)
+        $courierResult = $reconciliationService->verifyCourierCodReceivable();
+
+        // 6. Payment Gateway Clearing (ACC-17)
+        $gatewayResult = $reconciliationService->verifyGatewayClearing();
+
         return $this->cachedMetrics = [
             'seller_wallet' => [
                 'title' => 'Seller Wallet Payables',
+                'hint' => 'GL Code 2010 · Vendor liquid payables',
+                'sub_ledger_label' => 'Sub-Ledger Total',
                 'sub_ledger_total' => $walletSubTotal,
                 'gl_total' => $walletGlTotal,
                 'discrepancy' => $walletDiscrepancy,
@@ -297,6 +324,8 @@ class FinancialReconciliationPage extends Page
             ],
             'seller_escrow' => [
                 'title' => 'Seller Escrow Payables',
+                'hint' => 'GL Code 2020 · 48h escrow protection',
+                'sub_ledger_label' => 'Sub-Ledger Total',
                 'sub_ledger_total' => $escrowSubTotal,
                 'gl_total' => $escrowGlTotal,
                 'discrepancy' => $escrowDiscrepancy,
@@ -304,6 +333,8 @@ class FinancialReconciliationPage extends Page
             ],
             'reserved_payouts' => [
                 'title' => 'Reserved Payout Payables',
+                'hint' => 'GL Code 2030 · Pending disbursements',
+                'sub_ledger_label' => 'Pending Payouts',
                 'sub_ledger_total' => $reservedSubTotal,
                 'gl_total' => $reservedGlTotal,
                 'discrepancy' => $reservedDiscrepancy,
@@ -311,10 +342,30 @@ class FinancialReconciliationPage extends Page
             ],
             'customer_refunds' => [
                 'title' => 'Customer Refund Payables',
+                'hint' => 'GL Code 2040 · Pending refund payouts',
+                'sub_ledger_label' => 'Pending Refunds',
                 'sub_ledger_total' => $refundSubTotal,
                 'gl_total' => $refundGlTotal,
                 'discrepancy' => $refundDiscrepancy,
                 'is_reconciled' => $refundIsReconciled,
+            ],
+            'courier_cod' => [
+                'title' => 'Courier COD Receivable',
+                'hint' => 'GL Code 1040 · Cash couriers still owe',
+                'sub_ledger_label' => 'Unsettled Parcels',
+                'sub_ledger_total' => $courierResult['unsettled_parcels_total'],
+                'gl_total' => $courierResult['ledger_balance'],
+                'discrepancy' => $courierResult['discrepancy'],
+                'is_reconciled' => $courierResult['is_reconciled'],
+            ],
+            'gateway_clearing' => [
+                'title' => 'Payment Gateway Clearing',
+                'hint' => 'GL Code 1030 · Must not fall below ৳0',
+                'sub_ledger_label' => 'Lowest Allowed',
+                'sub_ledger_total' => 0.00,
+                'gl_total' => $gatewayResult['ledger_balance'],
+                'discrepancy' => $gatewayResult['discrepancy'],
+                'is_reconciled' => $gatewayResult['is_reconciled'],
             ],
         ];
     }

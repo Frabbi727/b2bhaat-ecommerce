@@ -2,10 +2,7 @@
     @php
         $metrics = $this->getReconciliationMetrics();
         $sellersData = $this->getSellersAuditData();
-        $allReconciled = $metrics['seller_wallet']['is_reconciled']
-            && $metrics['seller_escrow']['is_reconciled']
-            && $metrics['reserved_payouts']['is_reconciled']
-            && $metrics['customer_refunds']['is_reconciled']
+        $allReconciled = collect($metrics)->every(fn (array $metric): bool => $metric['is_reconciled'])
             && $sellersData['unreconciled_count'] === 0;
     @endphp
 
@@ -29,7 +26,7 @@
                         </div>
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                             @if ($this->lastAuditedAt)
-                                Last verified: <span class="font-medium text-gray-700 dark:text-gray-300">{{ \Carbon\Carbon::parse($this->lastAuditedAt)->diffForHumans() }}</span> ({{ $this->lastAuditedAt }})
+                                Last verified: <span class="font-medium text-gray-700 dark:text-gray-300">{{ \Carbon\Carbon::parse($this->lastAuditedAt)->diffForHumans() }}</span> ({{ \Carbon\Carbon::parse($this->lastAuditedAt)->timezone(config('app.display_timezone'))->format('d M Y, h:i A') }})
                             @else
                                 Audit not yet run
                             @endif
@@ -53,163 +50,46 @@
             </div>
         </div>
 
-        {{-- 4 Core Reconciliation Metric Cards Grid --}}
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {{-- Card 1: Seller Wallet Payables --}}
-            @php $m1 = $metrics['seller_wallet']; @endphp
-            <div class="rounded-xl border border-gray-200/80 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 flex flex-col justify-between">
-                <div>
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                            {{ $m1['title'] }}
-                        </span>
-                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold {{ $m1['is_reconciled'] ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400' }}">
-                            @if ($m1['is_reconciled'])
-                                <x-heroicon-m-check class="h-3.5 w-3.5" /> Reconciled
-                            @else
-                                <x-heroicon-m-exclamation-triangle class="h-3.5 w-3.5" /> Discrepancy
-                            @endif
-                        </span>
+        {{-- Core Reconciliation Check Cards --}}
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            @foreach ($metrics as $key => $m)
+                <div wire:key="metric-{{ $key }}" class="rounded-xl border border-gray-200/80 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                                {{ $m['title'] }}
+                            </span>
+                            <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold {{ $m['is_reconciled'] ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400' }}">
+                                @if ($m['is_reconciled'])
+                                    <x-heroicon-m-check class="h-3.5 w-3.5" /> Reconciled
+                                @else
+                                    <x-heroicon-m-exclamation-triangle class="h-3.5 w-3.5" /> Discrepancy
+                                @endif
+                            </span>
+                        </div>
+                        <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
+                            {{ $m['hint'] }}
+                        </p>
                     </div>
-                    <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
-                        GL Code 2010 · Vendor liquid payables
-                    </p>
-                </div>
 
-                <div class="mt-4 space-y-2 border-t border-gray-100 pt-3 dark:border-gray-800">
-                    <div class="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
-                        <span>Sub-Ledger Total:</span>
-                        <span class="font-mono font-medium text-gray-900 dark:text-gray-100">৳{{ number_format($m1['sub_ledger_total'], 2) }}</span>
-                    </div>
-                    <div class="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
-                        <span>General Ledger:</span>
-                        <span class="font-mono font-medium text-gray-900 dark:text-gray-100">৳{{ number_format($m1['gl_total'], 2) }}</span>
-                    </div>
-                    <div class="border-t border-gray-100 pt-2 dark:border-gray-800 flex items-center justify-between text-xs">
-                        <span class="font-semibold text-gray-700 dark:text-gray-300">Variance:</span>
-                        <span class="font-mono font-bold {{ $m1['is_reconciled'] ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">
-                            ৳{{ number_format($m1['discrepancy'], 2) }}
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            {{-- Card 2: Seller Escrow Payables --}}
-            @php $m2 = $metrics['seller_escrow']; @endphp
-            <div class="rounded-xl border border-gray-200/80 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 flex flex-col justify-between">
-                <div>
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                            {{ $m2['title'] }}
-                        </span>
-                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold {{ $m2['is_reconciled'] ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400' }}">
-                            @if ($m2['is_reconciled'])
-                                <x-heroicon-m-check class="h-3.5 w-3.5" /> Reconciled
-                            @else
-                                <x-heroicon-m-exclamation-triangle class="h-3.5 w-3.5" /> Discrepancy
-                            @endif
-                        </span>
-                    </div>
-                    <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
-                        GL Code 2020 · 48h escrow protection
-                    </p>
-                </div>
-
-                <div class="mt-4 space-y-2 border-t border-gray-100 pt-3 dark:border-gray-800">
-                    <div class="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
-                        <span>Sub-Ledger Total:</span>
-                        <span class="font-mono font-medium text-gray-900 dark:text-gray-100">৳{{ number_format($m2['sub_ledger_total'], 2) }}</span>
-                    </div>
-                    <div class="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
-                        <span>General Ledger:</span>
-                        <span class="font-mono font-medium text-gray-900 dark:text-gray-100">৳{{ number_format($m2['gl_total'], 2) }}</span>
-                    </div>
-                    <div class="border-t border-gray-100 pt-2 dark:border-gray-800 flex items-center justify-between text-xs">
-                        <span class="font-semibold text-gray-700 dark:text-gray-300">Variance:</span>
-                        <span class="font-mono font-bold {{ $m2['is_reconciled'] ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">
-                            ৳{{ number_format($m2['discrepancy'], 2) }}
-                        </span>
+                    <div class="mt-4 space-y-2 border-t border-gray-100 pt-3 dark:border-gray-800">
+                        <div class="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+                            <span>{{ $m['sub_ledger_label'] }}:</span>
+                            <span class="font-mono font-medium text-gray-900 dark:text-gray-100">৳{{ number_format($m['sub_ledger_total'], 2) }}</span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+                            <span>General Ledger:</span>
+                            <span class="font-mono font-medium text-gray-900 dark:text-gray-100">৳{{ number_format($m['gl_total'], 2) }}</span>
+                        </div>
+                        <div class="border-t border-gray-100 pt-2 dark:border-gray-800 flex items-center justify-between text-xs">
+                            <span class="font-semibold text-gray-700 dark:text-gray-300">Variance:</span>
+                            <span class="font-mono font-bold {{ $m['is_reconciled'] ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">
+                                ৳{{ number_format($m['discrepancy'], 2) }}
+                            </span>
+                        </div>
                     </div>
                 </div>
-            </div>
-
-            {{-- Card 3: Reserved Payout Payables --}}
-            @php $m3 = $metrics['reserved_payouts']; @endphp
-            <div class="rounded-xl border border-gray-200/80 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 flex flex-col justify-between">
-                <div>
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                            {{ $m3['title'] }}
-                        </span>
-                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold {{ $m3['is_reconciled'] ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400' }}">
-                            @if ($m3['is_reconciled'])
-                                <x-heroicon-m-check class="h-3.5 w-3.5" /> Reconciled
-                            @else
-                                <x-heroicon-m-exclamation-triangle class="h-3.5 w-3.5" /> Discrepancy
-                            @endif
-                        </span>
-                    </div>
-                    <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
-                        GL Code 2030 · Pending disbursements
-                    </p>
-                </div>
-
-                <div class="mt-4 space-y-2 border-t border-gray-100 pt-3 dark:border-gray-800">
-                    <div class="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
-                        <span>Pending Payouts:</span>
-                        <span class="font-mono font-medium text-gray-900 dark:text-gray-100">৳{{ number_format($m3['sub_ledger_total'], 2) }}</span>
-                    </div>
-                    <div class="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
-                        <span>General Ledger:</span>
-                        <span class="font-mono font-medium text-gray-900 dark:text-gray-100">৳{{ number_format($m3['gl_total'], 2) }}</span>
-                    </div>
-                    <div class="border-t border-gray-100 pt-2 dark:border-gray-800 flex items-center justify-between text-xs">
-                        <span class="font-semibold text-gray-700 dark:text-gray-300">Variance:</span>
-                        <span class="font-mono font-bold {{ $m3['is_reconciled'] ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">
-                            ৳{{ number_format($m3['discrepancy'], 2) }}
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            {{-- Card 4: Customer Refund Payables --}}
-            @php $m4 = $metrics['customer_refunds']; @endphp
-            <div class="rounded-xl border border-gray-200/80 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 flex flex-col justify-between">
-                <div>
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                            {{ $m4['title'] }}
-                        </span>
-                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold {{ $m4['is_reconciled'] ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400' }}">
-                            @if ($m4['is_reconciled'])
-                                <x-heroicon-m-check class="h-3.5 w-3.5" /> Reconciled
-                            @else
-                                <x-heroicon-m-exclamation-triangle class="h-3.5 w-3.5" /> Discrepancy
-                            @endif
-                        </span>
-                    </div>
-                    <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
-                        GL Code 2040 · Pending refund payouts
-                    </p>
-                </div>
-
-                <div class="mt-4 space-y-2 border-t border-gray-100 pt-3 dark:border-gray-800">
-                    <div class="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
-                        <span>Pending Refunds:</span>
-                        <span class="font-mono font-medium text-gray-900 dark:text-gray-100">৳{{ number_format($m4['sub_ledger_total'], 2) }}</span>
-                    </div>
-                    <div class="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
-                        <span>General Ledger:</span>
-                        <span class="font-mono font-medium text-gray-900 dark:text-gray-100">৳{{ number_format($m4['gl_total'], 2) }}</span>
-                    </div>
-                    <div class="border-t border-gray-100 pt-2 dark:border-gray-800 flex items-center justify-between text-xs">
-                        <span class="font-semibold text-gray-700 dark:text-gray-300">Variance:</span>
-                        <span class="font-mono font-bold {{ $m4['is_reconciled'] ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">
-                            ৳{{ number_format($m4['discrepancy'], 2) }}
-                        </span>
-                    </div>
-                </div>
-            </div>
+            @endforeach
         </div>
 
         {{-- Seller Sub-Ledger Discrepancy Table --}}

@@ -168,6 +168,7 @@ class AuditLogResource extends Resource
                         'products' => 'Products (products)',
                         'orders' => 'Orders (orders)',
                         'finance' => 'Finance & Escrow (finance)',
+                        'accounting' => 'Accounting & Reconciliation (accounting)',
                         'sellers' => 'Sellers (sellers)',
                         'marketing' => 'Marketing & Flash Sales (marketing)',
                         'communications' => 'Communications (Email & SMS)',
