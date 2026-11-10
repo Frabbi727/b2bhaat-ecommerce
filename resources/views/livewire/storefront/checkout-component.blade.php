@@ -25,7 +25,7 @@
     @else
     @guest
         <p class="mb-6 text-xs text-slate-600">
-            Have an account? <a href="{{ route('login', ['redirect' => '/checkout']) }}" class="font-bold text-indigo-600 hover:underline">Sign in</a> to use your saved addresses. Or just fill in the form below, no account needed.
+            Have an account? <a href="{{ route('login', ['redirect' => '/checkout']) }}" class="font-bold text-indigo-600 hover:underline">Sign in</a> to use your saved addresses. Or just fill in the form below: no password needed, we will text you a code to confirm your order.
         </p>
     @endguest
 
@@ -378,21 +378,57 @@
                     </div>
                 </div>
 
-                <button 
-                    type="submit" 
-                    wire:loading.attr="disabled"
-                    class="w-full py-4 px-4 rounded-xl font-bold text-sm bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-                >
-                    <svg wire:loading.remove class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <svg wire:loading class="animate-spin w-5 h-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span wire:loading.remove>Place order</span>
-                    <span wire:loading>Placing your order…</span>
-                </button>
+                @if ($awaitingPhoneCode)
+                    <div class="p-4 rounded-xl bg-indigo-50 border border-indigo-200 space-y-3" wire:key="phone-code-step">
+                        <p class="text-xs font-semibold text-indigo-900">{{ $phoneCodeNotice }}</p>
+                        <div>
+                            <label for="phoneCode" class="block text-xs font-bold text-slate-700 mb-1">SMS code</label>
+                            <input
+                                id="phoneCode"
+                                type="text"
+                                inputmode="numeric"
+                                autocomplete="one-time-code"
+                                maxlength="8"
+                                wire:model="phoneCode"
+                                class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-base tracking-widest font-bold focus:border-indigo-500 focus:ring-indigo-500"
+                                placeholder="123456"
+                            >
+                            @error('phoneCode') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
+                        </div>
+                        <button
+                            type="button"
+                            wire:click="confirmPhoneCode"
+                            wire:loading.attr="disabled"
+                            class="w-full py-4 px-4 rounded-xl font-bold text-sm bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white transition shadow-sm cursor-pointer"
+                        >
+                            <span wire:loading.remove wire:target="confirmPhoneCode">Confirm and place order</span>
+                            <span wire:loading wire:target="confirmPhoneCode">Placing your order…</span>
+                        </button>
+                        <div class="flex justify-between text-xs">
+                            <button type="button" wire:click="resendPhoneCode" class="font-bold text-indigo-600 hover:underline cursor-pointer">Send a new code</button>
+                            <button type="button" wire:click="changePhoneNumber" class="font-bold text-slate-600 hover:underline cursor-pointer">Change phone number</button>
+                        </div>
+                    </div>
+                @else
+                    <button 
+                        type="submit" 
+                        wire:loading.attr="disabled"
+                        class="w-full py-4 px-4 rounded-xl font-bold text-sm bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                        <svg wire:loading.remove class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <svg wire:loading class="animate-spin w-5 h-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span wire:loading.remove>Place order</span>
+                        <span wire:loading>Placing your order…</span>
+                    </button>
+                    @guest
+                        <p class="text-[11px] text-slate-500 text-center">We will text a code to your phone to confirm the order.</p>
+                    @endguest
+                @endif
             </div>
         </div>
     </form>

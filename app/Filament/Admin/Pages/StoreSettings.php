@@ -239,8 +239,8 @@ class StoreSettings extends Page
                 Section::make('Who can order')
                     ->schema([
                         Toggle::make('guest_checkout_enabled')
-                            ->label('Let shoppers order without an account')
-                            ->helperText('When off, shoppers sign in with their phone number before paying.'),
+                            ->label('Let shoppers order without signing in first')
+                            ->helperText('When on, a shopper without an account confirms their phone with an SMS code at checkout and an account is made for them. When off, they must sign in or register before checkout.'),
                     ]),
 
                 Section::make('Order limits')

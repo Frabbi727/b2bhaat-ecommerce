@@ -278,14 +278,6 @@ class CustomerAuth extends Component
     }
 
     /**
-     * Registering with a phone that only has a hidden guest-checkout account takes that account over.
-     */
-    private static function mayClaimByRegistration(User $user): bool
-    {
-        return $user->is_active && ResolveCheckoutCustomer::isUnclaimedGuest($user);
-    }
-
-    /**
      * @param  array{success: bool, error?: string, seconds_remaining?: int}  $result
      */
     private static function lockedMessage(array $result): string
@@ -324,7 +316,7 @@ class CustomerAuth extends Component
                         return;
                     }
                     $existing = User::wherePhone(PhoneNormalizer::normalize($value))->first();
-                    if ($existing && ! self::mayClaimByRegistration($existing)) {
+                    if ($existing && ! ResolveCheckoutCustomer::mayTakeOverByRegistration($existing)) {
                         $fail('An account with this phone number already exists.');
                     }
                 },
@@ -393,9 +385,9 @@ class CustomerAuth extends Component
             'phone_verified_at' => now(),
         ];
 
-        // A guest who ordered with this phone before takes over that account, so their orders stay with them.
+        // A shopper account with this phone (for example one made at checkout) gets the new details and keeps its orders.
         $user = User::wherePhone($normalized)->first();
-        if ($user && ! self::mayClaimByRegistration($user)) {
+        if ($user && ! ResolveCheckoutCustomer::mayTakeOverByRegistration($user)) {
             $this->errorMessage = 'An account with this phone number already exists. Please sign in instead.';
 
             return;

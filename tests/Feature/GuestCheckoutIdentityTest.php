@@ -9,22 +9,30 @@ use App\Livewire\Storefront\CustomerAuth;
 use App\Models\Order;
 use App\Models\PaymentMethod;
 use App\Models\Product;
+use App\Models\Role;
 use App\Models\SalesChannel;
 use App\Models\User;
 use App\Services\Cart\CartSessionService;
+use App\Services\Settings\StoreConfigurationService;
 use App\Services\Sms\Contracts\SmsGatewayInterface;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\TestCase;
 
+/**
+ * A shopper without an account confirms their phone with an SMS code before an order is placed.
+ */
 class GuestCheckoutIdentityTest extends TestCase
 {
     use RefreshDatabase;
+
+    private int $existingOrderId = 0;
 
     protected function setUp(): void
     {
@@ -34,14 +42,142 @@ class GuestCheckoutIdentityTest extends TestCase
         $this->existingOrderId = (int) Order::max('id');
     }
 
-    private int $existingOrderId = 0;
-
-    private function newOrders(): Collection
+    public function test_guest_order_waits_for_the_sms_code_and_nothing_is_placed_yet(): void
     {
-        return Order::where('id', '>', $this->existingOrderId)->get();
+        $this->fillCheckout('01899001199')
+            ->call('placeOrder')
+            ->assertSet('errorMessage', '')
+            ->assertSet('awaitingPhoneCode', true);
+
+        $this->assertCount(0, $this->newOrders());
+        $this->assertFalse(User::wherePhone('8801899001199')->exists());
+        $this->assertSame('8801899001199', collect($this->sentSms())->last()['to'] ?? null);
     }
 
-    private function placeGuestOrder(string $phone, string $name = 'Guest Buyer'): Testable
+    public function test_right_code_makes_an_account_signs_in_and_places_the_order(): void
+    {
+        $this->placeOrderConfirmingPhone($this->fillCheckout('01899001199'))
+            ->assertSet('errorMessage', '')
+            ->assertRedirect();
+
+        $order = $this->newOrders()->sole();
+        $customer = $order->customer;
+        $this->assertSame('8801899001199', $customer->phone);
+        $this->assertNotNull($customer->phone_verified_at);
+        $this->assertStringEndsWith('@guest.b2bhaat.invalid', $customer->email);
+        $this->assertFalse(Hash::check('password', $customer->password));
+        $this->assertSame($customer->id, Auth::id());
+    }
+
+    public function test_wrong_code_places_no_order(): void
+    {
+        $this->fillCheckout('01899001199')
+            ->call('placeOrder')
+            ->set('phoneCode', '000000')
+            ->call('confirmPhoneCode')
+            ->assertHasErrors(['phoneCode'])
+            ->assertSet('awaitingPhoneCode', true);
+
+        $this->assertCount(0, $this->newOrders());
+        $this->assertGuest();
+    }
+
+    public function test_changing_the_phone_after_the_code_was_sent_places_no_order(): void
+    {
+        $checkout = $this->fillCheckout('01899001199')->call('placeOrder');
+        $code = $this->lastSentSmsCode();
+
+        $checkout->set('recipientPhone', '01899001188')
+            ->set('phoneCode', $code)
+            ->call('confirmPhoneCode')
+            ->assertSet('awaitingPhoneCode', false)
+            ->assertSet('errorMessage', 'The phone number changed. Please press Place order again to get a code for the new number.');
+
+        $this->assertCount(0, $this->newOrders());
+        $this->assertGuest();
+    }
+
+    public function test_confirmed_phone_of_a_registered_shopper_orders_into_their_own_account(): void
+    {
+        $customer = User::where('email', 'customer@retail.com')->firstOrFail();
+        $customer->update(['phone' => '8801899001177']);
+
+        $this->placeOrderConfirmingPhone($this->fillCheckout('01899001177'))->assertSet('errorMessage', '');
+
+        $this->assertSame($customer->id, $this->newOrders()->sole()->customer_id);
+        $this->assertSame($customer->id, Auth::id());
+    }
+
+    public function test_seller_phone_is_refused_before_any_sms_is_sent(): void
+    {
+        $seller = User::whereHas('role', fn ($query) => $query->where('slug', 'seller'))->firstOrFail();
+        $smsBefore = count($this->sentSms());
+
+        $this->fillCheckout((string) $seller->phone)
+            ->call('placeOrder')
+            ->assertSet('awaitingPhoneCode', false)
+            ->assertSet('errorMessage', 'This phone belongs to a seller or staff account. Please sign in with your password to order.');
+
+        $this->assertCount($smsBefore, $this->sentSms());
+        $this->assertCount(0, $this->newOrders());
+    }
+
+    public function test_when_guest_checkout_is_off_no_sms_is_sent(): void
+    {
+        app(StoreConfigurationService::class)->set('guest_checkout_enabled', false, 'checkout', 'boolean');
+
+        $this->fillCheckout('01899001199')
+            ->call('placeOrder')
+            ->assertSet('awaitingPhoneCode', false)
+            ->assertSet('errorMessage', 'Please sign in or create an account to place your order.');
+
+        $this->assertSame([], $this->sentSms());
+    }
+
+    public function test_two_new_shoppers_get_separate_accounts(): void
+    {
+        $this->placeOrderConfirmingPhone($this->fillCheckout('01899001199', 'First Shopper'));
+        Auth::logout();
+        $this->placeOrderConfirmingPhone($this->fillCheckout('01899001188', 'Second Shopper'));
+
+        $this->assertCount(2, $this->newOrders());
+        $this->assertCount(2, $this->newOrders()->pluck('customer_id')->unique());
+    }
+
+    public function test_shopper_who_registers_later_keeps_the_checkout_account_and_orders(): void
+    {
+        $this->placeOrderConfirmingPhone($this->fillCheckout('01899001199'));
+        $account = $this->newOrders()->sole()->customer;
+        Auth::logout();
+
+        $this->registerWithPhone('01899001199')
+            ->assertSet('errorMessage', '')
+            ->assertRedirect(route('customer.orders'));
+
+        $account->refresh();
+        $this->assertSame($account->id, Auth::id());
+        $this->assertSame('rahim@b2bhaat-test.com', $account->email);
+        $this->assertSame('Rahim Chowdhury', $account->name);
+        $this->assertTrue(Hash::check('SecretPass123!', $account->password));
+        $this->assertSame(1, User::wherePhone('8801899001199')->count());
+        $this->assertTrue(Order::where('customer_id', $account->id)->exists());
+    }
+
+    public function test_registering_with_a_wholesale_buyer_phone_is_refused(): void
+    {
+        $customer = User::where('email', 'customer@retail.com')->firstOrFail();
+        $customer->forceFill([
+            'phone' => '8801899001199',
+            'role_id' => Role::where('slug', 'wholesale_buyer')->value('id'),
+            'is_wholesale_approved' => true,
+        ])->save();
+
+        $this->fillRegistration(Livewire::test(CustomerAuth::class, ['tab' => 'register']))
+            ->call('register')
+            ->assertHasErrors(['registerPhone']);
+    }
+
+    private function fillCheckout(string $phone, string $name = 'Guest Buyer'): Testable
     {
         $product = Product::where('slug', 'luxury-press-on-fake-nails-set')->firstOrFail();
         $cart = app(CartSessionService::class);
@@ -55,133 +191,46 @@ class GuestCheckoutIdentityTest extends TestCase
             ->set('city', 'Chittagong')
             ->set('postalCode', '4100')
             ->set('deliveryZone', 'outside_dhaka')
-            ->set('selectedPaymentMethodId', PaymentMethod::where('slug', 'cod')->value('id'))
-            ->call('placeOrder');
+            ->set('selectedPaymentMethodId', PaymentMethod::where('slug', 'cod')->value('id'));
     }
 
-    public function test_guest_checkout_does_not_create_login_with_known_password(): void
+    private function registerWithPhone(string $phone): Testable
     {
-        $this->placeGuestOrder('01899001199');
-
-        $guest = Order::latest('id')->firstOrFail()->customer;
-        $this->assertSame('8801899001199', $guest->phone);
-        $this->assertFalse(Hash::check('password', $guest->password), 'Guest account has the known password "password"');
-        $this->assertStringEndsWith('@guest.b2bhaat.invalid', $guest->email);
-    }
-
-    public function test_two_guests_in_same_second_get_distinct_accounts(): void
-    {
-        $this->travelTo(now()->startOfSecond());
-        $this->placeGuestOrder('01899001199', 'First Guest');
-        $this->placeGuestOrder('01899001188', 'Second Guest');
-
-        $this->assertCount(2, $this->newOrders());
-        $this->assertCount(2, $this->newOrders()->pluck('customer_id')->unique());
-    }
-
-    public function test_returning_guest_phone_reuses_existing_user_without_error(): void
-    {
-        $this->placeGuestOrder('01899001199');
-        $this->placeGuestOrder('+8801899001199')->assertSet('errorMessage', '');
-
-        $this->assertCount(2, $this->newOrders());
-        $this->assertCount(1, $this->newOrders()->pluck('customer_id')->unique());
-    }
-
-    public function test_guest_phone_matching_seller_account_is_refused(): void
-    {
-        $seller = User::whereHas('role', fn ($q) => $q->where('slug', 'seller'))->firstOrFail();
-
-        $this->placeGuestOrder((string) $seller->phone)
-            ->assertSet('errorMessage', 'This phone belongs to a registered account. Please sign in to order.');
-
-        $this->assertFalse(Order::where('customer_id', $seller->id)->exists());
-    }
-
-    public function test_guest_phone_matching_registered_retail_account_is_refused(): void
-    {
-        $customer = User::where('email', 'customer@retail.com')->firstOrFail();
-        $customer->update(['phone' => '8801899001177']);
-
-        $this->placeGuestOrder('01899001177')
-            ->assertSet('errorMessage', 'This phone belongs to a registered account. Please sign in to order.');
-
-        $this->assertFalse(Order::where('customer_id', $customer->id)->where('id', '>', $this->existingOrderId)->exists());
-    }
-
-    public function test_guest_who_registers_later_takes_over_the_guest_account_and_keeps_orders(): void
-    {
-        $this->placeGuestOrder('01899001199');
-        $guest = Order::latest('id')->firstOrFail()->customer;
-
-        $this->fillRegistration(Livewire::test(CustomerAuth::class, ['tab' => 'register']))
+        $this->fillRegistration(Livewire::test(CustomerAuth::class, ['tab' => 'register']), $phone)
             ->call('register')
             ->assertHasNoErrors()
             ->assertSet('step', 'otp_verification');
 
-        $this->fillRegistration(Livewire::test(CustomerAuth::class, ['tab' => 'register']))
+        return $this->fillRegistration(Livewire::test(CustomerAuth::class, ['tab' => 'register']), $phone)
             ->set('step', 'otp_verification')
-            ->set('otpCode', $this->lastSentOtpCode())
-            ->call('completeRegistration')
-            ->assertSet('errorMessage', '')
-            ->assertRedirect(route('customer.orders'));
-
-        $guest->refresh();
-        $this->assertSame($guest->id, auth()->id());
-        $this->assertSame('rahim@b2bhaat-test.com', $guest->email);
-        $this->assertSame('Rahim Chowdhury', $guest->name);
-        $this->assertTrue(Hash::check('SecretPass123!', $guest->password));
-        $this->assertNotNull($guest->phone_verified_at);
-        $this->assertSame(1, User::wherePhone('8801899001199')->count());
-        $this->assertTrue(Order::where('customer_id', $guest->id)->exists());
+            ->set('otpCode', $this->lastSentSmsCode())
+            ->call('completeRegistration');
     }
 
-    public function test_registering_with_phone_of_a_registered_account_is_still_refused(): void
-    {
-        User::where('email', 'customer@retail.com')->firstOrFail()->update(['phone' => '8801899001199']);
-
-        $this->fillRegistration(Livewire::test(CustomerAuth::class, ['tab' => 'register']))
-            ->call('register')
-            ->assertHasErrors(['registerPhone']);
-    }
-
-    public function test_guest_account_signed_in_by_otp_is_no_longer_open_to_guest_orders(): void
-    {
-        $this->placeGuestOrder('01899001199');
-
-        Livewire::test(CustomerAuth::class)
-            ->set('otpPhone', '01899001199')
-            ->call('sendLoginOtp');
-
-        Livewire::test(CustomerAuth::class)
-            ->set('otpPhone', '01899001199')
-            ->set('otpCode', $this->lastSentOtpCode())
-            ->call('verifyLoginOtp')
-            ->assertRedirect(route('customer.orders'));
-
-        $this->assertNotNull(User::wherePhone('8801899001199')->value('phone_verified_at'));
-
-        auth()->logout();
-        $this->placeGuestOrder('01899001199')
-            ->assertSet('errorMessage', 'This phone belongs to a registered account. Please sign in to order.');
-    }
-
-    private function fillRegistration(Testable $component): Testable
+    private function fillRegistration(Testable $component, string $phone = '01899001199'): Testable
     {
         return $component
             ->set('registerName', 'Rahim Chowdhury')
-            ->set('registerPhone', '01899001199')
+            ->set('registerPhone', $phone)
             ->set('registerEmail', 'rahim@b2bhaat-test.com')
             ->set('registerPassword', 'SecretPass123!')
             ->set('registerPasswordConfirmation', 'SecretPass123!')
             ->set('agreeTerms', true);
     }
 
-    private function lastSentOtpCode(): string
+    /**
+     * @return Collection<int, Order>
+     */
+    private function newOrders(): Collection
     {
-        $sent = app(SmsGatewayInterface::class)->sentMessages;
-        preg_match('/\b(\d{6})\b/', (string) end($sent)['message'], $matches);
+        return Order::where('id', '>', $this->existingOrderId)->get();
+    }
 
-        return $matches[1] ?? '';
+    /**
+     * @return array<int, array{to: string, message: string, purpose: ?string}>
+     */
+    private function sentSms(): array
+    {
+        return app(SmsGatewayInterface::class)->sentMessages;
     }
 }

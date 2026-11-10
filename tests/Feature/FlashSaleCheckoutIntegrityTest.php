@@ -341,15 +341,14 @@ class FlashSaleCheckoutIntegrityTest extends TestCase
 
     private function checkout(string $phone): Testable
     {
-        return Livewire::test(CheckoutComponent::class)
+        return $this->placeOrderConfirmingPhone(Livewire::test(CheckoutComponent::class)
             ->set('recipientName', 'Flash Buyer')
             ->set('recipientPhone', $phone)
             ->set('streetAddress', 'Road 3, CDA Avenue')
             ->set('city', 'Chittagong')
             ->set('postalCode', '4100')
             ->set('deliveryZone', 'outside_dhaka')
-            ->set('selectedPaymentMethodId', PaymentMethod::where('slug', 'cod')->value('id'))
-            ->call('placeOrder');
+            ->set('selectedPaymentMethodId', PaymentMethod::where('slug', 'cod')->value('id')));
     }
 
     /**

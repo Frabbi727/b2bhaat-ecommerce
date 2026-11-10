@@ -117,12 +117,11 @@ class PlainLanguageCheckoutTest extends TestCase
     // Simpler checkout
     public function test_order_can_be_placed_without_a_postal_code_and_with_a_district_from_the_list(): void
     {
-        $checkout = $this->fillAddress(Livewire::test(CheckoutComponent::class))
+        $checkout = $this->placeOrderConfirmingPhone($this->fillAddress(Livewire::test(CheckoutComponent::class))
             ->set('city', 'Rajshahi')
             ->set('postalCode', '')
             ->assertSet('deliveryZone', 'outside_dhaka')
-            ->set('selectedPaymentMethodId', PaymentMethod::where('slug', 'cod')->value('id'))
-            ->call('placeOrder')
+            ->set('selectedPaymentMethodId', PaymentMethod::where('slug', 'cod')->value('id')))
             ->assertHasNoErrors();
 
         $order = Order::latest('id')->firstOrFail();
@@ -132,11 +131,10 @@ class PlainLanguageCheckoutTest extends TestCase
 
     public function test_old_district_spellings_are_accepted_and_saved_with_the_official_name(): void
     {
-        $this->fillAddress(Livewire::test(CheckoutComponent::class))
+        $this->placeOrderConfirmingPhone($this->fillAddress(Livewire::test(CheckoutComponent::class))
             ->set('city', 'Chittagong')
             ->set('deliveryZone', 'outside_dhaka')
-            ->set('selectedPaymentMethodId', PaymentMethod::where('slug', 'cod')->value('id'))
-            ->call('placeOrder')
+            ->set('selectedPaymentMethodId', PaymentMethod::where('slug', 'cod')->value('id')))
             ->assertHasNoErrors();
 
         $this->assertSame('Chattogram', Order::latest('id')->firstOrFail()->shipping_address['city']);

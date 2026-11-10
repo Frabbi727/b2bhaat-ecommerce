@@ -23,6 +23,10 @@ use App\Services\Logistics\ShippingCalculatorService;
 use App\Services\Orders\OrderSplitterService;
 use App\Services\Settings\StoreConfigurationService;
 use App\Services\Sms\OrderNotificationService;
+use App\Services\Sms\OtpService;
+use App\Services\Sms\Support\OtpMessages;
+use App\Services\Sms\Support\PhoneNormalizer;
+use DomainException;
 use Exception;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Auth;
@@ -70,6 +74,16 @@ class CheckoutComponent extends Component
     public string $couponError = '';
 
     public string $errorMessage = '';
+
+    /** A shopper without an account confirms their phone with an SMS code before the order is placed. */
+    public bool $awaitingPhoneCode = false;
+
+    public string $phoneCode = '';
+
+    public string $phoneCodeNotice = '';
+
+    /** The phone the code was sent to is kept on the server, where the shopper cannot change it. */
+    private const VERIFYING_PHONE_SESSION_KEY = 'checkout.verifying_phone';
 
     public function mount(): void
     {
@@ -202,6 +216,13 @@ class CheckoutComponent extends Component
 
     public function placeOrder(): void
     {
+        // Pressing Enter in the code box submits the form: treat it as confirming the code
+        if ($this->awaitingPhoneCode && ! Auth::check()) {
+            $this->confirmPhoneCode();
+
+            return;
+        }
+
         $this->errorMessage = '';
 
         $this->validate([
@@ -319,9 +340,15 @@ class CheckoutComponent extends Component
             return;
         }
 
+        // 4. A shopper without an account confirms their phone by SMS code before anything is reserved
+        if (! Auth::check()) {
+            $this->sendPhoneCode();
+
+            return;
+        }
+
         try {
-            // Determine customer
-            $customer = app(ResolveCheckoutCustomer::class)->handle(Auth::user(), $this->recipientName, $this->recipientPhone);
+            $customer = Auth::user();
 
             $shippingFee = $this->getShippingFee();
             $appliedCoupon = $this->appliedCoupon ?? $cart->getCoupon();
@@ -495,6 +522,94 @@ class CheckoutComponent extends Component
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
         }
+    }
+
+    public function resendPhoneCode(): void
+    {
+        $this->sendPhoneCode();
+    }
+
+    public function changePhoneNumber(): void
+    {
+        $this->resetPhoneCodeStep();
+    }
+
+    /**
+     * Check the SMS code, sign the shopper in to the account for that phone (made if new), then place the order.
+     */
+    public function confirmPhoneCode(): void
+    {
+        $this->errorMessage = '';
+        $this->phoneCodeNotice = '';
+
+        $this->validate(['phoneCode' => 'required|string|min:4|max:8'], ['phoneCode.required' => 'Enter the code we sent by SMS.']);
+
+        $phone = (string) session(self::VERIFYING_PHONE_SESSION_KEY, '');
+        if ($phone === '' || ! PhoneNormalizer::isValid($this->recipientPhone) || PhoneNormalizer::normalize($this->recipientPhone) !== $phone) {
+            $this->resetPhoneCodeStep();
+            $this->errorMessage = 'The phone number changed. Please press Place order again to get a code for the new number.';
+
+            return;
+        }
+
+        $result = app(OtpService::class)->verify($phone, trim($this->phoneCode), 'checkout');
+        if (! $result['success']) {
+            $this->addError('phoneCode', OtpMessages::verifyFailure($result));
+
+            return;
+        }
+
+        try {
+            $customer = app(ResolveCheckoutCustomer::class)->forConfirmedPhone(trim($this->recipientName), $phone);
+        } catch (DomainException $exception) {
+            $this->resetPhoneCodeStep();
+            $this->errorMessage = $exception->getMessage();
+
+            return;
+        }
+
+        Auth::login($customer, true);
+        if (request()->hasSession()) {
+            request()->session()->regenerate();
+        }
+
+        $this->resetPhoneCodeStep();
+        $this->placeOrder();
+    }
+
+    private function sendPhoneCode(): void
+    {
+        $phone = PhoneNormalizer::normalize($this->recipientPhone);
+
+        try {
+            app(ResolveCheckoutCustomer::class)->ensureMayConfirmByPhone($phone);
+        } catch (DomainException $exception) {
+            $this->errorMessage = $exception->getMessage();
+
+            return;
+        }
+
+        $result = app(OtpService::class)->sendOtp($phone, 'checkout');
+        if (! $result['success']) {
+            $this->errorMessage = OtpMessages::sendFailure($result);
+
+            return;
+        }
+
+        session()->put(self::VERIFYING_PHONE_SESSION_KEY, $phone);
+        $this->awaitingPhoneCode = true;
+        $this->phoneCode = '';
+        $this->resetErrorBag('phoneCode');
+        $this->phoneCodeNotice = "We sent a code by SMS to {$this->recipientPhone}. Enter it to place your order.";
+    }
+
+    private function resetPhoneCodeStep(): void
+    {
+        session()->forget(self::VERIFYING_PHONE_SESSION_KEY);
+        $this->awaitingPhoneCode = false;
+        $this->phoneCode = '';
+        $this->phoneCodeNotice = '';
+        $this->resetErrorBag('phoneCode');
     }
 
     private static function trxIdUsedMessage(string $gatewayName): string

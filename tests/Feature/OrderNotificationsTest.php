@@ -75,7 +75,7 @@ class OrderNotificationsTest extends TestCase
             $checkout->set('mfsSenderNumber', '01711223344')->set('mfsTransactionId', 'TRX12345AB');
         }
 
-        $checkout->call('placeOrder')->assertHasNoErrors();
+        $this->placeOrderConfirmingPhone($checkout)->assertHasNoErrors();
     }
 
     // Buyer: one SMS per parcel step that matters

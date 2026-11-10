@@ -2,9 +2,14 @@
 
 namespace Tests;
 
+use App\Jobs\SendSmsJob;
 use App\Models\Product;
+use App\Services\Sms\Contracts\SmsGatewayInterface;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Testing\Fakes\QueueFake;
 use Illuminate\Testing\TestResponse;
+use Livewire\Features\SupportTesting\Testable;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -37,6 +42,37 @@ abstract class TestCase extends BaseTestCase
             'CONTENT_TYPE' => 'application/json',
             'HTTP_ACCEPT' => 'application/json',
         ] + $headers, $body);
+    }
+
+    /**
+     * Press Place order and, when a shopper without an account is asked for the SMS code, enter it.
+     */
+    protected function placeOrderConfirmingPhone(Testable $checkout): Testable
+    {
+        $checkout->call('placeOrder');
+
+        if ($checkout->get('awaitingPhoneCode')) {
+            $checkout->set('phoneCode', $this->lastSentSmsCode())->call('confirmPhoneCode');
+        }
+
+        return $checkout;
+    }
+
+    /**
+     * The 6-digit code in the last SMS sent: from the queued job when the queue is faked, otherwise from the mock gateway.
+     */
+    protected function lastSentSmsCode(): string
+    {
+        if (Queue::getFacadeRoot() instanceof QueueFake) {
+            $message = Queue::pushed(SendSmsJob::class)->last()?->message;
+        } else {
+            $sent = app(SmsGatewayInterface::class)->sentMessages;
+            $message = end($sent)['message'] ?? null;
+        }
+
+        preg_match('/\b(\d{6})\b/', (string) $message, $matches);
+
+        return $matches[1] ?? '';
     }
 
     /**
