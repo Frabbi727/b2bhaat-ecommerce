@@ -134,12 +134,13 @@ class PaymentVerificationService
                 ->map(fn ($item) => ['variation_id' => $item->variation_id, 'quantity' => $item->quantity])
                 ->values()
                 ->all();
+            // The flash-sale units this order claimed are free for other buyers again. Offers before stock rows,
+            // the order checkout locks them in, so the two can't deadlock (review R-5)
+            app(FlashSaleAllocationService::class)->release($subOrder->items);
+
             if ($stockItems !== []) {
                 $this->stockReservationService->releaseStock($stockItems);
             }
-
-            // The flash-sale units this order claimed are free for other buyers again.
-            app(FlashSaleAllocationService::class)->release($subOrder->items);
 
             $subOrder->update(['fulfillment_status_id' => $cancelled->id]);
 

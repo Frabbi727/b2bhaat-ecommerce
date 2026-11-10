@@ -295,10 +295,11 @@ class OrderDisputeService
                         }
                     }
 
+                    // Offers before stock rows, as checkout locks them (review R-5)
+                    app(FlashSaleAllocationService::class)->release($returnRequest->subOrder->items);
                     if (! empty($stockItems)) {
                         $this->stockReservationService->releaseStock($stockItems);
                     }
-                    app(FlashSaleAllocationService::class)->release($returnRequest->subOrder->items);
 
                     // 3. Create tracking timeline log
                     OrderTrackingLog::create([

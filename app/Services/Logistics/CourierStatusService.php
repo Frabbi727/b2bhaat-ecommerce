@@ -191,10 +191,11 @@ class CourierStatusService
             }
         }
 
+        // Offers before stock rows, as checkout locks them (review R-5)
+        app(FlashSaleAllocationService::class)->release($subOrder->items);
         if (! empty($stockItems)) {
             $this->stockReservationService->releaseStock($stockItems);
         }
-        app(FlashSaleAllocationService::class)->release($subOrder->items);
 
         // 2. Undo the seller side: refund the hold, or reverse an already released credit
         $this->escrowLedgerService->reverseReturnedSubOrder($subOrder, 'Returned to origin (RTO) by courier service');

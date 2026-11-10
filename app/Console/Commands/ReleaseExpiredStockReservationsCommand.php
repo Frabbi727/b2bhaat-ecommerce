@@ -104,10 +104,11 @@ class ReleaseExpiredStockReservationsCommand extends Command
                         }
                     }
 
+                    // Offers before stock rows, as checkout locks them (review R-5)
+                    $flashSales->release($subOrder->items);
                     if (! empty($stockItems)) {
                         $stockService->releaseStock($stockItems);
                     }
-                    $flashSales->release($subOrder->items);
 
                     $subOrder->update([
                         'fulfillment_status_id' => $cancelledFulfillmentStatus->id,

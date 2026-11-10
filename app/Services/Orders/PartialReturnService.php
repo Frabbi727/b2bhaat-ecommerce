@@ -281,11 +281,12 @@ class PartialReturnService
             $returnedItems[] = $returned;
         }
 
+        // Offers before stock rows, as checkout locks them (review R-5)
+        app(FlashSaleAllocationService::class)->release($returnedItems);
+
         if ($stock !== []) {
             $this->stockReservationService->releaseStock($stock);
         }
-
-        app(FlashSaleAllocationService::class)->release($returnedItems);
     }
 
     /**
