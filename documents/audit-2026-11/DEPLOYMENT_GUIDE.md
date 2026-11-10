@@ -262,3 +262,7 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## INV-10 (import option names)
 - Code only. **Behaviour change for sellers:** a product sheet that uses an option name the admin hasn't created (Admin → Attributes) is refused for that product, with the list of valid names.
+
+## INV-6 (rising tiers)
+- Code only; existing prices are not changed. Optional read-only check for products that would now fail validation the next time they are edited:
+  `select a.product_id, a.min_quantity, a.unit_price, b.min_quantity, b.unit_price from product_prices a join product_prices b on b.product_id = a.product_id and b.sales_channel_id = a.sales_channel_id and coalesce(b.variation_id,0) = coalesce(a.variation_id,0) and b.min_quantity > a.min_quantity and b.unit_price > a.unit_price;`

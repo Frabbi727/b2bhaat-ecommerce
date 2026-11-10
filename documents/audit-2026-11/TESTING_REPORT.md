@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1461 tests, 1452 passed, 9 skipped, 6666 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1462 tests, 1453 passed, 9 skipped, 6669 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -112,6 +112,7 @@ The existing tests of other features were touched only to give their test produc
 | SEC-8 | `tests/Feature/TokenLinkExpiryTest.php` (3) | Links work inside the window; an old tracking link no longer opens the order; an old invoice link returns 410 while the signed-in buyer still sees it |
 | INV-9 | `tests/Feature/ProductFeaturingTest.php` (2) | Seller form has no feature field and a forged value is ignored; `update()` can't set it; admin features and unfeatures |
 | INV-10 | `tests/Feature/ProductBulkImportTest.php` (+1, 1 updated) | A sheet with "Shape" is refused with a clear row error and no attribute or product is created; existing option names still work and a new value is added once |
+| INV-6 | `tests/Feature/Catalog/PriceSetTest.php` (+1), `ProductBulkImportTest.php` (1 extended) | 50–99 @ ৳85 then 100+ @ ৳110 is refused with a plain message in the form and the importer; falling and equal tiers pass |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
