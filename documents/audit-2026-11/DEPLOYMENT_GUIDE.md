@@ -290,3 +290,6 @@ Users with role `admin` count as catalog reviewers, but the admin panel admits o
 
 ## ACC-17 (reconciliation coverage)
 - Code and Blade only. After deploy, run the Reconciliation page once. If Courier COD Receivable shows a variance, compare the unsettled-parcels list on the courier settlement screen with journals that touched account 1040 (for example ACC-1 reclassification or manual journals). A negative Payment Gateway Clearing means more was booked as leaving a gateway than arriving: check gateway transfers and MFS refunds.
+
+## ACC-18 (statements and cash flow)
+- Code and Blade only; a new admin page "Cash Flow Statement" appears under Accounting. If its closing cash differs from the bank statement, the gap is usually gateway or courier money not yet settled (ACC-7) or bank charges not yet booked.
