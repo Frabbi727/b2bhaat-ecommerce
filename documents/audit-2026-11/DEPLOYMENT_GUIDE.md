@@ -441,3 +441,7 @@ MON-13 adds one migration, `add_commission_rate_to_order_items_table` (a nullabl
 - Rollback drops the index only.
 
 UX-7 changes Blade views and Tailwind classes: run `npm ci && npm run build` (already in the deploy steps). No migration.
+
+## Owner items 7 and 8 (behaviour change, tell sellers)
+- Sellers whose COD commission bill is unpaid more than the grace days after its due date are now suspended automatically by the nightly `monetization:bill-cod-deficits` run; paying restores them. Before the first run after deploy, check `SELECT id, seller_id, invoice_number, due_date FROM seller_invoices WHERE invoice_type = 'cod_commission_deficit' AND status = 'unpaid' ORDER BY due_date;` and warn those sellers.
+- On a self-collected COD return the buyer is now refunded by B2Bhaat through the refund queue and the amount is taken from the seller's balance. Earlier self-collected returns are not changed.

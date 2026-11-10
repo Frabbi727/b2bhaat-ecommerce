@@ -91,12 +91,12 @@ All findings come from reading the code; every one cites file:line. Status value
 ## P2 (Wave 2)
 | ID | Title (evidence) | Solution summary | Status |
 |---|---|---|---|
-| MON-11 | Listing-pack purchase, COD-deficit invoice and seller TrxID submission are missing | Build the missing flows | Fixed (90ea25b, 5ad3b30, 702e351); deficit bills do not suspend (owner question) |
+| MON-11 | Listing-pack purchase, COD-deficit invoice and seller TrxID submission are missing | Build the missing flows | Fixed (90ea25b, 5ad3b30, 702e351, 656a656); owner item 7: an overdue deficit bill suspends the store |
 | MON-12 | Delinquent sellers can withdraw; flash-sale submissions ignore suspension (`EscrowLedgerService.php:262`) | Block payouts while invoices are overdue | Fixed (`5193504`) |
 | ORD-2 | Dispatch, self-delivery and booking write status without `canTransition` | Go through `CourierStatusService` with a lock | Fixed (`ffbf60a`) |
 | ORD-3 | Checkout post-split steps are not atomic; coupon limit can be exceeded (`CouponService.php:80`) | Move them inside the transaction; lock the coupon | Fixed (`49d39df`) |
 | ORD-4 | Splitter doesn't re-check seller suspension | Check `sellable` inside the transaction | Already handled (test added in `49d39df`): `Product::sellable()` inside the order transaction refuses a suspended seller's items |
-| PAY-4 | Refunds are whole sub-order only | Line-level partial refunds | Fixed (f6c223c). Owner rules 2026-11-10 applied; the self-collected COD refund gap is now an owner question |
+| PAY-4 | Refunds are whole sub-order only | Line-level partial refunds | Fixed (f6c223c, daa2118). Owner rules 2026-11-10 applied; owner item 8: B2Bhaat refunds the buyer on self-collected COD returns and charges the seller |
 | FS-1 / INV-7 | Flash `units_sold` not returned on reject, expiry or return; expiry job can release twice | Central release helper; lock and re-check | Fixed (`d5b7dea`); payment rejection and PAY-2 expiry were already fixed in 4787c36 |
 | FS-2 | Admin approve bypasses the conflict checker | Approve through the service | Fixed (719e111) |
 | ACC-2 | Mock gateway marks orders paid with no journal (local/testing only) | Post the journal; never seed it as active | Fixed (115060d) |
@@ -161,5 +161,5 @@ All findings come from reading the code; every one cites file:line. Status value
 - Statutory retention period for financial and audit records.
 - Deferral of subscription revenue.
 - Who bears the courier cost on COD orders.
-- Whether an unpaid COD commission deficit bill (MON-11) should put the seller into grace and suspension, like an unpaid subscription bill. Today it does not.
-- Self-collected COD returns, found while fixing PAY-4: the seller kept the buyer's cash, so the platform owes the buyer nothing in its books. Returns give the seller back the commission charge, and a refund row is raised only if the order shows as paid. Who pays the buyer back (the seller directly, or the platform after taking it from the seller), and how that is recorded, is not decided. This is unchanged from whole-parcel returns.
+- ~~Whether an unpaid COD commission deficit bill (MON-11) should suspend the seller.~~ Decided 2026-11-10: yes, after the grace days past its due date (656a656).
+- ~~Who pays the buyer back on a self-collected COD return.~~ Decided 2026-11-10: B2Bhaat refunds the buyer through the refund queue and takes it from the seller's balance (daa2118).
