@@ -62,7 +62,7 @@ The existing tests of other features were touched only to give their test produc
 
 # Testing Report: Wave 1
 
-**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1523 tests, 1511 passed, 9 skipped, 6895 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
+**Full suite:** `php -d memory_limit=-1 vendor/bin/phpunit` gives **1525 tests, 1516 passed, 9 skipped, 6941 assertions** (2026-11-09, branch `fix/audit-wave-1`). The 9 skipped tests are the PostgreSQL-only journal guards, the M-1 lock-order test and the M-7 index rebuild test; they were run separately on PostgreSQL (below).
 
 | Issue | Test file | What is proven |
 |---|---|---|
@@ -134,6 +134,7 @@ The existing tests of other features were touched only to give their test produc
 | UX-1 | `tests/Feature/TakaFormattingTest.php` (3) | The formatter handles amounts, zero, negatives and empty values; the admin order list shows ৳ and not "BDT"; no Filament file uses `->money('BDT')` or a (Tk) label. `FilamentSmsManagementTest` now expects ৳420.75 |
 | UX-4 | `tests/Feature/DestructiveActionConfirmationTest.php` (2) | The flash sale pause action on the list and edit pages and the seller's bulk hide action all require confirmation |
 | UX-2 | `tests/Feature/SellerPlainWordingTest.php` (2) | The seller dashboard, statement, wallet, orders list, printed statement, shipping label and challan show none of: escrow, sub-order, consignment, ledger. Wording assertions in `SellerAccountStatementTest`, `WalletStatementTest`, `FilamentPanelsSmokeTest` and `ShippingLabelTest` were updated to the new text |
+| UX-3 | `tests/Feature/PanelNavigationTest.php` (2) | Every navigation group in both panels is declared in its panel and no two items in a group share a position. Billing, plans, wholesale quotes, cash flow and the seller activity log are in the agreed groups |
 
 **PostgreSQL check (AUD-2):** on a throwaway local database, direct `UPDATE`, `DELETE` and `TRUNCATE` on `audit_logs` were all refused with "Audit records cannot be changed or deleted."; `audit:prune --force` removed the 400-day-old routine row, kept the finance row, and logged its own run.
 
