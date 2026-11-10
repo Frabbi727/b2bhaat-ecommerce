@@ -137,3 +137,4 @@ MON-13 hard-coded rates and rate not stored · ORD-5 mock journal · PAY-5 float
 - Statutory retention period for financial and audit records.
 - Deferral of subscription revenue.
 - Who bears the courier cost on COD orders.
+- Whether an unpaid COD commission deficit bill (MON-11) should put the seller into grace and suspension, like an unpaid subscription bill. Today it does not.
