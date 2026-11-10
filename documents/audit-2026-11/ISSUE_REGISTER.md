@@ -132,7 +132,7 @@ All findings come from reading the code; every one cites file:line. Status value
 ## P3 (Wave 3)
 | ID | Title | Status |
 |---|---|---|
-| MON-13 | Hard-coded rates; the rate used is not stored | Open |
+| MON-13 | Hard-coded rates; the rate used is not stored | Open | Fixed (27eeeeb) |
 | ORD-5 | Mock payment path posts no journal | Open |
 | PAY-5 | Money handled as floats | Open | Fixed (bf42207) |
 | PAY-6 | Missing locks; stock rows locked in no fixed order | Open | Fixed (845a999) |
