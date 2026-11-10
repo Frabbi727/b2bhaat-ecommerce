@@ -181,6 +181,10 @@ class FlashSalesTable
                     ->label('Pause')
                     ->color('warning')
                     ->visible(fn (FlashSale $record): bool => in_array($record->effectiveStatus(), [FlashSaleStatus::Scheduled, FlashSaleStatus::Active], true) && $record->status !== FlashSaleStatus::Paused)
+                    ->requiresConfirmation()
+                    ->modalHeading('Pause this flash sale?')
+                    ->modalDescription('Flash prices stop straight away and buyers see normal prices until you resume it.')
+                    ->modalSubmitActionLabel('Pause sale')
                     ->action(function (FlashSale $record) use ($service): void {
                         try {
                             $service->pause($record);

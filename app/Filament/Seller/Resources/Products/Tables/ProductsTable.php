@@ -247,6 +247,10 @@ class ProductsTable
                     BulkAction::make('hide')
                         ->label('Hide from storefront')
                         ->icon(Heroicon::OutlinedEyeSlash)
+                        ->requiresConfirmation()
+                        ->modalHeading('Hide the selected products?')
+                        ->modalDescription('Buyers will not see them or be able to order them until you show them again.')
+                        ->modalSubmitActionLabel('Hide products')
                         ->action(fn (Collection $records) => self::setVisibility($records, false))
                         ->deselectRecordsAfterCompletion(),
 
