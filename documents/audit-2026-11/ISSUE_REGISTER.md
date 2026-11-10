@@ -130,7 +130,19 @@ All findings come from reading the code; every one cites file:line. Status value
 | UX-1 to UX-4, UX-6 | Currency formats; jargon; navigation; confirmations; mobile layout | UI consistency pass | Fixed: UX-1 (38c3683), UX-4 (035e11b), UX-2 (67d677b), UX-3 (fbc3b93), UX-6 (3a156d3) |
 
 ## P3 (Wave 3)
-MON-13 hard-coded rates and rate not stored · ORD-5 mock journal · PAY-5 float money · PAY-6 missing locks and unsorted stock locks · FS-3 claim doesn't verify offer ↔ product · ACC-20 chart-of-accounts guards are UI-only · ACC-21 idempotency ignores the payload · UX-ACC-4 and UX-ACC-5 journal display and format consistency · INV-11 product SKU uniqueness · SEC-11 webhook replay · UX-7 MOQ shown only at checkout.
+| ID | Title | Status |
+|---|---|---|
+| MON-13 | Hard-coded rates; the rate used is not stored | Open |
+| ORD-5 | Mock payment path posts no journal | Open |
+| PAY-5 | Money handled as floats | Open |
+| PAY-6 | Missing locks; stock rows locked in no fixed order | Open |
+| FS-3 | Flash claim doesn't check the offer belongs to the product | Open |
+| ACC-20 | Chart-of-accounts guards are UI-only | Open |
+| ACC-21 | Journal idempotency ignores the payload | Open |
+| UX-ACC-4 / UX-ACC-5 | Journal display and format consistency | Open |
+| INV-11 | Product SKU uniqueness | Open |
+| SEC-11 | Courier webhook replay | Open | Fixed (0fb505f) |
+| UX-7 | MOQ shown only at checkout | Open |
 
 ## Needs owner or legal validation
 - VAT and BIN on B2B invoices.
