@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\Escrow;
 
+use App\Enums\Accounting\AccountingEvent;
+use App\Enums\Accounting\JournalEntryStatus;
 use App\Events\Finance\PayoutStatusUpdatedEvent;
+use App\Models\Accounting\AccountingJournalEntry;
 use App\Models\SellerInvoice;
 use App\Models\SellerWallet;
 use App\Models\SubOrder;
@@ -13,9 +16,11 @@ use App\Models\WalletTransaction;
 use App\Services\Accounting\EventPipeline\EscrowReleaseJournalHandler;
 use App\Services\Accounting\EventPipeline\PayoutJournalHandler;
 use App\Services\Accounting\EventPipeline\RefundJournalHandler;
+use App\Services\Accounting\SettlementService;
 use App\Services\Settings\StoreConfigurationService;
 use DomainException;
 use Exception;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -333,7 +338,9 @@ class EscrowLedgerService
             throw new Exception('A transaction ID is required to disburse a payout.');
         }
 
-        DB::transaction(function () use ($payout, $trxId, $channel): void {
+        // UX-ACC-3: one transfer reference settles one payout per channel; the lock stops two admins racing
+        Cache::lock('payout-disbursement', 15)->block(10, fn () => DB::transaction(function () use ($payout, $trxId, $channel): void {
+            $this->assertTrxIdUnused($trxId, $channel);
             $locked = $this->lockPendingPayout($payout);
 
             $locked->update([
@@ -350,7 +357,26 @@ class EscrowLedgerService
                     Log::warning('Payout disbursed email event failed: '.$e->getMessage());
                 }
             });
-        });
+        }));
+    }
+
+    /**
+     * @throws Exception
+     */
+    private function assertTrxIdUnused(string $trxId, string $channel): void
+    {
+        $key = SettlementService::referenceKey($trxId);
+
+        $existing = AccountingJournalEntry::query()
+            ->where('financial_event', AccountingEvent::PAYOUT_DISBURSED->value)
+            ->where('status', JournalEntryStatus::POSTED)
+            ->where('metadata->channel', $channel)
+            ->where(fn ($query) => $query->where('metadata->trx_key', $key)->orWhere('metadata->trx_id', $trxId))
+            ->first();
+
+        if ($existing !== null) {
+            throw new Exception("TrxID {$trxId} was already used for payout #{$existing->reference_id} ({$existing->journal_number}). Check the transfer and enter its own TrxID.");
+        }
     }
 
     /**

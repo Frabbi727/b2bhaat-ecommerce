@@ -147,6 +147,26 @@ class EscrowLedgerPayoutIntegrationTest extends TestCase
         $this->assertSame($this->seller->id, $creditLine->seller_id);
     }
 
+    public function test_the_same_payout_trxid_cannot_mark_two_payouts_paid(): void
+    {
+        // UX-ACC-3: one transfer can't settle two payouts (e.g. a pasted TrxID)
+        $first = $this->escrowLedger->requestPayout($this->seller, 1000.00);
+        $second = $this->escrowLedger->requestPayout($this->seller, 1000.00);
+        $this->escrowLedger->disbursePayout($first, 'BK-PAY-77', 'bkash');
+
+        try {
+            $this->escrowLedger->disbursePayout($second, 'bk pay 77', 'bkash');
+            $this->fail('A repeated payout TrxID must be refused.');
+        } catch (\Exception $e) {
+            $this->assertStringContainsString("payout #{$first->id}", $e->getMessage());
+        }
+
+        $this->assertSame(WalletTransaction::STATUS_REQUESTED, $second->fresh()->status);
+        // The same reference on a different channel is a different transfer
+        $this->escrowLedger->disbursePayout($second, 'BK-PAY-77', 'bank');
+        $this->assertSame(WalletTransaction::STATUS_DISBURSED, $second->fresh()->status);
+    }
+
     /**
      * Test 2: Calling disbursePayout() with bank channel generates a posted payout_disbursed journal
      * (Dr reserved_payout_payable / Cr bank_operating).

@@ -12,6 +12,7 @@ use App\Models\Accounting\AccountingAccount;
 use App\Models\Accounting\AccountingJournalEntry;
 use App\Models\WalletTransaction;
 use App\Services\Accounting\JournalPostingService;
+use App\Services\Accounting\SettlementService;
 use Illuminate\Support\Facades\Schema;
 
 class PayoutJournalHandler
@@ -132,6 +133,8 @@ class PayoutJournalHandler
                 'seller_id' => $sellerId,
                 'channel' => $channel,
                 'trx_id' => $trxId,
+                // UX-ACC-3: normalised for the duplicate check in EscrowLedgerService::disbursePayout
+                'trx_key' => $trxId !== null && $trxId !== '' ? SettlementService::referenceKey($trxId) : null,
             ]),
         );
 
