@@ -76,14 +76,14 @@ trait BuildsSellerBooksFixtures
         ]);
     }
 
-    protected function makeProduct(User $seller, string $title, float $buyPrice): Product
+    protected function makeProduct(User $seller, string $title, float $buyPrice, string $channel = SalesChannel::RETAIL): Product
     {
         $category = Category::firstOrCreate(['slug' => 'books-test'], ['name' => 'Books Test', 'is_active' => true]);
 
         return Product::create([
             'seller_id' => $seller->id,
             'category_id' => $category->id,
-            'sales_channel_id' => SalesChannel::where('slug', SalesChannel::RETAIL)->firstOrFail()->id,
+            'sales_channel_id' => SalesChannel::where('slug', $channel)->firstOrFail()->id,
             'unit_id' => Unit::where('symbol', 'pc')->firstOrFail()->id,
             'title' => $title,
             'slug' => Str::slug($title).'-'.Str::lower(Str::random(5)),
@@ -104,13 +104,14 @@ trait BuildsSellerBooksFixtures
         string $paymentMethod = 'bkash',
         string $paymentStatus = 'paid',
         string $fulfillment = 'delivered',
+        ?User $buyer = null,
     ): SubOrder {
         $subtotal = round(array_sum(array_map(fn (array $item): float => $item['unit_price'] * $item['quantity'], $items)), 2);
         $number = 'ORD-BOOKS-'.Str::upper(Str::random(6));
 
         $order = Order::create([
             'order_number' => $number,
-            'customer_id' => $this->makeBuyer()->id,
+            'customer_id' => ($buyer ?? $this->makeBuyer())->id,
             'order_status_id' => OrderStatus::where('slug', 'processing')->firstOrFail()->id,
             'payment_status_id' => PaymentStatus::where('slug', $paymentStatus)->firstOrFail()->id,
             'payment_method_id' => PaymentMethod::where('slug', $paymentMethod)->firstOrFail()->id,
