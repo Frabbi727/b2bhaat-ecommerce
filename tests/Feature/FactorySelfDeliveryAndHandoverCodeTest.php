@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class FactorySelfDeliveryAndHandoverCodeTest extends TestCase
@@ -164,6 +165,38 @@ class FactorySelfDeliveryAndHandoverCodeTest extends TestCase
 
         $this->subOrder->refresh();
         $this->assertEquals('delivered', $this->subOrder->fulfillmentStatus->slug);
+    }
+
+    /**
+     * @return array<string, array{0: callable(string): string}>
+     */
+    public static function codeAsSharedByTheBuyer(): array
+    {
+        $banglaDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+
+        return [
+            'copied from the page with spaces and line breaks' => [fn (string $code): string => "\n            {$code}\n        "],
+            'read out in two groups' => [fn (string $code): string => substr($code, 0, 3).' '.substr($code, 3)],
+            'typed on a Bangla keyboard' => [fn (string $code): string => strtr($code, array_combine(range(0, 9), $banglaDigits))],
+        ];
+    }
+
+    /**
+     * @param  callable(string): string  $asShared
+     */
+    #[DataProvider('codeAsSharedByTheBuyer')]
+    public function test_seller_can_confirm_the_code_however_the_buyer_shared_it(callable $asShared): void
+    {
+        $code = app(SelfDeliveryService::class)->dispatchSelfDelivery($this->subOrder);
+
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+        $this->actingAs($this->seller);
+
+        Livewire::test(ListSubOrders::class)
+            ->callTableAction('verifyHandoverCode', $this->subOrder, ['handover_code' => $asShared($code)])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame('delivered', $this->subOrder->fresh()->fulfillmentStatus->slug);
     }
 
     public function test_dispatch_texts_the_buyer_their_handover_code(): void

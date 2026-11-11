@@ -344,7 +344,12 @@ class SubOrdersTable
                         ->label('6-Digit Customer Handover Code')
                         ->placeholder('e.g. 849201')
                         ->required()
-                        ->length(6),
+                        // Checked on the digits only, so a pasted or spaced-out code still counts as 6 digits
+                        ->rule(fn (): \Closure => function (string $attribute, mixed $value, \Closure $fail): void {
+                            if (strlen(SelfDeliveryService::normalizeHandoverCode((string) $value)) !== 6) {
+                                $fail('Enter the 6-digit code the customer gave you.');
+                            }
+                        }),
                 ])
                 ->action(function (SubOrder $record, array $data): void {
                     try {

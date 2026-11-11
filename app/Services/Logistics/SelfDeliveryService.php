@@ -94,6 +94,20 @@ class SelfDeliveryService
     }
 
     /**
+     * The code as the buyer shared it, reduced to its digits: a copy from the tracking page brings spaces and line
+     * breaks, a code read out may be split "473 333", and a Bangla keyboard types ০-৯.
+     */
+    public static function normalizeHandoverCode(string $inputCode): string
+    {
+        $westernDigits = strtr($inputCode, array_combine(
+            ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'],
+            ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+        ));
+
+        return (string) preg_replace('/\D/', '', $westernDigits);
+    }
+
+    /**
      * Verify customer handover code upon physical receipt and mark delivered.
      *
      * @throws Exception
@@ -110,7 +124,7 @@ class SelfDeliveryService
             throw new Exception('Too many wrong handover codes for this consignment. Try again later or contact support.');
         }
 
-        if (! is_string($subOrder->handover_code) || ! hash_equals($subOrder->handover_code, trim($inputCode))) {
+        if (! is_string($subOrder->handover_code) || ! hash_equals($subOrder->handover_code, self::normalizeHandoverCode($inputCode))) {
             RateLimiter::hit($limiterKey, 3600);
 
             throw new Exception('Invalid Handover Code. Please ask the recipient for the 6-digit verification code shown on their tracking page.');
