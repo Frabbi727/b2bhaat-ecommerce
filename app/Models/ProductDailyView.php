@@ -27,7 +27,7 @@ class ProductDailyView extends Model
     protected function casts(): array
     {
         return [
-            'date' => 'date:Y-m-d',
+            // Kept as a plain Y-m-d string: a date cast would store a time too and break day comparisons on SQLite.
             'views' => 'integer',
         ];
     }
