@@ -9,6 +9,7 @@ use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\PromotionsAndStoreSettingsSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class ProductionUiUxSecurityTest extends TestCase
@@ -82,6 +83,31 @@ class ProductionUiUxSecurityTest extends TestCase
         foreach ($manifest['icons'] as $icon) {
             $this->assertFileExists(public_path(ltrim($icon['src'], '/')));
         }
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function brandedPageProvider(): array
+    {
+        return [
+            'storefront home' => ['/'],
+            'customer login' => ['/login'],
+            'order tracking' => ['/track'],
+            'flash sales' => ['/flash-sales'],
+            'become a seller' => ['/become-a-seller'],
+            'admin login' => ['/admin/login'],
+            'seller login' => ['/seller/login'],
+        ];
+    }
+
+    #[DataProvider('brandedPageProvider')]
+    public function test_page_shows_the_brand_favicon_and_logo(string $path): void
+    {
+        $this->get($path)
+            ->assertOk()
+            ->assertSee('favicon-32x32.png', false)
+            ->assertSee('images/brand/logo-mark.png', false);
     }
 
     public function test_error_page_links_the_brand_favicons(): void

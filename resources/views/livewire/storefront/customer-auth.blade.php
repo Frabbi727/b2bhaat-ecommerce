@@ -2,8 +2,8 @@
     <div class="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
         <!-- Brand Header Strip -->
         <div class="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white p-6 text-center space-y-2">
-            <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-indigo-600 text-white font-black text-xl shadow-lg mb-1">
-                B2B
+            <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-white p-1.5 shadow-lg mb-1">
+                <img src="{{ asset('images/brand/logo-mark.png') }}" alt="B2B Haat logo" width="44" height="44" class="w-full h-full object-contain">
             </div>
             <h1 class="text-xl sm:text-2xl font-black tracking-tight text-white">
                 {{ $mode === 'register' ? 'Join B2B Haat Marketplace' : 'Welcome Back' }}

@@ -225,6 +225,7 @@
 
             <div class="flex flex-col items-center justify-center">
                 <div class="w-16 h-16 rounded-full border-2 border-dashed border-indigo-300 text-indigo-400 flex flex-col items-center justify-center font-bold text-[8px] uppercase tracking-wider rotate-[-12deg]">
+                    <img src="{{ asset('images/brand/logo-mark.png') }}" alt="" width="20" height="20" class="w-5 h-5 object-contain">
                     <span>B2B Haat</span>
                     <span class="text-[7px]">Verified</span>
                 </div>
