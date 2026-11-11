@@ -4,13 +4,19 @@ namespace App\Services\Logistics;
 
 use App\Models\FulfillmentStatus;
 use App\Models\SubOrder;
+use App\Services\Sms\OrderNotificationService;
 use Exception;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
+use Throwable;
 
 class SelfDeliveryService
 {
     public const MAX_HANDOVER_ATTEMPTS = 5;
+
+    public const MAX_CODE_RESENDS = 3;
 
     public function __construct(
         protected CourierStatusService $courierStatusService
@@ -50,7 +56,41 @@ class SelfDeliveryService
             $hubLocation,
         );
 
+        DB::afterCommit(fn () => $this->textHandoverCode($subOrder));
+
         return $handoverCode;
+    }
+
+    /**
+     * Send the buyer their handover code again (lost SMS). Limited so the buyer's phone can't be flooded.
+     *
+     * @throws Exception when the parcel is not waiting for a handover or the limit is reached
+     */
+    public function resendHandoverCode(SubOrder $subOrder): void
+    {
+        if (! $subOrder->is_self_delivered || ! filled($subOrder->handover_code) || $subOrder->fulfillmentStatus?->slug === 'delivered') {
+            throw new Exception('This parcel is not waiting for a delivery code.');
+        }
+
+        $limiterKey = 'handover-code-resend:'.$subOrder->id;
+        if (RateLimiter::tooManyAttempts($limiterKey, self::MAX_CODE_RESENDS)) {
+            throw new Exception('The code was already sent '.self::MAX_CODE_RESENDS.' times in the last hour. Ask the buyer to open their tracking link, or try again later.');
+        }
+
+        RateLimiter::hit($limiterKey, 3600);
+
+        if (! app(OrderNotificationService::class)->sendHandoverCode($subOrder->fresh() ?? $subOrder)) {
+            throw new Exception('No valid phone number on this order, so the code could not be sent by SMS.');
+        }
+    }
+
+    private function textHandoverCode(SubOrder $subOrder): void
+    {
+        try {
+            app(OrderNotificationService::class)->sendHandoverCode($subOrder->fresh() ?? $subOrder);
+        } catch (Throwable $exception) {
+            Log::warning('Handover code SMS not sent: '.$exception->getMessage(), ['sub_order_id' => $subOrder->id]);
+        }
     }
 
     /**

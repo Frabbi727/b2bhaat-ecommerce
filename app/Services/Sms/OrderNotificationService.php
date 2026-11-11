@@ -158,6 +158,36 @@ class OrderNotificationService
     }
 
     /**
+     * Text the buyer the 6-digit code for a parcel the seller delivers themselves, with the cash to pay on a COD
+     * order. The seller never sees the code; the buyer gives it to the delivery person after receiving the parcel.
+     */
+    public function sendHandoverCode(SubOrder $subOrder): bool
+    {
+        $order = $subOrder->order;
+        if ($order === null || ! filled($subOrder->handover_code)) {
+            return false;
+        }
+
+        $phone = $this->extractCustomerPhone($order);
+        if (! $phone || ! PhoneNormalizer::isValid($phone)) {
+            return false;
+        }
+
+        $cashToPay = $subOrder->codCollectAmount();
+        $message = $this->render('self_delivery_handover_code', [
+            'order_number' => $order->order_number,
+            'store_name' => $subOrder->seller?->sellerProfile?->store_name ?? $this->storeName(),
+            'handover_code' => (string) $subOrder->handover_code,
+            'cash_note' => $cashToPay > 0 ? ' Pay BDT '.number_format($cashToPay, 2).' cash on delivery.' : '',
+            'tracking_url' => route('order.track.token', ['token' => $order->tracking_token]),
+        ], 'B2Bhaat: your parcel from {store_name} (order #{order_number}) is on the way.{cash_note} Check the parcel, then give code {handover_code} to the delivery person. Do not share it before. Track: {tracking_url}');
+
+        SendSmsJob::dispatch(PhoneNormalizer::normalize($phone), $message, 'self_delivery_handover_code', bypassDeduplication: true);
+
+        return true;
+    }
+
+    /**
      * Tell each seller in the order that they have a parcel to prepare.
      * Called once the order can be fulfilled: at checkout for cash on delivery, after the payment check for mobile wallets.
      */

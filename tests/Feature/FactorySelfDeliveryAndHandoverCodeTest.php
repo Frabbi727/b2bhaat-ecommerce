@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Filament\Seller\Resources\SubOrders\Pages\ListSubOrders;
+use App\Filament\Seller\Resources\SubOrders\Pages\ViewSubOrder;
+use App\Jobs\SendSmsJob;
 use App\Livewire\Storefront\CustomerOrders;
 use App\Livewire\Storefront\OrderTracking;
 use App\Models\FulfillmentStatus;
@@ -13,6 +15,8 @@ use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -157,5 +161,58 @@ class FactorySelfDeliveryAndHandoverCodeTest extends TestCase
 
         $this->subOrder->refresh();
         $this->assertEquals('delivered', $this->subOrder->fulfillmentStatus->slug);
+    }
+
+    public function test_dispatch_texts_the_buyer_their_handover_code(): void
+    {
+        Queue::fake();
+
+        $code = app(SelfDeliveryService::class)->dispatchSelfDelivery($this->subOrder);
+        $cashToPay = $this->subOrder->fresh()->codCollectAmount();
+
+        Queue::assertPushed(SendSmsJob::class, fn (SendSmsJob $job): bool => $job->purpose === 'self_delivery_handover_code'
+            && str_contains($job->message, $code)
+            && ($cashToPay <= 0 || str_contains($job->message, 'BDT '.number_format($cashToPay, 2))));
+    }
+
+    public function test_seller_can_resend_the_code_a_limited_number_of_times(): void
+    {
+        $service = app(SelfDeliveryService::class);
+        $service->dispatchSelfDelivery($this->subOrder);
+        RateLimiter::clear('handover-code-resend:'.$this->subOrder->id);
+        Queue::fake();
+
+        for ($i = 0; $i < SelfDeliveryService::MAX_CODE_RESENDS; $i++) {
+            $service->resendHandoverCode($this->subOrder->fresh());
+        }
+        Queue::assertPushed(SendSmsJob::class, SelfDeliveryService::MAX_CODE_RESENDS);
+
+        $this->expectExceptionMessage('already sent');
+        $service->resendHandoverCode($this->subOrder->fresh());
+    }
+
+    public function test_seller_can_deliver_from_the_order_page(): void
+    {
+        $this->subOrder->update([
+            'fulfillment_status_id' => FulfillmentStatus::where('slug', 'unfulfilled')->value('id'),
+            'is_self_delivered' => false,
+        ]);
+
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+        $this->actingAs($this->seller);
+
+        Livewire::test(ViewSubOrder::class, ['record' => $this->subOrder->getRouteKey()])
+            ->assertActionVisible('dispatchFactoryFleet')
+            ->callAction('dispatchFactoryFleet', [
+                'hub_location' => 'Main Warehouse',
+                'driver_contact' => '+8801811223344',
+                'dispatch_note' => 'Direct dispatch.',
+            ])
+            ->assertHasNoActionErrors()
+            ->assertActionVisible('verifyHandoverCode')
+            ->callAction('verifyHandoverCode', ['handover_code' => $this->subOrder->fresh()->handover_code])
+            ->assertHasNoActionErrors();
+
+        $this->assertSame('delivered', $this->subOrder->fresh()->fulfillmentStatus->slug);
     }
 }
