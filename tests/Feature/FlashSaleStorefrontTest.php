@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Enums\FlashSaleDiscountType;
 use App\Enums\FlashSaleStatus;
+use App\Enums\FlashSaleSubmissionStatus;
 use App\Models\FlashSale;
 use App\Models\FlashSaleProduct;
 use App\Models\Product;
@@ -136,10 +137,30 @@ class FlashSaleStorefrontTest extends TestCase
     public function test_countdown_carries_server_time(): void
     {
         $sale = FlashSale::factory()->live()->create();
+        FlashSaleProduct::factory()->create([
+            'flash_sale_id' => $sale->id,
+            'product_id' => $this->nails->id,
+        ]);
 
         $this->get(route('catalog.index'))
             ->assertOk()
             ->assertSee('data-server-now', false);
+    }
+
+    public function test_homepage_hides_a_live_sale_that_has_no_approved_deals(): void
+    {
+        FlashSale::query()->delete();
+
+        $sale = FlashSale::factory()->live()->create(['name' => 'Pending Approval Campaign']);
+        FlashSaleProduct::factory()->create([
+            'flash_sale_id' => $sale->id,
+            'product_id' => $this->nails->id,
+            'status' => FlashSaleSubmissionStatus::Pending,
+        ]);
+
+        $this->get(route('catalog.index'))
+            ->assertOk()
+            ->assertDontSee('Pending Approval Campaign');
     }
 
     public function test_remaining_units_shown_when_stock_limit_set(): void

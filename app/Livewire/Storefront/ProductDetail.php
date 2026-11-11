@@ -159,6 +159,7 @@ class ProductDetail extends Component
         $secondary = Product::with(['retailPrice', 'variations', 'seller.sellerProfile'])->sellable()->find($secondaryProductId);
         if (! $secondary) {
             $this->errorMessage = 'Bundle product not found.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
@@ -182,9 +183,11 @@ class ProductDetail extends Component
             );
 
             $this->feedbackMessage = "Added bundle lot ({$this->product->title} + {$secondary->title}) to your cart!";
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: true);
             $this->dispatch('cartUpdated');
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
         }
     }
 
@@ -199,6 +202,7 @@ class ProductDetail extends Component
 
         if ($this->isSellerOnVacation) {
             $this->errorMessage = 'This merchant is currently on vacation mode. Ordering is temporarily disabled.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
@@ -208,6 +212,7 @@ class ProductDetail extends Component
         if ($this->product->variations->isNotEmpty()) {
             if (! $this->selectedVariationId) {
                 $this->errorMessage = 'Please select a variation before adding to cart.';
+                $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
                 return;
             }
@@ -215,6 +220,7 @@ class ProductDetail extends Component
             $variation = $this->product->variations->firstWhere('id', $this->selectedVariationId);
             if (! $variation || ! $variation->is_active) {
                 $this->errorMessage = 'Selected variation is currently unavailable.';
+                $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
                 return;
             }
@@ -222,6 +228,7 @@ class ProductDetail extends Component
             $allowBackorders = app(StoreConfigurationService::class)->isBackorderAllowed();
             if (! $allowBackorders && $this->retailQuantity > $variation->stock_quantity) {
                 $this->errorMessage = "Requested quantity ({$this->retailQuantity}) exceeds available stock ({$variation->stock_quantity} units).";
+                $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
                 return;
             }
@@ -238,9 +245,11 @@ class ProductDetail extends Component
             );
 
             $this->feedbackMessage = "Added {$this->retailQuantity} unit(s) to your cart.";
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: true);
             $this->dispatch('cartUpdated');
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
         }
     }
 
@@ -251,12 +260,14 @@ class ProductDetail extends Component
         $user = auth()->user();
         if (! $user || ! $user->canSeeWholesalePrices()) {
             $this->errorMessage = 'Wholesale volume tier sourcing is reserved for verified wholesale business accounts. Please upgrade your account.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
 
         if ($this->isSellerOnVacation) {
             $this->errorMessage = 'This merchant is currently on vacation mode. Ordering is temporarily disabled.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
@@ -270,6 +281,7 @@ class ProductDetail extends Component
 
         if ($totalUnits < $moq) {
             $this->errorMessage = "Wholesale bulk order requires at least {$moq} units. You currently selected {$totalUnits}.";
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
@@ -279,6 +291,7 @@ class ProductDetail extends Component
             $qty = (int) $qty;
             if ($qty < 0) {
                 $this->errorMessage = 'Quantities must be positive numbers.';
+                $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
                 return;
             }
@@ -288,6 +301,7 @@ class ProductDetail extends Component
                 $var = $this->product->variations->firstWhere('id', (int) $variationId);
                 if (! $allowBackorders && $var && $qty > $var->stock_quantity) {
                     $this->errorMessage = "Requested quantity ({$qty}) for SKU '{$var->sku}' exceeds available stock ({$var->stock_quantity} units).";
+                    $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
                     return;
                 }
@@ -305,9 +319,11 @@ class ProductDetail extends Component
             }
 
             $this->feedbackMessage = "Successfully added wholesale bulk lot ({$addedCount} units) to your cart!";
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: true);
             $this->dispatch('cartUpdated');
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
         }
     }
 
@@ -329,6 +345,7 @@ class ProductDetail extends Component
             $existing->delete();
             $this->isInWishlist = false;
             $this->feedbackMessage = 'Product removed from your Wishlist.';
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: false);
         } else {
             Wishlist::create([
                 'user_id' => $userId,
@@ -336,6 +353,7 @@ class ProductDetail extends Component
             ]);
             $this->isInWishlist = true;
             $this->feedbackMessage = 'Product added to your Wishlist!';
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: false);
         }
     }
 
@@ -522,7 +540,7 @@ class ProductDetail extends Component
                 $q->where('category_id', $this->product->category_id)
                     ->orWhere('brand_id', $this->product->brand_id);
             })
-            ->with(['primaryImage', 'brand', 'retailPrice'])
+            ->with(['primaryImage', 'brand', 'retailPrice', 'variations', 'seller.sellerProfile', 'salesChannel'])
             ->take(4)
             ->get();
 

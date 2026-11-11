@@ -5,6 +5,7 @@ namespace App\Livewire\Storefront;
 use App\Models\Category;
 use App\Models\SalesChannel;
 use App\Models\SellerProfile;
+use App\Services\Promotions\FlashSalePricing;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -61,7 +62,9 @@ class SellerStore extends Component
                 'unit',
                 'primaryImage',
                 'prices.salesChannel',
+                'retailPrice',
                 'variations',
+                'seller.sellerProfile',
             ]);
 
         // Distinct categories within this seller's catalog
@@ -88,6 +91,8 @@ class SellerStore extends Component
         }
 
         $products = $sellerProductsQuery->paginate(12);
+
+        app(FlashSalePricing::class)->primeFor($products->items());
 
         return view('livewire.storefront.seller-store', [
             'products' => $products,

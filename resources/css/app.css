@@ -11,3 +11,27 @@
 [x-cloak] {
     display: none !important;
 }
+
+@utility no-scrollbar {
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+@layer base {
+    ::selection {
+        background-color: var(--color-indigo-100);
+        color: var(--color-indigo-950);
+    }
+
+    :focus-visible {
+        outline-color: var(--color-indigo-500);
+    }
+
+    input,
+    textarea {
+        caret-color: var(--color-indigo-600);
+    }
+}

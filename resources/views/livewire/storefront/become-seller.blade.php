@@ -57,12 +57,12 @@
                     <p class="text-xs text-slate-500 leading-relaxed">Offer bulk MOQ tiers (e.g. 50+ pcs) to boutiques and retail rates to consumers from one listing.</p>
                 </div>
                 <div class="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-2">
-                    <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm">🛡️</div>
+                    <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><x-storefront.icon name="shield" class="w-4 h-4" /></div>
                     <h3 class="font-bold text-slate-900 text-sm">48-Hour Escrow Protection</h3>
                     <p class="text-xs text-slate-500 leading-relaxed">Customer payments are locked in escrow and released automatically 48h after delivery handover.</p>
                 </div>
                 <div class="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-2">
-                    <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm">🚚</div>
+                    <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center"><x-storefront.icon name="truck" class="w-4 h-4" /></div>
                     <h3 class="font-bold text-slate-900 text-sm">Courier Integration</h3>
                     <p class="text-xs text-slate-500 leading-relaxed">1-click consignment creation with Steadfast, Pathao, RedX, and Paperfly with automated milestone logs.</p>
                 </div>

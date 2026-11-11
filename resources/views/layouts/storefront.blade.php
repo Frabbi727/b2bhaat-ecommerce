@@ -23,6 +23,8 @@
     <meta name="twitter:image" content="{{ $metaImage ?? 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=1200' }}">
 
     @stack('jsonld')
+    <link rel="preconnect" href="https://fonts.bunny.net">
+    <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700&display=swap" rel="stylesheet">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
@@ -179,40 +181,152 @@
             </div>
         </div>
 
-        <!-- Category Navigation Rail -->
+        <!-- Category Navigation Rail: one searchable category picker instead of a row of repeated links -->
         @php
-            $navCategories = \App\Models\Category::where('is_active', true)->whereNull('parent_id')->orderBy('sort_order')->take(8)->get();
+            $navCategories = \App\Models\Category::where('is_active', true)
+                ->whereNull('parent_id')
+                ->with(['children' => fn ($children) => $children->where('is_active', true)->orderBy('sort_order')])
+                ->orderBy('sort_order')
+                ->get();
+
+            $navCategoryOptions = $navCategories->flatMap(fn ($parent) => collect([[
+                'id' => $parent->id,
+                'name' => $parent->name,
+                'parent' => null,
+                'url' => route('catalog.index', ['category' => $parent->id]),
+            ]])->concat($parent->children->map(fn ($child) => [
+                'id' => $child->id,
+                'name' => $child->name,
+                'parent' => $parent->name,
+                'url' => route('catalog.index', ['category' => $child->id]),
+            ])))->values();
         @endphp
-        <div class="border-t border-slate-100 bg-slate-50/70 hidden md:block">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between text-xs font-semibold text-slate-700">
-                <div class="flex items-center gap-6 overflow-x-auto py-2.5 no-scrollbar">
-                    <a href="{{ route('catalog.index') }}" class="flex items-center gap-1.5 text-indigo-600 font-bold hover:text-indigo-800 transition shrink-0">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
-                        All Categories
-                    </a>
-                    @foreach ($navCategories as $navCat)
-                        <a
-                            href="{{ route('catalog.index', ['category' => $navCat->id]) }}"
-                            class="hover:text-indigo-600 transition shrink-0"
-                        >
-                            {{ $navCat->name }}
+        <div class="border-t border-slate-100">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-center justify-between gap-4 text-sm">
+                <div
+                    class="relative"
+                    x-data="{
+                        open: false,
+                        query: '',
+                        active: 0,
+                        options: @js($navCategoryOptions),
+                        get matches() {
+                            const needle = this.query.toLowerCase().trim();
+                            if (! needle) { return this.options; }
+                            return this.options.filter((option) => option.name.toLowerCase().includes(needle));
+                        },
+                        toggle() {
+                            this.open = ! this.open;
+                            if (this.open) {
+                                this.query = '';
+                                this.active = 0;
+                                this.$nextTick(() => this.$refs.categoryInput.focus());
+                            }
+                        },
+                        close() {
+                            this.open = false;
+                            this.$refs.categoryTrigger.focus();
+                        },
+                        move(step) {
+                            const count = this.matches.length;
+                            if (! count) { return; }
+                            this.active = (this.active + step + count) % count;
+                            this.$nextTick(() => this.$refs.categoryList.querySelector('[aria-selected=true]')?.scrollIntoView({ block: 'nearest' }));
+                        },
+                        go(option) {
+                            if (option) { window.location.href = option.url; }
+                        },
+                    }"
+                    @keydown.escape="if (open) { close() }"
+                    @click.outside="open = false"
+                >
+                    <button
+                        x-ref="categoryTrigger"
+                        type="button"
+                        @click="toggle()"
+                        :aria-expanded="open"
+                        aria-haspopup="listbox"
+                        class="inline-flex items-center gap-2 h-9 -ml-2 px-2.5 rounded-lg font-semibold text-slate-900 hover:bg-slate-100 transition cursor-pointer focus-visible:outline-2 focus-visible:outline-indigo-500"
+                    >
+                        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h10"/></svg>
+                        <span>All Categories</span>
+                        <svg class="w-3.5 h-3.5 text-slate-400 transition" :class="open && 'rotate-180'" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+
+                    <div
+                        x-show="open"
+                        x-cloak
+                        x-transition:enter="transition ease-out duration-150"
+                        x-transition:enter-start="opacity-0 -translate-y-1"
+                        x-transition:enter-end="opacity-100 translate-y-0"
+                        class="absolute left-0 top-full mt-1.5 w-[min(22rem,calc(100vw-2rem))] bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-200 z-50 overflow-hidden"
+                    >
+                        <div class="p-2 border-b border-slate-100">
+                            <label for="nav-category-search" class="sr-only">Search categories</label>
+                            <div class="relative">
+                                <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z"/></svg>
+                                <input
+                                    id="nav-category-search"
+                                    x-ref="categoryInput"
+                                    x-model="query"
+                                    @input="active = 0"
+                                    @keydown.arrow-down.prevent="move(1)"
+                                    @keydown.arrow-up.prevent="move(-1)"
+                                    @keydown.enter.prevent="go(matches[active])"
+                                    type="text"
+                                    role="combobox"
+                                    aria-autocomplete="list"
+                                    aria-controls="nav-category-list"
+                                    :aria-activedescendant="matches[active] ? 'nav-category-' + matches[active].id : null"
+                                    placeholder="Type a category name"
+                                    autocomplete="off"
+                                    class="w-full h-10 pl-9 pr-3 text-sm rounded-xl border border-slate-200 bg-slate-50 placeholder:text-slate-400 focus:bg-white focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                            </div>
+                        </div>
+
+                        <ul id="nav-category-list" x-ref="categoryList" role="listbox" aria-label="Categories" class="max-h-80 overflow-y-auto overscroll-contain p-1.5">
+                            <template x-for="(option, index) in matches" :key="option.id">
+                                <li role="option" :id="'nav-category-' + option.id" :aria-selected="index === active">
+                                    <a
+                                        :href="option.url"
+                                        @mouseenter="active = index"
+                                        tabindex="-1"
+                                        class="flex items-center justify-between gap-3 py-2 pr-3 rounded-lg text-sm transition"
+                                        :class="[
+                                            index === active ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700',
+                                            option.parent ? 'pl-6' : 'pl-3 font-semibold text-slate-900',
+                                        ]"
+                                    >
+                                        <span class="truncate" x-text="option.name"></span>
+                                        <span x-show="option.parent && query" x-text="option.parent" class="shrink-0 text-xs text-slate-400"></span>
+                                    </a>
+                                </li>
+                            </template>
+                            <li x-show="! matches.length" class="px-3 py-6 text-center text-sm text-slate-500">
+                                No category matches &ldquo;<span x-text="query"></span>&rdquo;
+                            </li>
+                        </ul>
+
+                        <a href="{{ route('catalog.index') }}#all-products" class="flex items-center justify-between px-4 py-3 border-t border-slate-100 text-sm font-semibold text-indigo-600 hover:bg-slate-50">
+                            Browse all products
+                            <span aria-hidden="true">&rarr;</span>
                         </a>
-                    @endforeach
+                    </div>
                 </div>
 
-                <div class="flex items-center gap-4 shrink-0 py-2.5">
-                    <a href="{{ route('catalog.index') }}#flash-sales" class="flex items-center gap-1 text-rose-600 font-bold hover:text-rose-700 transition">
-                        <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
-                        ⚡ Flash Deals
+                <nav aria-label="Shortcuts" class="flex items-center gap-1 sm:gap-2 font-semibold">
+                    <a href="{{ route('flash-sales.index') }}" class="inline-flex items-center gap-1.5 h-9 px-2.5 rounded-lg text-rose-600 hover:bg-rose-50 transition">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12L13 2z"/></svg>
+                        Flash Deals
                     </a>
-                    <span class="text-slate-300">|</span>
-                    <a href="{{ route('wholesale.upgrade') }}" class="text-indigo-600 hover:text-indigo-700 transition flex items-center gap-1">
-                        Wholesale KYC
-                        <span class="px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700 text-[10px] uppercase font-bold">B2B</span>
+                    <a href="{{ route('wholesale.upgrade') }}" class="hidden sm:inline-flex items-center h-9 px-2.5 rounded-lg text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition">
+                        Wholesale Prices
                     </a>
-                    <span class="text-slate-300">|</span>
-                    <a href="{{ route('seller.register') }}" class="text-emerald-700 hover:text-emerald-800 transition">Open Factory Store</a>
-                </div>
+                    <a href="{{ route('seller.register') }}" class="hidden md:inline-flex items-center h-9 px-2.5 rounded-lg text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition">
+                        Sell on {{ $identity['name'] }}
+                    </a>
+                </nav>
             </div>
         </div>
     </div>
@@ -291,64 +405,71 @@
         </div>
 
         <!-- Footer Columns -->
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div class="space-y-3">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-6 gap-y-10">
+            <div class="col-span-2 sm:col-span-3 lg:col-span-2 space-y-4 lg:pr-8">
                 <div class="text-white font-bold text-lg flex items-center gap-2">
-                    <span class="w-6 h-6 rounded bg-indigo-600 text-white flex items-center justify-center font-bold text-xs">B2B</span>
+                    <span class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-[11px]">B2B</span>
                     <span>{{ $identity['name'] }}</span>
                 </div>
-                <p class="text-xs leading-relaxed text-slate-400">
+                <p class="text-sm leading-relaxed text-slate-400 max-w-sm">
                     The hybrid e-commerce retail & factory-direct bulk wholesale platform connecting manufacturers, verified merchants, and shoppers across Bangladesh.
                 </p>
-                <div class="text-xs text-slate-400 pt-2">
+                <div class="text-sm text-slate-400 space-y-1">
                     @if ($identity['helpline'])
-                        <div>Customer Service: <strong class="text-white">{{ $identity['helpline'] }}</strong></div>
+                        <div>Customer Service: <a href="tel:{{ preg_replace('/[^0-9+]/', '', $identity['helpline']) }}" class="font-semibold text-white hover:text-indigo-300">{{ $identity['helpline'] }}</a></div>
                     @endif
                     @if ($identity['email'])
-                        <div>Email: <strong class="text-white">{{ $identity['email'] }}</strong></div>
+                        <div>Email: <a href="mailto:{{ $identity['email'] }}" class="font-semibold text-white hover:text-indigo-300">{{ $identity['email'] }}</a></div>
                     @endif
                     @if ($identity['address'])
                         <div>{{ $identity['address'] }}</div>
                     @endif
                 </div>
+                @if ($buyerPaymentMethods->isNotEmpty())
+                    <div class="pt-1">
+                        <div class="text-xs text-slate-500 mb-2">We accept</div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            @foreach ($buyerPaymentMethods as $buyerPaymentMethod)
+                                <span class="px-2.5 py-1 rounded-md bg-slate-800 text-slate-200 border border-slate-700 text-xs font-semibold">{{ $buyerPaymentMethod->name }}</span>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
             </div>
 
             <div>
-                <h4 class="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Product Categories</h4>
-                <ul class="space-y-2 text-xs">
+                <h4 class="text-white font-semibold mb-4 text-sm">Shop</h4>
+                <ul class="space-y-2.5 text-sm">
                     @foreach ($navCategories->take(5) as $fc)
                         <li><a href="{{ route('catalog.index', ['category' => $fc->id]) }}" class="hover:text-white transition">{{ $fc->name }}</a></li>
                     @endforeach
-                    <li><a href="{{ route('catalog.index') }}" class="hover:text-white transition font-semibold text-indigo-400">View All Categories &rarr;</a></li>
+                    <li><a href="{{ route('flash-sales.index') }}" class="hover:text-white transition">Flash Deals</a></li>
+                    <li><a href="{{ route('catalog.index') }}#all-products" class="hover:text-white transition font-semibold text-indigo-300">View All Categories &rarr;</a></li>
                 </ul>
             </div>
 
             <div>
-                <h4 class="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Customer Care</h4>
-                <ul class="space-y-2 text-xs">
+                <h4 class="text-white font-semibold mb-4 text-sm">Help</h4>
+                <ul class="space-y-2.5 text-sm">
                     <li><a href="{{ route('tracking.index') }}" class="hover:text-white transition">Track your order</a></li>
                     <li><a href="{{ route('customer.orders') }}" class="hover:text-white transition">Order History & Invoices</a></li>
                     <li><a href="{{ route('customer.wishlist') }}" class="hover:text-white transition">My Wishlist</a></li>
-                    <li><a href="{{ route('seller.register') }}" class="hover:text-white transition">Merchant / Factory Onboarding</a></li>
-                    <li><a href="{{ route('wholesale.upgrade') }}" class="hover:text-white transition">B2B Wholesale KYC Verification</a></li>
+                    <li><a href="{{ route('pages.returns') }}" class="hover:text-white transition">Returns & Refunds</a></li>
+                    <li><a href="{{ route('pages.contact') }}" class="hover:text-white transition">Contact Us</a></li>
                 </ul>
             </div>
 
             <div>
-                <h4 class="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Payment</h4>
-                <p class="text-xs text-slate-400 mb-3">We accept:</p>
-                <div class="flex items-center gap-2 flex-wrap">
-                    @foreach ($buyerPaymentMethods as $buyerPaymentMethod)
-                        <span class="px-2.5 py-1 rounded bg-slate-800 text-slate-200 border border-slate-700 text-[11px] font-bold">{{ $buyerPaymentMethod->name }}</span>
-                    @endforeach
-                </div>
-                <h4 class="text-white font-semibold mt-6 mb-3 text-xs uppercase tracking-wider">Policies</h4>
-                <ul class="space-y-2 text-xs">
+                <h4 class="text-white font-semibold mb-4 text-sm">For Business</h4>
+                <ul class="space-y-2.5 text-sm">
+                    <li><a href="{{ route('wholesale.upgrade') }}" class="hover:text-white transition">Get Wholesale Prices</a></li>
+                    <li><a href="{{ route('seller.register') }}" class="hover:text-white transition">Sell on {{ $identity['name'] }}</a></li>
+                </ul>
+                <h4 class="text-white font-semibold mt-8 mb-4 text-sm">Company</h4>
+                <ul class="space-y-2.5 text-sm">
+                    <li><a href="{{ route('pages.about') }}" class="hover:text-white transition">About Us</a></li>
                     <li><a href="{{ route('pages.terms') }}" class="hover:text-white transition">Terms & Conditions</a></li>
                     <li><a href="{{ route('pages.privacy') }}" class="hover:text-white transition">Privacy Policy</a></li>
-                    <li><a href="{{ route('pages.returns') }}" class="hover:text-white transition">Returns & Refunds</a></li>
-                    <li><a href="{{ route('pages.about') }}" class="hover:text-white transition">About Us</a></li>
-                    <li><a href="{{ route('pages.contact') }}" class="hover:text-white transition">Contact Us</a></li>
                 </ul>
             </div>
         </div>
@@ -364,7 +485,7 @@
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
             <span>Home</span>
         </a>
-        <a href="{{ route('catalog.index') }}#flash-sales" class="flex flex-col items-center gap-0.5 hover:text-rose-600">
+        <a href="{{ route('flash-sales.index') }}" class="flex flex-col items-center gap-0.5 {{ request()->routeIs('flash-sales.*') ? 'text-rose-600 font-bold' : 'hover:text-rose-600' }}">
             <svg class="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
             <span>Deals</span>
         </a>
@@ -391,6 +512,48 @@
             <span>{{ auth()->check() ? 'Account' : 'Login' }}</span>
         </a>
     </nav>
+
+    <!-- Toasts: pages dispatch a "toast" event (message, tone, cart) instead of showing a banner at the top of the page -->
+    <div
+        x-data="{
+            toasts: [],
+            add(detail) {
+                const id = Date.now() + Math.random();
+                this.toasts.push({ id, message: detail.message, tone: detail.tone ?? 'success', cart: detail.cart ?? false });
+                if (this.toasts.length > 3) { this.toasts.shift(); }
+                setTimeout(() => this.remove(id), detail.tone === 'error' ? 7000 : 4500);
+            },
+            remove(id) {
+                this.toasts = this.toasts.filter((toast) => toast.id !== id);
+            },
+        }"
+        @toast.window="add($event.detail)"
+        role="status"
+        aria-live="polite"
+        class="fixed z-[60] inset-x-4 bottom-36 md:bottom-6 md:left-auto md:right-6 md:w-[24rem] flex flex-col gap-2 pointer-events-none"
+    >
+        <template x-for="toast in toasts" :key="toast.id">
+            <div
+                x-transition:enter="transition ease-out duration-300"
+                x-transition:enter-start="opacity-0 translate-y-3"
+                x-transition:enter-end="opacity-100 translate-y-0"
+                x-transition:leave="transition ease-in duration-150"
+                x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0"
+                class="pointer-events-auto flex items-start gap-3 p-3.5 pr-2 rounded-2xl bg-slate-900 text-white shadow-xl shadow-slate-900/20"
+            >
+                <span class="grid place-items-center w-7 h-7 rounded-full shrink-0" :class="toast.tone === 'error' ? 'bg-rose-500/20 text-rose-300' : 'bg-emerald-500/20 text-emerald-300'">
+                    <svg x-show="toast.tone !== 'error'" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                    <svg x-show="toast.tone === 'error'" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01"/></svg>
+                </span>
+                <p class="flex-1 pt-1 text-sm leading-snug" x-text="toast.message"></p>
+                <a x-show="toast.cart" href="{{ route('cart.index') }}" class="shrink-0 self-center px-2.5 py-1.5 rounded-lg text-sm font-bold text-indigo-300 hover:text-white hover:bg-white/10">View cart</a>
+                <button type="button" @click="remove(toast.id)" class="shrink-0 grid place-items-center w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 cursor-pointer" aria-label="Dismiss">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+        </template>
+    </div>
 
     @livewireScripts
 </body>

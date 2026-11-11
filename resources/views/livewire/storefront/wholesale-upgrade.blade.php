@@ -17,15 +17,15 @@
             <div class="p-6 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-left max-w-md mx-auto space-y-2 text-slate-600">
                 <div class="font-bold text-slate-900 uppercase tracking-wider text-[11px] mb-2">B2B Features After Approval:</div>
                 <div class="flex items-center gap-2">
-                    <span class="text-emerald-600 font-bold">✓</span>
+                    <x-storefront.icon name="check" class="w-4 h-4 text-emerald-600" />
                     <span>Factory volume discounts and transparent Minimum Order Quantities.</span>
                 </div>
                 <div class="flex items-center gap-2">
-                    <span class="text-emerald-600 font-bold">✓</span>
+                    <x-storefront.icon name="check" class="w-4 h-4 text-emerald-600" />
                     <span>B2B Multi-variation matrix ordering (order multiple colors & sizes at once).</span>
                 </div>
                 <div class="flex items-center gap-2">
-                    <span class="text-emerald-600 font-bold">✓</span>
+                    <x-storefront.icon name="check" class="w-4 h-4 text-emerald-600" />
                     <span>Formal commercial tax invoices & delivery challans with your trade license.</span>
                 </div>
             </div>

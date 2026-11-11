@@ -1,39 +1,16 @@
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-10">
     <!-- Feedback Alerts -->
+    {{-- Shown to the shopper as a toast (see the storefront layout); kept here as text for screen readers and tests. --}}
     @if ($feedbackMessage)
-        <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between shadow-xs">
-            <div class="flex items-center gap-2">
-                <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                <span>{{ $feedbackMessage }}</span>
-            </div>
-            <a href="{{ route('cart.index') }}" class="font-bold underline text-emerald-900">View cart &rarr;</a>
-        </div>
+        <p class="sr-only">{{ $feedbackMessage }}</p>
     @endif
 
+    {{-- Shown to the shopper as a toast (see the storefront layout); kept here as text for screen readers and tests. --}}
     @if ($errorMessage)
-        <div class="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2 shadow-xs">
-            <svg class="w-4 h-4 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            <span>{{ $errorMessage }}</span>
-        </div>
+        <p class="sr-only">{{ $errorMessage }}</p>
     @endif
 
     @if (!$isFiltering)
-        {{-- Wholesale status strip --}}
-        <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-2.5 rounded-2xl bg-indigo-50/70 border border-indigo-100 text-xs">
-            @if ($isWholesaleUser)
-                <span class="font-bold text-emerald-800">Wholesale prices are on for your account.</span>
-                <span class="text-slate-600">Buy more to pay less per piece.</span>
-            @elseif ($isWholesalePending)
-                <span class="font-bold text-slate-800">Your wholesale application is under review.</span>
-                <span class="text-slate-600">Until it is approved you see shop prices. Wholesale prices appear here as soon as it is.</span>
-            @else
-                <span class="text-slate-700"><strong class="text-slate-900">Buying for a business?</strong> Get lower prices when you buy in bulk.</span>
-                <a href="{{ route('wholesale.upgrade') }}" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline shrink-0">
-                    Apply for wholesale prices &rarr;
-                </a>
-            @endif
-        </div>
-
         <!-- ================= HOMEPAGE HERO BANNER SLIDER ================= -->
         @if ($heroBanners->isNotEmpty())
             <div
@@ -148,6 +125,22 @@
                 </div>
             </div>
         @endif
+
+        {{-- Wholesale status strip --}}
+        <div class="{{ $heroBanners->isNotEmpty() ? '-mt-4 sm:-mt-6' : '' }} flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-3 rounded-2xl bg-white border border-slate-200 text-xs sm:text-sm">
+            @if ($isWholesaleUser)
+                <span class="font-bold text-emerald-800">Wholesale prices are on for your account.</span>
+                <span class="text-slate-600">Buy more to pay less per piece.</span>
+            @elseif ($isWholesalePending)
+                <span class="font-bold text-slate-800">Your wholesale application is under review.</span>
+                <span class="text-slate-600">Until it is approved you see shop prices. Wholesale prices appear here as soon as it is.</span>
+            @else
+                <span class="text-slate-700"><strong class="text-slate-900">Buying for a business?</strong> Get lower prices when you buy in bulk.</span>
+                <a href="{{ route('wholesale.upgrade') }}" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline shrink-0">
+                    Apply for wholesale prices &rarr;
+                </a>
+            @endif
+        </div>
 
         <!-- ================= CATEGORY SHOWCASE ================= -->
         @if ($categories->isNotEmpty())
@@ -321,304 +314,318 @@
     @endif
 
     <!-- ================= FULL CATALOG & FILTERING EXPLORER ================= -->
-    <section id="all-products" class="space-y-6 scroll-mt-28" x-data="{ showMobileFilters: false }">
-        <!-- Section Header / Active Filter Bar -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
-            <div>
-                <h2 class="text-xl font-extrabold text-slate-900">
-                    {{ $isFiltering ? 'Search results' : 'All products' }}
+    @php
+        $activeFilterCount = (int) ! is_null($selectedCategoryId)
+            + (int) ! is_null($selectedBrandId)
+            + (int) ($channelFilter !== 'all')
+            + (int) (! is_null($minPrice) || ! is_null($maxPrice))
+            + (int) $onlyFlashSale
+            + (int) $inStockOnly
+            + (int) $verifiedSupplierOnly;
+
+        $activeCat = $selectedCategoryId
+            ? ($categories->firstWhere('id', $selectedCategoryId) ?? $categories->flatMap->children->firstWhere('id', $selectedCategoryId))
+            : null;
+        $activeCatParent = $activeCat && $activeCat->parent_id ? $categories->firstWhere('id', $activeCat->parent_id) : null;
+        $subcategoryRail = $activeCatParent?->children ?? $activeCat?->children ?? collect();
+        $activeBrand = $selectedBrandId ? $brands->firstWhere('id', $selectedBrandId) : null;
+    @endphp
+
+    <section
+        id="all-products"
+        aria-labelledby="all-products-heading"
+        class="scroll-mt-28"
+        x-data="{ filtersOpen: false, catQuery: '', brandQuery: '' }"
+        @keydown.escape.window="filtersOpen = false"
+    >
+        <!-- Heading & toolbar -->
+        <div class="flex flex-wrap items-end justify-between gap-x-4 gap-y-3 mb-4">
+            <div class="min-w-0">
+                <h2 id="all-products-heading" class="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900">
+                    @if ($search)
+                        Results for &ldquo;{{ $search }}&rdquo;
+                    @elseif ($activeCat)
+                        {{ $activeCat->name }}
+                    @else
+                        {{ $isFiltering ? 'Search results' : 'All products' }}
+                    @endif
                 </h2>
-                <p class="text-xs text-slate-500">
-                    Showing <strong class="text-slate-800">{{ $products->total() }}</strong> available products
-                    @if ($search) for "<strong class="text-indigo-600">{{ $search }}</strong>"@endif
+                <p class="mt-0.5 text-xs sm:text-sm text-slate-500">
+                    <span class="tabular-nums font-semibold text-slate-700">{{ number_format($products->total()) }}</span>
+                    {{ str('product')->plural($products->total()) }} available
                 </p>
             </div>
 
-            <!-- Sorting Dropdown & Channel Switcher -->
-            <div class="flex items-center gap-3 flex-wrap">
-                <!-- Mobile Filters Toggle Button -->
+            <div class="flex items-center gap-2">
                 <button
                     type="button"
-                    @click="showMobileFilters = !showMobileFilters"
-                    class="lg:hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-slate-800 text-xs font-bold shadow-xs hover:bg-slate-50 cursor-pointer"
+                    @click="filtersOpen = true"
+                    class="inline-flex items-center gap-2 h-10 px-3.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 hover:border-slate-300 hover:bg-slate-50 transition cursor-pointer focus-visible:outline-2 focus-visible:outline-indigo-500"
+                    aria-haspopup="dialog"
+                    :aria-expanded="filtersOpen"
                 >
-                    <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M7 12h10M10 18h4"/></svg>
                     <span>Filters</span>
-                    @if ($isFiltering)
-                        <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+                    @if ($activeFilterCount > 0)
+                        <span class="grid place-items-center min-w-5 h-5 px-1 rounded-full bg-indigo-600 text-white text-[11px] font-bold tabular-nums">{{ $activeFilterCount }}</span>
                     @endif
                 </button>
 
-                <div class="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 text-xs">
-                    <button
-                        type="button"
-                        wire:click="$set('channelFilter', 'all')"
-                        class="px-2.5 py-1 rounded-lg font-semibold transition {{ $channelFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:text-slate-900' }}"
-                    >
-                        All
-                    </button>
-                    <button
-                        type="button"
-                        wire:click="$set('channelFilter', 'retail')"
-                        class="px-2.5 py-1 rounded-lg font-semibold transition {{ $channelFilter === 'retail' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:text-slate-900' }}"
-                    >
-                        Retail Only
-                    </button>
-                    <button
-                        type="button"
-                        wire:click="$set('channelFilter', 'wholesale')"
-                        class="px-2.5 py-1 rounded-lg font-semibold transition {{ $channelFilter === 'wholesale' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:text-slate-900' }}"
-                    >
-                        Wholesale B2B
-                    </button>
-                </div>
-
+                <label for="catalog-sort" class="sr-only">Sort products</label>
                 <select
+                    id="catalog-sort"
                     wire:model.live="sort"
-                    class="h-9 pl-3 pr-8 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl focus:ring-indigo-500 focus:border-indigo-500"
+                    class="h-10 pl-3 pr-9 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:border-slate-300 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
                 >
-                    <option value="newest">Sort: Newest First</option>
-                    <option value="price_asc">Price: Low to High</option>
-                    <option value="price_desc">Price: High to Low</option>
-                    <option value="popularity">Popularity / Views</option>
-                    <option value="discount">Highest Discount</option>
+                    <option value="newest">Newest first</option>
+                    <option value="popularity">Most popular</option>
+                    <option value="price_asc">Price: low to high</option>
+                    <option value="price_desc">Price: high to low</option>
+                    <option value="discount">Biggest discount</option>
                 </select>
-
-                @if ($isFiltering)
-                    <button
-                        type="button"
-                        wire:click="resetFilters"
-                        class="px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold transition flex items-center gap-1"
-                    >
-                        <span>Reset</span>
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                    </button>
-                @endif
             </div>
         </div>
 
-        <!-- Catalog Layout: Sidebar + Product Grid -->
+        <!-- Sub-categories of the chosen category: one tap to narrow down -->
+        @if ($subcategoryRail->isNotEmpty())
+            <div class="-mx-4 px-4 sm:mx-0 sm:px-0 mb-4 flex gap-2 overflow-x-auto no-scrollbar" role="list" aria-label="Sub-categories">
+                @php $railParent = $activeCatParent ?? $activeCat; @endphp
+                <button
+                    type="button"
+                    role="listitem"
+                    wire:click="$set('selectedCategoryId', {{ $railParent->id }})"
+                    class="shrink-0 h-9 px-3.5 rounded-full text-xs font-semibold border transition cursor-pointer {{ $selectedCategoryId === $railParent->id ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-400' }}"
+                >
+                    All {{ $railParent->name }}
+                </button>
+                @foreach ($subcategoryRail as $sub)
+                    <button
+                        type="button"
+                        role="listitem"
+                        wire:click="$set('selectedCategoryId', {{ $sub->id }})"
+                        @if ($selectedCategoryId === $sub->id) x-init="$el.parentElement.scrollLeft = $el.offsetLeft - $el.parentElement.offsetLeft - 16" @endif
+                        class="shrink-0 h-9 px-3.5 rounded-full text-xs font-semibold border transition cursor-pointer {{ $selectedCategoryId === $sub->id ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-400' }}"
+                    >
+                        {{ $sub->name }}
+                    </button>
+                @endforeach
+            </div>
+        @endif
+
+        <!-- Active filters: each one removable on its own -->
         @if ($isFiltering)
-            <!-- Active Filter Chips -->
-            <div class="flex items-center gap-2 flex-wrap text-xs bg-slate-50 p-3 rounded-2xl border border-slate-200">
-                <span class="font-bold text-slate-500">Active Filters:</span>
+            <div class="mb-5 flex flex-wrap items-center gap-2 text-xs">
                 @if ($search)
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 font-medium">
-                        Search: "{{ $search }}"
-                        <button type="button" wire:click="$set('search', '')" class="text-indigo-600 hover:text-indigo-900 text-sm font-bold">&times;</button>
-                    </span>
+                    <x-storefront.filter-chip wire:click="$set('search', '')">Search: {{ $search }}</x-storefront.filter-chip>
                 @endif
-                @if ($selectedCategoryId)
-                    @php
-                        $activeCat = $categories->firstWhere('id', $selectedCategoryId) ?? $categories->flatMap->children->firstWhere('id', $selectedCategoryId);
-                    @endphp
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 font-medium">
-                        Category: {{ $activeCat?->name ?? $selectedCategoryId }}
-                        <button type="button" wire:click="$set('selectedCategoryId', null)" class="text-indigo-600 hover:text-indigo-900 text-sm font-bold">&times;</button>
-                    </span>
+                @if ($activeCat)
+                    <x-storefront.filter-chip wire:click="$set('selectedCategoryId', null)">{{ $activeCat->name }}</x-storefront.filter-chip>
                 @endif
-                @if ($selectedBrandId)
-                    @php $activeBrand = $brands->firstWhere('id', $selectedBrandId); @endphp
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 font-medium">
-                        Brand: {{ $activeBrand?->name ?? $selectedBrandId }}
-                        <button type="button" wire:click="$set('selectedBrandId', null)" class="text-indigo-600 hover:text-indigo-900 text-sm font-bold">&times;</button>
-                    </span>
+                @if ($activeBrand)
+                    <x-storefront.filter-chip wire:click="$set('selectedBrandId', null)">{{ $activeBrand->name }}</x-storefront.filter-chip>
                 @endif
                 @if ($channelFilter !== 'all')
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 font-medium">
-                        Channel: {{ ucfirst($channelFilter) }}
-                        <button type="button" wire:click="$set('channelFilter', 'all')" class="text-indigo-600 hover:text-indigo-900 text-sm font-bold">&times;</button>
-                    </span>
+                    <x-storefront.filter-chip wire:click="$set('channelFilter', 'all')">{{ $channelFilter === 'wholesale' ? 'Wholesale' : 'Retail' }}</x-storefront.filter-chip>
                 @endif
-                @if (!is_null($minPrice) || !is_null($maxPrice))
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 font-medium">
-                        Price: ৳{{ $minPrice ?? '0' }} - {{ $maxPrice ? '৳'.$maxPrice : 'Any' }}
-                        <button type="button" wire:click="$set('minPrice', null); $set('maxPrice', null)" class="text-indigo-600 hover:text-indigo-900 text-sm font-bold">&times;</button>
-                    </span>
+                @if (! is_null($minPrice) || ! is_null($maxPrice))
+                    <x-storefront.filter-chip wire:click="$set('minPrice', null); $set('maxPrice', null)">৳{{ number_format((float) ($minPrice ?? 0)) }} – {{ $maxPrice ? '৳'.number_format((float) $maxPrice) : 'any' }}</x-storefront.filter-chip>
                 @endif
                 @if ($onlyFlashSale)
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-100 text-rose-800 font-medium">
-                        Flash Sale
-                        <button type="button" wire:click="$set('onlyFlashSale', false)" class="text-rose-600 hover:text-rose-900 text-sm font-bold">&times;</button>
-                    </span>
+                    <x-storefront.filter-chip wire:click="$set('onlyFlashSale', false)">Flash Sale</x-storefront.filter-chip>
                 @endif
                 @if ($inStockOnly)
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-medium">
-                        In Stock Only
-                        <button type="button" wire:click="$set('inStockOnly', false)" class="text-emerald-600 hover:text-emerald-900 text-sm font-bold">&times;</button>
-                    </span>
+                    <x-storefront.filter-chip wire:click="$set('inStockOnly', false)">In Stock Only</x-storefront.filter-chip>
                 @endif
                 @if ($verifiedSupplierOnly)
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-100 text-teal-800 font-medium">
-                        Verified Suppliers
-                        <button type="button" wire:click="$set('verifiedSupplierOnly', false)" class="text-teal-600 hover:text-teal-900 text-sm font-bold">&times;</button>
-                    </span>
+                    <x-storefront.filter-chip wire:click="$set('verifiedSupplierOnly', false)">Verified Suppliers</x-storefront.filter-chip>
                 @endif
-                <button type="button" wire:click="resetFilters" class="text-xs text-rose-600 hover:text-rose-800 font-semibold underline ml-2">
+                <button type="button" wire:click="resetFilters" class="h-8 px-2 font-semibold text-slate-500 hover:text-rose-600 underline underline-offset-4 cursor-pointer">
                     Clear all
                 </button>
             </div>
         @endif
 
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            <!-- Left Filter Sidebar (Collapsible on mobile) -->
-            <div :class="showMobileFilters ? 'block' : 'hidden lg:block'" class="lg:col-span-1 space-y-6">
-                <!-- Categories Filter -->
-                <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
-                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-900">Categories</h3>
-                    <div class="space-y-1 max-h-64 overflow-y-auto text-xs">
-                        <button
-                            type="button"
-                            wire:click="$set('selectedCategoryId', null)"
-                            class="w-full text-left px-2 py-1.5 rounded-lg font-semibold transition {{ is_null($selectedCategoryId) ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-50' }}"
-                        >
-                            All Categories
-                        </button>
-                        @foreach ($categories as $cat)
-                            <div>
-                                <button
-                                    type="button"
-                                    wire:click="selectCategory({{ $cat->id }})"
-                                    class="w-full text-left px-2 py-1.5 rounded-lg transition flex items-center justify-between {{ $selectedCategoryId === $cat->id ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-50' }}"
-                                >
-                                    <span class="truncate">{{ $cat->name }}</span>
-                                    @if ($cat->children->isNotEmpty())
-                                        <span class="text-[10px] text-slate-400">({{ $cat->children->count() }})</span>
-                                    @endif
-                                </button>
-                                @if ($cat->children->isNotEmpty() && ($selectedCategoryId === $cat->id || $cat->children->contains('id', $selectedCategoryId)))
-                                    <div class="pl-3 py-1 space-y-0.5 border-l-2 border-indigo-100 ml-2 mt-0.5">
-                                        @foreach ($cat->children as $child)
-                                            <button
-                                                type="button"
-                                                wire:click="selectCategory({{ $child->id }})"
-                                                class="w-full text-left px-2 py-1 rounded text-[11px] transition flex items-center justify-between {{ $selectedCategoryId === $child->id ? 'bg-indigo-100 text-indigo-800 font-bold' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"
-                                            >
-                                                <span class="truncate">{{ $child->name }}</span>
-                                            </button>
-                                        @endforeach
-                                    </div>
-                                @endif
-                            </div>
-                        @endforeach
-                    </div>
+        <!-- Product grid -->
+        @if ($products->isEmpty())
+            <div class="py-16 px-6 text-center rounded-3xl bg-white border border-slate-200">
+                <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 grid place-items-center mx-auto">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z"/></svg>
+                </div>
+                <h3 class="mt-4 text-base font-bold text-slate-900">No products match your criteria</h3>
+                <p class="mt-1 text-sm text-slate-500 max-w-sm mx-auto">Try a shorter search, a wider price range, or remove a filter.</p>
+                <button
+                    type="button"
+                    wire:click="resetFilters"
+                    class="mt-5 h-10 px-5 rounded-xl bg-slate-900 hover:bg-indigo-600 text-white font-bold text-sm transition cursor-pointer"
+                >
+                    Reset All Filters
+                </button>
+            </div>
+        @else
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4" wire:loading.class="opacity-60" wire:target="sort,selectedCategoryId,selectedBrandId,channelFilter,minPrice,maxPrice,onlyFlashSale,inStockOnly,verifiedSupplierOnly,selectCategory,selectBrand,resetFilters,search,gotoPage,nextPage,previousPage">
+                @foreach ($products as $item)
+                    <x-storefront.product-card
+                        :product="$item"
+                        :wishlisted="in_array($item->id, $userWishlistIds)"
+                        wire:key="catalog-{{ $item->id }}"
+                    />
+                @endforeach
+            </div>
+
+            <div class="mt-8">
+                {{ $products->links() }}
+            </div>
+        @endif
+
+        <!-- ================= FILTER PANEL (drawer on desktop, bottom sheet on phones) ================= -->
+        <div x-show="filtersOpen" x-cloak class="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-labelledby="filters-heading">
+            <div
+                x-show="filtersOpen"
+                x-transition.opacity.duration.200ms
+                @click="filtersOpen = false"
+                class="absolute inset-0 bg-slate-950/40"
+            ></div>
+
+            <div
+                x-show="filtersOpen"
+                x-trap.noscroll="filtersOpen"
+                x-transition:enter="transition ease-out duration-300"
+                x-transition:enter-start="translate-y-full sm:translate-y-0 sm:translate-x-full"
+                x-transition:enter-end="translate-y-0 sm:translate-x-0"
+                x-transition:leave="transition ease-in duration-200"
+                x-transition:leave-start="translate-y-0 sm:translate-x-0"
+                x-transition:leave-end="translate-y-full sm:translate-y-0 sm:translate-x-full"
+                class="absolute inset-x-0 bottom-0 max-h-[88dvh] rounded-t-3xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-full sm:max-w-sm sm:rounded-none bg-white shadow-2xl flex flex-col"
+            >
+                <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                    <h2 id="filters-heading" class="text-base font-extrabold text-slate-900">Filters</h2>
+                    <button type="button" @click="filtersOpen = false" class="grid place-items-center w-9 h-9 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900 cursor-pointer" aria-label="Close filters">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
                 </div>
 
-                <!-- Brands Filter -->
-                @if ($brands->isNotEmpty())
-                    <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
-                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-900">Brands</h3>
-                        <div class="space-y-1 max-h-48 overflow-y-auto text-xs">
-                            @foreach ($brands as $b)
+                <div class="flex-1 overflow-y-auto overscroll-contain px-5 py-5 space-y-7">
+                    <!-- Category (searchable) -->
+                    <fieldset>
+                        <legend class="text-sm font-bold text-slate-900">Category</legend>
+                        <label for="filter-category-search" class="sr-only">Find a category</label>
+                        <div class="relative mt-2.5">
+                            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z"/></svg>
+                            <input id="filter-category-search" type="search" x-model="catQuery" placeholder="Find a category" autocomplete="off" class="w-full h-10 pl-9 pr-3 text-sm rounded-xl border border-slate-200 placeholder:text-slate-400 focus:ring-indigo-500 focus:border-indigo-500"/>
+                        </div>
+                        <ul class="mt-2 max-h-56 overflow-y-auto -mx-1 px-1 space-y-0.5 text-sm">
+                            <li x-show="!catQuery">
+                                <button type="button" wire:click="$set('selectedCategoryId', null)" class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left transition cursor-pointer {{ is_null($selectedCategoryId) ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-slate-700 hover:bg-slate-50' }}">
+                                    All Categories
+                                </button>
+                            </li>
+                            @foreach ($categories as $cat)
+                                @foreach (collect([$cat])->concat($cat->children) as $option)
+                                    @php $isChild = $option->parent_id !== null; @endphp
+                                    <li x-show="!catQuery || @js(mb_strtolower($option->name)).includes(catQuery.toLowerCase().trim())">
+                                        <button
+                                            type="button"
+                                            wire:click="$set('selectedCategoryId', {{ $option->id }})"
+                                            class="w-full flex items-center justify-between gap-2 py-2 pr-3 rounded-lg text-left transition cursor-pointer {{ $isChild ? 'pl-7 text-[13px]' : 'pl-3' }} {{ $selectedCategoryId === $option->id ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-slate-700 hover:bg-slate-50' }}"
+                                        >
+                                            <span class="truncate">{{ $option->name }}</span>
+                                            @if ($selectedCategoryId === $option->id)
+                                                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                            @endif
+                                        </button>
+                                    </li>
+                                @endforeach
+                            @endforeach
+                        </ul>
+                    </fieldset>
+
+                    <!-- Brand (searchable) -->
+                    @if ($brands->isNotEmpty())
+                        <fieldset>
+                            <legend class="text-sm font-bold text-slate-900">Brand</legend>
+                            <label for="filter-brand-search" class="sr-only">Find a brand</label>
+                            <div class="relative mt-2.5">
+                                <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z"/></svg>
+                                <input id="filter-brand-search" type="search" x-model="brandQuery" placeholder="Find a brand" autocomplete="off" class="w-full h-10 pl-9 pr-3 text-sm rounded-xl border border-slate-200 placeholder:text-slate-400 focus:ring-indigo-500 focus:border-indigo-500"/>
+                            </div>
+                            <ul class="mt-2 max-h-48 overflow-y-auto -mx-1 px-1 space-y-0.5 text-sm">
+                                @foreach ($brands as $b)
+                                    <li x-show="!brandQuery || @js(mb_strtolower($b->name)).includes(brandQuery.toLowerCase().trim())">
+                                        <button
+                                            type="button"
+                                            wire:click="selectBrand({{ $b->id }})"
+                                            class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left transition cursor-pointer {{ $selectedBrandId === $b->id ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-slate-700 hover:bg-slate-50' }}"
+                                            aria-pressed="{{ $selectedBrandId === $b->id ? 'true' : 'false' }}"
+                                        >
+                                            <span class="truncate">{{ $b->name }}</span>
+                                            @if ($selectedBrandId === $b->id)
+                                                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                            @endif
+                                        </button>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </fieldset>
+                    @endif
+
+                    <!-- Price -->
+                    <fieldset>
+                        <legend class="text-sm font-bold text-slate-900">Price (৳)</legend>
+                        <div class="mt-2.5 grid grid-cols-2 gap-3">
+                            <div>
+                                <label for="filter-min-price" class="block text-xs font-medium text-slate-500 mb-1">Min</label>
+                                <input id="filter-min-price" type="number" min="0" inputmode="numeric" placeholder="0" wire:model.blur="minPrice" class="w-full h-10 px-3 text-sm rounded-xl border border-slate-200 tabular-nums focus:ring-indigo-500 focus:border-indigo-500"/>
+                            </div>
+                            <div>
+                                <label for="filter-max-price" class="block text-xs font-medium text-slate-500 mb-1">Max</label>
+                                <input id="filter-max-price" type="number" min="0" inputmode="numeric" placeholder="Any" wire:model.blur="maxPrice" class="w-full h-10 px-3 text-sm rounded-xl border border-slate-200 tabular-nums focus:ring-indigo-500 focus:border-indigo-500"/>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <!-- Buying type -->
+                    <fieldset>
+                        <legend class="text-sm font-bold text-slate-900">Buying for</legend>
+                        <div class="mt-2.5 grid grid-cols-3 gap-1 p-1 rounded-xl bg-slate-100 text-xs font-semibold">
+                            @foreach (['all' => 'Everything', 'retail' => 'Retail', 'wholesale' => 'Wholesale'] as $channelValue => $channelLabel)
                                 <button
                                     type="button"
-                                    wire:click="selectBrand({{ $b->id }})"
-                                    class="w-full text-left px-2 py-1.5 rounded-lg transition flex items-center justify-between {{ $selectedBrandId === $b->id ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-50' }}"
+                                    wire:click="$set('channelFilter', '{{ $channelValue }}')"
+                                    class="h-9 rounded-lg transition cursor-pointer {{ $channelFilter === $channelValue ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900' }}"
+                                    aria-pressed="{{ $channelFilter === $channelValue ? 'true' : 'false' }}"
                                 >
-                                    <span>{{ $b->name }}</span>
-                                    @if ($selectedBrandId === $b->id)
-                                        <svg class="w-3.5 h-3.5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-                                    @endif
+                                    {{ $channelLabel }}
                                 </button>
                             @endforeach
                         </div>
-                    </div>
-                @endif
+                    </fieldset>
 
-                <!-- Price Range Filter -->
-                <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
-                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-900">Price Range (৳)</h3>
-                    <div class="grid grid-cols-2 gap-2 text-xs">
-                        <div>
-                            <label class="block text-[10px] font-semibold text-slate-500 mb-1">Min Price</label>
-                            <input
-                                type="number"
-                                min="0"
-                                placeholder="Min ৳"
-                                wire:model.blur="minPrice"
-                                class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 focus:ring-indigo-500 focus:border-indigo-500"
-                            />
+                    <!-- Deals & availability -->
+                    <fieldset>
+                        <legend class="text-sm font-bold text-slate-900">Deals &amp; availability</legend>
+                        <div class="mt-2.5 space-y-1">
+                            @foreach ([
+                                'onlyFlashSale' => 'Flash Sale Deals',
+                                'inStockOnly' => 'In Stock Only',
+                                'verifiedSupplierOnly' => 'Verified Suppliers Only',
+                            ] as $toggleProperty => $toggleLabel)
+                                <label class="flex items-center justify-between gap-3 py-2 cursor-pointer text-sm text-slate-700">
+                                    <span>{{ $toggleLabel }}</span>
+                                    <input type="checkbox" wire:model.live="{{ $toggleProperty }}" class="w-5 h-5 rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"/>
+                                </label>
+                            @endforeach
                         </div>
-                        <div>
-                            <label class="block text-[10px] font-semibold text-slate-500 mb-1">Max Price</label>
-                            <input
-                                type="number"
-                                min="0"
-                                placeholder="Max ৳"
-                                wire:model.blur="maxPrice"
-                                class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                        </div>
-                    </div>
+                    </fieldset>
                 </div>
 
-                <!-- Stock, Trust & Promotion Filters -->
-                <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
-                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-900">Deals & Availability</h3>
-                    <div class="space-y-2">
-                        <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800">
-                            <input
-                                type="checkbox"
-                                wire:model.live="onlyFlashSale"
-                                class="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
-                            />
-                            <span>Flash Sale Deals</span>
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800">
-                            <input
-                                type="checkbox"
-                                wire:model.live="inStockOnly"
-                                class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                            />
-                            <span>In Stock Only</span>
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800">
-                            <input
-                                type="checkbox"
-                                wire:model.live="verifiedSupplierOnly"
-                                class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                            />
-                            <span>Verified Suppliers Only</span>
-                        </label>
-                    </div>
+                <div class="flex items-center gap-3 px-5 py-4 border-t border-slate-100 bg-white">
+                    <button type="button" wire:click="resetFilters" class="h-11 px-4 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-100 transition cursor-pointer">
+                        Clear all
+                    </button>
+                    <button type="button" @click="filtersOpen = false; $nextTick(() => document.getElementById('all-products')?.scrollIntoView({ behavior: 'smooth' }))" class="flex-1 h-11 rounded-xl bg-slate-900 hover:bg-indigo-600 text-white text-sm font-bold transition cursor-pointer">
+                        Show {{ number_format($products->total()) }} {{ str('product')->plural($products->total()) }}
+                    </button>
                 </div>
-            </div>
-
-            <!-- Right Product Grid -->
-            <div class="lg:col-span-3">
-                @if ($products->isEmpty())
-                    <div class="p-12 text-center rounded-3xl bg-white border border-slate-200 space-y-3">
-                        <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z"/></svg>
-                        </div>
-                        <h3 class="text-base font-bold text-slate-900">No products match your criteria</h3>
-                        <p class="text-xs text-slate-500 max-w-sm mx-auto">
-                            Try broadening your search term, clearing price thresholds, or resetting category filters.
-                        </p>
-                        <button
-                            type="button"
-                            wire:click="resetFilters"
-                            class="mt-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition"
-                        >
-                            Reset All Filters
-                        </button>
-                    </div>
-                @else
-                    <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                        @foreach ($products as $item)
-                            <x-storefront.product-card
-                                :product="$item"
-                                :wishlisted="in_array($item->id, $userWishlistIds)"
-                                wire:key="catalog-{{ $item->id }}"
-                            />
-                        @endforeach
-                    </div>
-
-                    <!-- Pagination -->
-                    <div class="mt-8">
-                        {{ $products->links() }}
-                    </div>
-                @endif
             </div>
         </div>
     </section>
@@ -743,7 +750,7 @@
                                 </div>
                             @endif
                             <div class="p-2 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-1.5 text-slate-700">
-                                <span>🚚</span>
+                                <x-storefront.icon name="truck" class="w-3.5 h-3.5 text-slate-400" />
                                 <span class="font-medium truncate">{{ $quickViewProduct->delivery_info ?? '24-48 Hours Express Delivery' }}</span>
                             </div>
                         </div>

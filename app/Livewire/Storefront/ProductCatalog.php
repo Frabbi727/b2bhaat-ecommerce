@@ -99,6 +99,7 @@ class ProductCatalog extends Component
 
         if (! $this->quickViewProduct) {
             $this->errorMessage = 'Product not found.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
@@ -149,6 +150,7 @@ class ProductCatalog extends Component
 
         if ($this->quickViewProduct->seller?->sellerProfile?->is_on_vacation) {
             $this->errorMessage = 'This merchant is on vacation mode and cannot accept orders right now.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
@@ -162,10 +164,12 @@ class ProductCatalog extends Component
             );
 
             $this->feedbackMessage = "Added {$this->quickViewQuantity}x '{$this->quickViewProduct->title}' to your cart.";
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: true);
             $this->dispatch('cartUpdated');
             $this->closeQuickView();
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
         }
     }
 
@@ -177,6 +181,7 @@ class ProductCatalog extends Component
 
         if ($this->quickViewProduct->seller?->sellerProfile?->is_on_vacation) {
             $this->errorMessage = 'This merchant is on vacation mode and cannot accept orders right now.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
@@ -193,6 +198,7 @@ class ProductCatalog extends Component
             $this->redirect(route('checkout.index'));
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
         }
     }
 
@@ -288,14 +294,17 @@ class ProductCatalog extends Component
         if ($existing) {
             $existing->delete();
             $this->feedbackMessage = 'Product removed from your Wishlist.';
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: false);
         } elseif (! Product::sellable()->whereKey($productId)->exists()) {
             $this->errorMessage = 'This product is not available right now.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
         } else {
             Wishlist::create([
                 'user_id' => $userId,
                 'product_id' => $productId,
             ]);
             $this->feedbackMessage = 'Product saved to your Wishlist!';
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: false);
         }
     }
 
@@ -306,12 +315,14 @@ class ProductCatalog extends Component
         $product = Product::with(['retailPrice', 'variations', 'seller.sellerProfile'])->find($productId);
         if (! $product) {
             $this->errorMessage = 'Product not found.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
 
         if ($product->seller?->sellerProfile?->is_on_vacation) {
             $this->errorMessage = 'This merchant is on vacation mode and cannot accept orders right now.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
@@ -335,9 +346,11 @@ class ProductCatalog extends Component
             );
 
             $this->feedbackMessage = "Added '{$product->title}' to your cart.";
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: true);
             $this->dispatch('cartUpdated');
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
         }
     }
 
@@ -356,7 +369,9 @@ class ProductCatalog extends Component
         $promoStripBanners = Banner::active()->forPosition('promo_strip')->get();
 
         // Top priority live campaign for the homepage section
+        // Only a campaign with approved, sellable products earns the homepage slot
         $activeFlashSale = FlashSale::query()->live()
+            ->whereHas('approvedProducts', fn ($products) => $products->listable())
             ->orderByDesc('is_featured')
             ->orderByDesc('display_priority')
             ->orderBy('ends_at')
@@ -365,7 +380,7 @@ class ProductCatalog extends Component
         $liveCampaignsCount = FlashSale::query()->live()->count();
 
         $flashSaleProducts = $activeFlashSale
-            ? $activeFlashSale->products()
+            ? $activeFlashSale->approvedProducts()
                 ->listable()
                 ->with(['seller.sellerProfile', 'category', 'brand', 'primaryImage', 'retailPrice', 'variations'])
                 ->take(6)

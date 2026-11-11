@@ -15,14 +15,15 @@ class FlashSaleIndex extends Component
     public function render()
     {
         $liveSales = FlashSale::query()->live()
-            ->with(['approvedProducts' => fn ($q) => $q->listable()->take(6)->with(['primaryImage', 'brand', 'prices.salesChannel'])])
+            ->withCount(['approvedProducts' => fn ($q) => $q->listable()])
+            ->with(['approvedProducts' => fn ($q) => $q->listable()->take(4)->with(['primaryImage', 'brand', 'prices.salesChannel', 'variations', 'seller.sellerProfile', 'salesChannel'])])
             ->orderByDesc('is_featured')
             ->orderByDesc('display_priority')
             ->orderBy('ends_at')
             ->get();
 
         $upcomingSales = FlashSale::query()->upcoming()
-            ->with(['approvedProducts' => fn ($q) => $q->listable()->take(6)->with(['primaryImage', 'brand', 'prices.salesChannel'])])
+            ->with(['approvedProducts' => fn ($q) => $q->listable()->take(6)->with(['primaryImage'])])
             ->orderByDesc('is_featured')
             ->orderByDesc('display_priority')
             ->orderBy('starts_at')

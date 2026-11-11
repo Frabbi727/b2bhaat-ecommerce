@@ -178,6 +178,24 @@ class HeaderSearchAndHomepageTest extends TestCase
             ->assertViewHas('featuredProducts', fn ($products) => $products->pluck('id')->all() === [$featuredOnly->id]);
     }
 
+    public function test_homepage_offers_one_searchable_category_picker_and_keeps_filters_in_a_panel(): void
+    {
+        $parent = Category::create(['name' => 'Kitchen Appliances', 'slug' => 'kitchen-appliances', 'is_active' => true]);
+        Category::create(['name' => 'Rice Cookers', 'slug' => 'rice-cookers', 'parent_id' => $parent->id, 'is_active' => true]);
+
+        $this->get(route('catalog.index'))
+            ->assertOk()
+            // Header: a single searchable picker that lists parents and their sub-categories
+            ->assertSee('id="nav-category-search"', false)
+            ->assertSee('Rice Cookers')
+            // The search bar no longer carries its own category dropdown or invented "popular" products
+            ->assertDontSee('Popular Searches')
+            ->assertDontSee('Haier Mini LED')
+            // Catalog filters live in one panel, with searchable category and brand lists
+            ->assertSee('id="filter-category-search"', false)
+            ->assertSee('Filters');
+    }
+
     public function test_catalog_sorting_and_quick_cart(): void
     {
         $sellerRole = Role::where('slug', 'seller')->firstOrFail();

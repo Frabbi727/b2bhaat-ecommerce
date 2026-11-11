@@ -32,7 +32,7 @@ class FlashSaleShow extends Component
 
         $products = $sale->approvedProducts()
             ->listable()
-            ->with(['primaryImage', 'brand', 'prices.salesChannel'])
+            ->with(['primaryImage', 'brand', 'prices.salesChannel', 'variations', 'seller.sellerProfile', 'salesChannel'])
             ->get();
 
         if ($effective === FlashSaleStatus::Active) {

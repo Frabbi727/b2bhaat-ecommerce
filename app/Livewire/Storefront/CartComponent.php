@@ -118,7 +118,14 @@ class CartComponent extends Component
         }
         $insideDhakaShipping = $shippingByZone['inside_dhaka']['total_shipping'];
 
+        $productImages = Product::query()
+            ->with('primaryImage')
+            ->whereIn('id', collect($items)->pluck('product_id')->unique())
+            ->get()
+            ->mapWithKeys(fn (Product $product): array => [$product->id => $product->primaryImage?->public_url]);
+
         return view('livewire.storefront.cart-component', [
+            'productImages' => $productImages,
             'shippingByZone' => $shippingByZone,
             'insideDhakaShipping' => $insideDhakaShipping,
             'estimatedTotal' => round($subtotalAfterDiscount + $insideDhakaShipping, 2),

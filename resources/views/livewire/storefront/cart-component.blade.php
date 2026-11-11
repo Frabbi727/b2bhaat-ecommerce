@@ -1,8 +1,8 @@
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
     <div class="flex items-center justify-between mb-8 pb-4 border-b border-slate-200">
         <div>
             <h1 class="text-2xl font-black text-slate-900 tracking-tight">Your cart</h1>
-            <p class="text-xs text-slate-500 mt-1">Check your items and quantities, then go to checkout.</p>
+            <p class="text-sm text-slate-500 mt-1">Check your items and quantities, then go to checkout.</p>
         </div>
 
         @if (! empty($items))
@@ -74,86 +74,85 @@
                             $shortfallShown[$item['product_id']] = true;
                         }
                     @endphp
-                    <div class="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                        <div class="space-y-1">
-                            <div class="flex items-center gap-2">
-                                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider {{ $isWholesale ? 'bg-emerald-100 text-emerald-800' : 'bg-indigo-100 text-indigo-800' }}">
-                                    {{ $isWholesale ? 'Wholesale' : 'Retail' }}
-                                </span>
-                            </div>
-
-                            <h4 class="font-bold text-slate-900 text-sm">
-                                <a href="{{ route('catalog.show', $item['product_slug']) }}" class="hover:underline">
-                                    {{ $item['product_title'] }}
-                                </a>
-                            </h4>
-
-                            @if ($item['attributes_summary'])
-                                <div class="text-xs text-slate-500">{{ $item['attributes_summary'] }}</div>
+                    <div wire:key="cart-line-{{ $item['key'] }}" class="p-3 sm:p-4 rounded-2xl bg-white border border-slate-200 flex gap-3 sm:gap-4">
+                        <a href="{{ route('catalog.show', $item['product_slug']) }}" class="w-20 h-20 sm:w-24 sm:h-24 shrink-0 rounded-xl bg-slate-100 overflow-hidden" tabindex="-1" aria-hidden="true">
+                            @if ($productImages[$item['product_id']] ?? null)
+                                <img src="{{ $productImages[$item['product_id']] }}" alt="" class="w-full h-full object-cover" loading="lazy"/>
                             @endif
+                        </a>
 
-                            <div class="text-xs text-slate-500">
-                                Sold by <strong class="text-slate-700">{{ $item['seller_name'] }}</strong>
+                        <div class="flex-1 min-w-0 flex flex-col md:flex-row md:items-center gap-3 md:gap-6">
+                            <div class="flex-1 min-w-0 space-y-1">
+                                <h4 class="font-semibold text-slate-900 text-sm leading-snug line-clamp-2">
+                                    <a href="{{ route('catalog.show', $item['product_slug']) }}" class="hover:text-indigo-600 transition">
+                                        {{ $item['product_title'] }}
+                                    </a>
+                                </h4>
+
+                                @if ($item['attributes_summary'])
+                                    <div class="text-xs text-slate-500">{{ $item['attributes_summary'] }}</div>
+                                @endif
+
+                                <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide {{ $isWholesale ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-700' }}">
+                                        {{ $isWholesale ? 'Wholesale' : 'Retail' }}
+                                    </span>
+                                    <span>Sold by <strong class="font-semibold text-slate-700">{{ $item['seller_name'] }}</strong></span>
+                                    <span class="text-slate-300" aria-hidden="true">·</span>
+                                    <span class="tabular-nums">৳{{ number_format($item['unit_price'], 2) }} each</span>
+                                </div>
+
+                                @if ($shortfall)
+                                    <p class="mt-1 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1" role="status">
+                                        Wholesale minimum for this product is {{ $shortfall['moq'] }} units, all options together. You have {{ $shortfall['quantity'] }}. Add {{ $shortfall['moq'] - $shortfall['quantity'] }} more to check out.
+                                    </p>
+                                @endif
                             </div>
 
-                            @if ($shortfall)
-                                <p class="mt-1 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1" role="status">
-                                    Wholesale minimum for this product is {{ $shortfall['moq'] }} units, all options together. You have {{ $shortfall['quantity'] }}. Add {{ $shortfall['moq'] - $shortfall['quantity'] }} more to check out.
-                                </p>
-                            @endif
-                        </div>
+                            <div class="flex items-center justify-between md:justify-end gap-3 sm:gap-5">
+                                <div class="flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden" role="group" aria-label="Quantity">
+                                    <button
+                                        type="button"
+                                        wire:click="updateQuantity('{{ $item['key'] }}', {{ $item['quantity'] - 1 }})"
+                                        aria-label="Decrease quantity"
+                                        class="grid place-items-center w-9 h-9 text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                                    >
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" d="M5 12h14"/></svg>
+                                    </button>
+                                    <span class="w-10 text-center font-bold text-sm text-slate-900 tabular-nums" aria-live="polite">{{ $item['quantity'] }}</span>
+                                    <button
+                                        type="button"
+                                        wire:click="updateQuantity('{{ $item['key'] }}', {{ $item['quantity'] + 1 }})"
+                                        aria-label="Increase quantity"
+                                        class="grid place-items-center w-9 h-9 text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                                    >
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
+                                    </button>
+                                </div>
 
-                        <!-- Quantity and Line Pricing -->
-                        <div class="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto">
-                            <div>
-                                <span class="text-xs text-slate-400 block sm:text-right">Price each</span>
-                                <span class="text-xs font-bold text-slate-700">৳{{ number_format($item['unit_price'], 2) }}</span>
-                            </div>
+                                <div class="text-right min-w-20">
+                                    <span class="sr-only">Total</span>
+                                    <span class="text-base font-extrabold text-slate-900 tabular-nums">৳{{ number_format($lineTotal, 2) }}</span>
+                                </div>
 
-                            <!-- Quantity adjustment -->
-                            <div class="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
-                                <button 
-                                    wire:click="updateQuantity('{{ $item['key'] }}', {{ $item['quantity'] - 1 }})" 
-                                    aria-label="Decrease quantity"
-                                    class="px-2.5 py-1 text-slate-600 hover:bg-slate-200 font-bold text-xs"
-                                >
-                                    -
-                                </button>
-                                <span class="px-3 py-1 font-bold text-xs text-slate-800 min-w-8 text-center bg-white">
-                                    {{ $item['quantity'] }}
-                                </span>
-                                <button 
-                                    wire:click="updateQuantity('{{ $item['key'] }}', {{ $item['quantity'] + 1 }})" 
-                                    aria-label="Increase quantity"
-                                    class="px-2.5 py-1 text-slate-600 hover:bg-slate-200 font-bold text-xs"
-                                >
-                                    +
-                                </button>
-                            </div>
-
-                            <div class="text-right min-w-24">
-                                <span class="text-xs text-slate-400 block">Total</span>
-                                <span class="text-sm font-extrabold text-slate-900">৳{{ number_format($lineTotal, 2) }}</span>
-                            </div>
-
-                            <div class="flex items-center gap-2">
-                                <button
-                                    wire:click="moveToWishlist('{{ $item['key'] }}', {{ $item['product_id'] }})"
-                                    class="p-1 text-slate-400 hover:text-indigo-600 transition"
-                                    title="Save for later" aria-label="Save for later"
-                                >
-                                    <svg class="w-4 h-4 fill-none stroke-current" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-                                </button>
-
-                                <button 
-                                    wire:click="removeItem('{{ $item['key'] }}')" 
-                                    class="p-1 text-slate-400 hover:text-rose-500 transition" 
-                                    title="Remove" aria-label="Remove"
-                                >
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                    </svg>
-                                </button>
+                                <div class="flex items-center">
+                                    <button
+                                        type="button"
+                                        wire:click="moveToWishlist('{{ $item['key'] }}', {{ $item['product_id'] }})"
+                                        class="grid place-items-center w-9 h-9 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer"
+                                        title="Save for later" aria-label="Save for later"
+                                    >
+                                        <svg class="w-4 h-4 fill-none stroke-current" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        wire:click="removeItem('{{ $item['key'] }}')"
+                                        class="grid place-items-center w-9 h-9 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                                        title="Remove" aria-label="Remove"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

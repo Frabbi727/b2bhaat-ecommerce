@@ -15,30 +15,14 @@ class HeaderSearch extends Component
 {
     public string $query = '';
 
+    /** Optional category scope for the suggestions and the submitted search. */
     public ?int $selectedCategory = null;
 
     public bool $isOpen = false;
 
-    /**
-     * @var array<int, string>
-     */
-    public array $popularSearches = [
-        'Haier Mini LED',
-        'Sony WH-1000XM5',
-        'Galaxy S24 Ultra',
-        '4K UHD Google TV',
-        'Press-on Nails',
-    ];
-
     public function updatedQuery(): void
     {
         $this->isOpen = strlen(trim($this->query)) >= 2;
-    }
-
-    public function selectPopular(string $term): void
-    {
-        $this->query = $term;
-        $this->submitSearch();
     }
 
     public function submitSearch(): mixed

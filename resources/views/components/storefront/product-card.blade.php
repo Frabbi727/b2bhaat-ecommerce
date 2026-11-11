@@ -3,6 +3,7 @@
     'wishlisted' => false,
     'flash' => false,
     'remainingUnits' => null,
+    'actions' => true,
 ])
 
 @php
@@ -28,6 +29,7 @@
             </span>
         @endif
 
+        @if ($actions)
         <button
             type="button"
             wire:click="toggleWishlist({{ $product->id }})"
@@ -37,6 +39,7 @@
         >
             <svg class="w-4 h-4 {{ $wishlisted ? 'fill-rose-500 text-rose-500' : 'fill-none' }}" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
         </button>
+        @endif
     </div>
 
     <div class="mt-3 flex items-center gap-1.5 min-w-0 h-4 text-[11px] font-bold">
@@ -71,6 +74,11 @@
             @endif
         </div>
 
+        @isset($footer)
+            <div class="mt-2.5">{{ $footer }}</div>
+        @endisset
+
+        @if ($actions)
         <div class="mt-3 grid grid-cols-2 gap-2">
             <button
                 type="button"
@@ -91,5 +99,10 @@
                 <span class="hidden sm:inline">{{ $hasOptions ? 'Choose options' : 'Add to cart' }}</span>
             </button>
         </div>
+        @else
+            <a href="{{ $productUrl }}" class="mt-3 flex items-center justify-center h-9 rounded-xl bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-800 text-xs font-bold transition focus-visible:outline-2 focus-visible:outline-indigo-500">
+                View product
+            </a>
+        @endif
     </div>
 </article>

@@ -19,25 +19,14 @@
     </div>
 
     <!-- Feedback Alerts -->
+    {{-- Shown to the shopper as a toast (see the storefront layout); kept here as text for screen readers and tests. --}}
     @if ($feedbackMessage)
-        <div class="mt-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <svg class="w-5 h-5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
-                <span>{{ $feedbackMessage }}</span>
-            </div>
-            <a href="{{ route('cart.index') }}" class="font-bold underline text-emerald-900 text-xs">View Cart &rarr;</a>
-        </div>
+        <p class="sr-only">{{ $feedbackMessage }}</p>
     @endif
 
+    {{-- Shown to the shopper as a toast (see the storefront layout); kept here as text for screen readers and tests. --}}
     @if ($errorMessage)
-        <div class="mt-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-center gap-2">
-            <svg class="w-5 h-5 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-            <span>{{ $errorMessage }}</span>
-        </div>
+        <p class="sr-only">{{ $errorMessage }}</p>
     @endif
 
     <!-- Wishlist Grid -->

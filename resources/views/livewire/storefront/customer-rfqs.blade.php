@@ -251,7 +251,7 @@
                                         type="submit" 
                                         class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-xs flex items-center gap-1.5 cursor-pointer"
                                     >
-                                        <span>✓ Accept & Order</span>
+                                        <x-storefront.icon name="check" class="w-3.5 h-3.5" /><span>Accept & Order</span>
                                         <span class="font-mono font-semibold">(৳{{ number_format((float) $rfq->seller_quoted_price, 2) }}/u)</span>
                                     </button>
                                 </form>

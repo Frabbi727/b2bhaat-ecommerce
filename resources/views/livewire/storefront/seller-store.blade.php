@@ -171,118 +171,36 @@
     </div>
 
     <!-- Products Grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        @forelse ($products as $product)
-            @php
-                $retailPrice = $product->prices->first(fn($p) => $p->salesChannel?->slug === 'retail' && is_null($p->variation_id));
-                $wholesalePrice = $product->prices->first(fn($p) => $p->salesChannel?->slug === 'wholesale' && is_null($p->variation_id));
-                $primaryImg = $product->primaryImage?->public_url ?? 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=500';
-            @endphp
-            <div class="group bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-lg transition-all flex flex-col justify-between">
-                <div>
-                    <!-- Image & Badge Container -->
-                    <div class="relative aspect-4/3 bg-slate-100 overflow-hidden">
-                        <img 
-                            src="{{ $primaryImg }}" 
-                            alt="{{ $product->title }}" 
-                            class="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                        />
-
-                        <!-- Channel Badge -->
-                        <div class="absolute top-3 left-3 flex flex-col gap-1">
-                            @if ($product->salesChannel?->slug === 'both')
-                                <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-indigo-600 text-white shadow-xs">
-                                    Shop &amp; wholesale
-                                </span>
-                            @elseif ($product->salesChannel?->slug === 'wholesale')
-                                <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-emerald-600 text-white shadow-xs">
-                                    Wholesale Only
-                                </span>
-                            @else
-                                <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-slate-800 text-white shadow-xs">
-                                    Retail Only
-                                </span>
-                            @endif
-                        </div>
-                    </div>
-
-                    <!-- Details -->
-                    <div class="p-4 space-y-2">
-                        <div class="flex items-center justify-between text-xs text-slate-500">
-                            <span>{{ $product->category?->name }}</span>
-                            <span class="font-mono text-[10px] text-slate-400">{{ $product->brand?->name ?? '' }}</span>
-                        </div>
-
-                        <h3 class="font-bold text-slate-900 group-hover:text-indigo-600 transition line-clamp-1">
-                            <a href="{{ route('catalog.show', $product->slug) }}">
-                                {{ $product->title }}
+    @if ($products->isEmpty())
+        <div class="py-12 text-center text-sm text-slate-500 bg-white rounded-2xl border border-slate-200 p-8">
+            No products found matching your search criteria in this supplier's store.
+        </div>
+    @else
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+            @foreach ($products as $product)
+                @php
+                    $wholesalePrice = $product->prices->first(fn ($price) => $price->salesChannel?->slug === 'wholesale' && is_null($price->variation_id));
+                @endphp
+                <x-storefront.product-card :product="$product" :actions="false" wire:key="store-{{ $product->id }}">
+                    @if ($isWholesaleUser && $wholesalePrice)
+                        <x-slot:footer>
+                            <div class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-emerald-50 text-[11px] text-emerald-800">
+                                <span>Wholesale <strong class="tabular-nums">৳{{ number_format($wholesalePrice->unit_price, 2) }}</strong>{{ $product->unit?->symbol ? ' / '.$product->unit->symbol : '' }}</span>
+                                <span class="font-semibold shrink-0">MOQ: {{ $wholesalePrice->min_quantity }}</span>
+                            </div>
+                        </x-slot:footer>
+                    @elseif (! $isWholesaleUser && in_array($product->salesChannel?->slug, ['wholesale', 'both']))
+                        <x-slot:footer>
+                            <a href="{{ route('wholesale.upgrade') }}" class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-indigo-50 text-[11px] text-indigo-700 hover:bg-indigo-100 transition">
+                                <span>Bulk prices available</span>
+                                <span class="font-bold shrink-0">Unlock &rarr;</span>
                             </a>
-                        </h3>
-
-                        <p class="text-xs text-slate-500 line-clamp-2">
-                            {{ $product->short_description }}
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Pricing Block -->
-                <div class="p-4 pt-0 border-t border-slate-100 mt-2 space-y-3">
-                    @if ($isWholesaleUser)
-                        @if ($wholesalePrice)
-                            <div class="flex items-baseline justify-between">
-                                <div>
-                                    <span class="text-xs text-emerald-600 font-semibold uppercase">Wholesale Price</span>
-                                    <div class="text-lg font-black text-slate-900">
-                                        ৳{{ number_format($wholesalePrice->unit_price, 2) }}
-                                        <span class="text-xs font-normal text-slate-500">/ {{ $product->unit?->symbol }}</span>
-                                    </div>
-                                </div>
-                                <span class="text-xs px-2 py-1 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
-                                    MOQ: {{ $wholesalePrice->min_quantity }} {{ $product->unit?->symbol }}
-                                </span>
-                            </div>
-                        @endif
-                        @if ($retailPrice)
-                            <div class="text-[11px] text-slate-400">
-                                Retail MSRP: ৳{{ number_format($retailPrice->unit_price, 2) }}
-                            </div>
-                        @endif
-                    @else
-                        @if ($retailPrice)
-                            <div class="flex items-baseline justify-between">
-                                <div>
-                                    <span class="text-xs text-slate-500 font-semibold">Retail Price</span>
-                                    <div class="text-lg font-black text-slate-900">
-                                        ৳{{ number_format($retailPrice->unit_price, 2) }}
-                                        <span class="text-xs font-normal text-slate-500">/ {{ $product->unit?->symbol }}</span>
-                                    </div>
-                                </div>
-                                <span class="text-xs text-slate-400">Min: 1 pc</span>
-                            </div>
-                        @endif
-
-                        @if (in_array($product->salesChannel?->slug, ['wholesale', 'both']))
-                            <div class="p-2 rounded-lg bg-indigo-50/80 border border-indigo-100 text-[11px] text-indigo-700 flex items-center justify-between">
-                                <span>Bulk wholesale pricing available</span>
-                                <a href="{{ route('wholesale.upgrade') }}" class="font-bold underline text-indigo-900">Unlock</a>
-                            </div>
-                        @endif
+                        </x-slot:footer>
                     @endif
-
-                    <a 
-                        href="{{ route('catalog.show', $product->slug) }}" 
-                        class="block w-full text-center py-2 px-3 rounded-xl text-xs font-bold transition shadow-xs {{ $isWholesaleUser ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-indigo-600 hover:bg-indigo-700 text-white' }}"
-                    >
-                        {{ $isWholesaleUser ? 'Order in bulk' : 'View product' }}
-                    </a>
-                </div>
-            </div>
-        @empty
-            <div class="col-span-full py-12 text-center text-slate-500 bg-white rounded-2xl border border-slate-200 p-8">
-                No products found matching your search criteria in this supplier's store.
-            </div>
-        @endforelse
-    </div>
+                </x-storefront.product-card>
+            @endforeach
+        </div>
+    @endif
 
     <!-- Pagination -->
     <div class="mt-8">

@@ -31,6 +31,7 @@ class CustomerWishlist extends Component
         $wishlist->delete();
 
         $this->feedbackMessage = 'Item removed from your wishlist.';
+        $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: false);
     }
 
     public function quickAddToCart(int $productId, CartSessionService $cart): void
@@ -54,8 +55,10 @@ class CustomerWishlist extends Component
 
             $this->dispatch('cartUpdated');
             $this->feedbackMessage = 'Product added to your cart successfully!';
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: true);
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
         }
     }
 
