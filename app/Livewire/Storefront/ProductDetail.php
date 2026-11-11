@@ -4,6 +4,7 @@ namespace App\Livewire\Storefront;
 
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\ProductDailyView;
 use App\Models\ProductReview;
 use App\Models\RfqRequest;
 use App\Models\SalesChannel;
@@ -129,6 +130,7 @@ class ProductDetail extends Component
 
         // Increment view count
         $this->product->increment('views_count');
+        ProductDailyView::record($this->product->id);
     }
 
     public function selectImage(int $index): void
