@@ -73,10 +73,12 @@ class SellerInsightsService
         $retailRevenue = round((float) ($rows['retail']->revenue ?? 0), 2);
         $wholesaleRevenue = round((float) ($rows[self::WHOLESALE]->revenue ?? 0), 2);
         $total = $retailRevenue + $wholesaleRevenue;
+        $retailShare = $this->percent($retailRevenue, $total) ?? 0.0;
+        $wholesaleShare = $total > 0 ? round(100 - $retailShare, 1) : 0.0;
 
         return [
-            'retail' => ['revenue' => $retailRevenue, 'orders' => (int) ($rows['retail']->orders ?? 0), 'share' => $this->percent($retailRevenue, $total) ?? 0.0],
-            self::WHOLESALE => ['revenue' => $wholesaleRevenue, 'orders' => (int) ($rows[self::WHOLESALE]->orders ?? 0), 'share' => $this->percent($wholesaleRevenue, $total) ?? 0.0],
+            'retail' => ['revenue' => $retailRevenue, 'orders' => (int) ($rows['retail']->orders ?? 0), 'share' => $retailShare],
+            self::WHOLESALE => ['revenue' => $wholesaleRevenue, 'orders' => (int) ($rows[self::WHOLESALE]->orders ?? 0), 'share' => $wholesaleShare],
             'mixed_orders' => $mixedOrders,
         ];
     }
@@ -104,7 +106,7 @@ class SellerInsightsService
 
         return DB::query()->fromSub($sales, 't')
             ->join('products as p', 'p.id', '=', 't.product_id')
-            ->leftJoinSub($this->viewsByProduct($range['from'], $range['to']), 'v', 'v.product_id', '=', 't.product_id')
+            ->leftJoinSub($this->viewsByProduct($sellerId, $range['from'], $range['to']), 'v', 'v.product_id', '=', 't.product_id')
             ->orderByDesc('t.revenue')
             ->orderBy('t.product_id')
             ->limit(10)
@@ -145,7 +147,7 @@ class SellerInsightsService
             ->select(['oi.product_id', DB::raw('COUNT(DISTINCT s.id) as orders')]);
 
         return $this->liveProducts($sellerId)
-            ->joinSub($this->viewsByProduct($range['from'], $range['to']), 'v', 'v.product_id', '=', 'p.id')
+            ->joinSub($this->viewsByProduct($sellerId, $range['from'], $range['to']), 'v', 'v.product_id', '=', 'p.id')
             ->leftJoinSub($orders, 'o', 'o.product_id', '=', 'p.id')
             ->where('v.views', '>=', 20)
             ->whereRaw('COALESCE(o.orders, 0) * 100 < v.views')
@@ -158,7 +160,8 @@ class SellerInsightsService
                 'title' => (string) $row->title,
                 'views' => (int) $row->views,
                 'orders' => (int) $row->orders,
-                'conversion' => $this->percent((float) $row->orders, (float) $row->views) ?? 0.0,
+                // Rounded down so a product just under 1% never reads "1.0%" in an "under 1%" list.
+                'conversion' => floor((int) $row->orders * 1000 / (int) $row->views) / 10,
             ])
             ->values()
             ->all();
@@ -335,11 +338,14 @@ class SellerInsightsService
     }
 
     /**
-     * Views per product ("product_id", "views") within the Dhaka days of the period.
+     * Views per product ("product_id", "views") of this seller's products within the Dhaka days of the period.
+     * Filtering by seller inside the subquery lets the (product_id, date) index serve it instead of summing the
+     * whole marketplace's views.
      */
-    protected function viewsByProduct(?CarbonImmutable $from, CarbonImmutable $to): Builder
+    protected function viewsByProduct(int $sellerId, ?CarbonImmutable $from, CarbonImmutable $to): Builder
     {
         return DB::table('product_daily_views')
+            ->whereIn('product_id', DB::table('products')->where('seller_id', $sellerId)->select('id'))
             ->when($from !== null, fn (Builder $query) => $query->where('date', '>=', $from->toDateString()))
             ->where('date', '<=', $to->toDateString())
             ->groupBy('product_id')

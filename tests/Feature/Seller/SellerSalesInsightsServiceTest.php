@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\Reporting\SellerInsightsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Tests\Feature\SellerAccounting\Concerns\BuildsSellerBooksFixtures;
 use Tests\TestCase;
 
@@ -323,5 +324,47 @@ class SellerSalesInsightsServiceTest extends TestCase
         $this->assertSame(1, $rows[0]['orders']);
         $this->assertSame($this->today(), $rows[0]['last_order_on']);
         $this->assertSame(['customer_id', 'name', 'type', 'orders', 'spend', 'last_order_on'], array_keys($rows[0]));
+    }
+
+    public function test_channel_shares_always_add_up_to_100(): void
+    {
+        $seller = $this->makeSeller();
+        $this->sale($seller, [
+            ['product' => $this->makeProduct($seller, 'Retail Saree', 100), 'quantity' => 1, 'unit_price' => 12.25],
+            ['product' => $this->makeProduct($seller, 'Bulk Saree', 100, SalesChannel::WHOLESALE), 'quantity' => 1, 'unit_price' => 87.75],
+        ]);
+
+        $split = $this->insights->channelSplit($seller->id, $this->daysAgo(29), $this->today());
+
+        $this->assertSame(100.0, round($split['retail']['share'] + $split['wholesale']['share'], 1));
+    }
+
+    public function test_view_totals_only_read_this_sellers_products(): void
+    {
+        $seller = $this->makeSeller();
+        $this->sale($seller, [['product' => $this->makeProduct($seller, 'Saree', 100), 'quantity' => 1, 'unit_price' => 100]]);
+
+        DB::enableQueryLog();
+        $this->insights->topProducts($seller->id, null, null);
+        $this->insights->viewedNotSelling($seller->id, null, null);
+        $viewQueries = array_filter(DB::getQueryLog(), fn (array $query): bool => str_contains($query['query'], 'product_daily_views'));
+
+        $this->assertCount(2, $viewQueries);
+        foreach ($viewQueries as $query) {
+            $inner = substr($query['query'], strpos($query['query'], 'product_daily_views'));
+            $this->assertStringContainsString('seller_id', $inner);
+        }
+    }
+
+    public function test_viewed_not_selling_never_shows_one_percent(): void
+    {
+        $seller = $this->makeSeller();
+        $product = $this->liveProduct($seller, 'Almost converting');
+        $this->views($product, $this->today(), 101);
+        $this->sale($seller, [['product' => $product, 'quantity' => 1, 'unit_price' => 100]]);
+
+        $rows = $this->insights->viewedNotSelling($seller->id, $this->daysAgo(29), $this->today());
+
+        $this->assertSame(0.9, $rows[0]['conversion']);
     }
 }
