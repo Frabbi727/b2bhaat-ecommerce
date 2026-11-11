@@ -4,6 +4,7 @@ namespace App\Filament\Admin\Resources\SellerProfiles\Schemas;
 
 use App\Models\User;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
@@ -47,6 +48,37 @@ class SellerProfileForm
                             ->helperText('The account the seller signs in with. Create it under Users first.')
                             ->required()
                             ->columnSpanFull(),
+                    ]),
+
+                Section::make('Business address & phone')
+                    ->description('Printed on the seller\'s challans, shipping labels and quotations. Changes you make here go live straight away.')
+                    ->columns(['default' => 1, 'sm' => 2])
+                    ->schema([
+                        Textarea::make('business_address')
+                            ->label('Business address')
+                            ->rows(2)
+                            ->maxLength(500)
+                            ->columnSpanFull(),
+                        TextInput::make('business_phone')
+                            ->label('Business phone')
+                            ->tel()
+                            ->maxLength(32),
+                        Select::make('show_contact_on_invoice')
+                            ->label('Show on customer invoices')
+                            ->options([
+                                'default' => 'Follow the store setting',
+                                '1' => 'Always show',
+                                '0' => 'Always hide',
+                            ])
+                            ->selectablePlaceholder(false)
+                            ->default('default')
+                            ->formatStateUsing(fn ($state): string => $state === null ? 'default' : ((bool) $state ? '1' : '0'))
+                            ->dehydrateStateUsing(fn (?string $state): ?bool => match ($state) {
+                                '1' => true,
+                                '0' => false,
+                                default => null,
+                            })
+                            ->helperText('Store setting: Settings → Store settings → Invoices.'),
                     ]),
 
                 Section::make('Verification & fees')

@@ -7,6 +7,7 @@ namespace App\Filament\Admin\Pages;
 use App\Services\Settings\StoreConfigurationService;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -66,6 +67,15 @@ class StoreSettings extends Page
             'support_email' => $service->get('support_email', ''),
             'store_address' => $service->get('store_address', ''),
             'announcement_text' => $service->get('announcement_text', ''),
+            'store_tagline' => $service->getStoreIdentity()['tagline'],
+            'store_logo_path' => ($logo = (string) $service->get('store_logo_path', '')) !== '' ? $logo : null,
+            ...collect(StoreConfigurationService::SOCIAL_NETWORKS)
+                ->mapWithKeys(fn (string $label, string $network): array => ["social_{$network}_url" => (string) $service->get("social_{$network}_url", '')])
+                ->all(),
+
+            'invoice_show_seller_address' => $service->getInvoiceDisplaySettings()['show_seller_address'],
+            'invoice_show_seller_phone' => $service->getInvoiceDisplaySettings()['show_seller_phone'],
+            'invoice_footer_note' => (string) $service->get('invoice_footer_note', ''),
 
             'delivery_fee_inside_dhaka' => $service->getDeliveryFee('inside_dhaka'),
             'delivery_fee_sub_dhaka' => $service->getDeliveryFee('sub_dhaka'),
@@ -124,6 +134,7 @@ class StoreSettings extends Page
                     ->persistTabInQueryString('section')
                     ->tabs([
                         $this->shopDetailsTab(),
+                        $this->invoicesTab(),
                         $this->deliveryTab(),
                         $this->checkoutTab(),
                         $this->mobilePaymentsTab(),
@@ -174,6 +185,40 @@ class StoreSettings extends Page
                             ->maxLength(500),
                     ]),
 
+                Section::make('Logo and tagline')
+                    ->description('Used in the shop header, emails, invoices, challans and shipping labels.')
+                    ->columns(['default' => 1, 'md' => 2])
+                    ->schema([
+                        FileUpload::make('store_logo_path')
+                            ->label('Logo')
+                            ->image()
+                            ->disk('public')
+                            ->directory('brand')
+                            ->visibility('public')
+                            ->maxSize(1024)
+                            ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'])
+                            ->imagePreviewHeight('80')
+                            ->helperText('Square PNG works best. Remove it to go back to the default logo.'),
+
+                        TextInput::make('store_tagline')
+                            ->label('Tagline')
+                            ->placeholder('e.g. Hybrid Wholesale & Retail Marketplace Platform')
+                            ->helperText('One short line under the shop name on invoices and in the footer.')
+                            ->maxLength(150),
+                    ]),
+
+                Section::make('Social links')
+                    ->description('Shown as links in the shop footer. Leave a field empty to hide it.')
+                    ->columns(['default' => 1, 'md' => 2])
+                    ->schema(collect(StoreConfigurationService::SOCIAL_NETWORKS)
+                        ->map(fn (string $label, string $network): TextInput => TextInput::make("social_{$network}_url")
+                            ->label($label)
+                            ->url()
+                            ->placeholder('https://')
+                            ->maxLength(255))
+                        ->values()
+                        ->all()),
+
                 Section::make('Announcement')
                     ->schema([
                         TextInput::make('announcement_text')
@@ -181,6 +226,33 @@ class StoreSettings extends Page
                             ->placeholder('e.g. Eid sale: up to 35% off TVs and audio')
                             ->helperText('One short line at the top of every shop page. Leave empty to show nothing.')
                             ->maxLength(150),
+                    ]),
+            ]);
+    }
+
+    private function invoicesTab(): Tab
+    {
+        return Tab::make('Invoices')
+            ->icon(Heroicon::OutlinedDocumentText)
+            ->schema([
+                Section::make('Seller details on customer invoices')
+                    ->description('Each package on an invoice always shows the seller\'s store name. Choose what else buyers see. You can change this for a single seller on their seller profile.')
+                    ->schema([
+                        Toggle::make('invoice_show_seller_address')
+                            ->label('Show the seller\'s business address')
+                            ->helperText('Printed under the seller name, next to the marketplace address at the top.'),
+
+                        Toggle::make('invoice_show_seller_phone')
+                            ->label('Show the seller\'s business phone'),
+                    ]),
+
+                Section::make('Invoice note')
+                    ->schema([
+                        Textarea::make('invoice_footer_note')
+                            ->label('Note at the bottom of every invoice')
+                            ->placeholder('e.g. Goods once sold are returnable within 7 days with this invoice.')
+                            ->rows(3)
+                            ->maxLength(1000),
                     ]),
             ]);
     }
@@ -412,9 +484,19 @@ class StoreSettings extends Page
         // Optional text fields come back as null when cleared; save them as empty so clearing actually works.
         $text = fn (string $key): string => trim((string) ($state[$key] ?? ''));
 
-        foreach (['store_name', 'vat_bin_number', 'helpline_phone', 'support_email', 'store_address', 'announcement_text'] as $key) {
+        foreach (['store_name', 'store_tagline', 'vat_bin_number', 'helpline_phone', 'support_email', 'store_address', 'announcement_text'] as $key) {
             $service->set($key, $text($key), 'general', 'string');
         }
+
+        $service->set('store_logo_path', $text('store_logo_path'), 'general', 'string');
+
+        foreach (array_keys(StoreConfigurationService::SOCIAL_NETWORKS) as $network) {
+            $service->set("social_{$network}_url", $text("social_{$network}_url"), 'general', 'string');
+        }
+
+        $service->set('invoice_show_seller_address', (bool) ($state['invoice_show_seller_address'] ?? false), 'invoice', 'boolean');
+        $service->set('invoice_show_seller_phone', (bool) ($state['invoice_show_seller_phone'] ?? false), 'invoice', 'boolean');
+        $service->set('invoice_footer_note', $text('invoice_footer_note'), 'invoice', 'string');
 
         foreach (['inside_dhaka', 'sub_dhaka', 'outside_dhaka'] as $zone) {
             $service->set("delivery_fee_{$zone}", (float) $state["delivery_fee_{$zone}"], 'delivery', 'float');

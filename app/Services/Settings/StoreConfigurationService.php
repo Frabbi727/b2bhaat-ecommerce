@@ -6,9 +6,22 @@ namespace App\Services\Settings;
 
 use App\Models\StoreSetting;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 
 class StoreConfigurationService
 {
+    /**
+     * Social networks admins can link from the shop footer.
+     *
+     * @var array<string, string>
+     */
+    public const SOCIAL_NETWORKS = [
+        'facebook' => 'Facebook',
+        'youtube' => 'YouTube',
+        'whatsapp' => 'WhatsApp',
+        'linkedin' => 'LinkedIn',
+    ];
+
     /**
      * Retrieve a typed configuration value by key.
      */
@@ -52,17 +65,66 @@ class StoreConfigurationService
     /**
      * Get store branding and identity details.
      *
-     * @return array{name: string, helpline: string, email: string, address: string, vat_bin: string, announcement: string}
+     * @return array{name: string, tagline: string, logo_url: string, helpline: string, email: string, address: string, vat_bin: string, announcement: string, invoice_footer_note: string, social: array<string, string>}
      */
     public function getStoreIdentity(): array
     {
         return [
             'name' => (string) $this->get('store_name', 'B2B Haat'),
+            'tagline' => (string) $this->get('store_tagline', 'Hybrid Wholesale & Retail Marketplace Platform'),
+            'logo_url' => $this->getLogoUrl(),
             'helpline' => (string) $this->get('helpline_phone', ''),
             'email' => (string) $this->get('support_email', ''),
             'address' => (string) $this->get('store_address', ''),
             'vat_bin' => (string) $this->get('vat_bin_number', ''),
             'announcement' => (string) $this->get('announcement_text', ''),
+            'invoice_footer_note' => (string) $this->get('invoice_footer_note', ''),
+            'social' => $this->getSocialLinks(),
+        ];
+    }
+
+    /**
+     * Absolute URL of the uploaded shop logo, or the bundled image when none was uploaded.
+     *
+     * @param  string  $fallback  Bundled image to use without an upload: the square mark or the full wordmark.
+     */
+    public function getLogoUrl(string $fallback = 'images/brand/logo-mark.png'): string
+    {
+        $path = (string) $this->get('store_logo_path', '');
+
+        return $path !== '' ? Storage::disk('public')->url($path) : asset($fallback);
+    }
+
+    /**
+     * Social profile links that were filled in, keyed by network.
+     *
+     * @return array<string, string>
+     */
+    public function getSocialLinks(): array
+    {
+        $links = [];
+
+        foreach (self::SOCIAL_NETWORKS as $network => $label) {
+            $url = (string) $this->get("social_{$network}_url", '');
+
+            if ($url !== '') {
+                $links[$network] = $url;
+            }
+        }
+
+        return $links;
+    }
+
+    /**
+     * Whether seller address and phone print on customer invoices by default. A seller's own override wins.
+     *
+     * @return array{show_seller_address: bool, show_seller_phone: bool}
+     */
+    public function getInvoiceDisplaySettings(): array
+    {
+        return [
+            'show_seller_address' => (bool) $this->get('invoice_show_seller_address', false),
+            'show_seller_phone' => (bool) $this->get('invoice_show_seller_phone', false),
         ];
     }
 

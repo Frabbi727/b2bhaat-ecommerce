@@ -66,13 +66,16 @@
                         {{ $subOrder->seller?->sellerProfile?->store_name ?? 'Factory Shipper' }}
                     </h1>
                     <div class="text-[11px] text-slate-600 space-y-0.5">
-                        <div>Trade License: <strong class="font-mono text-slate-900">{{ $subOrder->seller?->sellerProfile?->trade_license_number ?? 'Verified' }}</strong> | TIN: <strong class="font-mono text-slate-900">{{ $subOrder->seller?->sellerProfile?->tax_id_number ?? 'Verified' }}</strong></div>
-                        <div>Authorized Contact: {{ $subOrder->seller?->name }} ({{ $subOrder->seller?->phone ?? '+8801700000000' }})</div>
+                        <div>Trade License: <strong class="font-mono text-slate-900">{{ $subOrder->seller?->sellerProfile?->trade_license_number ?: '—' }}</strong> | TIN: <strong class="font-mono text-slate-900">{{ $subOrder->seller?->sellerProfile?->tax_id_number ?: '—' }}</strong></div>
+                        @if ($subOrder->seller?->sellerProfile?->business_address)
+                            <div>{{ $subOrder->seller->sellerProfile->business_address }}</div>
+                        @endif
+                        <div>Authorized Contact: {{ $subOrder->seller?->name }}@if ($subOrder->seller?->sellerProfile?->business_phone ?: $subOrder->seller?->phone) ({{ $subOrder->seller?->sellerProfile?->business_phone ?: $subOrder->seller?->phone }})@endif</div>
                     </div>
                 </div>
 
                 <div class="text-right space-y-1">
-                    <img src="{{ asset('images/brand/logo.png') }}" alt="B2B Haat" width="86" height="48" class="h-12 w-auto object-contain ml-auto mb-1">
+                    <x-brand.logo :full="true" width="86" height="48" class="h-12 w-auto object-contain ml-auto mb-1" />
                     <div class="text-lg font-black uppercase tracking-tight text-slate-900 bg-slate-100 px-3 py-1 rounded-lg border border-slate-300 inline-block">
                         DELIVERY CHALLAN
                     </div>

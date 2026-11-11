@@ -111,13 +111,16 @@
                     </h1>
 
                     <div class="text-[11px] text-slate-600 space-y-0.5 leading-relaxed">
-                        <div>Trade License: <strong class="font-mono text-slate-900">{{ $sellerProfile?->trade_license_number ?? 'TRAD/DNCC/VERIFIED' }}</strong> | TIN: <strong class="font-mono text-slate-900">{{ $sellerProfile?->tax_id_number ?? 'TIN-9876543210' }}</strong></div>
-                        <div>Factory Hub: {{ $rfq->seller?->name }} ({{ $rfq->seller?->phone ?? '+8801700000002' }}) • {{ $rfq->seller?->email }}</div>
+                        <div>Trade License: <strong class="font-mono text-slate-900">{{ $sellerProfile?->trade_license_number ?: '—' }}</strong> | TIN: <strong class="font-mono text-slate-900">{{ $sellerProfile?->tax_id_number ?: '—' }}</strong></div>
+                        @if ($sellerProfile?->business_address)
+                            <div>{{ $sellerProfile->business_address }}</div>
+                        @endif
+                        <div>Contact: {{ collect([$rfq->seller?->name, $sellerProfile?->business_phone ?: $rfq->seller?->phone, $rfq->seller?->email])->filter()->implode(' • ') }}</div>
                     </div>
                 </div>
 
                 <div class="text-right space-y-1">
-                    <img src="{{ asset('images/brand/logo.png') }}" alt="B2B Haat" width="86" height="48" class="h-12 w-auto object-contain ml-auto mb-1">
+                    <x-brand.logo :full="true" width="86" height="48" class="h-12 w-auto object-contain ml-auto mb-1" />
                     <div class="text-lg font-black uppercase tracking-tight text-slate-900 bg-slate-100 px-3.5 py-1.5 rounded-lg border border-slate-300 inline-block">
                         PRO-FORMA QUOTATION
                     </div>
@@ -225,7 +228,7 @@
 
             <div class="flex flex-col items-center justify-center">
                 <div class="w-16 h-16 rounded-full border-2 border-dashed border-indigo-300 text-indigo-400 flex flex-col items-center justify-center font-bold text-[8px] uppercase tracking-wider rotate-[-12deg]">
-                    <img src="{{ asset('images/brand/logo-mark.png') }}" alt="" width="20" height="20" class="w-5 h-5 object-contain">
+                    <x-brand.logo alt="" width="20" height="20" class="w-5 h-5 object-contain" />
                     <span>B2B Haat</span>
                     <span class="text-[7px]">Verified</span>
                 </div>

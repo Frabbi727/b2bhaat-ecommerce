@@ -32,6 +32,7 @@
         @php
             $storeConfig = app(\App\Services\Settings\StoreConfigurationService::class);
             $identity = $storeConfig->getStoreIdentity();
+            $invoiceDisplay = $storeConfig->getInvoiceDisplaySettings();
         @endphp
         <!-- Invoice Printable Paper -->
         <div class="invoice-box bg-white p-8 sm:p-12 rounded-3xl border border-slate-200 shadow-sm space-y-8">
@@ -39,10 +40,12 @@
             <div class="flex justify-between items-start border-b border-slate-200 pb-8">
                 <div>
                     <div class="flex items-center gap-2">
-                        <img src="{{ asset('images/brand/logo-mark.png') }}" alt="B2B Haat logo" width="44" height="44" class="w-11 h-11 object-contain">
+                        <img src="{{ $identity['logo_url'] }}" alt="{{ $identity['name'] }} logo" width="44" height="44" class="w-11 h-11 object-contain">
                         <h1 class="text-2xl font-black text-slate-900 tracking-tight">{{ $identity['name'] }}</h1>
                     </div>
-                    <p class="text-xs text-slate-500 mt-1">Hybrid Wholesale & Retail Marketplace Platform</p>
+                    @if ($identity['tagline'])
+                        <p class="text-xs text-slate-500 mt-1">{{ $identity['tagline'] }}</p>
+                    @endif
                     @if ($identity['address'])
                         <p class="text-[11px] text-slate-500 font-mono mt-0.5">{{ $identity['address'] }}</p>
                     @endif
@@ -103,6 +106,16 @@
                                 <strong class="text-indigo-700">{{ $subOrder->seller?->sellerProfile?->store_name }}</strong>
                                 @if ($subOrder->seller?->sellerProfile?->trade_license_number)
                                     <span class="text-[10px] text-slate-400 font-mono">({{ $subOrder->seller?->sellerProfile?->trade_license_number }})</span>
+                                @endif
+                                @php
+                                    $vendorProfile = $subOrder->seller?->sellerProfile;
+                                    $vendorContact = $vendorProfile ? collect([
+                                        $vendorProfile->showsContactOnInvoice($invoiceDisplay['show_seller_address']) ? $vendorProfile->business_address : null,
+                                        $vendorProfile->showsContactOnInvoice($invoiceDisplay['show_seller_phone']) && $vendorProfile->business_phone ? 'Phone: '.$vendorProfile->business_phone : null,
+                                    ])->filter()->implode(' • ') : '';
+                                @endphp
+                                @if ($vendorContact !== '')
+                                    <div class="text-[11px] text-slate-500 mt-0.5" data-testid="vendor-contact">{{ $vendorContact }}</div>
                                 @endif
                             </div>
                             <div>
@@ -206,6 +219,10 @@
                     @endif
                 </div>
             </div>
+
+            @if ($identity['invoice_footer_note'])
+                <div class="text-[11px] text-slate-500 whitespace-pre-line border-t border-slate-100 pt-4">{{ $identity['invoice_footer_note'] }}</div>
+            @endif
 
             <!-- Footer Signatures & Terms -->
             <div class="border-t border-slate-200 pt-8 mt-12 grid grid-cols-2 text-center text-xs text-slate-400">

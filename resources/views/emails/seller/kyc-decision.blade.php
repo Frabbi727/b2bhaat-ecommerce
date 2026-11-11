@@ -42,7 +42,8 @@
         </p>
 
         <p style="font-size: 13px; color: #475569;">
-            You may contact our support team at <a href="mailto:support@b2bhaat.com" style="color: #0D9488;">support@b2bhaat.com</a> with updated documents to reapply.
+            @php($supportEmail = app(\App\Services\Settings\StoreConfigurationService::class)->getStoreIdentity()['email'])
+            You may contact our support team@if ($supportEmail) at <a href="mailto:{{ $supportEmail }}" style="color: #0D9488;">{{ $supportEmail }}</a>@endif with updated documents to reapply.
         </p>
     @endif
 </x-emails.layouts.master>

@@ -17,6 +17,12 @@ class SellerProfile extends Model
         'store_slug',
         'trade_license_number',
         'tax_id_number',
+        'business_address',
+        'business_phone',
+        'pending_business_address',
+        'pending_business_phone',
+        'contact_change_submitted_at',
+        'show_contact_on_invoice',
         'commission_rate_percentage',
         'inside_dhaka_rate',
         'outside_dhaka_rate',
@@ -43,6 +49,8 @@ class SellerProfile extends Model
             'rejected_at' => 'datetime',
             'is_on_vacation' => 'boolean',
             'vacation_ends_at' => 'date',
+            'contact_change_submitted_at' => 'datetime',
+            'show_contact_on_invoice' => 'boolean',
         ];
     }
 
@@ -59,6 +67,53 @@ class SellerProfile extends Model
     public function isApproved(): bool
     {
         return (bool) $this->is_approved;
+    }
+
+    public function hasPendingContactChange(): bool
+    {
+        return $this->contact_change_submitted_at !== null;
+    }
+
+    /**
+     * Store the seller's requested address and phone until an admin approves them; live values stay unchanged.
+     */
+    public function submitContactChange(?string $address, ?string $phone): void
+    {
+        $this->forceFill([
+            'pending_business_address' => filled($address) ? trim($address) : null,
+            'pending_business_phone' => filled($phone) ? trim($phone) : null,
+            'contact_change_submitted_at' => now(),
+        ])->save();
+    }
+
+    public function approveContactChange(): void
+    {
+        $this->forceFill([
+            'business_address' => $this->pending_business_address,
+            'business_phone' => $this->pending_business_phone,
+        ])->clearPendingContactChange();
+    }
+
+    public function rejectContactChange(): void
+    {
+        $this->clearPendingContactChange();
+    }
+
+    /**
+     * Whether this seller's address and phone print on customer invoices: the seller's own override wins, else the platform setting.
+     */
+    public function showsContactOnInvoice(bool $platformDefault): bool
+    {
+        return $this->show_contact_on_invoice ?? $platformDefault;
+    }
+
+    private function clearPendingContactChange(): void
+    {
+        $this->forceFill([
+            'pending_business_address' => null,
+            'pending_business_phone' => null,
+            'contact_change_submitted_at' => null,
+        ])->save();
     }
 
     public function user(): BelongsTo

@@ -104,7 +104,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-3.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-4 gap-y-2.5">
             <!-- Brand Logo -->
             <a href="{{ route('catalog.index') }}" class="flex items-center gap-2.5 text-xl font-black tracking-tight text-slate-900 shrink-0">
-                <img src="{{ asset('images/brand/logo-mark.png') }}" alt="B2B Haat logo" width="40" height="40" class="w-10 h-10 object-contain shrink-0">
+                <x-brand.logo width="40" height="40" class="w-10 h-10 object-contain shrink-0" />
                 <span class="hidden sm:inline">{{ $identity['name'] }}</span>
             </a>
 
@@ -406,7 +406,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-6 gap-y-10">
             <div class="col-span-2 sm:col-span-3 lg:col-span-2 space-y-4 lg:pr-8">
                 <div class="text-white font-bold text-lg flex items-center gap-2">
-                    <span class="w-8 h-8 rounded-lg bg-white flex items-center justify-center p-0.5"><img src="{{ asset('images/brand/logo-mark.png') }}" alt="" width="28" height="28" class="w-7 h-7 object-contain"></span>
+                    <span class="w-8 h-8 rounded-lg bg-white flex items-center justify-center p-0.5"><x-brand.logo alt="" width="28" height="28" class="w-7 h-7 object-contain" /></span>
                     <span>{{ $identity['name'] }}</span>
                 </div>
                 <p class="text-sm leading-relaxed text-slate-400 max-w-sm">
@@ -423,6 +423,13 @@
                         <div>{{ $identity['address'] }}</div>
                     @endif
                 </div>
+                @if ($identity['social'] !== [])
+                    <div class="flex items-center gap-2 flex-wrap">
+                        @foreach ($identity['social'] as $network => $socialUrl)
+                            <a href="{{ $socialUrl }}" target="_blank" rel="noopener noreferrer" class="px-2.5 py-1 rounded-md bg-slate-800 text-slate-200 border border-slate-700 text-xs font-semibold hover:text-white hover:border-slate-500 transition">{{ \App\Services\Settings\StoreConfigurationService::SOCIAL_NETWORKS[$network] }}</a>
+                        @endforeach
+                    </div>
+                @endif
                 @if ($buyerPaymentMethods->isNotEmpty())
                     <div class="pt-1">
                         <div class="text-xs text-slate-500 mb-2">We accept</div>

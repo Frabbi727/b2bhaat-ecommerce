@@ -32,7 +32,7 @@
                             <table width="100%" cellspacing="0" cellpadding="0" border="0">
                                 <tr>
                                     <td>
-                                        <a href="{{ config('app.url') }}" style="text-decoration: none;"><img src="{{ asset('images/brand/logo.png') }}" alt="B2B Haat" width="140" height="78" style="display: block; width: 140px; height: auto; border: 0;"></a>
+                                        <a href="{{ config('app.url') }}" style="text-decoration: none;"><x-brand.logo :full="true" width="140" height="78" style="display: block; width: 140px; height: auto; border: 0;" /></a>
                                         <p style="margin: 6px 0 0 0; font-size: 11px; color: #64748B; text-transform: uppercase; letter-spacing: 1px;">Wholesale & Retail Marketplace</p>
                                     </td>
                                     @isset($headerBadge)
@@ -60,7 +60,8 @@
                             <p style="margin: 0 0 8px 0; font-weight: 600; color: #334155;">B2Bhaat Commercial Marketplace</p>
                             <p style="margin: 0 0 12px 0;">Connecting verified Bangladeshi manufacturers, importers and retailers nationwide.</p>
                             <p style="margin: 0; font-size: 12px; color: #94A3B8;">
-                                Need help? Email us at <a href="mailto:support@b2bhaat.com" style="color: #0D9488;">support@b2bhaat.com</a> or visit <a href="{{ config('app.url') }}" style="color: #0D9488;">b2bhaat.com</a>
+                                @php($mailIdentity = app(\App\Services\Settings\StoreConfigurationService::class)->getStoreIdentity())
+                                Need help? @if ($mailIdentity['email'])Email us at <a href="mailto:{{ $mailIdentity['email'] }}" style="color: #0D9488;">{{ $mailIdentity['email'] }}</a> or visit @else Visit @endif<a href="{{ config('app.url') }}" style="color: #0D9488;">{{ parse_url(config('app.url'), PHP_URL_HOST) ?: $mailIdentity['name'] }}</a>
                             </p>
                         </td>
                     </tr>

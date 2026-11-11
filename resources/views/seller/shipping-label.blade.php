@@ -132,10 +132,13 @@
                 {{ $subOrder->seller?->sellerProfile?->store_name ?? 'Factory Merchant' }}
             </div>
             <div class="text-slate-600 font-mono">
-                Trade Lic: {{ $subOrder->seller?->sellerProfile?->trade_license_number ?? 'Verified Manufacturer' }}
+                Trade Lic: {{ $subOrder->seller?->sellerProfile?->trade_license_number ?: '—' }}
             </div>
             <div class="text-slate-600">
-                Supplier Contact: {{ $subOrder->seller?->phone ?? '+8801700000002' }}
+                @if ($subOrder->seller?->sellerProfile?->business_address)
+                    <div>{{ $subOrder->seller->sellerProfile->business_address }}</div>
+                @endif
+                Supplier Contact: {{ $subOrder->seller?->sellerProfile?->business_phone ?: ($subOrder->seller?->phone ?: '—') }}
             </div>
         </div>
 
@@ -160,7 +163,7 @@
 
         <!-- Section 7: Footer Routing Footer -->
         <div class="border-t-2 border-slate-900 pt-1 flex justify-between items-center text-[8px] font-mono text-slate-500">
-            <span class="flex items-center gap-1"><img src="{{ asset('images/brand/logo-mark.png') }}" alt="" width="12" height="12" class="w-3 h-3 object-contain">B2B HAAT</span>
+            <span class="flex items-center gap-1"><x-brand.logo alt="" width="12" height="12" class="w-3 h-3 object-contain" />{{ strtoupper(app(\App\Services\Settings\StoreConfigurationService::class)->getStoreIdentity()['name']) }}</span>
             <span>GEN: {{ now()->format('Y-m-d H:i') }}</span>
         </div>
     </div>

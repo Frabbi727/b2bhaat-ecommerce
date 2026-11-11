@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Financial Statement - {{ $seller->sellerProfile?->store_name ?? $seller->name }} - B2B Haat</title>
+    <title>Financial Statement - {{ $seller->sellerProfile?->store_name ?? $seller->name }} - {{ app(\App\Services\Settings\StoreConfigurationService::class)->getStoreIdentity()['name'] }}</title>
     <x-brand.favicons />
     @vite(['resources/css/app.css'])
     <style>
@@ -43,7 +43,7 @@
         <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-6 border-b border-slate-200 pb-8">
             <div class="space-y-1.5">
                 <div class="flex items-center gap-2">
-                    <img src="{{ asset('images/brand/logo-mark.png') }}" alt="" width="32" height="32" class="w-8 h-8 object-contain">
+                    <x-brand.logo alt="" width="32" height="32" class="w-8 h-8 object-contain" />
                     <span class="text-xl font-black text-slate-900 tracking-tight">B2B HAAT</span>
                     <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 uppercase tracking-wider">Seller statement</span>
                 </div>
@@ -77,9 +77,11 @@
 
             <div class="space-y-2 sm:text-right">
                 <span class="font-bold text-[11px] uppercase tracking-wider text-slate-500">Regulatory Credentials</span>
-                <div class="text-slate-700">Govt. Trade License: <strong class="font-mono text-slate-900">{{ $seller->trade_license_number ?? 'TRAD/DNCC/092143/2024' }}</strong></div>
-                <div class="text-slate-700">Tax Identification (TIN): <strong class="font-mono text-slate-900">{{ $seller->tax_id_number ?? '482910482910' }}</strong></div>
-                <div class="text-slate-700">Registered Hub: <span class="font-medium text-slate-900">Tejgaon Industrial Area, Dhaka</span></div>
+                <div class="text-slate-700">Govt. Trade License: <strong class="font-mono text-slate-900">{{ $seller->sellerProfile?->trade_license_number ?: '—' }}</strong></div>
+                <div class="text-slate-700">Tax Identification (TIN): <strong class="font-mono text-slate-900">{{ $seller->sellerProfile?->tax_id_number ?: '—' }}</strong></div>
+                @if ($seller->sellerProfile?->business_address)
+                    <div class="text-slate-700">Business address: <span class="font-medium text-slate-900">{{ $seller->sellerProfile->business_address }}</span></div>
+                @endif
                 <div class="text-slate-700">Platform Commission Tier: <strong class="text-indigo-600">{{ $seller->sellerProfile?->commission_rate_percentage ?? '10.0' }}% Retail / 4.0% Wholesale</strong></div>
             </div>
         </div>

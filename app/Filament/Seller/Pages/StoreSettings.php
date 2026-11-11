@@ -3,6 +3,8 @@
 namespace App\Filament\Seller\Pages;
 
 use App\Models\SellerProfile;
+use App\Models\User;
+use App\Notifications\Seller\SellerContactChangeSubmitted;
 use App\Services\Monetization\SellerTermsSummary;
 use App\Services\Settings\StoreConfigurationService;
 use BackedEnum;
@@ -24,11 +26,13 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Facades\Notification as NotificationFacade;
+use Throwable;
 use UnitEnum;
 
 /**
  * The seller's own store controls: pausing orders (vacation mode) and overriding delivery charges.
- * Verified business details are shown read-only; only an admin can change them.
+ * Verified business details are shown read-only; a business address or phone edit waits for admin approval.
  */
 class StoreSettings extends Page
 {
@@ -60,6 +64,9 @@ class StoreSettings extends Page
             'inside_dhaka_rate' => $profile?->inside_dhaka_rate !== null ? (float) $profile->inside_dhaka_rate : null,
             'outside_dhaka_rate' => $profile?->outside_dhaka_rate !== null ? (float) $profile->outside_dhaka_rate : null,
             'free_shipping_threshold' => $profile?->free_shipping_threshold !== null ? (float) $profile->free_shipping_threshold : null,
+            // Show what the seller last asked for while it waits, so they can correct it before an admin reviews it
+            'business_address' => $profile?->hasPendingContactChange() ? $profile->pending_business_address : $profile?->business_address,
+            'business_phone' => $profile?->hasPendingContactChange() ? $profile->pending_business_phone : $profile?->business_phone,
         ]);
     }
 
@@ -132,6 +139,33 @@ class StoreSettings extends Page
                             ->helperText('Shown to buyers only. Orders stay paused until you switch vacation mode off yourself.')
                             ->visible(fn (Get $get): bool => (bool) $get('is_on_vacation'))
                             ->maxWidth('xs'),
+                    ]),
+
+                Section::make('Business address & phone')
+                    ->description('Printed on your challans, shipping labels and quotations, and on buyer invoices when the marketplace shows seller details. Changes go live after an admin approves them.')
+                    ->icon(Heroicon::OutlinedMapPin)
+                    ->schema([
+                        TextEntry::make('pending_contact_notice')
+                            ->hiddenLabel()
+                            ->state(fn (): ?string => $this->profile()?->hasPendingContactChange()
+                                ? 'Waiting for admin approval since '.$this->profile()->contact_change_submitted_at?->timezone('Asia/Dhaka')->format('d M Y, g:i A').'. Your documents still show the old details.'
+                                : null)
+                            ->badge()
+                            ->color('warning')
+                            ->visible(fn (): bool => (bool) $this->profile()?->hasPendingContactChange()),
+
+                        Textarea::make('business_address')
+                            ->label('Business address')
+                            ->placeholder('e.g. Plot 12, Road 3, BSCIC Industrial Area, Tongi, Gazipur')
+                            ->rows(2)
+                            ->maxLength(500),
+
+                        TextInput::make('business_phone')
+                            ->label('Business phone')
+                            ->tel()
+                            ->placeholder('+880 1XXX-XXXXXX')
+                            ->maxLength(32)
+                            ->maxWidth('sm'),
                     ]),
 
                 Section::make('Delivery charges')
@@ -242,6 +276,12 @@ class StoreSettings extends Page
                     ->helperText('Full terms and next payment: Subscription & Billing.')
                     ->placeholder('Not set'),
 
+                TextEntry::make('business_contact')
+                    ->label('Address on your documents')
+                    ->state(collect([$profile?->business_address, $profile?->business_phone])->filter()->all())
+                    ->listWithLineBreaks()
+                    ->placeholder('Not set yet'),
+
                 TextEntry::make('contact')
                     ->label('Account contact')
                     ->state(collect([$user?->phone, $user?->email])->filter()->all())
@@ -277,12 +317,57 @@ class StoreSettings extends Page
             'free_shipping_threshold' => $data['free_shipping_threshold'] ?? null,
         ]);
 
+        $contactSubmitted = $this->submitContactChangeIfEdited($profile, $data);
+
         $this->rememberData();
 
         Notification::make()
             ->title('Settings saved')
-            ->body($isOnVacation ? 'Orders are paused. Buyers can browse but cannot check out from your store.' : 'Your store is open for orders.')
+            ->body(($isOnVacation ? 'Orders are paused. Buyers can browse but cannot check out from your store.' : 'Your store is open for orders.')
+                .($contactSubmitted ? ' Your new address and phone were sent to the marketplace for approval.' : ''))
             ->success()
             ->send();
+    }
+
+    /**
+     * Queue an address or phone edit for admin approval. Returns whether a new request was sent.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function submitContactChangeIfEdited(SellerProfile $profile, array $data): bool
+    {
+        $normalize = fn (mixed $value): ?string => filled($value) ? trim((string) $value) : null;
+        $address = $normalize($data['business_address'] ?? null);
+        $phone = $normalize($data['business_phone'] ?? null);
+
+        $current = $profile->hasPendingContactChange()
+            ? [$profile->pending_business_address, $profile->pending_business_phone]
+            : [$profile->business_address, $profile->business_phone];
+
+        if ([$address, $phone] === array_map($normalize, $current)) {
+            return false;
+        }
+
+        // Going back to exactly the approved details simply withdraws the pending request
+        if ([$address, $phone] === array_map($normalize, [$profile->business_address, $profile->business_phone])) {
+            $profile->rejectContactChange();
+
+            return false;
+        }
+
+        $profile->submitContactChange($address, $phone);
+
+        try {
+            $admins = User::query()
+                ->whereHas('role', fn ($query) => $query->whereIn('slug', ['super_admin', 'admin']))
+                ->where('is_active', true)
+                ->get();
+
+            NotificationFacade::send($admins, new SellerContactChangeSubmitted($profile));
+        } catch (Throwable $e) {
+            report($e);
+        }
+
+        return true;
     }
 }

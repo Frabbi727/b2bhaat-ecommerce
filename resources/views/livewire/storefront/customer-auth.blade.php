@@ -3,7 +3,7 @@
         <!-- Brand Header Strip -->
         <div class="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white p-6 text-center space-y-2">
             <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-white p-1.5 shadow-lg mb-1">
-                <img src="{{ asset('images/brand/logo-mark.png') }}" alt="B2B Haat logo" width="44" height="44" class="w-full h-full object-contain">
+                <x-brand.logo width="44" height="44" class="w-full h-full object-contain" />
             </div>
             <h1 class="text-xl sm:text-2xl font-black tracking-tight text-white">
                 {{ $mode === 'register' ? 'Join B2B Haat Marketplace' : 'Welcome Back' }}

@@ -222,7 +222,7 @@ class SubOrdersTable
                         ->required(),
                     TextInput::make('hub_location')
                         ->label('Courier Hub / Location')
-                        ->default('Tejgaon Sorting Hub, Dhaka')
+                        ->placeholder('e.g. Tejgaon Sorting Hub, Dhaka')
                         ->required(),
                     TextInput::make('title')
                         ->label('Log Headline')
@@ -280,7 +280,8 @@ class SubOrdersTable
                 ->schema([
                     TextInput::make('hub_location')
                         ->label('Factory Dispatch Bay / Hub Location')
-                        ->default(fn (SubOrder $record) => ($record->seller?->sellerProfile?->store_name ?? 'Factory').' Factory Bay, Dhaka')
+                        ->default(fn (SubOrder $record): ?string => $record->seller?->sellerProfile?->business_address)
+                        ->placeholder('Your factory or warehouse address')
                         ->required(),
                     TextInput::make('driver_contact')
                         ->label('Fleet Driver / Representative Phone')
@@ -404,7 +405,8 @@ class SubOrdersTable
 
                     TextInput::make('pickup_address')
                         ->label('Pickup Warehouse / Factory Location')
-                        ->default(fn (SubOrder $record) => ($record->seller?->sellerProfile?->store_name ?? 'Factory').' Main Warehouse, Dhaka')
+                        ->default(fn (SubOrder $record): ?string => $record->seller?->sellerProfile?->business_address)
+                        ->placeholder('Your factory or warehouse address')
                         ->required(),
 
                     TextInput::make('estimated_weight')
