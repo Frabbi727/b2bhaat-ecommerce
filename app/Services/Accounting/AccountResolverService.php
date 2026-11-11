@@ -34,8 +34,12 @@ class AccountResolverService
             return $this->bySlug[$slug];
         }
 
-        /** @var AccountingAccount $account */
-        $account = AccountingAccount::where('system_slug', $slug)->firstOrFail();
+        /** @var AccountingAccount|null $account */
+        $account = AccountingAccount::where('system_slug', $slug)->first();
+
+        if ($account === null) {
+            throw new ModelNotFoundException("The ledger account \"{$slug}\" is missing, so this can't be recorded and nothing was changed. Ask the admin to run: php artisan migrate --force && php artisan db:seed --class=AccountingChartOfAccountsSeeder --force");
+        }
 
         if (! $account->is_active) {
             throw InactiveAccountException::forAccount($slug);

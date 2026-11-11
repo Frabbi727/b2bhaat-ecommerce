@@ -118,16 +118,19 @@ class SelfDeliveryService
 
         RateLimiter::clear($limiterKey);
 
-        $subOrder->update([
-            'handover_confirmed_at' => now(),
-        ]);
+        // One unit: if settlement fails, the parcel must not look received
+        DB::transaction(function () use ($subOrder): void {
+            $subOrder->update([
+                'handover_confirmed_at' => now(),
+            ]);
 
-        $this->courierStatusService->updateStatus(
-            subOrder: $subOrder,
-            statusSlug: 'delivered',
-            hubLocation: 'Customer Destination',
-            title: 'Delivered via Factory Fleet (Code Verified)',
-            description: 'Package successfully delivered and confirmed using buyer 6-digit handover verification code.'
-        );
+            $this->courierStatusService->updateStatus(
+                subOrder: $subOrder,
+                statusSlug: 'delivered',
+                hubLocation: 'Customer Destination',
+                title: 'Delivered via Factory Fleet (Code Verified)',
+                description: 'Package successfully delivered and confirmed using buyer 6-digit handover verification code.'
+            );
+        });
     }
 }
