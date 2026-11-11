@@ -6,7 +6,7 @@
     <title>{{ $title ?? 'B2B Haat - Premium E-Commerce & Wholesale Marketplace' }}</title>
     <meta name="description" content="{{ $metaDescription ?? 'Bangladesh\'s trusted multi-vendor marketplace for factory-direct electronics, smart TVs, home appliances, and wholesale sourcing with verified escrow protection.' }}">
     <link rel="canonical" href="{{ url()->current() }}">
-    <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
+    <x-brand.favicons />
     <meta name="theme-color" content="#4338ca">
 
     <!-- Open Graph / Social SEO -->
@@ -14,13 +14,13 @@
     <meta property="og:url" content="{{ url()->current() }}">
     <meta property="og:title" content="{{ $title ?? 'B2B Haat - Premium E-Commerce & Wholesale Marketplace' }}">
     <meta property="og:description" content="{{ $metaDescription ?? 'Shop authentic electronics, smart TVs, appliances, and factory-direct inventory with nationwide delivery.' }}">
-    <meta property="og:image" content="{{ $metaImage ?? 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=1200' }}">
+    <meta property="og:image" content="{{ $metaImage ?? asset('images/brand/og-image.png') }}">
 
     <!-- Twitter Cards -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ $title ?? 'B2B Haat - Premium E-Commerce & Wholesale Marketplace' }}">
     <meta name="twitter:description" content="{{ $metaDescription ?? 'Shop authentic electronics, smart TVs, appliances, and factory-direct inventory with nationwide delivery.' }}">
-    <meta name="twitter:image" content="{{ $metaImage ?? 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=1200' }}">
+    <meta name="twitter:image" content="{{ $metaImage ?? asset('images/brand/og-image.png') }}">
 
     @stack('jsonld')
     <link rel="preconnect" href="https://fonts.bunny.net">
@@ -104,9 +104,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-3.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-4 gap-y-2.5">
             <!-- Brand Logo -->
             <a href="{{ route('catalog.index') }}" class="flex items-center gap-2.5 text-xl font-black tracking-tight text-slate-900 shrink-0">
-                <span class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-700 to-indigo-500 text-white flex items-center justify-center font-black text-base shadow-sm">
-                    B2B
-                </span>
+                <img src="{{ asset('images/brand/logo-mark.png') }}" alt="B2B Haat logo" width="40" height="40" class="w-10 h-10 object-contain shrink-0">
                 <span class="hidden sm:inline">{{ $identity['name'] }}</span>
             </a>
 
@@ -408,7 +406,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-6 gap-y-10">
             <div class="col-span-2 sm:col-span-3 lg:col-span-2 space-y-4 lg:pr-8">
                 <div class="text-white font-bold text-lg flex items-center gap-2">
-                    <span class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-[11px]">B2B</span>
+                    <span class="w-8 h-8 rounded-lg bg-white flex items-center justify-center p-0.5"><img src="{{ asset('images/brand/logo-mark.png') }}" alt="" width="28" height="28" class="w-7 h-7 object-contain"></span>
                     <span>{{ $identity['name'] }}</span>
                 </div>
                 <p class="text-sm leading-relaxed text-slate-400 max-w-sm">

@@ -21,6 +21,7 @@ use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -40,6 +41,9 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->brandName(fn (): string => app(StoreConfigurationService::class)->getStoreIdentity()['name'].' Admin')
+            ->brandLogo(fn (): View => view('filament.brand-logo'))
+            ->brandLogoHeight('2rem')
+            ->favicon(asset('favicon-32x32.png'))
             ->path('admin')
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->login()

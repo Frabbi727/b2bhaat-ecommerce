@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Financial Statement - {{ $seller->sellerProfile?->store_name ?? $seller->name }} - B2B Haat</title>
+    <x-brand.favicons />
     @vite(['resources/css/app.css'])
     <style>
         @media print {
@@ -42,7 +43,8 @@
         <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-6 border-b border-slate-200 pb-8">
             <div class="space-y-1.5">
                 <div class="flex items-center gap-2">
-                    <span class="text-xl font-black text-indigo-600 tracking-tight">B2B HAAT</span>
+                    <img src="{{ asset('images/brand/logo-mark.png') }}" alt="" width="32" height="32" class="w-8 h-8 object-contain">
+                    <span class="text-xl font-black text-slate-900 tracking-tight">B2B HAAT</span>
                     <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 uppercase tracking-wider">Seller statement</span>
                 </div>
                 <h1 class="text-2xl font-black text-slate-900 tracking-tight">Merchant Financial Statement</h1>

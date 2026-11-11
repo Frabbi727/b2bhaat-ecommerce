@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Commercial Quotation - QT-RFQ-{{ str_pad($rfq->id, 6, '0', STR_PAD_LEFT) }}</title>
+    <x-brand.favicons />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         @page {
@@ -116,6 +117,7 @@
                 </div>
 
                 <div class="text-right space-y-1">
+                    <img src="{{ asset('images/brand/logo.png') }}" alt="B2B Haat" width="86" height="48" class="h-12 w-auto object-contain ml-auto mb-1">
                     <div class="text-lg font-black uppercase tracking-tight text-slate-900 bg-slate-100 px-3.5 py-1.5 rounded-lg border border-slate-300 inline-block">
                         PRO-FORMA QUOTATION
                     </div>

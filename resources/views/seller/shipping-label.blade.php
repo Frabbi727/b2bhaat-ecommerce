@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shipping Label - {{ $subOrder->sub_order_number }}</title>
+    <x-brand.favicons />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         @page {
@@ -159,7 +160,7 @@
 
         <!-- Section 7: Footer Routing Footer -->
         <div class="border-t-2 border-slate-900 pt-1 flex justify-between items-center text-[8px] font-mono text-slate-500">
-            <span>B2B HAAT</span>
+            <span class="flex items-center gap-1"><img src="{{ asset('images/brand/logo-mark.png') }}" alt="" width="12" height="12" class="w-3 h-3 object-contain">B2B HAAT</span>
             <span>GEN: {{ now()->format('Y-m-d H:i') }}</span>
         </div>
     </div>

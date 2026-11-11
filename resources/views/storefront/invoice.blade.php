@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Commercial Tax Invoice - {{ $order->order_number }}</title>
+    <x-brand.favicons />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         @media print {
@@ -38,7 +39,7 @@
             <div class="flex justify-between items-start border-b border-slate-200 pb-8">
                 <div>
                     <div class="flex items-center gap-2">
-                        <span class="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-black text-lg">B2B</span>
+                        <img src="{{ asset('images/brand/logo-mark.png') }}" alt="B2B Haat logo" width="44" height="44" class="w-11 h-11 object-contain">
                         <h1 class="text-2xl font-black text-slate-900 tracking-tight">{{ $identity['name'] }}</h1>
                     </div>
                     <p class="text-xs text-slate-500 mt-1">Hybrid Wholesale & Retail Marketplace Platform</p>

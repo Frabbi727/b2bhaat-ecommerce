@@ -11,9 +11,7 @@
         img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
         body { margin: 0; padding: 0; width: 100% !important; background-color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1E293B; }
         .container { max-width: 600px; margin: 0 auto; background-color: #FFFFFF; border-radius: 8px; overflow: hidden; border: 1px solid #E2E8F0; }
-        .header { background-color: #0F172A; padding: 24px 32px; text-align: left; }
-        .header h1 { margin: 0; font-size: 20px; font-weight: 700; color: #FFFFFF; letter-spacing: -0.5px; }
-        .header span { color: #10B981; }
+        .header { background-color: #FFFFFF; padding: 20px 32px; text-align: left; border-bottom: 3px solid #60A5FA; }
         .content { padding: 32px; font-size: 15px; line-height: 1.6; color: #334155; }
         .footer { background-color: #F1F5F9; padding: 24px 32px; text-align: center; font-size: 13px; color: #64748B; border-top: 1px solid #E2E8F0; }
         .footer a { color: #0F172A; text-decoration: underline; font-weight: 500; }
@@ -34,12 +32,12 @@
                             <table width="100%" cellspacing="0" cellpadding="0" border="0">
                                 <tr>
                                     <td>
-                                        <h1 style="color: #FFFFFF; margin: 0; font-size: 22px;">B2B<span>haat</span></h1>
-                                        <p style="margin: 4px 0 0 0; font-size: 12px; color: #94A3B8; text-transform: uppercase; letter-spacing: 1px;">Wholesale & Retail Marketplace</p>
+                                        <a href="{{ config('app.url') }}" style="text-decoration: none;"><img src="{{ asset('images/brand/logo.png') }}" alt="B2B Haat" width="140" height="78" style="display: block; width: 140px; height: auto; border: 0;"></a>
+                                        <p style="margin: 6px 0 0 0; font-size: 11px; color: #64748B; text-transform: uppercase; letter-spacing: 1px;">Wholesale & Retail Marketplace</p>
                                     </td>
                                     @isset($headerBadge)
-                                        <td align="right">
-                                            <span style="background-color: rgba(16, 185, 129, 0.2); color: #10B981; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600;">
+                                        <td align="right" valign="middle">
+                                            <span style="background-color: #ECFDF5; color: #047857; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600;">
                                                 {{ $headerBadge }}
                                             </span>
                                         </td>
