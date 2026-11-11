@@ -1,5 +1,5 @@
 @php
-    $presets = ['month' => 'This month', 'last_month' => 'Last month', 'quarter' => 'This quarter', 'year' => 'This year', 'all' => 'All time'];
+    $presets = $this->periodPresets();
 @endphp
 
 <div class="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm sm:flex-row sm:items-end sm:justify-between dark:border-white/10 dark:bg-gray-900 print:hidden">

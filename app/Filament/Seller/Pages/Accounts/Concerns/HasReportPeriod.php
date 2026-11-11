@@ -8,7 +8,7 @@ use Carbon\CarbonImmutable;
 use Livewire\Attributes\Url;
 
 /**
- * A date range with quick presets (this month, last month, quarter, year, all time), kept in the URL.
+ * A date range with quick presets (this month, last month, quarter, year, last 7/30/90 days, all time), kept in the URL.
  */
 trait HasReportPeriod
 {
@@ -19,13 +19,29 @@ trait HasReportPeriod
     public ?string $endDate = null;
 
     #[Url]
-    public ?string $preset = 'month';
+    public ?string $preset = null;
 
     public function mountHasReportPeriod(): void
     {
-        if ($this->startDate === null && $this->endDate === null && $this->preset !== null) {
-            $this->setPreset($this->preset);
+        if ($this->startDate === null && $this->endDate === null) {
+            $this->setPreset($this->preset ?? $this->defaultPreset());
         }
+    }
+
+    /** The preset a page opens on when the URL names no period. */
+    protected function defaultPreset(): string
+    {
+        return 'month';
+    }
+
+    /**
+     * The preset buttons shown in the period picker, keyed by preset.
+     *
+     * @return array<string, string>
+     */
+    public function periodPresets(): array
+    {
+        return ['month' => 'This month', 'last_month' => 'Last month', 'quarter' => 'This quarter', 'year' => 'This year', 'all' => 'All time'];
     }
 
     public function setPreset(string $preset): void
@@ -37,10 +53,13 @@ trait HasReportPeriod
             'last_month' => [$now->subMonthNoOverflow()->startOfMonth(), $now->subMonthNoOverflow()->endOfMonth()],
             'quarter' => [$now->startOfQuarter(), $now->endOfQuarter()],
             'year' => [$now->startOfYear(), $now->endOfYear()],
+            '7d' => [$now->subDays(6)->startOfDay(), $now],
+            '30d' => [$now->subDays(29)->startOfDay(), $now],
+            '90d' => [$now->subDays(89)->startOfDay(), $now],
             default => [null, null],
         };
 
-        $this->preset = in_array($preset, ['month', 'last_month', 'quarter', 'year'], true) ? $preset : 'all';
+        $this->preset = in_array($preset, ['month', 'last_month', 'quarter', 'year', '7d', '30d', '90d'], true) ? $preset : 'all';
         $this->startDate = $from?->toDateString();
         $this->endDate = $to?->toDateString();
     }

@@ -198,4 +198,25 @@ class SellerBooksPagesTest extends TestCase
             Livewire::test($page)->call('exportCsv')->assertFileDownloaded();
         }
     }
+
+    public function test_accounts_pages_still_default_to_this_month(): void
+    {
+        $this->actAsSeller($this->makeSeller());
+
+        Livewire::test(ProfitAndLoss::class)
+            ->assertSet('preset', 'month')
+            ->assertSet('startDate', now(config('app.display_timezone'))->startOfMonth()->toDateString());
+    }
+
+    public function test_rolling_presets_set_a_range_ending_today(): void
+    {
+        $this->actAsSeller($this->makeSeller());
+        $today = now(config('app.display_timezone'));
+
+        Livewire::test(ProfitAndLoss::class)
+            ->call('setPreset', '30d')
+            ->assertSet('preset', '30d')
+            ->assertSet('endDate', $today->toDateString())
+            ->assertSet('startDate', $today->copy()->subDays(29)->toDateString());
+    }
 }
