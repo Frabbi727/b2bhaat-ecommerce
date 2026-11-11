@@ -6,6 +6,7 @@ namespace Tests\Feature\Seller;
 
 use App\Models\Product;
 use App\Models\ProductDailyView;
+use App\Models\Role;
 use App\Models\SalesChannel;
 use App\Models\SubOrder;
 use App\Models\User;
@@ -260,5 +261,67 @@ class SellerSalesInsightsServiceTest extends TestCase
         $this->views($this->makeProduct($seller, 'Lungi', 100), '2026-11-08', 3);
 
         $this->assertSame('2026-11-08', $this->insights->viewsCountedSince());
+    }
+
+    public function test_repeat_buyer_counts_an_order_before_the_period(): void
+    {
+        $seller = $this->makeSeller();
+        $product = $this->makeProduct($seller, 'Saree', 100);
+        $line = [['product' => $product, 'quantity' => 1, 'unit_price' => 100]];
+        [$m, $n, $o] = [$this->makeBuyer(), $this->makeBuyer(), $this->makeBuyer()];
+        $this->sale($seller, $line, now()->subDays(60)->toDateTimeString(), buyer: $m);
+        $this->sale($seller, $line, buyer: $m);
+        $this->sale($seller, $line, buyer: $n);
+        $this->sale($seller, $line, now()->subDays(60)->toDateTimeString(), fulfillment: 'cancelled', buyer: $o);
+        $this->sale($seller, $line, buyer: $o);
+
+        $buyers = $this->insights->buyerSummary($seller->id, $this->daysAgo(29), $this->today());
+
+        $this->assertSame(['unique' => 3, 'repeat' => 1, 'repeat_rate' => 33.3], $buyers);
+    }
+
+    public function test_orders_from_another_seller_do_not_make_a_repeat_buyer(): void
+    {
+        $seller = $this->makeSeller();
+        $other = $this->makeSeller();
+        $buyer = $this->makeBuyer();
+        $this->sale($other, [['product' => $this->makeProduct($other, 'Lungi', 100), 'quantity' => 1, 'unit_price' => 100]], now()->subDays(60)->toDateTimeString(), buyer: $buyer);
+        $this->sale($seller, [['product' => $this->makeProduct($seller, 'Saree', 100), 'quantity' => 1, 'unit_price' => 100]], buyer: $buyer);
+
+        $buyers = $this->insights->buyerSummary($seller->id, $this->daysAgo(29), $this->today());
+
+        $this->assertSame(['unique' => 1, 'repeat' => 0, 'repeat_rate' => 0.0], $buyers);
+    }
+
+    public function test_buyer_summary_with_no_buyers_has_no_rate(): void
+    {
+        $seller = $this->makeSeller();
+
+        $this->assertSame(['unique' => 0, 'repeat' => 0, 'repeat_rate' => null], $this->insights->buyerSummary($seller->id, $this->daysAgo(29), $this->today()));
+    }
+
+    public function test_best_customers_ranked_by_spend_show_business_name_and_no_contact_details(): void
+    {
+        $seller = $this->makeSeller();
+        $product = $this->makeProduct($seller, 'Saree', 100);
+        $trader = $this->makeBuyer();
+        $trader->forceFill([
+            'role_id' => Role::where('slug', 'wholesale_buyer')->value('id'),
+            'business_name' => 'Rahim Traders',
+            'is_wholesale_approved' => true,
+        ])->save();
+        $shopper = $this->makeBuyer();
+        $this->sale($seller, [['product' => $product, 'quantity' => 1, 'unit_price' => 2000]], buyer: $shopper);
+        $this->sale($seller, [['product' => $product, 'quantity' => 3, 'unit_price' => 3000]], buyer: $trader);
+
+        $rows = $this->insights->bestCustomers($seller->id, $this->daysAgo(29), $this->today());
+
+        $this->assertSame(['Rahim Traders', $shopper->name], array_column($rows, 'name'));
+        $this->assertSame('wholesale', $rows[0]['type']);
+        $this->assertSame('retail', $rows[1]['type']);
+        $this->assertSame(9000.0, $rows[0]['spend']);
+        $this->assertSame(1, $rows[0]['orders']);
+        $this->assertSame($this->today(), $rows[0]['last_order_on']);
+        $this->assertSame(['customer_id', 'name', 'type', 'orders', 'spend', 'last_order_on'], array_keys($rows[0]));
     }
 }

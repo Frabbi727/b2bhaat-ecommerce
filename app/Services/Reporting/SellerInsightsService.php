@@ -200,6 +200,82 @@ class SellerInsightsService
             ->all();
     }
 
+    /**
+     * Unique buyers in the period, and how many of them have ordered from this seller at least twice (counting
+     * orders before the period, up to its end).
+     *
+     * @return array{unique: int, repeat: int, repeat_rate: ?float}
+     */
+    public function buyerSummary(int $sellerId, ?string $from, ?string $to): array
+    {
+        $range = $this->range($from, $to);
+
+        $buyersInPeriod = $this->countedSubOrders($sellerId, $range['from'], $range['to'])
+            ->join('orders as o', 'o.id', '=', 's.parent_order_id')
+            ->distinct()
+            ->select('o.customer_id');
+
+        $unique = DB::query()->fromSub($buyersInPeriod, 'b')->count();
+
+        $repeat = DB::query()->fromSub(
+            $this->countedSubOrders($sellerId, null, $range['to'])
+                ->join('orders as o', 'o.id', '=', 's.parent_order_id')
+                ->whereIn('o.customer_id', $buyersInPeriod)
+                ->groupBy('o.customer_id')
+                ->havingRaw('COUNT(DISTINCT s.id) >= 2')
+                ->select('o.customer_id'),
+            'r'
+        )->count();
+
+        return [
+            'unique' => $unique,
+            'repeat' => $repeat,
+            'repeat_rate' => $this->percent((float) $repeat, (float) $unique),
+        ];
+    }
+
+    /**
+     * The ten buyers who spent most in the period. Shown by name (business name when set) only: no phone, email or
+     * address leaves this method.
+     *
+     * @return list<array{customer_id: int, name: string, type: string, orders: int, spend: float, last_order_on: string}>
+     */
+    public function bestCustomers(int $sellerId, ?string $from, ?string $to): array
+    {
+        $range = $this->range($from, $to);
+        $zone = (string) config('app.display_timezone');
+        $storage = (string) config('app.timezone');
+
+        $spend = $this->countedLines($sellerId, $range['from'], $range['to'])
+            ->join('orders as o', 'o.id', '=', 's.parent_order_id')
+            ->groupBy('o.customer_id')
+            ->select(['o.customer_id', DB::raw('SUM(oi.total_price) as spend'), DB::raw('COUNT(DISTINCT s.id) as orders')]);
+
+        $lastOrders = $this->countedSubOrders($sellerId, null, $range['to'])
+            ->join('orders as o', 'o.id', '=', 's.parent_order_id')
+            ->groupBy('o.customer_id')
+            ->select(['o.customer_id', DB::raw('MAX(s.created_at) as last_order_at')]);
+
+        return DB::query()->fromSub($spend, 't')
+            ->join('users as u', 'u.id', '=', 't.customer_id')
+            ->leftJoin('roles as r', 'r.id', '=', 'u.role_id')
+            ->joinSub($lastOrders, 'l', 'l.customer_id', '=', 't.customer_id')
+            ->orderByDesc('t.spend')
+            ->orderBy('t.customer_id')
+            ->limit(10)
+            ->get(['t.customer_id', 'u.name', 'u.business_name', 'r.slug as role', 't.orders', 't.spend', 'l.last_order_at'])
+            ->map(fn (object $row): array => [
+                'customer_id' => (int) $row->customer_id,
+                'name' => filled($row->business_name) ? (string) $row->business_name : (string) $row->name,
+                'type' => $row->role === 'wholesale_buyer' ? self::WHOLESALE : 'retail',
+                'orders' => (int) $row->orders,
+                'spend' => round((float) $row->spend, 2),
+                'last_order_on' => CarbonImmutable::parse((string) $row->last_order_at, $storage)->setTimezone($zone)->toDateString(),
+            ])
+            ->values()
+            ->all();
+    }
+
     /** The first day product views were logged (the day the log went live), or null before any view. */
     public function viewsCountedSince(): ?string
     {
