@@ -189,39 +189,35 @@
                 <div class="flex flex-col gap-4 mb-5 lg:mb-0">
                     <div class="flex items-start gap-3 lg:flex-col">
                         <span class="grid place-items-center w-10 h-10 shrink-0 rounded-xl bg-rose-600 text-white shadow-md shadow-rose-950/40">
-                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12L13 2z"/></svg>
+                            <x-storefront.icon name="bolt" class="w-5 h-5" />
                         </span>
                         <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2">
                                 <h2 id="home-flash-heading" class="text-xl sm:text-2xl font-black tracking-tight text-white text-balance">{{ $activeFlashSale->name }}</h2>
-                                <span class="px-2 py-0.5 rounded-full bg-rose-500/25 border border-rose-400/40 text-rose-200 text-[10px] font-bold uppercase tracking-wider">Live now</span>
+                                <span class="px-2 py-0.5 rounded-full bg-rose-500/25 border border-rose-400/40 text-rose-100 text-[11px] font-bold uppercase tracking-wider">Live now</span>
                             </div>
-                            <p class="mt-1 text-xs sm:text-sm text-rose-100/80">{{ $activeFlashSale->description ?: 'Massive limited-time price drops on flagship tech & essentials' }}</p>
+                            @if ($activeFlashSale->description)
+                                <p class="mt-1 text-xs sm:text-sm text-rose-100/80">{{ $activeFlashSale->description }}</p>
+                            @endif
                         </div>
                     </div>
 
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
                         <x-storefront.flash-countdown :ends-at="$activeFlashSale->ends_at" label="Ends in:" />
-                        @if (isset($liveCampaignsCount) && $liveCampaignsCount > 1)
-                            <a href="{{ route('flash-sales.index') }}" class="text-xs font-bold text-rose-200 hover:text-white underline underline-offset-4">
-                                See all {{ $liveCampaignsCount }} flash sales &rarr;
-                            </a>
-                        @endif
+                        <a href="{{ isset($liveCampaignsCount) && $liveCampaignsCount > 1 ? route('flash-sales.index') : route('flash-sales.show', $activeFlashSale->slug) }}" class="text-sm font-bold text-rose-200 hover:text-white underline underline-offset-4">
+                            {{ isset($liveCampaignsCount) && $liveCampaignsCount > 1 ? 'See all '.$liveCampaignsCount.' flash sales' : 'See every deal' }} &rarr;
+                        </a>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 {{ $flashSaleProducts->count() >= 3 ? 'xl:grid-cols-3' : '' }} gap-3 sm:gap-4">
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                     @foreach ($flashSaleProducts as $product)
-                        @php
-                            $offer = $product->liveFlashOffer();
-                            $stockLimit = $offer?->stock_limit;
-                            $remainingUnits = $stockLimit !== null ? max(0, $stockLimit - $offer->unitsSold()) : null;
-                        @endphp
                         <x-storefront.product-card
                             :product="$product"
                             :wishlisted="in_array($product->id, $userWishlistIds)"
                             :flash="true"
-                            :remaining-units="$remainingUnits"
+                            :remaining-units="$flashDealStock[$product->id]['remaining'] ?? null"
+                            :stock-limit="$flashDealStock[$product->id]['limit'] ?? null"
                             wire:key="flash-{{ $product->id }}"
                             class="border-transparent shadow-md shadow-slate-950/30"
                         />

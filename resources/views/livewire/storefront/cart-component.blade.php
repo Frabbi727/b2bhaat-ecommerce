@@ -66,6 +66,9 @@
                 @foreach ($items as $item)
                     @php
                         $lineTotal = $item['unit_price'] * $item['quantity'];
+                        $flashOriginalPrice = ($item['flash_sale_product_id'] ?? null) && ($item['original_unit_price'] ?? null) > $item['unit_price']
+                            ? (float) $item['original_unit_price']
+                            : null;
                         $isWholesale = $item['sales_channel_slug'] === 'wholesale';
                         $shortfall = $isWholesale && ! ($item['is_quoted'] ?? false) && ! isset($shortfallShown[$item['product_id']])
                             ? ($wholesaleShortfalls[$item['product_id']] ?? null)
@@ -94,13 +97,23 @@
                                 @endif
 
                                 <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide {{ $isWholesale ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-700' }}">
+                                    <span class="px-1.5 py-0.5 rounded text-[11px] font-bold uppercase tracking-wide {{ $isWholesale ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-700' }}">
                                         {{ $isWholesale ? 'Wholesale' : 'Retail' }}
                                     </span>
                                     <span>Sold by <strong class="font-semibold text-slate-700">{{ $item['seller_name'] }}</strong></span>
                                     <span class="text-slate-300" aria-hidden="true">·</span>
                                     <span class="tabular-nums">৳{{ number_format($item['unit_price'], 2) }} each</span>
+                                    @if ($flashOriginalPrice)
+                                        <span class="tabular-nums text-slate-400 line-through">৳{{ number_format($flashOriginalPrice, 2) }}</span>
+                                    @endif
                                 </div>
+
+                                @if ($flashOriginalPrice)
+                                    <p class="inline-flex items-center gap-1 text-xs font-semibold text-rose-700">
+                                        <x-storefront.icon name="bolt" class="w-3.5 h-3.5" />
+                                        Flash deal price · you save <span class="tabular-nums">৳{{ number_format(($flashOriginalPrice - $item['unit_price']) * $item['quantity'], 0) }}</span>
+                                    </p>
+                                @endif
 
                                 @if ($shortfall)
                                     <p class="mt-1 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1" role="status">
@@ -235,6 +248,17 @@
                             <span>Subtotal</span>
                             <span class="font-bold text-slate-900">৳{{ number_format($subtotal, 2) }}</span>
                         </div>
+                        @php
+                            $flashSavings = collect($items)->sum(fn ($line) => ($line['flash_sale_product_id'] ?? null) && ($line['original_unit_price'] ?? null) > $line['unit_price']
+                                ? ($line['original_unit_price'] - $line['unit_price']) * $line['quantity']
+                                : 0);
+                        @endphp
+                        @if ($flashSavings > 0)
+                            <div class="flex justify-between text-rose-700 font-semibold">
+                                <span>Flash deal savings (included)</span>
+                                <span class="font-bold tabular-nums">৳{{ number_format($flashSavings, 2) }}</span>
+                            </div>
+                        @endif
                         @if ($discountAmount > 0)
                             <div class="flex justify-between text-emerald-700 font-semibold">
                                 <span>Coupon ({{ $appliedCoupon['code'] ?? '' }})</span>

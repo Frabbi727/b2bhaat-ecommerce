@@ -14,14 +14,21 @@
         <section class="space-y-4" aria-label="{{ $sale->name }}">
             <x-storefront.flash-campaign-header
                 :sale="$sale"
-                :link="$sale->approved_products_count > 0 ? route('flash-sales.show', $sale->slug) : null"
+                :link="route('flash-sales.show', $sale->slug)"
                 :link-label="'See all '.$sale->approved_products_count.' '.str('deal')->plural($sale->approved_products_count)"
             />
 
             @if ($sale->products->isNotEmpty())
                 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                     @foreach ($sale->products as $product)
-                        <x-storefront.product-card :product="$product" :actions="false" wire:key="flash-{{ $sale->id }}-{{ $product->id }}" />
+                        <x-storefront.product-card
+                            :product="$product"
+                            :actions="false"
+                            :flash="true"
+                            :remaining-units="$dealStock[$product->id]['remaining'] ?? null"
+                            :stock-limit="$dealStock[$product->id]['limit'] ?? null"
+                            wire:key="flash-{{ $sale->id }}-{{ $product->id }}"
+                        />
                     @endforeach
                 </div>
             @else
@@ -43,9 +50,9 @@
                     <a href="{{ route('flash-sales.show', $upcoming->slug) }}" class="group block rounded-3xl bg-slate-900 p-5 sm:p-6 text-white border border-slate-800 hover:border-slate-600 transition space-y-4">
                         <div class="flex items-start justify-between gap-4 flex-wrap">
                             <div class="min-w-0">
-                                <h3 class="text-lg font-bold text-white group-hover:text-indigo-200">{{ $upcoming->name }}</h3>
+                                <h3 class="text-lg font-bold text-white group-hover:text-rose-200">{{ $upcoming->name }}</h3>
                                 @if ($upcoming->description)
-                                    <p class="text-xs text-slate-400 mt-0.5">{{ $upcoming->description }}</p>
+                                    <p class="text-xs text-slate-300 mt-0.5">{{ $upcoming->description }}</p>
                                 @endif
                             </div>
                             <x-storefront.flash-countdown :starts-at="$upcoming->starts_at" label="Starts in:" />

@@ -119,6 +119,30 @@ class FlashSaleProduct extends Model
         return (int) $this->nonCancelledItemsQuery()->sum('order_items.quantity');
     }
 
+    /**
+     * Units sold on many offers in one query, ignoring cancelled sub-orders.
+     *
+     * @param  array<int, int>  $offerIds
+     * @return array<int, int> offer id => units sold
+     */
+    public static function unitsSoldFor(array $offerIds): array
+    {
+        if ($offerIds === []) {
+            return [];
+        }
+
+        return DB::table('order_items')
+            ->join('sub_orders', 'sub_orders.id', '=', 'order_items.sub_order_id')
+            ->join('fulfillment_statuses', 'fulfillment_statuses.id', '=', 'sub_orders.fulfillment_status_id')
+            ->whereIn('order_items.flash_sale_product_id', $offerIds)
+            ->where('fulfillment_statuses.slug', '!=', self::CANCELLED_FULFILLMENT_SLUG)
+            ->groupBy('order_items.flash_sale_product_id')
+            ->selectRaw('order_items.flash_sale_product_id as offer_id, SUM(order_items.quantity) as units')
+            ->pluck('units', 'offer_id')
+            ->map(fn ($units): int => (int) $units)
+            ->all();
+    }
+
     public function unitsBoughtBy(int $customerId): int
     {
         return (int) $this->nonCancelledItemsQuery()

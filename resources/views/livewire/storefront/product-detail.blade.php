@@ -225,24 +225,30 @@
                     <div class="flex items-center justify-between gap-3 flex-wrap">
                         <div class="flex items-center gap-2">
                             <span class="w-7 h-7 rounded-lg bg-rose-600 text-white flex items-center justify-center"><x-storefront.icon name="bolt" class="w-4 h-4" /></span>
-                            <a href="{{ route('flash-sales.show', $offer->flashSale->slug) }}" class="text-sm font-bold text-rose-300 hover:text-white underline">
+                            <a href="{{ route('flash-sales.show', $offer->flashSale->slug) }}" class="text-sm font-bold text-rose-100 hover:text-white underline underline-offset-4">
                                 {{ $offer->flashSale->name }}
                             </a>
                         </div>
                         <x-storefront.flash-countdown :ends-at="$offer->flashSale->ends_at" label="Ends in:" />
                     </div>
-                    <div class="flex items-center gap-3 text-xs text-rose-200">
-                        @if ($offer->per_customer_limit)
-                            <span>Limit {{ $offer->per_customer_limit }} per customer</span>
+                    @if ($offer->per_customer_limit || $offer->stock_limit !== null)
+                        @php
+                            $unitsLeft = $offer->stock_limit !== null ? max(0, $offer->stock_limit - $offer->unitsSold()) : null;
+                        @endphp
+                        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-rose-100">
+                            @if ($unitsLeft !== null)
+                                <span class="font-bold text-white tabular-nums">{{ $unitsLeft > 0 ? $unitsLeft.' of '.$offer->stock_limit.' left at this price' : 'Deal stock sold out' }}</span>
+                            @endif
+                            @if ($offer->per_customer_limit)
+                                <span>Limit {{ $offer->per_customer_limit }} per customer</span>
+                            @endif
+                        </div>
+                        @if ($unitsLeft !== null && $offer->stock_limit > 0)
+                            <div class="h-1.5 rounded-full bg-white/15 overflow-hidden" aria-hidden="true">
+                                <div class="h-full rounded-full bg-rose-500" style="width: {{ ((int) round(100 * ($offer->stock_limit - $unitsLeft) / $offer->stock_limit)) }}%"></div>
+                            </div>
                         @endif
-                        @if ($offer->stock_limit !== null)
-                            @if ($offer->per_customer_limit) <span>•</span> @endif
-                            @php
-                                $unitsLeft = max(0, $offer->stock_limit - $offer->unitsSold());
-                            @endphp
-                            <span class="font-bold text-white">{{ $unitsLeft }} left</span>
-                        @endif
-                    </div>
+                    @endif
                 </div>
             @endif
 
@@ -271,10 +277,10 @@
                         <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                         <span>{{ $product->delivery_info ?: 'Delivery inside Dhaka in '.app(\App\Services\Settings\StoreConfigurationService::class)->getDeliverySla('inside_dhaka') }}</span>
                     </div>
-                    @if ($product->warranty_period)
+                    @if ($product->displayableWarranty())
                     <div class="flex items-center gap-1.5">
                         <svg class="w-4 h-4 text-indigo-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                        <span>{{ $product->warranty_period }}</span>
+                        <span>{{ $product->displayableWarranty() }}</span>
                     </div>
                     @endif
                 </div>
@@ -686,9 +692,9 @@
                 </div>
 
                 <div class="p-5 rounded-2xl bg-indigo-50/50 border border-indigo-100 space-y-3 text-xs">
-                    @if ($product->warranty_period || $product->warranty_policy)
-                        @if ($product->warranty_period)
-                            <div class="font-bold text-indigo-900 text-sm flex items-center gap-1.5"><x-storefront.icon name="shield" class="w-4 h-4 text-indigo-600" /> {{ $product->warranty_period }}</div>
+                    @if ($product->displayableWarranty() || $product->warranty_policy)
+                        @if ($product->displayableWarranty())
+                            <div class="font-bold text-indigo-900 text-sm flex items-center gap-1.5"><x-storefront.icon name="shield" class="w-4 h-4 text-indigo-600" /> {{ $product->displayableWarranty() }}</div>
                         @endif
                         @if ($product->warranty_policy)
                             <p class="text-slate-700 leading-relaxed">{{ $product->warranty_policy }}</p>

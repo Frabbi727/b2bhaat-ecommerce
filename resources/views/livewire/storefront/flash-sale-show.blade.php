@@ -22,12 +22,12 @@
         <div class="rounded-3xl bg-slate-900 p-5 sm:p-7 text-white border border-slate-800">
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <span class="px-2.5 py-1 rounded-md bg-indigo-600/30 text-indigo-200 border border-indigo-500/40 text-[10px] font-bold uppercase tracking-wider">
+                    <span class="px-2.5 py-1 rounded-md bg-indigo-600/30 text-indigo-100 border border-indigo-500/40 text-[11px] font-bold uppercase tracking-wider">
                         Upcoming Event
                     </span>
                     <h1 class="text-2xl sm:text-3xl font-black mt-2 text-white">{{ $sale->name }}</h1>
                     @if ($sale->description)
-                        <p class="text-sm text-slate-400 mt-1">{{ $sale->description }}</p>
+                        <p class="text-sm text-slate-300 mt-1">{{ $sale->description }}</p>
                     @endif
                 </div>
                 <x-storefront.flash-countdown :starts-at="$sale->starts_at" label="Starts in:" />
@@ -50,7 +50,14 @@
         @if ($products->isNotEmpty())
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                 @foreach ($products as $product)
-                    <x-storefront.product-card :product="$product" :actions="false" wire:key="deal-{{ $product->id }}" />
+                    <x-storefront.product-card
+                        :product="$product"
+                        :actions="false"
+                        :flash="true"
+                        :remaining-units="$dealStock[$product->id]['remaining'] ?? null"
+                        :stock-limit="$dealStock[$product->id]['limit'] ?? null"
+                        wire:key="deal-{{ $product->id }}"
+                    />
                 @endforeach
             </div>
         @else

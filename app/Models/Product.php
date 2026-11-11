@@ -329,6 +329,16 @@ class Product extends Model
     /**
      * This product's offer in a campaign that is live now, or null. Only retail prices use it.
      */
+    /**
+     * The warranty text worth showing to shoppers, or null when the seller left a placeholder such as "N/A".
+     */
+    public function displayableWarranty(): ?string
+    {
+        $warranty = trim((string) $this->warranty_period);
+
+        return in_array(strtolower($warranty), ['', 'n/a', 'na', 'none', 'no', 'no warranty', '-', '0'], true) ? null : $warranty;
+    }
+
     public function liveFlashOffer(): ?FlashSaleProduct
     {
         return app(FlashSalePricing::class)->offerFor($this);

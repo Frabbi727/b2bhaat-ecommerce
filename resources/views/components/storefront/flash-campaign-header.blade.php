@@ -10,7 +10,7 @@
             <div class="min-w-0">
                 <div class="flex flex-wrap items-center gap-2">
                     <{{ $as }} class="text-xl sm:text-2xl font-black tracking-tight text-white text-balance">{{ $sale->name }}</{{ $as }}>
-                    <span class="px-2 py-0.5 rounded-full bg-rose-500/25 border border-rose-400/40 text-rose-200 text-[10px] font-bold uppercase tracking-wider">Live now</span>
+                    <span class="px-2 py-0.5 rounded-full bg-rose-500/25 border border-rose-400/40 text-rose-100 text-[11px] font-bold uppercase tracking-wider">Live now</span>
                 </div>
                 @if ($sale->description)
                     <p class="mt-1 text-xs sm:text-sm text-rose-100/80">{{ $sale->description }}</p>

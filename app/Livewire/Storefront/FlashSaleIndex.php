@@ -20,7 +20,9 @@ class FlashSaleIndex extends Component
             ->orderByDesc('is_featured')
             ->orderByDesc('display_priority')
             ->orderBy('ends_at')
-            ->get();
+            ->get()
+            ->filter(fn (FlashSale $sale): bool => $sale->approved_products_count > 0)
+            ->values();
 
         $upcomingSales = FlashSale::query()->upcoming()
             ->with(['approvedProducts' => fn ($q) => $q->listable()->take(6)->with(['primaryImage'])])
@@ -38,10 +40,11 @@ class FlashSaleIndex extends Component
 
         $pricing = app(FlashSalePricing::class);
         $allLiveProducts = $liveSales->pluck('products')->flatten();
-        $pricing->primeFor($allLiveProducts);
+        $dealStock = $pricing->dealStockFor($allLiveProducts);
 
         return view('livewire.storefront.flash-sale-index', [
             'liveSales' => $liveSales,
+            'dealStock' => $dealStock,
             'upcomingSales' => $upcomingSales,
         ]);
     }

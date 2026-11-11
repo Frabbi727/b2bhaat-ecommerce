@@ -59,6 +59,32 @@ class FlashSalePricing
     }
 
     /**
+     * Deal stock for each product that has a live offer with a stock limit, using one query.
+     *
+     * @param  iterable<Product>  $products
+     * @return array<int, array{limit: int, remaining: int}> product id => deal stock
+     */
+    public function dealStockFor(iterable $products): array
+    {
+        $this->primeFor($products);
+
+        $limitedOffers = [];
+        foreach ($products as $product) {
+            $offer = $this->offerFor($product);
+            if ($offer !== null && $offer->stock_limit !== null) {
+                $limitedOffers[(int) $product->getKey()] = $offer;
+            }
+        }
+
+        $soldByOffer = FlashSaleProduct::unitsSoldFor(array_values(array_map(fn (FlashSaleProduct $offer): int => (int) $offer->getKey(), $limitedOffers)));
+
+        return array_map(fn (FlashSaleProduct $offer): array => [
+            'limit' => (int) $offer->stock_limit,
+            'remaining' => max(0, (int) $offer->stock_limit - ($soldByOffer[(int) $offer->getKey()] ?? 0)),
+        ], $limitedOffers);
+    }
+
+    /**
      * Price of a retail cart line whose normal (tier) price is $tierPrice.
      * An offer that saves nothing on this line is not recorded, so it uses up no campaign quota.
      *

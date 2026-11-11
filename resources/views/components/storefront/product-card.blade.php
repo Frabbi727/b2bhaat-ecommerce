@@ -3,6 +3,7 @@
     'wishlisted' => false,
     'flash' => false,
     'remainingUnits' => null,
+    'stockLimit' => null,
     'actions' => true,
 ])
 
@@ -15,6 +16,8 @@
     $sourceName = $product->brand?->name ?? $product->seller?->sellerProfile?->store_name;
     $sellsInBothChannels = $product->relationLoaded('salesChannel') && $product->salesChannel?->slug === 'both';
     $productUrl = route('catalog.show', $product->slug);
+    $showDealStock = $flash && $remainingUnits !== null;
+    $claimedPercent = $showDealStock && $stockLimit ? (int) round(100 * ($stockLimit - $remainingUnits) / max(1, $stockLimit)) : null;
 @endphp
 
 <article {{ $attributes->class('group relative flex flex-col bg-white rounded-2xl border border-slate-200 p-3 sm:p-4 text-slate-800 transition hover:border-indigo-300 hover:shadow-lg hover:shadow-slate-900/5') }}>
@@ -64,15 +67,21 @@
         </div>
 
         <div class="mt-0.5 h-4 flex items-center gap-1 text-[11px] font-medium min-w-0">
-            @if ($flash && $remainingUnits !== null)
-                <span class="text-rose-600 font-bold">Only {{ $remainingUnits }} left at this price</span>
+            @if ($showDealStock)
+                <span class="text-rose-700 font-bold tabular-nums">{{ $remainingUnits > 0 ? $remainingUnits.' left at this price' : 'Deal sold out' }}</span>
             @elseif ($isDiscounted)
                 <span class="text-emerald-700 font-semibold tabular-nums">Save ৳{{ number_format($product->savings_amount, 0) }}</span>
-            @elseif ($product->warranty_period)
+            @elseif ($product->displayableWarranty())
                 <svg class="w-3 h-3 shrink-0 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                <span class="text-slate-500 truncate" title="{{ $product->warranty_period }}">{{ $product->warranty_period }}</span>
+                <span class="text-slate-500 truncate" title="{{ $product->displayableWarranty() }}">{{ $product->displayableWarranty() }}</span>
             @endif
         </div>
+
+        @if ($claimedPercent !== null)
+            <div class="mt-1.5 h-1.5 rounded-full bg-rose-100 overflow-hidden" role="meter" aria-label="Deal stock claimed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $claimedPercent }}">
+                <div class="h-full rounded-full bg-rose-600" style="width: {{ $claimedPercent }}%"></div>
+            </div>
+        @endif
 
         @isset($footer)
             <div class="mt-2.5">{{ $footer }}</div>

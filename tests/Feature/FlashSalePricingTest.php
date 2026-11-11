@@ -64,6 +64,21 @@ class FlashSalePricingTest extends TestCase
         $this->assertEqualsWithDelta(1000.0, $line['original_unit_price'], 0.001);
     }
 
+    public function test_cart_page_shows_the_flash_price_and_what_it_saves(): void
+    {
+        $this->retailBasePrice()->update(['unit_price' => 1000]);
+        $this->offer(FlashSale::factory()->live(), FlashSaleDiscountType::Percentage, 20);
+
+        $this->cart->addItem($this->nails->id, $this->variation('NAIL-PNK-MED')->id, SalesChannel::RETAIL, 2);
+
+        $this->get(route('cart.index'))
+            ->assertOk()
+            ->assertSee('Flash deal price')
+            ->assertSee('৳1,000.00')
+            ->assertSee('Flash deal savings (included)')
+            ->assertSee('৳400.00');
+    }
+
     public function test_percentage_discount_is_applied_to_each_variations_own_price(): void
     {
         $this->retailBasePrice()->delete();

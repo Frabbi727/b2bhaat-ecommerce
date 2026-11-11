@@ -90,6 +90,10 @@ class FlashSaleStorefrontTest extends TestCase
         FlashSale::query()->delete();
 
         $live = FlashSale::factory()->live()->create(['name' => 'Currently Live Sale']);
+        FlashSaleProduct::factory()->create([
+            'flash_sale_id' => $live->id,
+            'product_id' => $this->nails->id,
+        ]);
         $upcoming = FlashSale::factory()->upcoming()->create(['name' => 'Next Week Mega Deal']);
         $paused = FlashSale::factory()->paused()->create(['name' => 'Temporarily Paused']);
         $ended = FlashSale::factory()->ended()->create(['name' => 'Finished Sale']);
@@ -100,6 +104,38 @@ class FlashSaleStorefrontTest extends TestCase
             ->assertSee('Next Week Mega Deal')
             ->assertDontSee('Temporarily Paused')
             ->assertDontSee('Finished Sale');
+    }
+
+    public function test_flash_sale_index_hides_live_campaigns_without_approved_deals(): void
+    {
+        FlashSale::query()->delete();
+
+        $sale = FlashSale::factory()->live()->create(['name' => 'Awaiting Approval Sale']);
+        FlashSaleProduct::factory()->pending()->create([
+            'flash_sale_id' => $sale->id,
+            'product_id' => $this->nails->id,
+        ]);
+
+        $this->get(route('flash-sales.index'))
+            ->assertOk()
+            ->assertDontSee('Awaiting Approval Sale')
+            ->assertSee('No active flash sales right now');
+    }
+
+    public function test_flash_sale_page_shows_how_many_deal_units_are_left(): void
+    {
+        FlashSale::query()->delete();
+
+        $sale = FlashSale::factory()->live()->create();
+        FlashSaleProduct::factory()->create([
+            'flash_sale_id' => $sale->id,
+            'product_id' => $this->nails->id,
+            'stock_limit' => 30,
+        ]);
+
+        $this->get(route('flash-sales.show', $sale->slug))
+            ->assertOk()
+            ->assertSee('30 left at this price');
     }
 
     public function test_campaign_page_states(): void

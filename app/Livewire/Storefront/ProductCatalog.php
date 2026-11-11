@@ -377,7 +377,9 @@ class ProductCatalog extends Component
             ->orderBy('ends_at')
             ->first();
 
-        $liveCampaignsCount = FlashSale::query()->live()->count();
+        $liveCampaignsCount = FlashSale::query()->live()
+            ->whereHas('approvedProducts', fn ($products) => $products->listable())
+            ->count();
 
         $flashSaleProducts = $activeFlashSale
             ? $activeFlashSale->approvedProducts()
@@ -387,8 +389,9 @@ class ProductCatalog extends Component
                 ->get()
             : collect();
 
+        $flashDealStock = [];
         if ($flashSaleProducts->isNotEmpty()) {
-            app(FlashSalePricing::class)->primeFor($flashSaleProducts);
+            $flashDealStock = app(FlashSalePricing::class)->dealStockFor($flashSaleProducts);
         }
 
         // Featured Products Section
@@ -535,6 +538,7 @@ class ProductCatalog extends Component
             'activeFlashSale' => $activeFlashSale,
             'liveCampaignsCount' => $liveCampaignsCount,
             'flashSaleProducts' => $flashSaleProducts,
+            'flashDealStock' => $flashDealStock,
             'flashSaleEndsAt' => $activeFlashSale?->ends_at,
             'featuredProducts' => $featuredProducts,
             'userWishlistIds' => $userWishlistIds,

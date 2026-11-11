@@ -35,14 +35,15 @@ class FlashSaleShow extends Component
             ->with(['primaryImage', 'brand', 'prices.salesChannel', 'variations', 'seller.sellerProfile', 'salesChannel'])
             ->get();
 
-        if ($effective === FlashSaleStatus::Active) {
-            app(FlashSalePricing::class)->primeFor($products);
-        }
+        $dealStock = $effective === FlashSaleStatus::Active
+            ? app(FlashSalePricing::class)->dealStockFor($products)
+            : [];
 
         return view('livewire.storefront.flash-sale-show', [
             'sale' => $sale,
             'effectiveStatus' => $effective,
             'products' => $products,
+            'dealStock' => $dealStock,
         ]);
     }
 }
