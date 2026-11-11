@@ -49,6 +49,7 @@ class SellerPanelProvider extends PanelProvider
                 NavigationGroup::make('Catalog'),
                 NavigationGroup::make('Marketing'),
                 NavigationGroup::make('Finance'),
+                NavigationGroup::make('Accounts'),
                 NavigationGroup::make('Store'),
             ])
             ->navigationItems([

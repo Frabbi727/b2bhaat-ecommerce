@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use App\Models\Traits\Auditable;
+use App\Observers\WalletTransactionObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+#[ObservedBy(WalletTransactionObserver::class)]
 class WalletTransaction extends Model
 {
     use Auditable;

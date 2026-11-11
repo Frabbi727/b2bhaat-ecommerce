@@ -131,4 +131,34 @@ class OrderSplitterTest extends TestCase
         $this->assertEquals(54.00, (float) $subOrder2->commission_amount);
         $this->assertEquals(396.00, $subOrder2->net_earnings);
     }
+
+    public function test_each_order_line_keeps_the_sellers_cost_per_unit_at_the_time_of_ordering(): void
+    {
+        $customer = User::where('email', 'customer@retail.com')->firstOrFail();
+        $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
+        $retailChannel = SalesChannel::where('slug', SalesChannel::RETAIL)->firstOrFail();
+
+        $product = Product::where('seller_id', $seller->id)->firstOrFail();
+        $variation = $product->variations()->firstOrFail();
+        $variation->update(['buy_price' => 77.50, 'stock_quantity' => 50]);
+
+        $order = app(OrderSplitterService::class)->createAndSplitOrder($customer, [
+            'payment_method_id' => PaymentMethod::where('slug', 'cod')->firstOrFail()->id,
+            'shipping_address' => ['recipient_name' => 'Tanvir Hasan', 'street' => 'Dhanmondi, Dhaka', 'phone' => '+8801700000004'],
+            'items' => [[
+                'product_id' => $product->id,
+                'variation_id' => $variation->id,
+                'sales_channel_id' => $retailChannel->id,
+                'quantity' => 2,
+                'unit_price' => 250.00,
+            ]],
+        ]);
+
+        $line = $order->subOrders->first()->items->first();
+        $this->assertSame('77.50', $line->unit_cost);
+
+        // A later cost change does not rewrite the profit of an order already placed
+        $variation->update(['buy_price' => 90]);
+        $this->assertSame('77.50', $line->fresh()->unit_cost);
+    }
 }

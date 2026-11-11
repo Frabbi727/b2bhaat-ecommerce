@@ -10,9 +10,11 @@ use App\Filament\Admin\Resources\AccountingJournalEntries\AccountingJournalEntry
 use App\Filament\Admin\Resources\RfqRequests\RfqRequestResource as AdminRfqRequestResource;
 use App\Filament\Admin\Resources\SellerMonetization\SellerMonetizationResource;
 use App\Filament\Admin\Resources\SellerPlans\SellerPlanResource;
+use App\Filament\Seller\Pages\Accounts\AccountsOverview;
 use App\Filament\Seller\Pages\SubscriptionBilling;
 use App\Filament\Seller\Resources\Activities\SellerActivityResource;
 use App\Filament\Seller\Resources\RfqRequests\RfqRequestResource as SellerRfqRequestResource;
+use App\Filament\Seller\Resources\SellerJournalEntries\SellerJournalEntryResource;
 use Filament\Facades\Filament;
 use Filament\Navigation\NavigationGroup;
 use Tests\TestCase;
@@ -91,5 +93,7 @@ class PanelNavigationTest extends TestCase
         $this->assertSame('Sales', SellerRfqRequestResource::getNavigationGroup());
         $this->assertSame('Wholesale quotes', SellerRfqRequestResource::getNavigationLabel());
         $this->assertSame('Activity log', SellerActivityResource::getNavigationLabel());
+        $this->assertSame('Accounts', AccountsOverview::getNavigationGroup());
+        $this->assertSame('Accounts', SellerJournalEntryResource::getNavigationGroup());
     }
 }

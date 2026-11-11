@@ -18,6 +18,7 @@ class OrderItem extends Model
         'sales_channel_id',
         'flash_sale_product_id',
         'unit_price',
+        'unit_cost',
         'original_unit_price',
         'quantity',
         'total_price',
@@ -28,6 +29,7 @@ class OrderItem extends Model
     {
         return [
             'unit_price' => 'decimal:2',
+            'unit_cost' => 'decimal:2',
             'original_unit_price' => 'decimal:2',
             'quantity' => 'integer',
             'total_price' => 'decimal:2',

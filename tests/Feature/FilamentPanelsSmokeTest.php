@@ -9,11 +9,14 @@ use App\Filament\Admin\Resources\Users\Pages\ListUsers;
 use App\Filament\Admin\Resources\WalletTransactions\Pages\ListWalletTransactions;
 use App\Filament\Admin\Widgets\AdminStatsOverview;
 use App\Filament\Admin\Widgets\LatestOrdersWidget;
+use App\Filament\Seller\Pages\Accounts\AccountsOverview;
 use App\Filament\Seller\Pages\StoreSettings;
 use App\Filament\Seller\Resources\ProductReviews\Pages\ListProductReviews;
 use App\Filament\Seller\Resources\Products\Pages\ListProducts;
 use App\Filament\Seller\Resources\ReturnRequests\Pages\ListReturnRequests;
 use App\Filament\Seller\Resources\RfqRequests\Pages\ListRfqRequests;
+use App\Filament\Seller\Resources\SellerAccounts\Pages\ListSellerAccounts;
+use App\Filament\Seller\Resources\SellerJournalEntries\Pages\ListSellerJournalEntries;
 use App\Filament\Seller\Resources\SellerWallets\Pages\ListSellerWallets;
 use App\Filament\Seller\Resources\SubOrders\Pages\ListSubOrders;
 use App\Filament\Seller\Widgets\SellerRecentOrdersWidget;
@@ -98,6 +101,9 @@ class FilamentPanelsSmokeTest extends TestCase
         Livewire::test(ListRfqRequests::class)->assertSuccessful();
         Livewire::test(ListSellerWallets::class)->assertSuccessful();
         Livewire::test(ListSubOrders::class)->assertSuccessful();
+        Livewire::test(ListSellerJournalEntries::class)->assertSuccessful();
+        Livewire::test(ListSellerAccounts::class)->assertSuccessful();
+        Livewire::test(AccountsOverview::class)->assertSuccessful();
         Livewire::test(StoreSettings::class)->assertSuccessful();
 
         $this->get('/seller/products/create')->assertSuccessful();

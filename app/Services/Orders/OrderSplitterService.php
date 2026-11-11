@@ -233,6 +233,7 @@ class OrderSplitterService
                         'variation_id' => $itemData['variation_id'] ?? null,
                         'sales_channel_id' => $itemData['sales_channel_id'],
                         'unit_price' => $itemData['unit_price'],
+                        'unit_cost' => $this->unitCostFor($entry['product'], $itemData['variation_id'] ?? null),
                         'flash_sale_product_id' => $itemData['flash_sale_product_id'] ?? null,
                         'original_unit_price' => $itemData['original_unit_price'] ?? null,
                         'quantity' => $itemData['quantity'],
@@ -244,5 +245,18 @@ class OrderSplitterService
 
             return $order->load('subOrders.items');
         });
+    }
+
+    /**
+     * Seller books: the seller's cost per unit at the moment of ordering (the option's cost, else the product's),
+     * so later cost edits never change the profit of this order.
+     */
+    private function unitCostFor(Product $product, int|string|null $variationId): float
+    {
+        $variationCost = $variationId !== null
+            ? (float) (ProductVariation::query()->whereKey($variationId)->where('product_id', $product->id)->value('buy_price') ?? 0)
+            : 0.0;
+
+        return round($variationCost > 0 ? $variationCost : (float) ($product->buy_price ?? 0), 2);
     }
 }
