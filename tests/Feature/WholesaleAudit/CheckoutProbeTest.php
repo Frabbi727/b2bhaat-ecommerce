@@ -72,7 +72,7 @@ class CheckoutProbeTest extends TestCase
      * line, the order is placed with it and the total drops by 5 × ৳250. Stock is untouched (the reservation skips
      * quantities ≤ 0), so the seller's parcel lists −5 units of an option that was never reserved.
      */
-    public function test_wa_chk_02_negative_quick_view_quantity_reduces_the_order_and_adds_stock(): void
+    public function test_wa_chk_02_negative_quick_view_quantity_reduces_the_order(): void
     {
         [$v1, $v2] = ProductVariation::where('product_id', $this->product->id)->orderBy('id')->take(2)->get()->all();
         $stockBefore = (int) $v2->stock_quantity;
