@@ -54,3 +54,87 @@ Which public properties on the storefront money path does the server trust?
 - Coupon last-use race: locked redeem (`CartCouponCheckoutAndPromotionsTest`; ORD-3).
 - Suspended seller at checkout: refused (ORD-4).
 - A product hidden after it was added: refused (`InactiveProductVisibilityTest`, `InactiveVariationSaleTest`; INV-5).
+
+## Part 2: after the order (journey steps 18–25)
+
+| # | Step | Who / entry point | Guard | Findings |
+|---|---|---|---|---|
+| 18 | Seller receives the order | `OrderNotificationService::notifySellersOfNewOrder` (COD and paid at once; MFS only after verification, `PaymentVerificationService::markVerified`); seller `SubOrders` resource | Seller scope on the resource (Task 6) | — |
+| 19 | Seller processes | `SubOrdersTable` "Dispatch Courier", "Book Courier Pickup", "Factory Direct" → `CourierStatusService::handOver` (ORD-2) | Order then parcel lock; `canTransition`; `isClearedForDispatch` (COD or paid) | **The seller can't decline or cancel an order** (out of stock, wrong price, can't deliver). No seller or admin action calls `cancelSubOrder`. After the buyer's cancellation window (24 h default) nobody can cancel a COD parcel, and the buyer is told to "contact support", which has no tool for it | **WA-ORD-01** |
+| 20 | Lifecycle | `CourierStatusService::updateStatus` (`ALLOWED_TRANSITIONS` :33-42) | below | Partial fulfilment of a parcel (ship 40 of 50) is not supported; a parcel moves as one | WA-ORD-04 |
+| 21 | Shipping info | `handOver` stores courier name and tracking. Courier booking returns fake tracking numbers until the courier API is set up (owner decision 2026-11-05) | — | Owner-deferred |
+| 22 | Buyer tracks | `/track/{token}`, `/track` (order + phone, throttled, SEC-6/M-8), `CustomerOrders` | Token expiry (SEC-8) | — |
+| 23 | Delivered | Courier webhook (signed, replay-safe: SEC-11); self-delivery by handover code (`SelfDeliveryService`); admin "Confirm from courier panel" (`CourierParcelResource.php:85-118`), which exists because there is no courier API. The seller's "Simulate Courier" shows only in local/testing (`SubOrdersTable.php:205`) | `canTransition`; COD marked paid on delivery (`CourierStatusService.php:236-238`) | Admin confirmation is a manual stand-in for the webhook. It needs a note, but there is no second approver |
+| 24 | Completed | `OrderStatusReconciler::reconcile` derives the order status from its parcels (ORD-1) | Order row lock | — |
+| 25 | Settlement | `escrow:release-delivered` hourly → `releaseFromEscrow` after the holding period (48 h), skipped while a return is pending; payouts via `SellerWalletsTable` → `requestPayout` (minimum, overdue-bill block); admin disburse/reject (`PayoutLifecycleTest`) | Wallet row lock; one release per parcel | Approved **replacements** take no stock and release escrow on schedule (**WA-ORD-03**). A seller's rejection of a return is final, with no admin escalation (**WA-ORD-02**). The release job scans every delivered parcel ever on each run (WA-DB-01) |
+
+### State machines
+
+**Parcel (`sub_orders.fulfillment_status_id`)**: `CourierStatusService::ALLOWED_TRANSITIONS` (`CourierStatusService.php:33-42`).
+
+| From | To | Triggered by |
+|---|---|---|
+| unfulfilled | processing, shipped, in_transit | seller hand-over (`handOver`) |
+| unfulfilled | cancelled | buyer cancel (window, not dispatched); MFS reject/expiry; reservation expiry |
+| processing | shipped … delivered, returned, cancelled | seller hand-over; courier; buyer cancel |
+| shipped / in_transit / out_for_delivery | onward, delivered, returned | courier webhook; admin courier confirmation; self-delivery code |
+| delivered | returned | courier RTO; approved full return |
+| returned, cancelled | (final) | — |
+
+Every write path goes through `updateStatus` or `handOver`, both of which call `canTransition` under the order-then-parcel lock (ORD-2, M-1). The admin order form cannot set a status by hand (`OrderStatusFromConsignmentsTest::test_admin_cannot_set_the_order_status_by_hand`).
+
+**Payment (`orders.payment_status_id`)**:
+
+| Path | Transitions |
+|---|---|
+| COD | unpaid → paid at delivery (`CourierStatusService.php:236`) |
+| bKash / Nagad | unpaid → awaiting_verification at checkout → paid (`markVerified`) or cancelled (`rejectPayment`; `expireUnverified` after 72 h, reminder at 12 h) |
+| Mock (local/testing) | paid at checkout |
+| Refund | paid → refunded when every parcel is cancelled or returned (M-3) |
+
+**Order (`orders.order_status_id`)**: pending → confirmed at checkout. After that it is derived from the parcels: processing while any parcel is open; completed when every parcel has finished and at least one was delivered; cancelled when every parcel was cancelled or returned (`OrderStatusReconciler.php:27-60`).
+
+### Business rule coverage (brief §4)
+
+| Rule | Status | Evidence |
+|---|---|---|
+| MOQ enforcement | Implemented (lot across variations) | `WholesaleLotMoqTest`; quoted-line bypass WA-PRC-01 |
+| Bulk purchase / quantity breaks | Implemented (tiers on the lot) | `test_verified_lot_tier_boundaries` |
+| Mixed-product wholesale orders | Implemented: each product is its own lot | `CartSessionService.php:418` |
+| Multiple sellers in one cart | Implemented: one parcel per seller, delivery fee per seller | `OrderSplitterTest` |
+| Seller-specific minimum order | **Not implemented** (platform minimum per channel only) | OWNER_QUESTIONS #4 |
+| Seller-specific delivery charges | Implemented (zone rates and free threshold per seller) | `SellerConfigurableShippingRatesTest` |
+| Partial fulfilment | **Not implemented** (parcel ships whole) | WA-ORD-04 |
+| Out-of-stock products | Implemented: refused at add and at reservation | `StockReservationService.php:42` |
+| Insufficient stock during checkout | Implemented: locked reservation, the order rolls back | `StockConcurrencyTest` |
+| Concurrent purchase of the same stock | Implemented: row locks in id order (PAY-6) | `StockLockOrderTest` |
+| Price change after adding to cart | Implemented: re-priced and checkout stopped | `test_verified_price_change_…`; message WA-PRC-06 |
+| Seller price change after the order | Implemented: line prices, commission rate and cost are snapshotted | report D §4 |
+| Order cancellation by the buyer | Implemented: per parcel or whole order, within the window, before dispatch | `OrderDisputeAndCancellationTest` |
+| Cancellation by the seller or an admin | **Not implemented** | WA-ORD-01 |
+| Partial cancellation | Implemented (cancel one parcel of several) | `OrderStatusFromConsignmentsTest` |
+| Partial refunds | Implemented (line-level returns, PAY-4) | `PartialReturnRefundTest`; rate issue WA-MNY-02 |
+| Returns | Implemented: within the escrow holding period after delivery; seller decides | `OrderDisputeService.php:157-212` |
+| Exchanges / replacements | Partial: approval only; no stock, no shipment, no hold | WA-ORD-03 |
+| Damaged products | Covered as a return reason; no photo evidence field | `ReturnRequest` |
+| Disputed orders | Partial: the return request is the only dispute; the seller's decision is final | WA-ORD-02; owner question Q7 open since 2026-10-28 |
+| Failed payments | Implemented: admin rejects the TrxID, or it expires after 72 h; stock and flash units released | `UnverifiedPaymentTimeoutTest`, `FlashUnitReleaseTest` |
+| Duplicate order submission | Partial: sequential safe; concurrent not | WA-CHK-03 |
+| Payment verification | Implemented (manual admin check of the TrxID) | `PaymentVerificationTest` |
+| COD | Implemented (owner flow D2; COD limit; deficit billing) | `CodCollectionAmountTest`, `MonetizationCronAndSmsAlertsTest` |
+| Order expiry / pending orders | Implemented for MFS (72 h) and unpaid reservations (`inventory:release-expired-reservations`). **COD parcels the seller never ships stay unfulfilled indefinitely** | WA-ORD-01 |
+
+### Re-verified from the carry-over
+
+| Prior ID | Proved today by |
+|---|---|
+| PAY-1, M-3 | `PaymentVerificationTest::test_verifying_payment_after_buyer_cancelled_records_a_refund_and_holds_no_escrow`, `…an_order_cancelled_before_verification_ends_cancelled_and_refunded` |
+| PAY-2 | `UnverifiedPaymentTimeoutTest` (all 7) |
+| ORD-1 | `OrderStatusFromConsignmentsTest` (all 7) |
+| ORD-2 | `PaymentVerificationTest::test_seller_cannot_dispatch_awaiting_verification_order`, `ParcelDispatchRulesTest` |
+| FS-1 / INV-7 | `FlashUnitReleaseTest`, `UnverifiedPaymentTimeoutTest::test_cancelling_an_unchecked_order_frees_its_flash_sale_units` |
+| R-1, R-4 | `PartialReturnRefundTest::test_a_courier_return_after_an_item_return_settles_only_what_was_left`, `…a_request_without_items_still_returns_the_whole_parcel`, `…a_waiting_return_is_closed_when_the_courier_returns_the_whole_parcel` |
+| Escrow idempotency and 48 h | `EscrowIntegrityTest::test_hold_and_release_are_idempotent`, `…release_command_waits_48_hours_then_releases_exactly_once`, `…release_command_skips_sub_orders_with_open_return_request` |
+| Payout limits | `EscrowIntegrityTest::test_negative_balance_blocks_payout`, `PayoutLifecycleTest`, `DelinquentSellerLimitsTest` |
+
+All of these passed in the baseline run.
