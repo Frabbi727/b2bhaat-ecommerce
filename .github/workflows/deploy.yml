@@ -1,0 +1,93 @@
+name: deploy
+
+# Push to `production` → tests → front-end build → a ready-to-run commit on `production-deploy`.
+#
+# The server cannot be reached over SSH from outside and has no Node, so GitHub does not
+# log in to it. Instead the server's cron runs deploy/auto-deploy.sh, which notices the new
+# `production-deploy` commit and deploys it (backup, migrate, caches, rollback on failure).
+#
+# `production-deploy` = exactly the tree of the tested `production` commit + public/build.
+# It only ever moves forward, one commit per deploy, so the server can fast-forward safely.
+# Nobody commits to it by hand.
+
+on:
+  push:
+    branches: [production]
+  workflow_dispatch:
+
+# One at a time; a newer push waits for the running one instead of racing it.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+
+  build:
+    needs: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: mbstring, intl, bcmath, gd, zip
+          coverage: none
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # The Filament themes import CSS from vendor/, so the packages must be present to build.
+      # Scripts are skipped: they need a configured app, and only the files are needed here.
+      - name: Install PHP packages (for CSS imports only)
+        run: composer install --no-dev --no-scripts --no-interaction --prefer-dist --no-progress
+
+      - name: Build front-end assets
+        run: |
+          npm ci
+          npm run build
+          test -f public/build/manifest.json
+          cp -R public/build "$RUNNER_TEMP/build"
+
+      - name: Publish to production-deploy
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          SUBJECT="$(git log -1 --format=%s "$SOURCE_SHA")"
+
+          # The fresh build is untracked here but tracked on production-deploy, which would
+          # block the checkout. It was copied to $RUNNER_TEMP above.
+          rm -rf public/build
+
+          if git fetch --quiet origin production-deploy 2>/dev/null; then
+              # Continue the existing line, but take the tree from the tested commit exactly.
+              git checkout --quiet -B production-deploy FETCH_HEAD
+              git read-tree -u --reset "$SOURCE_SHA"
+          else
+              git checkout --quiet -B production-deploy "$SOURCE_SHA"
+          fi
+
+          rm -rf public/build
+          mkdir -p public
+          cp -R "$RUNNER_TEMP/build" public/build
+          git add -f public/build
+
+          git commit --quiet --allow-empty \
+              -m "deploy: ${SOURCE_SHA::7} ${SUBJECT}" \
+              -m "Built from production@${SOURCE_SHA} by ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          git push --quiet origin production-deploy
+          echo "production-deploy is now $(git rev-parse --short HEAD) (from ${SOURCE_SHA::7}). The server picks it up within 5 minutes."
