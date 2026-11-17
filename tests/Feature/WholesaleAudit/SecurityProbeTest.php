@@ -60,6 +60,24 @@ class SecurityProbeTest extends TestCase
     }
 
     /**
+     * WA-SEL-01: current behaviour; the fix inverts this assertion.
+     * The seller's parcel page is a disabled generated form whose "Seller" select is filled from every user, so the
+     * page source lists the names of other sellers, admins and every customer on the platform.
+     */
+    public function test_wa_sel_01_seller_parcel_page_lists_every_users_name(): void
+    {
+        $parcel = SubOrder::orderBy('id')->firstOrFail();
+        $rival = $this->otherSeller();
+        $customer = User::where('email', 'customer@retail.com')->firstOrFail();
+        $this->actingAs($parcel->seller);
+
+        $this->get(route('filament.seller.resources.sub-orders.view', $parcel))
+            ->assertOk()
+            ->assertSee($rival->name, false)
+            ->assertSee($customer->name, false);
+    }
+
+    /**
      * Verified correct: guests and retail buyers get no wholesale price from the JSON API.
      */
     public function test_verified_api_catalog_masks_wholesale_prices_for_guests(): void
