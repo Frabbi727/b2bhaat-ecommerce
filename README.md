@@ -74,6 +74,8 @@ cd ~/b2bhaat.com && \
     php artisan queue:restart
 ```
 
+
+
 ```bash
 MAIL_MAILER=smtp
 MAIL_HOST=mail.b2bhaat.com
