@@ -79,6 +79,13 @@ class OrderSplitterService
 
     public function createAndSplitOrder(User $customer, array $data): Order
     {
+        // WA-CHK-02: a line with no units or a negative price would lower the order total
+        foreach ($data['items'] as $item) {
+            if ((int) $item['quantity'] < 1 || (float) $item['unit_price'] < 0) {
+                throw new \DomainException('An item in your cart has an invalid quantity or price. Remove it from your cart to continue.');
+            }
+        }
+
         return DB::transaction(function () use ($customer, $data) {
             // Only approved, live products may be ordered, even if the cart was filled earlier
             $orderedProductIds = collect($data['items'])->pluck('product_id')->unique()->filter()->values();

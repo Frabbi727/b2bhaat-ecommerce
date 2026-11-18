@@ -30,10 +30,13 @@ use DomainException;
 use Exception;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 #[Layout('layouts.storefront')]
@@ -69,6 +72,13 @@ class CheckoutComponent extends Component
 
     public ?array $appliedCoupon = null;
 
+    /**
+     * WA-CHK-03: one-time token for this checkout page. Two Place order requests from the same page carry the same
+     * token, and only the first can claim it, so a double click or a resent request cannot place a second order.
+     */
+    #[Locked]
+    public string $checkoutToken = '';
+
     public string $couponMessage = '';
 
     public string $couponError = '';
@@ -85,8 +95,18 @@ class CheckoutComponent extends Component
     /** The phone the code was sent to is kept on the server, where the shopper cannot change it. */
     private const VERIFYING_PHONE_SESSION_KEY = 'checkout.verifying_phone';
 
+    /** How long a claimed checkout token stays spent; covers a slow order plus any late duplicate of it. */
+    private const ORDER_LOCK_SECONDS = 300;
+
+    public static function orderLockKey(int $userId, string $checkoutToken): string
+    {
+        return "checkout:{$userId}:{$checkoutToken}";
+    }
+
     public function mount(): void
     {
+        $this->checkoutToken = Str::random(40);
+
         $cart = app(CartSessionService::class);
         if ($cart->getItemCount() === 0) {
             $this->redirectRoute('cart.index');
@@ -347,6 +367,19 @@ class CheckoutComponent extends Component
             return;
         }
 
+        // A page loaded before this token existed gets one now
+        if ($this->checkoutToken === '') {
+            $this->checkoutToken = Str::random(40);
+        }
+
+        $orderLock = Cache::lock(self::orderLockKey((int) Auth::id(), $this->checkoutToken), self::ORDER_LOCK_SECONDS);
+        if (! $orderLock->get()) {
+            $this->errorMessage = 'Your order is already being placed. Please wait a moment. If nothing happens within a minute, reload the page.';
+
+            return;
+        }
+        $orderPlaced = false;
+
         try {
             $customer = Auth::user();
 
@@ -503,6 +536,7 @@ class CheckoutComponent extends Component
             }
 
             $cart->clear();
+            $orderPlaced = true;
 
             $this->redirectRoute('tracking.show', [
                 'order' => $order->order_number,
@@ -521,6 +555,11 @@ class CheckoutComponent extends Component
             }
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
+        } finally {
+            // A failed attempt gives the token back so the buyer can fix the problem and try again; a placed order keeps it spent
+            if (! $orderPlaced) {
+                $orderLock->release();
+            }
         }
     }
 

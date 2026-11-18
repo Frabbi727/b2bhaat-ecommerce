@@ -106,6 +106,11 @@ class CartSessionService
 
     private function putItem(int $productId, ?int $variationId, string $channelSlug, int $quantity, ?float $overrideUnitPrice, bool $enforceLotMoq): void
     {
+        // WA-CHK-02: every add goes through here, so a zero or negative quantity can never lower a cart
+        if ($quantity < 1) {
+            throw new DomainException('Quantity must be at least 1.');
+        }
+
         $product = Product::with(['prices.salesChannel', 'variations.attributeValues.attribute', 'seller.sellerProfile'])
             ->sellable()
             ->find($productId);

@@ -19,6 +19,7 @@ use App\Services\Cart\CartSessionService;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Group;
@@ -67,15 +68,12 @@ class CheckoutProbeTest extends TestCase
     }
 
     /**
-     * WA-CHK-02: current behaviour; the fix inverts this assertion.
-     * The quick-view quantity is a public Livewire property. A browser can set it to −5; the cart accepts a negative
-     * line, the order is placed with it and the total drops by 5 × ৳250. Stock is untouched (the reservation skips
-     * quantities ≤ 0), so the seller's parcel lists −5 units of an option that was never reserved.
+     * WA-CHK-02 (fixed): the quick-view quantity is a public Livewire property a browser can set to −5.
+     * The cart refuses any quantity below 1, so the negative line never lowers the order.
      */
-    public function test_wa_chk_02_negative_quick_view_quantity_reduces_the_order(): void
+    public function test_wa_chk_02_negative_quick_view_quantity_is_refused(): void
     {
         [$v1, $v2] = ProductVariation::where('product_id', $this->product->id)->orderBy('id')->take(2)->get()->all();
-        $stockBefore = (int) $v2->stock_quantity;
 
         Livewire::test(ProductCatalog::class)
             ->call('openQuickView', $this->product->id)
@@ -85,18 +83,32 @@ class CheckoutProbeTest extends TestCase
             ->call('openQuickView', $this->product->id)
             ->set('quickViewVariationId', $v2->id)
             ->set('quickViewQuantity', -5)
-            ->call('quickViewAddToCart');
+            ->call('quickViewAddToCart')
+            ->assertSet('errorMessage', fn (string $message) => str_contains($message, 'at least 1'));
 
-        $this->assertSame(1250.0, $this->cart->getSubtotal(), 'today: 10 × ৳250 − 5 × ৳250');
+        $this->assertSame(2500.0, $this->cart->getSubtotal(), 'only the 10 × ৳250 line is in the cart');
+        $this->assertCount(1, $this->cart->getItems());
+    }
 
-        $this->checkoutForm()->call('placeOrder')->assertSet('errorMessage', '');
+    /**
+     * WA-CHK-02 (fixed): every way into the cart goes through one guard, so a zero or negative quantity is refused.
+     */
+    public function test_wa_chk_02_cart_refuses_a_quantity_below_one(): void
+    {
+        $variation = ProductVariation::where('product_id', $this->product->id)->orderBy('id')->firstOrFail();
 
-        $order = $this->latestOrder();
-        $this->assertNotNull($order, 'today: the order is placed');
-        $negative = $order->subOrders->flatMap->items->firstWhere('variation_id', $v2->id);
-        $this->assertSame(-5, (int) $negative->quantity);
-        $this->assertSame(1250.0, (float) $order->subOrders->sole()->subtotal);
-        $this->assertSame($stockBefore, (int) $v2->fresh()->stock_quantity, 'today: the negative line is skipped by the reservation');
+        $refused = 0;
+        foreach ([0, -5] as $quantity) {
+            try {
+                $this->cart->addItem($this->product->id, $variation->id, SalesChannel::RETAIL, $quantity);
+            } catch (\DomainException $e) {
+                $this->assertStringContainsString('at least 1', $e->getMessage());
+                $refused++;
+            }
+        }
+
+        $this->assertSame(2, $refused);
+        $this->assertSame([], $this->cart->getItems());
     }
 
     /**
@@ -152,6 +164,47 @@ class CheckoutProbeTest extends TestCase
 
         $form->call('placeOrder')->assertSet('errorMessage', '');
         $this->assertSame(300.0, (float) $this->latestOrder()->subOrders->sole()->items->sole()->unit_price);
+    }
+
+    /**
+     * WA-CHK-03 (fixed): a second Place order that arrives while the first is still running is refused. Both requests
+     * carry the same page token, and only one of them can claim it.
+     */
+    public function test_wa_chk_03_place_order_while_the_same_page_is_already_ordering_is_refused(): void
+    {
+        $variation = ProductVariation::where('product_id', $this->product->id)->orderBy('id')->firstOrFail();
+        $this->cart->addItem($this->product->id, $variation->id, SalesChannel::RETAIL, 2);
+        $form = $this->checkoutForm();
+
+        $inFlight = Cache::lock(CheckoutComponent::orderLockKey($this->customer->id, $form->get('checkoutToken')), 60);
+        $this->assertTrue($inFlight->get(), 'the first request holds the page token');
+
+        $ordersBefore = Order::count();
+        $form->call('placeOrder')->assertSet('errorMessage', fn (string $m) => str_contains($m, 'already being placed'));
+
+        $this->assertSame($ordersBefore, Order::count());
+        $this->assertSame((int) $variation->stock_quantity, (int) $variation->fresh()->stock_quantity, 'no stock taken');
+    }
+
+    /**
+     * WA-CHK-03: a failed attempt gives the page token back, so the buyer can fix the problem and press Place order again.
+     */
+    public function test_wa_chk_03_failed_place_order_can_be_retried_on_the_same_page(): void
+    {
+        $variation = ProductVariation::where('product_id', $this->product->id)->orderBy('id')->firstOrFail();
+        $this->cart->addItem($this->product->id, $variation->id, SalesChannel::RETAIL, 2);
+        $coupon = Coupon::create(['code' => 'RETRY10', 'name' => 'Retry', 'discount_type' => Coupon::TYPE_FIXED, 'discount_value' => 10, 'min_order_amount' => 0, 'usage_limit_per_user' => 5, 'is_active' => true]);
+        $this->assertTrue($this->cart->applyCoupon('RETRY10', $this->customer->id)['valid']);
+        $form = $this->checkoutForm();
+        $ordersBefore = Order::count();
+
+        // The coupon is switched off while the buyer is on checkout: this attempt fails inside the order step
+        $coupon->update(['is_active' => false]);
+        $form->call('placeOrder')->assertSet('errorMessage', fn (string $m) => str_contains($m, 'cannot be redeemed'));
+        $this->assertSame($ordersBefore, Order::count());
+
+        $form->call('placeOrder')->assertSet('errorMessage', '');
+        $this->assertSame($ordersBefore + 1, Order::count());
     }
 
     /**
