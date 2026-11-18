@@ -274,7 +274,11 @@ class MonetizationEngineServiceTest extends TestCase
             'unit_price' => 500.00,
         ]);
 
-        $customer = User::factory()->create();
+        // An approved wholesale buyer: wholesale prices are refused to anyone else (WA-PRC-02)
+        $customer = User::factory()->create([
+            'role_id' => Role::where('slug', 'wholesale_buyer')->value('id'),
+            'is_wholesale_approved' => true,
+        ]);
         $paymentMethod = PaymentMethod::firstOrCreate(['slug' => 'cod'], ['name' => 'Cash on Delivery', 'is_active' => true]);
 
         $orderSplitter = app(OrderSplitterService::class);

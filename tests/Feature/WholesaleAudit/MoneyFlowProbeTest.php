@@ -263,25 +263,31 @@ class MoneyFlowProbeTest extends TestCase
     }
 
     /**
-     * WA-MNY-03: current behaviour; the fix inverts this assertion.
-     * The splitter stores the caller's shipping_amount on the order but recomputes each parcel's fee itself, so the
-     * two can disagree. Checkout passes the same calculator's figure, so they agree there today.
+     * WA-MNY-03 (fixed): the splitter works out delivery itself; the order's shipping is the sum of its parcels', and
+     * a caller figure that disagrees is refused instead of being stored.
      */
-    public function test_wa_mny_03_order_shipping_is_taken_from_the_caller_while_parcels_recompute(): void
+    public function test_wa_mny_03_order_shipping_is_the_sum_of_its_parcels(): void
     {
         $this->fixDeliveryFee('200.00');
         $variation = $this->product->variations()->orderBy('id')->firstOrFail();
-
-        $order = app(OrderSplitterService::class)->createAndSplitOrder($this->buyer, [
+        $payload = [
             'payment_method_id' => PaymentMethod::where('slug', 'cod')->value('id'),
-            'shipping_amount' => 0.0,
             'shipping_address' => ['recipient_name' => 'R', 'recipient_phone' => '01711000000', 'street_address' => 'House 1', 'city' => 'Dhaka', 'delivery_zone' => 'inside_dhaka'],
             'items' => [['product_id' => $this->product->id, 'variation_id' => $variation->id, 'sales_channel_id' => SalesChannel::where('slug', SalesChannel::RETAIL)->value('id'), 'quantity' => 1, 'unit_price' => 100.00]],
-        ]);
+        ];
 
-        $this->assertSame(0, $this->poisha($order->shipping_amount), 'today: order shipping is whatever the caller passed');
-        $this->assertSame(20000, $this->poisha($order->subOrders->sole()->shipping_amount), 'the parcel charges the seller\'s ৳200');
-        $this->assertSame(10000, $this->poisha($order->total_amount), 'order total omits the ৳200 the parcel will collect');
+        try {
+            app(OrderSplitterService::class)->createAndSplitOrder($this->buyer, [...$payload, 'shipping_amount' => 0.0]);
+            $this->fail('An order was stored with shipping that disagrees with its parcels.');
+        } catch (\DomainException $e) {
+            $this->assertStringContainsString('Delivery charge', $e->getMessage());
+        }
+
+        $order = app(OrderSplitterService::class)->createAndSplitOrder($this->buyer, $payload);
+
+        $this->assertSame(20000, $this->poisha($order->shipping_amount));
+        $this->assertSame(20000, $this->poisha($order->subOrders->sole()->shipping_amount));
+        $this->assertSame(30000, $this->poisha($order->total_amount));
         $this->assertSame(30000, $this->poisha($order->subOrders->sole()->paidAmount()));
     }
 }

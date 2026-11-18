@@ -11,7 +11,6 @@ use App\Models\Order;
 use App\Models\OrderStatus;
 use App\Models\PaymentMethod;
 use App\Models\PaymentStatus;
-use App\Models\RfqRequest;
 use App\Models\SalesChannel;
 use App\Models\User;
 use App\Services\Accounting\EventPipeline\OrderPaymentJournalHandler;
@@ -435,14 +434,14 @@ class CheckoutComponent extends Component
                         'unit_price' => $item['unit_price'],
                         'flash_sale_product_id' => $item['flash_sale_product_id'] ?? null,
                         'original_unit_price' => $item['original_unit_price'] ?? null,
+                        'is_quoted' => (bool) ($item['is_quoted'] ?? false),
+                        'rfq_id' => $item['rfq_id'] ?? null,
                     ];
                 }, $items)),
             ];
 
             // ORD-3: the order, its payment status, the coupon use and the saved address commit together or not at all.
-            $quotedRfqIds = collect($items)->pluck('rfq_id')->filter()->map(fn ($id) => (int) $id)->unique()->values();
-
-            $order = DB::transaction(function () use ($customer, $orderPayload, $paymentMethod, $storedCouponId, $subtotal, $cart, $quotedRfqIds): Order {
+            $order = DB::transaction(function () use ($customer, $orderPayload, $paymentMethod, $storedCouponId, $subtotal, $cart): Order {
                 // Lock, validate and price the same coupon row that is then redeemed, so its limits hold under concurrency
                 $couponQuote = null;
                 if ($storedCouponId !== null) {
@@ -462,18 +461,6 @@ class CheckoutComponent extends Component
 
                 $splitter = app(OrderSplitterService::class);
                 $order = $splitter->createAndSplitOrder($customer, $orderPayload);
-
-                // WA-PRC-01: each accepted quotation is used by one order only, and records which one
-                if ($quotedRfqIds->isNotEmpty()) {
-                    $linked = RfqRequest::whereIn('id', $quotedRfqIds)
-                        ->where('status', 'accepted')
-                        ->whereNull('order_id')
-                        ->update(['order_id' => $order->id]);
-
-                    if ($linked !== $quotedRfqIds->count()) {
-                        throw new DomainException('A quotation in your cart was already used for another order. Remove it from your cart to continue.');
-                    }
-                }
 
                 $escrowService = app(EscrowLedgerService::class);
 

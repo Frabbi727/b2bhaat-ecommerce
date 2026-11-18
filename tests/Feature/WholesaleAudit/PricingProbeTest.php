@@ -253,11 +253,10 @@ class PricingProbeTest extends TestCase
     }
 
     /**
-     * WA-PRC-02: current behaviour; the fix inverts this assertion.
-     * Wholesale access is checked only when the line is added. A buyer whose approval is withdrawn afterwards
-     * still checks out at wholesale prices.
+     * WA-PRC-02 (fixed): wholesale access is checked again when the order is placed. A buyer whose approval was
+     * withdrawn after filling the cart is told so, and no order is placed at wholesale prices.
      */
-    public function test_wa_prc_02_wholesale_lines_are_honoured_after_approval_is_withdrawn(): void
+    public function test_wa_prc_02_wholesale_lines_are_refused_after_approval_is_withdrawn(): void
     {
         [$v1, $v2] = $this->twoVariationIds();
         Livewire::test(ProductDetail::class, ['slug' => $this->product->slug])
@@ -268,18 +267,30 @@ class PricingProbeTest extends TestCase
 
         $this->buyer->forceFill(['is_wholesale_approved' => false, 'wholesale_rejected_at' => now()])->save();
         $this->actingAs($this->buyer->fresh());
-        $this->assertFalse($this->buyer->fresh()->canSeeWholesalePrices());
+        $ordersBefore = Order::count();
 
-        $this->placeCodOrder()->assertSet('errorMessage', '');
+        $this->placeCodOrder()->assertSet('errorMessage', fn (string $m) => str_contains($m, 'wholesale access'));
 
-        $order = Order::where('customer_id', $this->buyer->id)->latest('id')->firstOrFail();
-        $items = $order->subOrders->flatMap->items;
-        $this->assertSame(50, (int) $items->sum('quantity'));
-        $this->assertEquals(110.0, (float) $items->first()->unit_price, 'today: wholesale ৳110 charged to a buyer no longer approved');
-        $this->assertSame(
-            SalesChannel::where('slug', SalesChannel::WHOLESALE)->value('id'),
-            (int) $items->first()->sales_channel_id
-        );
+        $this->assertSame($ordersBefore, Order::count());
+    }
+
+    /**
+     * Quoted lines are checked against their RFQ when the order is placed: a quote that belongs to someone else is
+     * refused, and the RFQ is not used up.
+     */
+    public function test_quoted_line_for_another_buyers_rfq_is_refused(): void
+    {
+        $rfq = $this->quoteFor($this->makeSimpleProduct());
+        $this->post(route('rfq.quotation.accept', $rfq->id))->assertRedirect(route('checkout.index'));
+
+        $someoneElse = User::where('email', 'customer@retail.com')->firstOrFail();
+        $rfq->forceFill(['buyer_id' => $someoneElse->id, 'buyer_email' => $someoneElse->email])->save();
+        $ordersBefore = Order::count();
+
+        $this->placeCodOrder()->assertSet('errorMessage', fn (string $m) => str_contains($m, 'Quotation #QT-RFQ-'));
+
+        $this->assertSame($ordersBefore, Order::count());
+        $this->assertNull($rfq->fresh()->order_id);
     }
 
     /**
