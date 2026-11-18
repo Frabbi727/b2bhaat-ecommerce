@@ -20,6 +20,7 @@ use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Group;
@@ -112,35 +113,82 @@ class CheckoutProbeTest extends TestCase
     }
 
     /**
-     * WA-CHK-01: current behaviour; the fix inverts this assertion.
-     * appliedCoupon is a public, unlocked property. Checkout validates the coupon by its code but redeems and stores
-     * the id the browser sent. Code A (one use per customer) with the id of coupon B gives A's discount every time,
-     * while the use is counted on B, so A's limits never fill up.
+     * WA-CHK-01 (fixed): appliedCoupon is display-only. The browser can no longer send a coupon id or code of its own.
      */
-    public function test_wa_chk_01_coupon_code_and_id_from_browser_bypass_usage_limits(): void
+    public function test_wa_chk_01_browser_cannot_set_the_applied_coupon(): void
+    {
+        $variation = ProductVariation::where('product_id', $this->product->id)->orderBy('id')->firstOrFail();
+        $this->cart->addItem($this->product->id, $variation->id, SalesChannel::RETAIL, 2);
+
+        $this->expectException(CannotUpdateLockedPropertyException::class);
+
+        $this->checkoutForm()->set('appliedCoupon', ['id' => 1, 'code' => 'ONCEONLY', 'name' => 'x', 'discount' => 0]);
+    }
+
+    /**
+     * WA-CHK-01 (fixed): the coupon comes from the server-side cart only, and its use is counted on that same coupon,
+     * so a one-use coupon gives its discount once.
+     */
+    public function test_wa_chk_01_one_use_coupon_is_given_once_and_counted_on_itself(): void
     {
         $limited = Coupon::create(['code' => 'ONCEONLY', 'name' => 'One per customer', 'discount_type' => Coupon::TYPE_FIXED, 'discount_value' => 200, 'min_order_amount' => 0, 'usage_limit_per_user' => 1, 'usage_limit_total' => 1, 'is_active' => true]);
-        $decoy = Coupon::create(['code' => 'ANYONE', 'name' => 'Decoy', 'discount_type' => Coupon::TYPE_FIXED, 'discount_value' => 1, 'min_order_amount' => 0, 'usage_limit_per_user' => 100, 'is_active' => true]);
         $variation = ProductVariation::where('product_id', $this->product->id)->orderBy('id')->firstOrFail();
 
-        foreach ([1, 2] as $round) {
-            $this->cart->clear();
-            $this->cart->addItem($this->product->id, $variation->id, SalesChannel::RETAIL, 2);
+        $this->cart->addItem($this->product->id, $variation->id, SalesChannel::RETAIL, 2);
+        $this->assertTrue($this->cart->applyCoupon('ONCEONLY', $this->customer->id)['valid']);
+        $this->checkoutForm()->call('placeOrder')->assertSet('errorMessage', '');
 
-            $this->checkoutForm()
-                ->set('appliedCoupon', ['id' => $decoy->id, 'code' => 'ONCEONLY', 'name' => 'x', 'discount' => 0])
-                ->call('placeOrder')
-                ->assertSet('errorMessage', '');
+        $order = $this->latestOrder();
+        $this->assertSame(200.0, (float) $order->discount_amount);
+        $this->assertSame($limited->id, (int) $order->coupon_id);
+        $this->assertSame(1, CouponUsage::where('coupon_id', $limited->id)->count());
+        $this->assertSame(1, (int) $limited->fresh()->used_count);
 
-            $order = $this->latestOrder();
-            $this->assertSame(200.0, (float) $order->discount_amount, "round {$round}: today the one-use ৳200 discount is given again");
-            $this->assertSame($decoy->id, (int) $order->coupon_id);
-            $this->assertSame('ONCEONLY', $order->coupon_code);
+        $this->cart->addItem($this->product->id, $variation->id, SalesChannel::RETAIL, 2);
+        $this->assertFalse($this->cart->applyCoupon('ONCEONLY', $this->customer->id)['valid'], 'second use is refused');
+    }
+
+    /**
+     * WA-CHK-01 (fixed): a coupon used up by someone else while the buyer is on checkout is checked again under a row
+     * lock. The order stops with a message instead of silently charging full price; pressing again orders without it.
+     */
+    public function test_wa_chk_01_coupon_used_up_during_checkout_stops_the_order(): void
+    {
+        $limited = Coupon::create(['code' => 'LASTONE', 'name' => 'Last one', 'discount_type' => Coupon::TYPE_FIXED, 'discount_value' => 200, 'min_order_amount' => 0, 'usage_limit_total' => 1, 'is_active' => true]);
+        $variation = ProductVariation::where('product_id', $this->product->id)->orderBy('id')->firstOrFail();
+        $this->cart->addItem($this->product->id, $variation->id, SalesChannel::RETAIL, 2);
+        $this->assertTrue($this->cart->applyCoupon('LASTONE', $this->customer->id)['valid']);
+        $form = $this->checkoutForm();
+
+        $limited->increment('used_count');
+        $ordersBefore = Order::count();
+
+        $form->call('placeOrder')->assertSet('errorMessage', fn (string $m) => str_contains($m, 'cannot be redeemed'));
+        $this->assertSame($ordersBefore, Order::count());
+
+        $form->call('placeOrder')->assertSet('errorMessage', '');
+        $order = $this->latestOrder();
+        $this->assertNull($order->coupon_id);
+        $this->assertSame(0.0, (float) $order->discount_amount);
+        $this->assertSame(1, (int) $limited->fresh()->used_count);
+    }
+
+    /**
+     * WA-SEC-01 (fixed): after 10 wrong codes in 10 minutes, coupon attempts are refused, even with a real code.
+     */
+    public function test_wa_sec_01_wrong_coupon_codes_are_throttled(): void
+    {
+        Coupon::create(['code' => 'REAL10', 'name' => 'Real', 'discount_type' => Coupon::TYPE_FIXED, 'discount_value' => 10, 'min_order_amount' => 0, 'is_active' => true]);
+        $variation = ProductVariation::where('product_id', $this->product->id)->orderBy('id')->firstOrFail();
+        $this->cart->addItem($this->product->id, $variation->id, SalesChannel::RETAIL, 2);
+
+        for ($attempt = 1; $attempt <= 10; $attempt++) {
+            $this->assertFalse($this->cart->applyCoupon("GUESS{$attempt}", $this->customer->id)['valid']);
         }
 
-        $this->assertSame(0, CouponUsage::where('coupon_id', $limited->id)->count(), 'today: no use is recorded on the limited coupon');
-        $this->assertSame(0, (int) $limited->fresh()->used_count);
-        $this->assertSame(2, (int) $decoy->fresh()->used_count);
+        $result = $this->cart->applyCoupon('REAL10', $this->customer->id);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('Too many', $result['message']);
     }
 
     /**

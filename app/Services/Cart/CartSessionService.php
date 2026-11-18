@@ -12,6 +12,7 @@ use App\Services\Promotions\FlashSalePricing;
 use DomainException;
 use Exception;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Session;
 
 class CartSessionService
@@ -529,10 +530,31 @@ class CartSessionService
         Session::forget(self::COUPON_KEY);
     }
 
+    /** WA-SEC-01: wrong coupon codes allowed per user (or IP for a guest) before attempts are refused. */
+    private const COUPON_ATTEMPTS = 10;
+
+    private const COUPON_ATTEMPT_WINDOW_SECONDS = 600;
+
     public function applyCoupon(string $code, ?int $userId = null): array
     {
+        $attemptKey = 'coupon-attempts:'.($userId ?? request()->ip());
+        if (RateLimiter::tooManyAttempts($attemptKey, self::COUPON_ATTEMPTS)) {
+            $minutes = (int) ceil(RateLimiter::availableIn($attemptKey) / 60);
+
+            return [
+                'valid' => false,
+                'message' => "Too many wrong coupon codes. Please try again in {$minutes} minute(s).",
+                'coupon' => null,
+                'discount' => 0.00,
+            ];
+        }
+
         $couponService = app(CouponService::class);
         $result = $couponService->applyCoupon($code, $this->getSubtotal(), $userId);
+
+        if (! $result['valid']) {
+            RateLimiter::hit($attemptKey, self::COUPON_ATTEMPT_WINDOW_SECONDS);
+        }
 
         if ($result['valid'] && $result['coupon']) {
             Session::put(self::COUPON_KEY, [
@@ -544,6 +566,17 @@ class CartSessionService
         }
 
         return $result;
+    }
+
+    /**
+     * The id of the coupon stored in the cart, without re-checking it. Checkout checks it under a row lock instead,
+     * so a coupon that stopped being valid stops the order with a message rather than silently dropping the discount.
+     */
+    public function storedCouponId(): ?int
+    {
+        $id = Session::get(self::COUPON_KEY)['id'] ?? null;
+
+        return $id === null ? null : (int) $id;
     }
 
     public function removeCoupon(): void
@@ -561,18 +594,15 @@ class CartSessionService
             return null;
         }
 
-        // Re-verify against current subtotal
+        // Re-verify against current subtotal. An invalid coupon is not shown or counted, but stays stored: Place order
+        // then tells the buyer why it was dropped instead of silently charging full price (WA-CHK-01).
         $coupon = Coupon::find($couponData['id']);
         if (! $coupon || ! $coupon->is_active) {
-            $this->removeCoupon();
-
             return null;
         }
 
         $validation = $coupon->validateForSubtotal($this->getSubtotal(), auth()->id());
         if (! $validation['valid']) {
-            $this->removeCoupon();
-
             return null;
         }
 

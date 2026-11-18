@@ -67,25 +67,32 @@ class CouponService
     }
 
     /**
-     * ORD-3: use the coupon for an order, inside the order's transaction. The coupon row is locked and checked again,
-     * so two buyers checking out at once can't both take its last use; if it fails, the whole order rolls back.
+     * ORD-3 / WA-CHK-01: lock the coupon row inside the order's transaction, check it again and price it. The caller
+     * redeems this same row with recordUsage(), so two buyers checking out at once can't both take its last use.
+     *
+     * @return array{coupon: Coupon, discount: float}
      *
      * @throws DomainException when the coupon can no longer be used
      */
-    public function redeem(int $couponId, int $userId, int $orderId, float $subtotal, float $discountAmount): CouponUsage
+    public function lockForOrder(int $couponId, int $userId, float $subtotal): array
     {
         $coupon = Coupon::whereKey($couponId)->lockForUpdate()->first();
 
         if (! $coupon) {
-            throw new DomainException('Promotional coupon cannot be redeemed: it no longer exists. Remove it to place your order.');
+            throw new DomainException(self::removedMessage('it no longer exists.'));
         }
 
         $validation = $coupon->validateForSubtotal($subtotal, $userId);
         if (! $validation['valid']) {
-            throw new DomainException("Promotional coupon cannot be redeemed: {$validation['message']} Remove it to place your order.");
+            throw new DomainException(self::removedMessage($validation['message']));
         }
 
-        return $this->recordUsage($coupon, $userId, $orderId, $discountAmount);
+        return ['coupon' => $coupon, 'discount' => $coupon->calculateDiscount($subtotal)];
+    }
+
+    private static function removedMessage(string $reason): string
+    {
+        return "Promotional coupon cannot be redeemed: {$reason} We removed it from your cart. Press Place order again to order without it.";
     }
 
     /**
@@ -93,15 +100,23 @@ class CouponService
      */
     public function recordUsage(Coupon $coupon, int $userId, ?int $orderId, float $discountAmount): CouponUsage
     {
-        $usage = CouponUsage::create([
+        // The total limit is enforced by the update itself, so a use can never be counted past it
+        $counted = Coupon::whereKey($coupon->id)
+            ->where(fn ($query) => $query->whereNull('usage_limit_total')->orWhere('usage_limit_total', 0)->orWhereColumn('used_count', '<', 'usage_limit_total'))
+            ->increment('used_count');
+
+        if ($counted === 0) {
+            throw new DomainException(self::removedMessage('This coupon has reached its maximum total usage limit.'));
+        }
+
+        $coupon->used_count++;
+        $coupon->syncOriginalAttribute('used_count');
+
+        return CouponUsage::create([
             'coupon_id' => $coupon->id,
             'user_id' => $userId,
             'order_id' => $orderId,
             'discount_amount' => $discountAmount,
         ]);
-
-        $coupon->increment('used_count');
-
-        return $usage;
     }
 }

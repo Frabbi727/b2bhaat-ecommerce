@@ -70,6 +70,8 @@ class CheckoutComponent extends Component
 
     public string $checkoutCouponCode = '';
 
+    /** Display only: the coupon used at Place order is read from the server-side cart (WA-CHK-01). */
+    #[Locked]
     public ?array $appliedCoupon = null;
 
     /**
@@ -298,6 +300,9 @@ class CheckoutComponent extends Component
 
         $cart = app(CartSessionService::class);
         $items = $cart->getItems();
+        // WA-CHK-01: only the coupon stored in the server-side cart counts. It is read before anything below re-checks
+        // (and could silently drop) it, and is checked again under a row lock when the order is written.
+        $storedCouponId = $cart->storedCouponId();
 
         if (empty($items)) {
             $this->errorMessage = 'Your cart is empty.';
@@ -384,27 +389,6 @@ class CheckoutComponent extends Component
             $customer = Auth::user();
 
             $shippingFee = $this->getShippingFee();
-            $appliedCoupon = $this->appliedCoupon ?? $cart->getCoupon();
-            $discountAmount = $cart->getDiscountAmount();
-
-            if ($appliedCoupon && ! empty($appliedCoupon['code'])) {
-                $couponService = app(CouponService::class);
-                $validation = $couponService->applyCoupon(
-                    code: (string) $appliedCoupon['code'],
-                    subtotal: $subtotal,
-                    userId: $customer->id
-                );
-
-                if (! $validation['valid']) {
-                    $cart->removeCoupon();
-                    $this->appliedCoupon = null;
-                    throw new Exception("Promotional coupon cannot be redeemed: {$validation['message']}");
-                }
-
-                $discountAmount = (float) $validation['discount'];
-            } else {
-                $discountAmount = 0.00;
-            }
 
             $cleanEmail = trim(strtolower($this->recipientEmail));
 
@@ -437,9 +421,9 @@ class CheckoutComponent extends Component
             $orderPayload = [
                 'payment_method_id' => $this->selectedPaymentMethodId,
                 'shipping_amount' => $shippingFee,
-                'coupon_id' => $appliedCoupon['id'] ?? null,
-                'coupon_code' => $appliedCoupon['code'] ?? null,
-                'discount_amount' => $discountAmount,
+                'coupon_id' => null,
+                'coupon_code' => null,
+                'discount_amount' => 0.00,
                 'shipping_address' => $shippingAddressPayload,
                 'items' => array_values(array_map(function ($item) {
                     return [
@@ -455,7 +439,24 @@ class CheckoutComponent extends Component
             ];
 
             // ORD-3: the order, its payment status, the coupon use and the saved address commit together or not at all.
-            $order = DB::transaction(function () use ($customer, $orderPayload, $paymentMethod, $appliedCoupon, $subtotal, $discountAmount): Order {
+            $order = DB::transaction(function () use ($customer, $orderPayload, $paymentMethod, $storedCouponId, $subtotal, $cart): Order {
+                // Lock, validate and price the same coupon row that is then redeemed, so its limits hold under concurrency
+                $couponQuote = null;
+                if ($storedCouponId !== null) {
+                    try {
+                        $couponQuote = app(CouponService::class)->lockForOrder($storedCouponId, $customer->id, $subtotal);
+                    } catch (DomainException $e) {
+                        $cart->removeCoupon();
+                        $this->appliedCoupon = null;
+
+                        throw $e;
+                    }
+
+                    $orderPayload['coupon_id'] = $couponQuote['coupon']->id;
+                    $orderPayload['coupon_code'] = $couponQuote['coupon']->code;
+                    $orderPayload['discount_amount'] = $couponQuote['discount'];
+                }
+
                 $splitter = app(OrderSplitterService::class);
                 $order = $splitter->createAndSplitOrder($customer, $orderPayload);
 
@@ -489,15 +490,16 @@ class CheckoutComponent extends Component
                     ]);
                 }
 
-                // Use the coupon under a lock; a coupon used up meanwhile cancels the whole order (ORD-3)
-                if ($appliedCoupon && ! empty($appliedCoupon['id'])) {
-                    app(CouponService::class)->redeem(
-                        couponId: (int) $appliedCoupon['id'],
-                        userId: $customer->id,
-                        orderId: $order->id,
-                        subtotal: $subtotal,
-                        discountAmount: $discountAmount,
-                    );
+                // ORD-3: the use is counted on the coupon row locked above, in the order's transaction
+                if ($couponQuote !== null) {
+                    try {
+                        app(CouponService::class)->recordUsage($couponQuote['coupon'], $customer->id, $order->id, $couponQuote['discount']);
+                    } catch (DomainException $e) {
+                        $cart->removeCoupon();
+                        $this->appliedCoupon = null;
+
+                        throw $e;
+                    }
                 }
 
                 // Save address to address book if requested by customer

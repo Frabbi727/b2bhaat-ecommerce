@@ -91,17 +91,20 @@ class SecurityProbeTest extends TestCase
     }
 
     /**
-     * WA-SEC-01: current behaviour; the fix inverts this assertion.
-     * Coupon codes can be guessed without limit: 30 wrong codes in a row are all answered, none throttled.
+     * WA-SEC-01 (fixed): coupon codes can no longer be guessed without limit. The first 10 wrong codes are answered
+     * normally; from the 11th, attempts are refused for 10 minutes.
      */
-    public function test_wa_sec_01_coupon_code_guessing_is_not_throttled(): void
+    public function test_wa_sec_01_coupon_code_guessing_is_throttled(): void
     {
         $this->actingAs(User::where('email', 'customer@retail.com')->firstOrFail());
         $cart = Livewire::test(CartComponent::class);
 
-        for ($attempt = 1; $attempt <= 30; $attempt++) {
+        for ($attempt = 1; $attempt <= 10; $attempt++) {
             $cart->set('couponCode', 'GUESS'.$attempt)->call('applyCoupon');
             $this->assertStringContainsString('Invalid', (string) $cart->get('couponErrorMessage'), "attempt {$attempt} answered normally");
         }
+
+        $cart->set('couponCode', 'GUESS11')->call('applyCoupon');
+        $this->assertStringContainsString('Too many wrong coupon codes', (string) $cart->get('couponErrorMessage'));
     }
 }
