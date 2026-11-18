@@ -159,6 +159,9 @@
                                 <span class="text-slate-500">Target Qty:</span>
                                 <span class="font-bold font-mono text-slate-900">{{ number_format($rfq->target_quantity) }} {{ $rfq->product?->unit?->symbol ?? 'pcs' }}</span>
                             </div>
+                            @if ($optionSummary = $rfq->optionSummary())
+                                <div class="text-[11px] text-slate-500 leading-snug">{{ $optionSummary }}</div>
+                            @endif
 
                             <div class="flex justify-between items-center">
                                 <span class="text-slate-500">Target Price:</span>

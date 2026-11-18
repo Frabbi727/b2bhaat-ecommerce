@@ -53,6 +53,15 @@ class OrderSplitterService
      */
     private function assertOptionsStillSold(array $items): void
     {
+        // WA-PRC-03: a product with options must be ordered by option, or the seller can't ship it and no stock is taken
+        $productsWithOptions = Product::query()
+            ->whereIn('id', collect($items)->whereNull('variation_id')->pluck('product_id')->filter()->unique())
+            ->where('has_variations', true)
+            ->pluck('title');
+        if ($productsWithOptions->isNotEmpty()) {
+            throw new \DomainException("Please choose an option (colour, size…) for {$productsWithOptions->first()}. Remove it from your cart and add it again with an option.");
+        }
+
         $variationIds = collect($items)->pluck('variation_id')->filter()->unique()->values();
         if ($variationIds->isEmpty()) {
             return;

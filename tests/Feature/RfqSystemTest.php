@@ -33,7 +33,7 @@ class RfqSystemTest extends TestCase
         Livewire::test(ProductDetail::class, ['slug' => $product->slug])
             ->call('openRfqModal')
             ->assertSet('showRfqModal', true)
-            ->set('rfqTargetQuantity', 1000)
+            ->set('rfqOptionQuantities', [$product->variations()->orderBy('id')->value('id') => 1000])
             ->set('rfqTargetPrice', 85.00)
             ->set('rfqBuyerName', 'Rahima Begum')
             ->set('rfqBuyerEmail', 'buyer@boutique.com')
@@ -57,11 +57,12 @@ class RfqSystemTest extends TestCase
     {
         $product = Product::where('slug', 'luxury-press-on-fake-nails-set')->firstOrFail();
 
+        // A product with options asks for a quantity per option (WA-PRC-03); both errors show in one pass
         Livewire::test(ProductDetail::class, ['slug' => $product->slug])
             ->set('rfqBuyerPhone', 'bad-phone-number')
-            ->set('rfqTargetQuantity', 0)
+            ->set('rfqOptionQuantities', [$product->variations()->orderBy('id')->value('id') => 0])
             ->call('submitRfq')
-            ->assertHasErrors(['rfqBuyerPhone', 'rfqTargetQuantity']);
+            ->assertHasErrors(['rfqBuyerPhone', 'rfqOptionQuantities']);
     }
 
     public function test_seller_can_review_and_dispatch_custom_quote(): void

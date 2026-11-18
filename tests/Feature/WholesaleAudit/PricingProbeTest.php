@@ -176,38 +176,80 @@ class PricingProbeTest extends TestCase
     }
 
     /**
-     * WA-PRC-03: current behaviour; the fix inverts this assertion.
-     * Accepting a quote on a product with options adds a line with no option, so the order line has no
-     * variation and no stock is reserved.
+     * WA-PRC-03 (fixed): on a product with options the buyer splits the RFQ quantity across options, and accepting the
+     * quote adds one quoted line per option, so the seller knows what to ship and stock is taken per option.
      */
-    public function test_wa_prc_03_quote_on_product_with_options_orders_no_option_and_reserves_no_stock(): void
+    public function test_wa_prc_03_quote_on_product_with_options_orders_each_option_and_reserves_its_stock(): void
     {
-        $seller = $this->product->seller;
-        $rfq = RfqRequest::create([
-            'product_id' => $this->product->id,
-            'seller_id' => $seller->id,
-            'buyer_id' => $this->buyer->id,
-            'buyer_name' => $this->buyer->name,
-            'buyer_email' => $this->buyer->email,
-            'buyer_phone' => '01711223344',
-            'company_name' => 'Boutique Chain Dhaka',
-            'target_quantity' => 60,
-            'target_unit_price' => 90.00,
-            'seller_quoted_price' => 100.00,
-            'destination_district' => 'Dhaka',
-            'status' => 'quoted',
-        ]);
-
-        $stockBefore = (int) ProductVariation::where('product_id', $this->product->id)->sum('stock_quantity');
+        [$v1, $v2] = $this->twoVariationIds();
+        $rfq = $this->quoteFor($this->product);
+        $rfq->update(['option_quantities' => [$v1 => 40, $v2 => 20]]);
+        $stockBefore = ProductVariation::whereIn('id', [$v1, $v2])->pluck('stock_quantity', 'id');
 
         $this->post(route('rfq.quotation.accept', $rfq->id))->assertRedirect(route('checkout.index'));
         $this->placeCodOrder()->assertSet('errorMessage', '');
 
         $order = Order::where('customer_id', $this->buyer->id)->latest('id')->firstOrFail();
-        $item = OrderItem::whereIn('sub_order_id', $order->subOrders->pluck('id'))->sole();
-        $this->assertNull($item->variation_id, 'today: the seller is not told which option to ship');
-        $this->assertSame(60, $item->quantity);
-        $this->assertSame($stockBefore, (int) ProductVariation::where('product_id', $this->product->id)->sum('stock_quantity'), 'today: no stock is reserved for the quoted units');
+        $lines = OrderItem::whereIn('sub_order_id', $order->subOrders->pluck('id'))->get()->keyBy('variation_id');
+        $this->assertSame([40, 20], [$lines[$v1]->quantity, $lines[$v2]->quantity]);
+        $this->assertSame([100.0, 100.0], [(float) $lines[$v1]->unit_price, (float) $lines[$v2]->unit_price]);
+        $this->assertSame((int) $stockBefore[$v1] - 40, (int) ProductVariation::find($v1)->stock_quantity);
+        $this->assertSame((int) $stockBefore[$v2] - 20, (int) ProductVariation::find($v2)->stock_quantity);
+    }
+
+    /**
+     * WA-PRC-03: the RFQ form on a product with options asks for a quantity per option; the total is their sum.
+     */
+    public function test_wa_prc_03_rfq_on_product_with_options_records_the_option_split(): void
+    {
+        [$v1, $v2] = $this->twoVariationIds();
+
+        Livewire::test(ProductDetail::class, ['slug' => $this->product->slug])
+            ->set('rfqOptionQuantities', [$v1 => 30, $v2 => 0])
+            ->set('rfqBuyerPhone', '01711223344')
+            ->call('submitRfq')
+            ->assertHasNoErrors();
+
+        $rfq = RfqRequest::where('product_id', $this->product->id)->latest('id')->firstOrFail();
+        $this->assertSame([$v1 => 30], $rfq->option_quantities);
+        $this->assertSame(30, $rfq->target_quantity);
+    }
+
+    /**
+     * WA-PRC-03: an RFQ needs at least one option quantity, and only this product's options are accepted.
+     */
+    public function test_wa_prc_03_rfq_option_split_is_validated(): void
+    {
+        $otherVariation = ProductVariation::where('product_id', '!=', $this->product->id)->value('id');
+        [$v1] = $this->twoVariationIds();
+
+        Livewire::test(ProductDetail::class, ['slug' => $this->product->slug])
+            ->set('rfqBuyerPhone', '01711223344')
+            ->set('rfqOptionQuantities', [$v1 => 0])
+            ->call('submitRfq')
+            ->assertHasErrors('rfqOptionQuantities')
+            ->set('rfqOptionQuantities', [$otherVariation => 10])
+            ->call('submitRfq')
+            ->assertHasErrors('rfqOptionQuantities');
+
+        $this->assertSame(0, RfqRequest::where('product_id', $this->product->id)->count());
+    }
+
+    /**
+     * WA-PRC-03: a quote sent before the option split existed doesn't say which options to ship. It can't be accepted;
+     * the buyer is asked to request a new quotation, and the quote stays open.
+     */
+    public function test_wa_prc_03_quote_without_option_split_on_product_with_options_is_refused(): void
+    {
+        $rfq = $this->quoteFor($this->product);
+
+        $this->from(route('customer.rfqs'))
+            ->post(route('rfq.quotation.accept', $rfq->id))
+            ->assertRedirect(route('customer.rfqs'))
+            ->assertSessionHas('error', fn (string $message) => str_contains($message, 'which options'));
+
+        $this->assertSame('quoted', $rfq->fresh()->status);
+        $this->assertSame([], $this->cart->getItems());
     }
 
     /**
@@ -246,7 +288,9 @@ class PricingProbeTest extends TestCase
      */
     public function test_wa_prc_04_failed_cart_add_leaves_the_quote_open(): void
     {
+        [$v1] = $this->twoVariationIds();
         $rfq = $this->quoteFor($this->product);
+        $rfq->update(['option_quantities' => [$v1 => 60]]);
         $this->product->forceFill(['is_active' => false])->save();
 
         $this->from(route('customer.rfqs'))

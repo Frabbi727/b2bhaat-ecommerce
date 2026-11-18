@@ -21,6 +21,7 @@ class RfqRequest extends Model
         'buyer_phone',
         'company_name',
         'target_quantity',
+        'option_quantities',
         'target_unit_price',
         'destination_district',
         'specifications',
@@ -38,6 +39,7 @@ class RfqRequest extends Model
     {
         return [
             'target_quantity' => 'integer',
+            'option_quantities' => 'array',
             'target_unit_price' => 'decimal:2',
             'seller_quoted_price' => 'decimal:2',
             'valid_until' => 'datetime',
@@ -54,6 +56,45 @@ class RfqRequest extends Model
     public function canBeAccepted(): bool
     {
         return $this->status === 'quoted' && ! $this->isExpired();
+    }
+
+    /**
+     * Units per option the buyer asked for (WA-PRC-03), keyed by variation id. Empty for a product without options.
+     *
+     * @return array<int, int>
+     */
+    public function optionQuantities(): array
+    {
+        $quantities = [];
+        foreach ($this->option_quantities ?? [] as $variationId => $quantity) {
+            if ((int) $quantity > 0) {
+                $quantities[(int) $variationId] = (int) $quantity;
+            }
+        }
+
+        return $quantities;
+    }
+
+    /** One line per option, e.g. "NAIL-PNK-MED (Colour: Pink): 40 · NAIL-BLK-LNG (Colour: Black): 20". */
+    public function optionSummary(): ?string
+    {
+        $quantities = $this->optionQuantities();
+        if ($quantities === []) {
+            return null;
+        }
+
+        $variations = ProductVariation::with('attributeValues.attribute')->whereIn('id', array_keys($quantities))->get()->keyBy('id');
+
+        return collect($quantities)->map(function (int $quantity, int $variationId) use ($variations): string {
+            $variation = $variations->get($variationId);
+            if (! $variation) {
+                return "Option #{$variationId}: {$quantity}";
+            }
+
+            $attributes = $variation->attributeValues->map(fn ($value) => "{$value->attribute->name}: {$value->value}")->implode(', ');
+
+            return $variation->sku.($attributes !== '' ? " ({$attributes})" : '').": {$quantity}";
+        })->implode(' · ');
     }
 
     public function product(): BelongsTo

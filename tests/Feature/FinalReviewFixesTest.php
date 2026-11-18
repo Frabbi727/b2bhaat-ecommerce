@@ -163,14 +163,14 @@ class FinalReviewFixesTest extends TestCase
         $rfq = RfqRequest::create([
             'product_id' => $product->id, 'seller_id' => $product->seller_id, 'buyer_id' => $buyer->id,
             'buyer_name' => 'B', 'buyer_email' => $buyer->email, 'buyer_phone' => '01711000000',
-            'target_quantity' => 500, 'destination_district' => 'Dhaka', 'status' => 'quoted', 'seller_quoted_price' => 70,
+            'target_quantity' => 500, 'option_quantities' => [$product->variations()->orderBy('id')->value('id') => 500], 'destination_district' => 'Dhaka', 'status' => 'quoted', 'seller_quoted_price' => 70,
         ]);
 
         $this->actingAs($buyer)->post(route('rfq.quotation.accept', $rfq->id))->assertRedirect();
         $this->actingAs($buyer)->post(route('rfq.quotation.accept', $rfq->id))->assertRedirect();
 
         $cart = app(CartSessionService::class);
-        $key = CartSessionService::quotedLineKey($product->id, null, $rfq->id);
+        $key = CartSessionService::quotedLineKey($product->id, $product->variations()->orderBy('id')->value('id'), $rfq->id);
         $this->assertSame(500, $cart->getItems()[$key]['quantity'], 'Accepting twice must not double the line');
 
         try {

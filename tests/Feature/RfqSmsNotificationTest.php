@@ -56,7 +56,7 @@ class RfqSmsNotificationTest extends TestCase
             ->set('rfqBuyerEmail', 'procurement@boutique.com')
             ->set('rfqBuyerPhone', '01711223344')
             ->set('rfqCompanyName', 'Boutique Chain Dhaka')
-            ->set('rfqTargetQuantity', 300)
+            ->set('rfqOptionQuantities', [$this->product->variations()->orderBy('id')->value('id') => 300])
             ->set('rfqTargetPrice', 1500.00)
             ->set('rfqDestinationDistrict', 'Dhaka')
             ->set('rfqSpecifications', 'Custom color requested.')
@@ -126,7 +126,7 @@ class RfqSmsNotificationTest extends TestCase
             'buyer_email' => $this->buyer->email,
             'buyer_phone' => '01711223344',
             'company_name' => 'Boutique Chain Dhaka',
-            'target_quantity' => 150,
+            'target_quantity' => 150, 'option_quantities' => [$this->product->variations()->orderBy('id')->value('id') => 150],
             'target_unit_price' => 1400.00,
             'seller_quoted_price' => 1450.00,
             'destination_district' => 'Dhaka',

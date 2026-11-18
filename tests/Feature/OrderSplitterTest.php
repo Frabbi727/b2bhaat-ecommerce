@@ -178,6 +178,37 @@ class OrderSplitterTest extends TestCase
         $this->assertSame($stockBefore, (int) $variation->fresh()->stock_quantity);
     }
 
+    /**
+     * WA-PRC-03 backstop: a line on a product with options must name the option, or the seller can't ship it and no
+     * stock is taken.
+     */
+    public function test_line_without_an_option_on_a_product_with_options_is_refused(): void
+    {
+        $customer = User::where('email', 'customer@retail.com')->firstOrFail();
+        $product = Product::where('slug', 'luxury-press-on-fake-nails-set')->firstOrFail();
+        $this->assertTrue((bool) $product->has_variations);
+        $ordersBefore = Order::count();
+
+        try {
+            app(OrderSplitterService::class)->createAndSplitOrder($customer, [
+                'payment_method_id' => PaymentMethod::where('slug', 'cod')->firstOrFail()->id,
+                'shipping_address' => ['recipient_name' => 'Tanvir Hasan', 'street' => 'Dhanmondi, Dhaka', 'phone' => '+8801700000004'],
+                'items' => [[
+                    'product_id' => $product->id,
+                    'variation_id' => null,
+                    'sales_channel_id' => SalesChannel::where('slug', SalesChannel::WHOLESALE)->value('id'),
+                    'quantity' => 60,
+                    'unit_price' => 100.00,
+                ]],
+            ]);
+            $this->fail('A line without an option was ordered.');
+        } catch (\DomainException $e) {
+            $this->assertStringContainsString('choose an option', $e->getMessage());
+        }
+
+        $this->assertSame($ordersBefore, Order::count());
+    }
+
     public function test_each_order_line_keeps_the_sellers_cost_per_unit_at_the_time_of_ordering(): void
     {
         $customer = User::where('email', 'customer@retail.com')->firstOrFail();
