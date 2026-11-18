@@ -213,9 +213,16 @@ class PaymentVerificationTest extends TestCase
         $subOrder = $order->subOrders->firstOrFail();
         $subOrder->update(['fulfillment_status_id' => FulfillmentStatus::where('slug', 'shipped')->value('id')]);
 
-        app(CourierStatusService::class)->updateStatus($subOrder->fresh(), 'delivered');
+        // AR-03: an unverified prepaid parcel can't be marked delivered at all, so it is never marked paid by delivery
+        try {
+            app(CourierStatusService::class)->updateStatus($subOrder->fresh(), 'delivered');
+            $this->fail('An unverified prepaid parcel was marked delivered.');
+        } catch (DomainException $e) {
+            $this->assertStringContainsString("payment hasn't been confirmed", $e->getMessage());
+        }
 
         $this->assertSame('awaiting_verification', $order->fresh()->paymentStatus->slug);
+        $this->assertSame('shipped', $subOrder->fresh()->fulfillmentStatus->slug);
     }
 
     /**

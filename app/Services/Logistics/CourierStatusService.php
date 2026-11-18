@@ -19,6 +19,7 @@ use App\Services\Orders\OrderStatusReconciler;
 use App\Services\Orders\PartialReturnService;
 use App\Services\Orders\RefundRecorder;
 use App\Services\Promotions\FlashSaleAllocationService;
+use App\Services\Settings\StoreConfigurationService;
 use Carbon\Carbon;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +41,9 @@ class CourierStatusService
         'returned' => [],
         'cancelled' => [],
     ];
+
+    /** Statuses that mean the goods have left the seller: reachable only once the payment is cleared (AR-03). */
+    private const DISPATCHED_STATUSES = ['shipped', 'in_transit', 'out_for_delivery', 'delivered'];
 
     public static function canTransition(?string $from, string $to): bool
     {
@@ -63,7 +67,11 @@ class CourierStatusService
      * Update courier status for a sub-order, record tracking log, and trigger settlement if delivered.
      * Repeating the current status is a no-op; an illegal move throws.
      *
-     * @throws InvalidStatusTransitionException
+     * $adminOverride: an admin recording what the courier panel shows (with a note) may record a return after the
+     * return window; nobody may ship or deliver a parcel whose payment isn't cleared.
+     *
+     * @throws InvalidStatusTransitionException when the parcel can't move to that status
+     * @throws DomainException when the payment isn't cleared, or a late return isn't recorded by an admin
      */
     public function updateStatus(
         SubOrder $subOrder,
@@ -71,13 +79,14 @@ class CourierStatusService
         ?string $hubLocation = null,
         ?string $title = null,
         ?string $description = null,
-        ?Carbon $timestamp = null
+        ?Carbon $timestamp = null,
+        bool $adminOverride = false,
     ): void {
-        DB::transaction(function () use ($subOrder, $statusSlug, $hubLocation, $title, $description, $timestamp) {
+        DB::transaction(function () use ($subOrder, $statusSlug, $hubLocation, $title, $description, $timestamp, $adminOverride) {
             // Order before parcel, as everywhere else (Wave 1 review M-1).
             Order::whereKey($subOrder->parent_order_id)->lockForUpdate()->first();
 
-            $subOrder = SubOrder::whereKey($subOrder->getKey())->lockForUpdate()->with(['fulfillmentStatus', 'order.paymentMethod'])->firstOrFail();
+            $subOrder = SubOrder::whereKey($subOrder->getKey())->lockForUpdate()->with(['fulfillmentStatus', 'order.paymentMethod', 'order.paymentStatus'])->firstOrFail();
             $currentSlug = $subOrder->fulfillmentStatus?->slug;
 
             if ($currentSlug === $statusSlug) {
@@ -86,6 +95,16 @@ class CourierStatusService
 
             if (! self::canTransition($currentSlug, $statusSlug)) {
                 throw InvalidStatusTransitionException::between($currentSlug, $statusSlug);
+            }
+
+            // AR-03: the same payment rule as hand-over, so a courier update can't ship (or hold escrow for) an unpaid parcel
+            if (in_array($statusSlug, self::DISPATCHED_STATUSES, true) && ! $subOrder->isClearedForDispatch()) {
+                throw new DomainException("Sub-Order #{$subOrder->sub_order_number} can't be marked {$statusSlug}: the buyer's payment hasn't been confirmed.");
+            }
+
+            // AR-02: after the return window the sale may already be settled, so only an admin can record a late return
+            if ($currentSlug === 'delivered' && $statusSlug === 'returned' && ! $adminOverride && $this->returnWindowHasClosed($subOrder)) {
+                throw new DomainException("Sub-Order #{$subOrder->sub_order_number} was delivered more than ".$this->returnWindowHours().' hours ago, so a return can only be recorded by an admin.');
             }
 
             $fulfillmentStatus = FulfillmentStatus::where('slug', $statusSlug)->firstOrFail();
@@ -156,6 +175,19 @@ class CourierStatusService
 
         // The caller's copy shows the saved state
         return $subOrder->refresh();
+    }
+
+    private function returnWindowHours(): int
+    {
+        return app(StoreConfigurationService::class)->getEscrowHoldingPeriodHours();
+    }
+
+    /** The return window is the escrow holding period, counted from delivery (as in OrderDisputeService). */
+    private function returnWindowHasClosed(SubOrder $subOrder): bool
+    {
+        $deliveredAt = $subOrder->deliveredAt();
+
+        return $deliveredAt !== null && $deliveredAt->copy()->addHours($this->returnWindowHours())->isPast();
     }
 
     protected function handleReturnedConsignment(SubOrder $subOrder): void
