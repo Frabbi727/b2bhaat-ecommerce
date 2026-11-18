@@ -170,7 +170,7 @@ class FinalReviewFixesTest extends TestCase
         $this->actingAs($buyer)->post(route('rfq.quotation.accept', $rfq->id))->assertRedirect();
 
         $cart = app(CartSessionService::class);
-        $key = "{$product->id}_base_".SalesChannel::WHOLESALE;
+        $key = CartSessionService::quotedLineKey($product->id, null, $rfq->id);
         $this->assertSame(500, $cart->getItems()[$key]['quantity'], 'Accepting twice must not double the line');
 
         try {

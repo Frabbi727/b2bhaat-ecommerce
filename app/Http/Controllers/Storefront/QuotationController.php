@@ -9,6 +9,7 @@ use App\Models\RfqRequest;
 use App\Models\SalesChannel;
 use App\Services\Cart\CartSessionService;
 use App\Services\Rfq\RfqNotificationService;
+use Exception;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -82,9 +83,31 @@ class QuotationController extends Controller
             return redirect()->back()->with('error', 'This RFQ has not yet received an official quotation from the seller.');
         }
 
-        // Only an open quote can be accepted, and only once (final review I6)
+        if ($rfq->status !== 'quoted') {
+            return redirect()->back()->with('error', 'This quotation is no longer open for acceptance.');
+        }
+
+        // WA-PRC-04: put the quote in the cart first, so a failed add (product hidden, merchant on vacation) leaves
+        // the quote open instead of using it up with nothing in the cart
+        $cart = app(CartSessionService::class);
+        try {
+            $cart->addItem(
+                productId: $rfq->product_id,
+                variationId: null,
+                channelSlug: SalesChannel::WHOLESALE,
+                quantity: (int) $rfq->target_quantity,
+                overrideUnitPrice: (float) $rfq->seller_quoted_price,
+                rfqId: $rfq->id,
+            );
+        } catch (Exception $e) {
+            return redirect()->back()->with('error', "This quotation can't be added to your cart: {$e->getMessage()}");
+        }
+
+        // Only an open quote can be accepted, and only once (final review I6); a lost race takes the line back out
         $accepted = RfqRequest::whereKey($rfq->id)->where('status', 'quoted')->update(['status' => 'accepted']);
         if ($accepted === 0) {
+            $cart->removeQuotedLine($rfq->id);
+
             return redirect()->back()->with('error', 'This quotation is no longer open for acceptance.');
         }
 
@@ -92,16 +115,6 @@ class QuotationController extends Controller
         // The guarded update above skips model events, so record the acceptance explicitly (AUD-4)
         $rfq->recordAuditActivity('updated', ['status' => 'quoted'], ['status' => 'accepted']);
         app(RfqNotificationService::class)->notifySellerOfAcceptedQuote($rfq);
-
-        // 2. Add item to cart with locked wholesale quotation unit price
-        $cart = app(CartSessionService::class);
-        $cart->addItem(
-            productId: $rfq->product_id,
-            variationId: null,
-            channelSlug: SalesChannel::WHOLESALE,
-            quantity: (int) $rfq->target_quantity,
-            overrideUnitPrice: (float) $rfq->seller_quoted_price
-        );
 
         return redirect()->route('checkout.index')->with(
             'success',

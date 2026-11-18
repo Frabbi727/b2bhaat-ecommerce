@@ -31,6 +31,7 @@ class RfqRequest extends Model
         'dispatch_days',
         'rejected_by',
         'rejection_reason',
+        'order_id',
     ];
 
     protected function casts(): array
@@ -41,6 +42,7 @@ class RfqRequest extends Model
             'seller_quoted_price' => 'decimal:2',
             'valid_until' => 'datetime',
             'dispatch_days' => 'integer',
+            'order_id' => 'integer',
         ];
     }
 
@@ -67,5 +69,11 @@ class RfqRequest extends Model
     public function buyer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'buyer_id');
+    }
+
+    /** The order that used this accepted quotation (WA-PRC-01). */
+    public function order(): BelongsTo
+    {
+        return $this->belongsTo(Order::class);
     }
 }
