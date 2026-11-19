@@ -6,9 +6,11 @@ use App\Models\FulfillmentStatus;
 use App\Models\Order;
 use App\Models\OrderTrackingLog;
 use App\Models\ReturnRequest;
+use App\Models\StockMovement;
 use App\Models\SubOrder;
 use App\Models\User;
 use App\Services\Escrow\EscrowLedgerService;
+use App\Services\Inventory\StockMovementContext;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Promotions\FlashSaleAllocationService;
 use App\Services\Settings\StoreConfigurationService;
@@ -250,7 +252,7 @@ class OrderDisputeService
                     // Offers before stock rows, as checkout locks them (review R-5)
                     app(FlashSaleAllocationService::class)->release($returnRequest->subOrder->items);
                     if (! empty($stockItems)) {
-                        $this->stockReservationService->releaseStock($stockItems);
+                        StockMovementContext::run(StockMovement::REASON_RETURNED, $returnRequest, fn () => $this->stockReservationService->releaseStock($stockItems));
                     }
 
                     // 3. Create tracking timeline log

@@ -10,6 +10,7 @@ use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\SalesChannel;
+use App\Models\StockMovement;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\Catalog\ProductApprovalService;
@@ -218,7 +219,7 @@ class ProductBulkImportService
             }
 
             if (! $dryRun) {
-                $product = DB::transaction(fn () => $this->createProduct($seller, $plan['product']));
+                $product = StockMovementContext::run(StockMovement::REASON_IMPORT, null, fn () => DB::transaction(fn () => $this->createProduct($seller, $plan['product'])), 'Product sheet import');
 
                 if ($plan['product']['is_active']) {
                     try {

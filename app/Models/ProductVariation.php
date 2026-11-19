@@ -4,12 +4,15 @@ namespace App\Models;
 
 use App\Exceptions\VariationInUseException;
 use App\Models\Traits\Auditable;
+use App\Observers\ProductVariationStockObserver;
 use App\Services\Inventory\ProductCodeGenerator;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+#[ObservedBy(ProductVariationStockObserver::class)]
 class ProductVariation extends Model
 {
     use Auditable;

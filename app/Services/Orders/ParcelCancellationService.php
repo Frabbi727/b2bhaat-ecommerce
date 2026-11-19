@@ -7,9 +7,11 @@ namespace App\Services\Orders;
 use App\Models\FulfillmentStatus;
 use App\Models\Order;
 use App\Models\OrderTrackingLog;
+use App\Models\StockMovement;
 use App\Models\SubOrder;
 use App\Models\User;
 use App\Services\Escrow\EscrowLedgerService;
+use App\Services\Inventory\StockMovementContext;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Logistics\CourierStatusService;
 use App\Services\Promotions\FlashSaleAllocationService;
@@ -103,7 +105,7 @@ class ParcelCancellationService
                 ->values()
                 ->all();
             if ($stockItems !== []) {
-                $this->stockReservations->releaseStock($stockItems);
+                StockMovementContext::run(StockMovement::REASON_ORDER_CANCELLED, $subOrder, fn () => $this->stockReservations->releaseStock($stockItems), $reason);
             }
 
             $subOrder->update([

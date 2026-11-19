@@ -11,8 +11,10 @@ use App\Models\OrderTrackingLog;
 use App\Models\Refund;
 use App\Models\ReturnRequest;
 use App\Models\ReturnRequestItem;
+use App\Models\StockMovement;
 use App\Models\SubOrder;
 use App\Services\Escrow\EscrowLedgerService;
+use App\Services\Inventory\StockMovementContext;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Promotions\FlashSaleAllocationService;
 use Illuminate\Support\Collection;
@@ -285,7 +287,7 @@ class PartialReturnService
         app(FlashSaleAllocationService::class)->release($returnedItems);
 
         if ($stock !== []) {
-            $this->stockReservationService->releaseStock($stock);
+            StockMovementContext::run(StockMovement::REASON_RETURNED, null, fn () => $this->stockReservationService->releaseStock($stock));
         }
     }
 

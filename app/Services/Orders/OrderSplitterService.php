@@ -11,9 +11,11 @@ use App\Models\Product;
 use App\Models\ProductVariation;
 use App\Models\RfqRequest;
 use App\Models\SalesChannel;
+use App\Models\StockMovement;
 use App\Models\SubOrder;
 use App\Models\User;
 use App\Services\Formatting\Money;
+use App\Services\Inventory\StockMovementContext;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Logistics\ShippingCalculatorService;
 use App\Services\Monetization\MonetizationEngineService;
@@ -96,7 +98,8 @@ class OrderSplitterService
             }
         }
 
-        return DB::transaction(function () use ($customer, $data) {
+        // AR-08: the stock this order takes is recorded as "order placed", linked to the order once it exists
+        return StockMovementContext::run(StockMovement::REASON_ORDER_PLACED, null, fn () => DB::transaction(function () use ($customer, $data) {
             // Only approved, live products may be ordered, even if the cart was filled earlier
             $orderedProductIds = collect($data['items'])->pluck('product_id')->unique()->filter()->values();
             if (Product::query()->sellable()->whereIn('id', $orderedProductIds)->count() !== $orderedProductIds->count()) {
@@ -172,7 +175,7 @@ class OrderSplitterService
             $orderNumber = 'ORD-'.date('Ymd').'-'.strtoupper(Str::random(6));
 
             // 3. Create master Order
-            $order = Order::create([
+            $order = Order::query()->create([
                 'order_number' => $orderNumber,
                 'customer_id' => $customer->id,
                 'order_status_id' => $pendingStatus->id,
@@ -186,6 +189,7 @@ class OrderSplitterService
                 'shipping_amount' => $shippingAmount,
                 'discount_amount' => $discountAmount,
             ]);
+            StockMovementContext::attachReference($order);
 
             // 4. Group order items by seller
             $itemsBySeller = [];
@@ -271,7 +275,7 @@ class OrderSplitterService
             }
 
             return $order->load('subOrders.items');
-        });
+        }));
     }
 
     /**

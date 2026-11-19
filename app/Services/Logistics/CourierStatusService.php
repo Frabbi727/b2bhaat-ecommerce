@@ -10,10 +10,12 @@ use App\Models\Order;
 use App\Models\OrderTrackingLog;
 use App\Models\PaymentStatus;
 use App\Models\ReturnRequest;
+use App\Models\StockMovement;
 use App\Models\SubOrder;
 use App\Services\Accounting\EventPipeline\CodDeliveryJournalHandler;
 use App\Services\Accounting\EventPipeline\CommissionRecognitionJournalHandler;
 use App\Services\Escrow\EscrowLedgerService;
+use App\Services\Inventory\StockMovementContext;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Orders\OrderStatusReconciler;
 use App\Services\Orders\PartialReturnService;
@@ -226,7 +228,7 @@ class CourierStatusService
         // Offers before stock rows, as checkout locks them (review R-5)
         app(FlashSaleAllocationService::class)->release($subOrder->items);
         if (! empty($stockItems)) {
-            $this->stockReservationService->releaseStock($stockItems);
+            StockMovementContext::run(StockMovement::REASON_RETURNED, $subOrder, fn () => $this->stockReservationService->releaseStock($stockItems), 'Returned to seller by courier');
         }
 
         // 2. Undo the seller side: refund the hold, or reverse an already released credit

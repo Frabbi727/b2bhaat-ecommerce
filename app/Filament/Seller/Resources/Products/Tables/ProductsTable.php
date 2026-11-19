@@ -5,6 +5,7 @@ namespace App\Filament\Seller\Resources\Products\Tables;
 use App\Enums\ProductApprovalStatus;
 use App\Exceptions\ListingActivationRefusedException;
 use App\Filament\Seller\Resources\Products\Actions\AdjustStockAction;
+use App\Filament\Seller\Resources\Products\Actions\StockHistoryAction;
 use App\Filament\Seller\Resources\Products\ProductResource;
 use App\Models\Category;
 use App\Models\Product;
@@ -231,6 +232,7 @@ class ProductsTable
                 ActionGroup::make([
                     EditAction::make(),
                     AdjustStockAction::make(),
+                    StockHistoryAction::make(),
                     self::viewOnStorefrontAction(),
                     self::duplicateAction(),
                     self::deleteAction(),
