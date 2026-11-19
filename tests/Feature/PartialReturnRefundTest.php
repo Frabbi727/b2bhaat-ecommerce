@@ -204,6 +204,30 @@ class PartialReturnRefundTest extends TestCase
         $this->assertEqualsWithDelta(630.00, (float) $release->amount, 0.001);
     }
 
+    /**
+     * WA-MNY-02: in a parcel with lines at different commission rates, a returned line gives back the commission it
+     * was charged at its own rate, not an average of the parcel.
+     */
+    public function test_a_returned_line_gives_back_commission_at_its_own_rate(): void
+    {
+        // Cheap items (৳600) at 10% = ৳60, dear items (৳400) at 5% = ৳20: parcel commission ৳80
+        $this->commission = 80.00;
+        $parcel = $this->deliveredParcel();
+        $this->cheapItem->update(['commission_rate' => 10]);
+        $this->dearItem->update(['commission_rate' => 5]);
+
+        $request = $this->returnItems($parcel, [$this->cheapItem->id => 3]);
+
+        $line = $request->items()->firstOrFail();
+        $this->assertEqualsWithDelta(30.00, (float) $line->commission_amount, 0.001, '৳300 at 10%, not ৳80 × 300/1000 = ৳24');
+        $this->assertEqualsWithDelta(270.00, (float) $line->seller_amount, 0.001);
+
+        // The rest comes back: what is left of the commission, so the total given back is the parcel's ৳80
+        $rest = $this->returnItems($parcel->fresh(), [$this->cheapItem->id => 3, $this->dearItem->id => 2]);
+        $this->assertEqualsWithDelta(50.00, (float) $rest->items()->sum('commission_amount'), 0.001);
+        $this->assertBooksBalance();
+    }
+
     public function test_the_return_that_brings_back_the_rest_also_refunds_the_delivery_fee(): void
     {
         $parcel = $this->deliveredParcel();

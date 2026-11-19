@@ -208,12 +208,11 @@ class MoneyFlowProbeTest extends TestCase
     }
 
     /**
-     * WA-MNY-02: current behaviour; the fix inverts this assertion.
-     * One parcel with a retail line ৳1,000 at 10% and a wholesale line ৳1,000 at 5%: commission ৳150.
-     * Returning the whole retail line should give back its own ৳100; today the give-back is pro rata by value, ৳75,
-     * so the seller is left paying ৳75 on a ৳1,000 line whose rate is 5% (৳50).
+     * WA-MNY-02 (fixed): one parcel with a retail line ৳1,000 at 10% and a wholesale line ৳1,000 at 5%: commission
+     * ৳150. Returning the whole retail line gives back its own ৳100 (not ৳75 pro rata), so the seller keeps paying
+     * exactly 5% (৳50) on the wholesale line they kept.
      */
-    public function test_wa_mny_02_partial_return_gives_back_commission_pro_rata_not_at_the_line_rate(): void
+    public function test_wa_mny_02_partial_return_gives_back_commission_at_the_line_rate(): void
     {
         $seller = $this->product->seller;
         $number = 'ORD-AUDIT-'.uniqid();
@@ -257,8 +256,8 @@ class MoneyFlowProbeTest extends TestCase
         $disputes->resolveReturnRequest($request, ReturnRequest::STATUS_APPROVED, 'Accepted');
 
         $line = $request->fresh()->items()->firstOrFail();
-        $this->assertSame(7500, $this->poisha($line->commission_amount), 'today: ৳75 given back (pro rata), not the line\'s own ৳100');
-        $this->assertSame(92500, $this->poisha($line->seller_amount));
+        $this->assertSame(10000, $this->poisha($line->commission_amount), 'the line\'s own ৳100, not ৳75 pro rata');
+        $this->assertSame(90000, $this->poisha($line->seller_amount));
         $this->assertSame(100000, $this->poisha($line->refund_amount), 'buyer refund is right: ৳1,000');
     }
 

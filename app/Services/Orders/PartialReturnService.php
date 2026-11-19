@@ -24,7 +24,7 @@ use InvalidArgumentException;
 /**
  * PAY-4: returns of some items of a delivered parcel. Owner rules (2026-11-10):
  *  - the buyer gets back the items' price minus their share of the coupon;
- *  - the commission on those items is given back in proportion, so the seller loses price − commission share;
+ *  - the commission on those items is given back at each line's own rate (in proportion for older lines without one), so the seller loses price − commission share;
  *  - the delivery fee is refunded only when the whole parcel has come back.
  *
  * The return that brings back the last items settles whatever is left, so rounding never leaves a few poisha behind.
@@ -215,7 +215,11 @@ class PartialReturnService
             $goods = round((float) $line->orderItem->unit_price * (int) $line->quantity, 2);
             $share = $subtotal > 0 ? $goods / $subtotal : 0.0;
 
-            return ['line' => $line, 'goods' => $goods, 'commission' => round($commission * $share, 2), 'discount' => round($discount * $share, 2)];
+            // WA-MNY-02: the line's own commission rate; lines from before rates were stored fall back to the average
+            $rate = $line->orderItem->commission_rate;
+            $lineCommission = $rate !== null ? $goods * (float) $rate / 100 : $commission * $share;
+
+            return ['line' => $line, 'goods' => $goods, 'commission' => round(min($lineCommission, $commission), 2), 'discount' => round($discount * $share, 2)];
         })->values()->all();
 
         if ($completes && $priced !== []) {
