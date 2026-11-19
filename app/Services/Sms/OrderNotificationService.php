@@ -214,6 +214,28 @@ class OrderNotificationService
     }
 
     /**
+     * AR-16: remind the seller that a parcel they can ship has waited too long.
+     */
+    public function sendUnshippedParcelReminder(SubOrder $subOrder, int $days): bool
+    {
+        $phone = $subOrder->seller?->phone;
+        if (! $phone || ! PhoneNormalizer::isValid($phone)) {
+            return false;
+        }
+
+        $message = $this->render('seller_unshipped_reminder', [
+            'order_number' => $subOrder->sub_order_number,
+            'days' => (string) $days,
+            'seller_orders_url' => SubOrderResource::getUrl('index', panel: 'seller'),
+            'store_name' => $this->storeName(),
+        ], 'Order #{order_number} on {store_name} has waited {days} days to ship. Please ship it, or decline it if you can\'t fill it: {seller_orders_url}');
+
+        SendSmsJob::dispatch(PhoneNormalizer::normalize($phone), $message, 'seller_unshipped_reminder', bypassDeduplication: true);
+
+        return true;
+    }
+
+    /**
      * Tell a wholesale applicant whether their business account was approved.
      */
     public function sendWholesaleDecision(User $user): bool

@@ -195,6 +195,14 @@ class StoreConfigurationService
     }
 
     /**
+     * Days a parcel that could ship (COD, or paid) may wait before the seller and admins are told (AR-16).
+     */
+    public function getUnshippedParcelAlertDays(): int
+    {
+        return max(1, (int) $this->get('unshipped_parcel_alert_days', 3));
+    }
+
+    /**
      * Check if customers can place orders without logged-in accounts.
      */
     public function isGuestCheckoutAllowed(): bool

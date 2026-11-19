@@ -30,6 +30,7 @@ class SubOrder extends Model
         'cancelled_by_user_id',
         'cancel_reason',
         'cancelled_at',
+        'unshipped_alerted_at',
         'courier_name',
         'tracking_number',
         'subtotal',
@@ -75,6 +76,7 @@ class SubOrder extends Model
             'handover_confirmed_at' => 'datetime',
             'courier_settled_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'unshipped_alerted_at' => 'datetime',
             'cancelled_by_user_id' => 'integer',
         ];
     }

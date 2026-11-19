@@ -89,6 +89,7 @@ class StoreSettings extends Page
             'stock_reservation_ttl' => $service->getStockReservationTtl(),
             'mfs_verification_reminder_hours' => $service->getMfsVerificationReminderHours(),
             'mfs_verification_timeout_hours' => $service->getMfsVerificationTimeoutHours(),
+            'unshipped_parcel_alert_days' => $service->getUnshippedParcelAlertDays(),
             'allow_backorders' => $service->isBackorderAllowed(),
 
             'guest_checkout_enabled' => $service->isGuestCheckoutAllowed(),
@@ -424,6 +425,15 @@ class StoreSettings extends Page
                             ->validationMessages(['gt' => 'Cancel after must be longer than the reminder time.'])
                             ->required(),
 
+                        TextInput::make('unshipped_parcel_alert_days')
+                            ->label('Flag orders not shipped after')
+                            ->numeric()
+                            ->integer()
+                            ->minValue(1)
+                            ->suffix('days')
+                            ->helperText('For cash on delivery and paid orders. The seller gets an SMS and admins get a notification, once per parcel. Nothing is cancelled.')
+                            ->required(),
+
                         Toggle::make('allow_backorders')
                             ->label('Allow orders when stock is 0')
                             ->helperText('When off, shoppers cannot add more than the seller has in stock.')
@@ -512,6 +522,7 @@ class StoreSettings extends Page
         $service->set('stock_reservation_ttl', (int) $state['stock_reservation_ttl'], 'inventory', 'integer');
         $service->set('mfs_verification_reminder_hours', (int) $state['mfs_verification_reminder_hours'], 'payments', 'integer');
         $service->set('mfs_verification_timeout_hours', (int) $state['mfs_verification_timeout_hours'], 'payments', 'integer');
+        $service->set('unshipped_parcel_alert_days', (int) $state['unshipped_parcel_alert_days'], 'inventory', 'integer');
         $service->set('allow_backorders', (bool) $state['allow_backorders'], 'inventory', 'boolean');
 
         $service->set('guest_checkout_enabled', (bool) $state['guest_checkout_enabled'], 'checkout', 'boolean');
