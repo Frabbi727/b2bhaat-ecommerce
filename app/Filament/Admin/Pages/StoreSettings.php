@@ -90,7 +90,6 @@ class StoreSettings extends Page
             'mfs_verification_reminder_hours' => $service->getMfsVerificationReminderHours(),
             'mfs_verification_timeout_hours' => $service->getMfsVerificationTimeoutHours(),
             'unshipped_parcel_alert_days' => $service->getUnshippedParcelAlertDays(),
-            'allow_backorders' => $service->isBackorderAllowed(),
 
             'guest_checkout_enabled' => $service->isGuestCheckoutAllowed(),
             'cancellation_window_hours' => $service->getOrderCancellationWindowHours(),
@@ -433,11 +432,6 @@ class StoreSettings extends Page
                             ->suffix('days')
                             ->helperText('For cash on delivery and paid orders. The seller gets an SMS and admins get a notification, once per parcel. Nothing is cancelled.')
                             ->required(),
-
-                        Toggle::make('allow_backorders')
-                            ->label('Allow orders when stock is 0')
-                            ->helperText('When off, shoppers cannot add more than the seller has in stock.')
-                            ->columnSpanFull(),
                     ]),
             ]);
     }
@@ -523,7 +517,6 @@ class StoreSettings extends Page
         $service->set('mfs_verification_reminder_hours', (int) $state['mfs_verification_reminder_hours'], 'payments', 'integer');
         $service->set('mfs_verification_timeout_hours', (int) $state['mfs_verification_timeout_hours'], 'payments', 'integer');
         $service->set('unshipped_parcel_alert_days', (int) $state['unshipped_parcel_alert_days'], 'inventory', 'integer');
-        $service->set('allow_backorders', (bool) $state['allow_backorders'], 'inventory', 'boolean');
 
         $service->set('guest_checkout_enabled', (bool) $state['guest_checkout_enabled'], 'checkout', 'boolean');
         $service->set('cancellation_window_hours', (int) $state['cancellation_window_hours'], 'checkout', 'integer');

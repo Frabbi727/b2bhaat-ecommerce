@@ -5,15 +5,10 @@ namespace App\Services\Inventory;
 use App\Exceptions\InsufficientStockException;
 use App\Models\ProductVariation;
 use App\Models\StockMovement;
-use App\Services\Settings\StoreConfigurationService;
 use Illuminate\Support\Facades\DB;
 
 class StockReservationService
 {
-    public function __construct(
-        protected StoreConfigurationService $config
-    ) {}
-
     /**
      * Atomically verify and reserve stock using pessimistic row locking.
      *
@@ -23,9 +18,7 @@ class StockReservationService
      */
     public function reserveStock(array $items): void
     {
-        $allowBackorders = $this->config->isBackorderAllowed();
-
-        StockMovementContext::runByDefault(StockMovement::REASON_ORDER_PLACED, null, fn () => DB::transaction(function () use ($items, $allowBackorders) {
+        StockMovementContext::runByDefault(StockMovement::REASON_ORDER_PLACED, null, fn () => DB::transaction(function () use ($items) {
             foreach (self::mergedInLockOrder($items) as $variationId => $requestedQty) {
                 // Acquire exclusive pessimistic lock on the variation row
                 /** @var ProductVariation|null $variation */
@@ -40,7 +33,8 @@ class StockReservationService
                     );
                 }
 
-                if (! $allowBackorders && $variation->stock_quantity < $requestedQty) {
+                // AR-09: no backorders; the database refuses negative stock too
+                if ($variation->stock_quantity < $requestedQty) {
                     throw new InsufficientStockException(
                         message: "Insufficient stock for SKU: {$variation->sku}. Requested: {$requestedQty}, Available: {$variation->stock_quantity}.",
                         variationId: $variationId,

@@ -12,7 +12,6 @@ use App\Models\Wishlist;
 use App\Services\Cart\CartSessionService;
 use App\Services\Promotions\FlashSalePricing;
 use App\Services\Rfq\RfqNotificationService;
-use App\Services\Settings\StoreConfigurationService;
 use Exception;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\Validator;
@@ -239,8 +238,8 @@ class ProductDetail extends Component
                 return;
             }
 
-            $allowBackorders = app(StoreConfigurationService::class)->isBackorderAllowed();
-            if (! $allowBackorders && $this->retailQuantity > $variation->stock_quantity) {
+            // AR-09: no backorders, so never more than the stock
+            if ($this->retailQuantity > $variation->stock_quantity) {
                 $this->errorMessage = "Requested quantity ({$this->retailQuantity}) exceeds available stock ({$variation->stock_quantity} units).";
                 $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
@@ -311,9 +310,8 @@ class ProductDetail extends Component
             }
 
             if ($qty > 0) {
-                $allowBackorders = app(StoreConfigurationService::class)->isBackorderAllowed();
                 $var = $this->product->variations->firstWhere('id', (int) $variationId);
-                if (! $allowBackorders && $var && $qty > $var->stock_quantity) {
+                if ($var && $qty > $var->stock_quantity) {
                     $this->errorMessage = "Requested quantity ({$qty}) for SKU '{$var->sku}' exceeds available stock ({$var->stock_quantity} units).";
                     $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 

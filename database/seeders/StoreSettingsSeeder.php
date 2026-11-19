@@ -41,7 +41,6 @@ class StoreSettingsSeeder extends Seeder
         $this->seedDefault('mfs_verification_reminder_hours', 12, 'payments', 'integer');
         $this->seedDefault('mfs_verification_timeout_hours', 72, 'payments', 'integer');
         $this->seedDefault('unshipped_parcel_alert_days', 3, 'inventory', 'integer');
-        $this->seedDefault('allow_backorders', false, 'inventory', 'boolean');
 
         // Group: checkout
         $this->seedDefault('guest_checkout_enabled', true, 'checkout', 'boolean');

@@ -198,7 +198,6 @@
                     $stockOnHand = $selectedVariation
                         ? (int) $selectedVariation->stock_quantity
                         : (int) $product->variations->where('is_active', true)->sum('stock_quantity');
-                    $backordersAllowed = app(\App\Services\Settings\StoreConfigurationService::class)->isBackorderAllowed();
                 @endphp
                 <div class="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs">
                     <x-storefront.stars :rating="$averageRating" class="w-4 h-4" />
@@ -211,8 +210,6 @@
                     @if ($product->variations->isNotEmpty())
                         @if ($stockOnHand > 0)
                             <span class="text-emerald-700 font-semibold">{{ $stockOnHand <= 5 ? 'Only '.$stockOnHand.' left in stock' : 'In stock' }}</span>
-                        @elseif ($backordersAllowed)
-                            <span class="text-amber-700 font-semibold">Available to order</span>
                         @else
                             <span class="text-rose-600 font-semibold">Out of stock</span>
                         @endif

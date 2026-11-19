@@ -211,14 +211,6 @@ class StoreConfigurationService
     }
 
     /**
-     * Check if backorders are allowed when stock reaches zero.
-     */
-    public function isBackorderAllowed(): bool
-    {
-        return (bool) $this->get('allow_backorders', false);
-    }
-
-    /**
      * Get allowable hours from order placement during which buyer can self-cancel without penalty.
      */
     public function getOrderCancellationWindowHours(): int

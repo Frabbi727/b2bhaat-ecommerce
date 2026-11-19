@@ -15,6 +15,7 @@ use App\Models\PaymentStatus;
 use App\Models\Product;
 use App\Models\ProductVariation;
 use App\Models\SalesChannel;
+use App\Models\StockMovement;
 use App\Models\SubOrder;
 use App\Models\User;
 use App\Services\Inventory\StockReservationService;
@@ -22,13 +23,17 @@ use App\Services\Settings\StoreConfigurationService;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\PromotionsAndStoreSettingsSeeder;
 use Database\Seeders\SystemLookupSeeder;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
 class InventoryReservationAndBackorderPolicyTest extends TestCase
 {
     use RefreshDatabase;
+
+    private const NO_NEGATIVE_STOCK_MIGRATION = '2026_11_19_090000_prevent_negative_stock_on_product_variations.php';
 
     protected StockReservationService $stockService;
 
@@ -217,29 +222,13 @@ class InventoryReservationAndBackorderPolicyTest extends TestCase
         $this->assertEquals($initialStock - 4, $variation->fresh()->stock_quantity);
     }
 
-    public function test_backorders_allowed_permits_inventory_depletion_without_exception(): void
+    /**
+     * AR-09 (owner decision 2026-11-19): no backorders. A shop that had the old "allow orders at 0 stock" setting on
+     * still can't sell more than it has.
+     */
+    public function test_stock_never_goes_below_zero_even_with_the_retired_backorder_setting_on(): void
     {
-        // Enable backorders
         $this->configService->set('allow_backorders', true, 'inventory', 'boolean');
-        $this->assertTrue($this->configService->isBackorderAllowed());
-
-        $variation = ProductVariation::where('sku', 'NAIL-PNK-MED')->firstOrFail();
-        $variation->update(['stock_quantity' => 2]);
-
-        // Request 5 units when only 2 in stock
-        $this->stockService->reserveStock([
-            ['variation_id' => $variation->id, 'quantity' => 5],
-        ]);
-
-        // Stock quantity should drop to -3 without throwing InsufficientStockException
-        $this->assertEquals(-3, $variation->fresh()->stock_quantity);
-    }
-
-    public function test_backorders_disallowed_blocks_excess_reservation(): void
-    {
-        // Disallow backorders
-        $this->configService->set('allow_backorders', false, 'inventory', 'boolean');
-        $this->assertFalse($this->configService->isBackorderAllowed());
 
         $variation = ProductVariation::where('sku', 'NAIL-PNK-MED')->firstOrFail();
         $variation->update(['stock_quantity' => 2]);
@@ -247,36 +236,55 @@ class InventoryReservationAndBackorderPolicyTest extends TestCase
         $this->expectException(InsufficientStockException::class);
         $this->expectExceptionMessage('Insufficient stock for SKU');
 
-        $this->stockService->reserveStock([
-            ['variation_id' => $variation->id, 'quantity' => 5],
-        ]);
-
-        // Stock should remain unchanged
-        $this->assertEquals(2, $variation->fresh()->stock_quantity);
+        try {
+            $this->stockService->reserveStock([
+                ['variation_id' => $variation->id, 'quantity' => 5],
+            ]);
+        } finally {
+            $this->assertEquals(2, $variation->fresh()->stock_quantity);
+        }
     }
 
-    public function test_product_detail_retail_cart_respects_backorder_configuration(): void
+    public function test_product_detail_never_adds_more_than_the_stock(): void
     {
         $product = Product::with('variations')->where('has_variations', true)->firstOrFail();
         $variation = $product->variations->firstOrFail();
         $variation->update(['stock_quantity' => 1, 'is_active' => true]);
-
-        // 1. Backorders disallowed: attempting to add 5 units must fail with error message
-        $this->configService->set('allow_backorders', false, 'inventory', 'boolean');
-
-        Livewire::test(ProductDetail::class, ['slug' => $product->slug])
-            ->set('selectedVariationId', $variation->id)
-            ->set('retailQuantity', 5)
-            ->call('addToCartRetail')
-            ->assertSee('exceeds available stock');
-
-        // 2. Backorders allowed: attempting to add 5 units must succeed
         $this->configService->set('allow_backorders', true, 'inventory', 'boolean');
 
         Livewire::test(ProductDetail::class, ['slug' => $product->slug])
             ->set('selectedVariationId', $variation->id)
             ->set('retailQuantity', 5)
             ->call('addToCartRetail')
-            ->assertSee('Added 5 unit(s) to your cart.');
+            ->assertSee('exceeds available stock');
+    }
+
+    public function test_the_database_refuses_negative_stock(): void
+    {
+        if (DB::getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('The stock check constraint is added on PostgreSQL only.');
+        }
+
+        $variation = ProductVariation::where('sku', 'NAIL-PNK-MED')->firstOrFail();
+
+        $this->expectException(QueryException::class);
+        DB::table('product_variations')->where('id', $variation->id)->update(['stock_quantity' => -1]);
+    }
+
+    public function test_the_migration_resets_negative_stock_to_zero_and_records_it(): void
+    {
+        $migration = require database_path('migrations/'.self::NO_NEGATIVE_STOCK_MIGRATION);
+        $variation = ProductVariation::where('sku', 'NAIL-PNK-MED')->firstOrFail();
+
+        $migration->down();
+        DB::table('product_variations')->where('id', $variation->id)->update(['stock_quantity' => -3]);
+        $migration->up();
+
+        $this->assertSame(0, (int) $variation->fresh()->stock_quantity);
+        $movement = StockMovement::where('product_variation_id', $variation->id)->latest('id')->firstOrFail();
+        $this->assertSame(StockMovement::REASON_ADJUSTMENT, $movement->reason);
+        $this->assertSame(3, $movement->quantity_change);
+        $this->assertSame(0, $movement->quantity_after);
+        $this->assertStringContainsString('backorders', (string) $movement->note);
     }
 }
