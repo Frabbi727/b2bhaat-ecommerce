@@ -102,4 +102,15 @@ class SellerOrderViewPageTest extends TestCase
             ->assertCanSeeTableRecords([$closed])
             ->assertCanNotSeeTableRecords([$toPack]);
     }
+
+    public function test_the_demo_order_is_placed_before_it_is_dispatched(): void
+    {
+        $demo = SubOrder::where('sub_order_number', 'PKG-20261028-001')->with('trackingLogs')->firstOrFail();
+
+        $this->assertNotEmpty($demo->trackingLogs);
+        foreach ($demo->trackingLogs as $log) {
+            $this->assertTrue($log->logged_at->greaterThanOrEqualTo($demo->created_at), "{$log->title} is logged before the order was placed");
+        }
+        $this->assertTrue($demo->order->created_at->equalTo($demo->created_at));
+    }
 }

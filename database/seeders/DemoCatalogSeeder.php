@@ -402,6 +402,14 @@ class DemoCatalogSeeder extends Seeder
                 ]
             );
 
+            // Placed 18 hours ago: before the dispatch logged 12 hours ago, and still inside the buyer's 24-hour
+            // cancellation window that tests rely on
+            if ($demoSubOrder->wasRecentlyCreated) {
+                $placedAt = now()->subHours(18);
+                $demoOrder->forceFill(['created_at' => $placedAt, 'updated_at' => $placedAt])->saveQuietly();
+                $demoSubOrder->forceFill(['created_at' => $placedAt, 'updated_at' => $placedAt])->saveQuietly();
+            }
+
             OrderItem::firstOrCreate(
                 [
                     'sub_order_id' => $demoSubOrder->id,
