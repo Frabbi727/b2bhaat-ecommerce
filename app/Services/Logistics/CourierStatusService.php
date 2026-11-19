@@ -124,6 +124,13 @@ class CourierStatusService
                 'logged_at' => $timestamp ?? now(),
             ]);
 
+            // A free replacement moves no money; the order still follows its parcels (WA-ORD-03)
+            if ($subOrder->isReplacement() && in_array($statusSlug, ['delivered', 'returned'], true)) {
+                $this->handleReplacementEnd($subOrder, $statusSlug);
+
+                return;
+            }
+
             // Lifecycle event: Delivered
             if ($statusSlug === 'delivered') {
                 $this->handleDeliveredSettlement($subOrder);
@@ -238,6 +245,24 @@ class CourierStatusService
         $this->refundRecorder->recordIfPaid($subOrder, 'Returned to origin (RTO) by courier service');
 
         // 4. The order's status follows its parcels (ORD-1)
+        if ($subOrder->order) {
+            $this->statusReconciler->reconcile($subOrder->order);
+        }
+    }
+
+    /**
+     * A replacement parcel reached the buyer, or came back (its units go back on the shelf). No money moves.
+     */
+    protected function handleReplacementEnd(SubOrder $subOrder, string $statusSlug): void
+    {
+        if ($statusSlug === 'returned') {
+            $stockItems = $subOrder->items->filter(fn ($item) => $item->variation_id)
+                ->map(fn ($item): array => ['variation_id' => $item->variation_id, 'quantity' => $item->quantity])->values()->all();
+            if ($stockItems !== []) {
+                StockMovementContext::run(StockMovement::REASON_RETURNED, $subOrder, fn () => $this->stockReservationService->releaseStock($stockItems), 'Replacement returned to seller by courier');
+            }
+        }
+
         if ($subOrder->order) {
             $this->statusReconciler->reconcile($subOrder->order);
         }

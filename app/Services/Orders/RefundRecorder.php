@@ -22,6 +22,11 @@ class RefundRecorder
             return null;
         }
 
+        // A free replacement parcel was never paid for (WA-ORD-03)
+        if ($subOrder->paidAmount() <= 0) {
+            return null;
+        }
+
         $refund = Refund::firstOrCreate(
             ['sub_order_id' => $subOrder->id, 'return_request_id' => null],
             [

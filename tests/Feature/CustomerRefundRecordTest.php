@@ -7,8 +7,11 @@ namespace Tests\Feature;
 use App\Filament\Admin\Resources\Refunds\Pages\ListRefunds;
 use App\Models\FulfillmentStatus;
 use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\ProductVariation;
 use App\Models\Refund;
 use App\Models\ReturnRequest;
+use App\Models\SalesChannel;
 use App\Models\User;
 use App\Services\Orders\OrderDisputeService;
 use Database\Seeders\DemoCatalogSeeder;
@@ -136,6 +139,12 @@ class CustomerRefundRecordTest extends TestCase
     {
         $order = MixedOrderFixture::create('cod', 'paid');
         [, $b] = $this->subOrders($order, 'delivered');
+        $variation = ProductVariation::where('product_id', '!=', 0)->orderBy('id')->firstOrFail();
+        OrderItem::create([
+            'sub_order_id' => $b->id, 'product_id' => $variation->product_id, 'variation_id' => $variation->id,
+            'sales_channel_id' => SalesChannel::where('slug', SalesChannel::RETAIL)->value('id'),
+            'quantity' => 2, 'unit_price' => 250, 'total_price' => 500,
+        ]);
 
         $request = $this->disputes->submitReturnRequest($b, User::findOrFail($order->customer_id), [
             'reason' => 'Wrong size', 'requested_action' => 'exchange', 'description' => 'Need L',

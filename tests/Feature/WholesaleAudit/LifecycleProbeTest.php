@@ -85,11 +85,10 @@ class LifecycleProbeTest extends TestCase
     }
 
     /**
-     * WA-ORD-03: current behaviour; the fix inverts this assertion.
-     * An approved replacement leaves stock untouched (the replacement unit never leaves inventory), records no new
-     * shipment, and lets the escrow release on schedule, so the seller is paid before the replacement reaches the buyer.
+     * WA-ORD-03 (fixed): an approved replacement takes the units from stock in a ৳0 follow-up parcel, and the seller
+     * is not paid for the original until that replacement has been delivered (ReplacementParcelTest covers the rest).
      */
-    public function test_wa_ord_03_approved_replacement_takes_no_stock_and_releases_escrow_on_schedule(): void
+    public function test_wa_ord_03_approved_replacement_takes_stock_and_holds_escrow(): void
     {
         $parcel = $this->deliveredPrepaidParcel();
         $stockBefore = (int) ProductVariation::whereKey($this->line->variation_id)->value('stock_quantity');
@@ -103,14 +102,15 @@ class LifecycleProbeTest extends TestCase
         ]);
         $disputes->resolveReturnRequest($request, ReturnRequest::STATUS_APPROVED, 'Sending two new pieces');
 
-        $this->assertSame($stockBefore, (int) ProductVariation::whereKey($this->line->variation_id)->value('stock_quantity'), 'today: the replacement units are not taken from stock');
+        $this->assertSame($stockBefore - 2, (int) ProductVariation::whereKey($this->line->variation_id)->value('stock_quantity'), 'the replacement units leave the shelf');
+        $this->assertTrue(SubOrder::where('replaces_sub_order_id', $parcel->id)->exists(), 'a follow-up parcel is created');
         $this->assertSame('delivered', $parcel->fresh()->fulfillmentStatus->slug);
 
         $this->travel(49)->hours();
         $this->artisan('escrow:release-delivered')->assertSuccessful();
-        $this->assertTrue(
+        $this->assertFalse(
             WalletTransaction::where('sub_order_id', $parcel->id)->where('transaction_type', WalletTransaction::TYPE_ESCROW_RELEASE)->exists(),
-            'today: the seller is paid with no proof the replacement was delivered'
+            'the seller is paid only once the replacement is delivered'
         );
     }
 

@@ -72,11 +72,17 @@ class FinalReviewFixesTest extends TestCase
         return [$sub->fresh(), $variation];
     }
 
-    // I1 — approved replacement must not strand the escrow hold
+    // I1 — approved replacement must not strand the escrow hold; it is released once the replacement is delivered (WA-ORD-03)
     public function test_approved_replacement_keeps_delivery_and_escrow_releases(): void
     {
         $order = MixedOrderFixture::create('cod', 'unpaid');
         $sub = $order->subOrders->firstWhere('subtotal', 500);
+        $variation = ProductVariation::where('product_id', '!=', 0)->orderBy('id')->firstOrFail();
+        OrderItem::create([
+            'sub_order_id' => $sub->id, 'product_id' => $variation->product_id, 'variation_id' => $variation->id,
+            'sales_channel_id' => SalesChannel::where('slug', SalesChannel::RETAIL)->value('id'),
+            'quantity' => 2, 'unit_price' => 250, 'total_price' => 500,
+        ]);
         app(CourierStatusService::class)->updateStatus($sub, 'delivered');
 
         $disputes = app(OrderDisputeService::class);
@@ -87,6 +93,11 @@ class FinalReviewFixesTest extends TestCase
 
         $this->assertSame('delivered', $sub->fresh()->fulfillmentStatus->slug);
         $this->assertSame(0, Refund::count());
+
+        $replacement = SubOrder::where('replaces_sub_order_id', $sub->id)->firstOrFail();
+        $replacement->update(['tracking_number' => 'TRK-RPL-'.$replacement->id, 'courier_name' => 'Steadfast Courier']);
+        app(CourierStatusService::class)->updateStatus($replacement->fresh(), 'shipped');
+        app(CourierStatusService::class)->updateStatus($replacement->fresh(), 'delivered');
 
         $this->travel(49)->hours();
         $this->artisan('escrow:release-delivered')->assertSuccessful();

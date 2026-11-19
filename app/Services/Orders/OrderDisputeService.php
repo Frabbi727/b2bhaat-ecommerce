@@ -199,17 +199,14 @@ class OrderDisputeService
                 'resolved_at' => now(),
             ]);
 
-            // Replacement: the sale stands (seller ships a replacement), so the consignment stays delivered and
-            // its escrow hold is released on schedule; no restock, no refund (final review I1)
+            // Replacement: the sale stands and the seller sends the items again in a ৳0 follow-up parcel, which takes
+            // the units from stock; the original's payment waits until it is delivered (WA-ORD-03)
             if ($status === ReturnRequest::STATUS_APPROVED && $returnRequest->requested_action !== 'refund') {
-                OrderTrackingLog::create([
-                    'sub_order_id' => $returnRequest->sub_order_id,
-                    'fulfillment_status_id' => $returnRequest->subOrder->fulfillment_status_id,
-                    'title' => 'Replacement Approved by Supplier',
-                    'description' => 'Replacement approved: '.($note ?? $returnRequest->reason).'. The seller will ship a replacement item.',
-                    'hub_location' => 'Merchant Hub',
-                    'logged_at' => now(),
-                ]);
+                app(ReplacementParcelService::class)->createFor($returnRequest, $note);
+
+                if ($subOrder->order) {
+                    $this->statusReconciler->reconcile($subOrder->order);
+                }
 
                 return;
             }

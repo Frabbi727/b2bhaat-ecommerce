@@ -40,6 +40,9 @@ class StockMovement extends Model
 
     public const REASON_PRODUCT_EDIT = 'product_edit';
 
+    /** Units sent again in a free replacement parcel (WA-ORD-03) */
+    public const REASON_REPLACEMENT = 'replacement';
+
     /** @var array<string, string> reason => what the seller and admin see */
     public const REASON_LABELS = [
         self::REASON_OPENING => 'Opening stock',
@@ -50,6 +53,7 @@ class StockMovement extends Model
         self::REASON_BULK_UPDATE => 'Stock sheet upload',
         self::REASON_IMPORT => 'Product import',
         self::REASON_PRODUCT_EDIT => 'Product edited',
+        self::REASON_REPLACEMENT => 'Replacement sent',
     ];
 
     protected $fillable = [
