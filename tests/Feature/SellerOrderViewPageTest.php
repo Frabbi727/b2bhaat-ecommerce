@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Seller\Resources\SubOrders\Pages\ListSubOrders;
 use App\Filament\Seller\Resources\SubOrders\Pages\ViewSubOrder;
 use App\Models\FulfillmentStatus;
 use App\Models\SubOrder;
@@ -79,5 +80,26 @@ class SellerOrderViewPageTest extends TestCase
             ->assertSee('Ordered by mistake')
             ->assertSee('Cancelled orders are not paid out.')
             ->assertDontSee('Delivery progress');
+    }
+
+    public function test_the_orders_list_splits_orders_by_what_the_seller_must_do(): void
+    {
+        $unfulfilled = FulfillmentStatus::where('slug', 'unfulfilled')->value('id');
+        $cancelled = FulfillmentStatus::where('slug', 'cancelled')->value('id');
+        $toPack = $this->subOrder;
+        $toPack->update(['fulfillment_status_id' => $unfulfilled]);
+        $closed = $toPack->replicate(['handover_code'])->fill([
+            'sub_order_number' => $toPack->sub_order_number.'-X',
+            'fulfillment_status_id' => $cancelled,
+        ]);
+        $closed->save();
+
+        Livewire::test(ListSubOrders::class)
+            ->set('activeTab', 'to_pack')
+            ->assertCanSeeTableRecords([$toPack])
+            ->assertCanNotSeeTableRecords([$closed])
+            ->set('activeTab', 'closed')
+            ->assertCanSeeTableRecords([$closed])
+            ->assertCanNotSeeTableRecords([$toPack]);
     }
 }
