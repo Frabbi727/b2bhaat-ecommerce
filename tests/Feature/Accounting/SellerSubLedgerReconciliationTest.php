@@ -105,7 +105,7 @@ class SellerSubLedgerReconciliationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-COD-REC-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $unpaid->id,
             'payment_method_id' => $codMethod->id,
             'shipping_address' => ['address' => 'Dhaka'],
@@ -171,7 +171,7 @@ class SellerSubLedgerReconciliationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-PRE-REC-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $paid->id,
             'payment_method_id' => $bkashMethod->id,
             'shipping_address' => ['address' => 'Chittagong'],
@@ -228,7 +228,7 @@ class SellerSubLedgerReconciliationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-HLD-REC-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $paid->id,
             'payment_method_id' => $nagadMethod->id,
             'shipping_address' => ['address' => 'Khulna'],
@@ -279,7 +279,7 @@ class SellerSubLedgerReconciliationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-REF-REC-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $paid->id,
             'payment_method_id' => $bkashMethod->id,
             'shipping_address' => ['address' => 'Rajshahi'],
@@ -370,7 +370,7 @@ class SellerSubLedgerReconciliationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-SUB-REC-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $unpaid->id,
             'payment_method_id' => $codMethod->id,
             'shipping_address' => ['address' => 'Sylhet'],
@@ -504,7 +504,7 @@ class SellerSubLedgerReconciliationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-ALL-002',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $paid->id,
             'payment_method_id' => $bkashMethod->id,
             'shipping_address' => ['address' => 'Dhaka'],

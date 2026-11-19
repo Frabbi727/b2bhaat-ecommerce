@@ -78,7 +78,7 @@ class SellerBillingAndQuotaEnforcementTest extends TestCase
         ]);
 
         $this->category = Category::create(['name' => 'Fabrics', 'slug' => 'fabrics']);
-        $this->unit = Unit::firstOrCreate(['slug' => 'pcs'], ['name' => 'Pieces', 'symbol' => 'pcs']);
+        $this->unit = Unit::firstOrCreate(['symbol' => 'pcs'], ['name' => 'Pieces']);
         $this->channel = SalesChannel::firstOrCreate(['slug' => SalesChannel::RETAIL], ['name' => 'Retail', 'is_active' => true]);
     }
 

@@ -70,7 +70,7 @@ class SellerProductEditApprovalTest extends TestCase
 
         $this->category = Category::firstOrCreate(['slug' => 'fabrics'], ['name' => 'Fabrics', 'is_active' => true]);
         $this->otherCategory = Category::firstOrCreate(['slug' => 'buttons'], ['name' => 'Buttons', 'is_active' => true]);
-        $this->unit = Unit::firstOrCreate(['slug' => 'pcs'], ['name' => 'Pieces', 'symbol' => 'pcs']);
+        $this->unit = Unit::firstOrCreate(['symbol' => 'pcs'], ['name' => 'Pieces']);
         $this->retail = SalesChannel::firstOrCreate(['slug' => SalesChannel::RETAIL], ['name' => 'Retail', 'is_active' => true]);
 
         $this->actingAs($this->seller);

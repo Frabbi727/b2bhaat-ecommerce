@@ -23,6 +23,22 @@ class AccountingModelRelationsTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * These tests check the models' own immutability guards, so they plant posted, reversed and one-sided journals
+     * directly. PostgreSQL's journal triggers would refuse that data first; they are tested in JournalDatabaseGuardsTest.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->pauseDatabaseGuards();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->resumeDatabaseGuards();
+        parent::tearDown();
+    }
+
     public function test_account_and_journal_relationships_work(): void
     {
         $group = AccountingAccountGroup::create([

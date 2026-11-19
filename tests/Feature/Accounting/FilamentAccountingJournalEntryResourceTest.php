@@ -13,6 +13,7 @@ use App\Filament\Admin\Resources\AccountingJournalEntries\Pages\ListAccountingJo
 use App\Filament\Admin\Resources\AccountingJournalEntries\Pages\ViewAccountingJournalEntry;
 use App\Filament\Admin\Resources\Orders\OrderResource;
 use App\Models\Accounting\AccountingJournalEntry;
+use App\Models\FulfillmentStatus;
 use App\Models\Order;
 use App\Models\OrderStatus;
 use App\Models\PaymentMethod;
@@ -132,9 +133,9 @@ class FilamentAccountingJournalEntryResourceTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-999',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
-            'payment_status_id' => 1,
-            'payment_method_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
+            'payment_status_id' => PaymentStatus::query()->min('id'),
+            'payment_method_id' => PaymentMethod::query()->min('id'),
             'shipping_address' => ['address' => 'Dhaka'],
             'total_amount' => 1500.00,
         ]);
@@ -142,7 +143,7 @@ class FilamentAccountingJournalEntryResourceTest extends TestCase
             'parent_order_id' => $order->id,
             'seller_id' => $seller->id,
             'sub_order_number' => 'ORD-999-A',
-            'fulfillment_status_id' => 1,
+            'fulfillment_status_id' => FulfillmentStatus::query()->min('id'),
             'subtotal' => 1350.00,
             'commission_amount' => 150.00,
             'shipping_amount' => 0.00,

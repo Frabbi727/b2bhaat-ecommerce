@@ -9,6 +9,7 @@ use App\Models\Accounting\AccountingJournalEntry;
 use App\Models\Accounting\AccountingPeriod;
 use App\Models\FulfillmentStatus;
 use App\Models\Order;
+use App\Models\OrderStatus;
 use App\Models\PaymentMethod;
 use App\Models\PaymentStatus;
 use App\Models\SubOrder;
@@ -47,7 +48,7 @@ class EscrowAndRefundJournalIntegrationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-ESC-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $paid->id,
             'payment_method_id' => $method->id,
             'shipping_address' => ['address' => 'Sylhet'],
@@ -95,7 +96,7 @@ class EscrowAndRefundJournalIntegrationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-CAN-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $paid->id,
             'payment_method_id' => $method->id,
             'shipping_address' => ['address' => 'Rajshahi'],
@@ -144,7 +145,7 @@ class EscrowAndRefundJournalIntegrationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-RET-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $paid->id,
             'payment_method_id' => $method->id,
             'shipping_address' => ['address' => 'Barisal'],
@@ -195,7 +196,7 @@ class EscrowAndRefundJournalIntegrationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-SELF-RET-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $paid->id,
             'payment_method_id' => $method->id,
             'shipping_address' => ['address' => 'Dhaka'],
@@ -246,7 +247,7 @@ class EscrowAndRefundJournalIntegrationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-DISC-CAN-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $paid->id,
             'payment_method_id' => $method->id,
             'shipping_address' => ['address' => 'Khulna'],
@@ -297,7 +298,7 @@ class EscrowAndRefundJournalIntegrationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-IDEM-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $paid->id,
             'payment_method_id' => $method->id,
             'shipping_address' => ['address' => 'Comilla'],

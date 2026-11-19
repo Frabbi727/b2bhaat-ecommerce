@@ -71,7 +71,7 @@ class DefaultSellerPlanTest extends TestCase
     {
         $channel = SalesChannel::firstOrCreate(['slug' => SalesChannel::RETAIL], ['name' => 'Retail', 'is_active' => true]);
         $category = Category::firstOrCreate(['slug' => 'mon3'], ['name' => 'MON-3']);
-        $unit = Unit::firstOrCreate(['slug' => 'pcs'], ['name' => 'Pieces', 'symbol' => 'pcs']);
+        $unit = Unit::firstOrCreate(['symbol' => 'pcs'], ['name' => 'Pieces']);
 
         for ($i = 0; $i < $count; $i++) {
             $this->productCounter++;

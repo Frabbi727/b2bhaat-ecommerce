@@ -51,9 +51,6 @@ class FilamentTrialBalancePageTest extends TestCase
 
     public function test_the_check_names_journals_that_do_not_balance_even_when_the_totals_do(): void
     {
-        if (DB::getDriverName() === 'pgsql') {
-            $this->markTestSkipped('The PostgreSQL journal guard (ACC-9) refuses the direct edits this test plants.');
-        }
         // ACC-16: two damaged journals that cancel each other out leave the grand totals equal
         $post = fn (string $key): AccountingJournalEntry => $this->postingService->post(new JournalEntryData(
             entryDate: now()->toDateString(),
@@ -67,9 +64,11 @@ class FilamentTrialBalancePageTest extends TestCase
         ));
         $a = $post('tb-a');
         $b = $post('tb-b');
-        // Direct database edits (the PostgreSQL guard would refuse these; the report must still catch them)
-        DB::table('accounting_journal_lines')->where('journal_entry_id', $a->id)->where('debit', '>', 0)->update(['debit' => 110.00]);
-        DB::table('accounting_journal_lines')->where('journal_entry_id', $b->id)->where('credit', '>', 0)->update(['credit' => 110.00]);
+        // Direct database edits: the PostgreSQL guard (ACC-9) would refuse them, so it is paused; the report must still catch them
+        $this->withoutDatabaseGuards(function () use ($a, $b): void {
+            DB::table('accounting_journal_lines')->where('journal_entry_id', $a->id)->where('debit', '>', 0)->update(['debit' => 110.00]);
+            DB::table('accounting_journal_lines')->where('journal_entry_id', $b->id)->where('credit', '>', 0)->update(['credit' => 110.00]);
+        });
 
         $data = Livewire::test(TrialBalancePage::class)->instance()->getTrialBalanceData();
 

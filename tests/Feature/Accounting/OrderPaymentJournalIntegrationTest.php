@@ -7,7 +7,9 @@ namespace Tests\Feature\Accounting;
 use App\Models\Accounting\AccountingFiscalYear;
 use App\Models\Accounting\AccountingJournalEntry;
 use App\Models\Accounting\AccountingPeriod;
+use App\Models\FulfillmentStatus;
 use App\Models\Order;
+use App\Models\OrderStatus;
 use App\Models\PaymentMethod;
 use App\Models\PaymentStatus;
 use App\Models\SubOrder;
@@ -45,7 +47,7 @@ class OrderPaymentJournalIntegrationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-TEST-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $awaiting->id,
             'payment_method_id' => $method->id,
             'shipping_address' => ['address' => 'Dhaka'],
@@ -58,7 +60,7 @@ class OrderPaymentJournalIntegrationTest extends TestCase
             'parent_order_id' => $order->id,
             'seller_id' => $seller->id,
             'sub_order_number' => 'ORD-TEST-001-A',
-            'fulfillment_status_id' => 1,
+            'fulfillment_status_id' => FulfillmentStatus::query()->min('id'),
             'subtotal' => 900.00,
             'commission_amount' => 90.00,
             'shipping_amount' => 100.00,
@@ -93,7 +95,7 @@ class OrderPaymentJournalIntegrationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-DISC-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $awaiting->id,
             'payment_method_id' => $method->id,
             'shipping_address' => ['address' => 'Dhaka'],
@@ -106,7 +108,7 @@ class OrderPaymentJournalIntegrationTest extends TestCase
             'parent_order_id' => $order->id,
             'seller_id' => $seller->id,
             'sub_order_number' => 'ORD-DISC-001-A',
-            'fulfillment_status_id' => 1,
+            'fulfillment_status_id' => FulfillmentStatus::query()->min('id'),
             'subtotal' => 1000.00,
             'commission_amount' => 100.00,
             'shipping_amount' => 0.00,
@@ -134,7 +136,7 @@ class OrderPaymentJournalIntegrationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-SELF-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $awaiting->id,
             'payment_method_id' => $method->id,
             'shipping_address' => ['address' => 'Dhaka'],
@@ -147,7 +149,7 @@ class OrderPaymentJournalIntegrationTest extends TestCase
             'parent_order_id' => $order->id,
             'seller_id' => $seller->id,
             'sub_order_number' => 'ORD-SELF-001-A',
-            'fulfillment_status_id' => 1,
+            'fulfillment_status_id' => FulfillmentStatus::query()->min('id'),
             'subtotal' => 900.00,
             'commission_amount' => 90.00,
             'shipping_amount' => 100.00,
@@ -183,7 +185,7 @@ class OrderPaymentJournalIntegrationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-MV-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $awaiting->id,
             'payment_method_id' => $method->id,
             'shipping_address' => ['address' => 'Dhaka'],
@@ -197,7 +199,7 @@ class OrderPaymentJournalIntegrationTest extends TestCase
             'parent_order_id' => $order->id,
             'seller_id' => $sellerA->id,
             'sub_order_number' => 'ORD-MV-001-A',
-            'fulfillment_status_id' => 1,
+            'fulfillment_status_id' => FulfillmentStatus::query()->min('id'),
             'subtotal' => 1000.00,
             'commission_amount' => 100.00,
             'shipping_amount' => 100.00,
@@ -209,7 +211,7 @@ class OrderPaymentJournalIntegrationTest extends TestCase
             'parent_order_id' => $order->id,
             'seller_id' => $sellerB->id,
             'sub_order_number' => 'ORD-MV-001-B',
-            'fulfillment_status_id' => 1,
+            'fulfillment_status_id' => FulfillmentStatus::query()->min('id'),
             'subtotal' => 800.00,
             'commission_amount' => 80.00,
             'shipping_amount' => 100.00,
@@ -244,7 +246,7 @@ class OrderPaymentJournalIntegrationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-IDEMP-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $awaiting->id,
             'payment_method_id' => $method->id,
             'shipping_address' => ['address' => 'Dhaka'],
@@ -257,7 +259,7 @@ class OrderPaymentJournalIntegrationTest extends TestCase
             'parent_order_id' => $order->id,
             'seller_id' => $seller->id,
             'sub_order_number' => 'ORD-IDEMP-001-A',
-            'fulfillment_status_id' => 1,
+            'fulfillment_status_id' => FulfillmentStatus::query()->min('id'),
             'subtotal' => 450.00,
             'commission_amount' => 45.00,
             'shipping_amount' => 50.00,
@@ -284,7 +286,7 @@ class OrderPaymentJournalIntegrationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-FREE-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $awaiting->id,
             'payment_method_id' => $method->id,
             'shipping_address' => ['address' => 'Dhaka'],
@@ -297,7 +299,7 @@ class OrderPaymentJournalIntegrationTest extends TestCase
             'parent_order_id' => $order->id,
             'seller_id' => $seller->id,
             'sub_order_number' => 'ORD-FREE-001-A',
-            'fulfillment_status_id' => 1,
+            'fulfillment_status_id' => FulfillmentStatus::query()->min('id'),
             'subtotal' => 500.00,
             'commission_amount' => 50.00,
             'shipping_amount' => 0.00,

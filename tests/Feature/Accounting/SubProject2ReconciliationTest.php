@@ -11,6 +11,7 @@ use App\Models\Accounting\AccountingFiscalYear;
 use App\Models\Accounting\AccountingPeriod;
 use App\Models\FulfillmentStatus;
 use App\Models\Order;
+use App\Models\OrderStatus;
 use App\Models\PaymentMethod;
 use App\Models\PaymentStatus;
 use App\Models\Refund;
@@ -357,7 +358,7 @@ class SubProject2ReconciliationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-REF-REC-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $paid->id,
             'payment_method_id' => $method->id,
             'shipping_address' => ['address' => 'Dhaka'],
@@ -434,9 +435,9 @@ class SubProject2ReconciliationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-TAMPER-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
-            'payment_status_id' => 1,
-            'payment_method_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
+            'payment_status_id' => PaymentStatus::query()->min('id'),
+            'payment_method_id' => PaymentMethod::query()->min('id'),
             'shipping_address' => ['address' => 'Khulna'],
             'total_amount' => 800.00,
             'shipping_amount' => 0.00,
@@ -446,7 +447,7 @@ class SubProject2ReconciliationTest extends TestCase
             'parent_order_id' => $order->id,
             'seller_id' => $seller->id,
             'sub_order_number' => 'ORD-TAMPER-001-A',
-            'fulfillment_status_id' => 1,
+            'fulfillment_status_id' => FulfillmentStatus::query()->min('id'),
             'subtotal' => 800.00,
             'shipping_amount' => 0.00,
             'commission_amount' => 80.00,
