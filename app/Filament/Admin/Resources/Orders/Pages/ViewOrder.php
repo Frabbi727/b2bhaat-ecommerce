@@ -24,6 +24,7 @@ class ViewOrder extends ViewRecord
                 OrdersTable::invoiceAction(),
                 OrdersTable::resendInvoiceSmsAction(),
                 OrdersTable::rejectPaymentAction(),
+                OrdersTable::cancelParcelAction(),
             ])
                 ->label('More')
                 ->button()

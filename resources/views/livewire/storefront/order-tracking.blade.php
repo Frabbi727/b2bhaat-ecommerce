@@ -85,7 +85,7 @@
 
                         @php
                             $canCancelOrder = $order->orderStatus?->slug !== 'cancelled' && 
-                                $order->subOrders->every(fn($s) => in_array($s->fulfillmentStatus?->slug, ['unfulfilled', 'processing']));
+                                $order->subOrders->every(fn($s) => $s->fulfillmentStatus?->slug === 'unfulfilled');
                         @endphp
 
                         @if ($canCancelOrder)
@@ -242,6 +242,12 @@
                                     >
                                         Cancel parcel
                                     </button>
+                                @elseif ($subOrder->fulfillmentStatus?->slug === 'processing')
+                                    <span class="text-[11px] text-gray-500">Packed by the seller. To cancel, contact the seller or support.</span>
+                                @elseif ($subOrder->fulfillmentStatus?->slug === 'cancelled' && filled($subOrder->cancel_reason))
+                                    <span class="text-[11px] text-rose-700">
+                                        Cancelled{{ match ($subOrder->cancelled_by) { 'seller' => ' by the seller', 'admin' => ' by B2Bhaat', default => '' } }}: {{ $subOrder->cancel_reason }}
+                                    </span>
                                 @endif
                             </div>
                         </div>

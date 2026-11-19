@@ -10,7 +10,6 @@ use App\Models\SubOrder;
 use App\Models\User;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Inventory\StockReservationService;
-use App\Services\Logistics\CourierStatusService;
 use App\Services\Promotions\FlashSaleAllocationService;
 use App\Services\Settings\StoreConfigurationService;
 use DomainException;
@@ -25,6 +24,7 @@ class OrderDisputeService
         protected RefundRecorder $refundRecorder,
         protected OrderStatusReconciler $statusReconciler,
         protected PartialReturnService $partialReturns,
+        protected ParcelCancellationService $parcelCancellation,
     ) {}
 
     /**
@@ -49,70 +49,22 @@ class OrderDisputeService
             return;
         }
 
-        DB::transaction(function () use ($subOrder, $reason) {
-            // Order before parcel, the same order payment verification and expiry lock in, so they can't deadlock
-            // (Wave 1 review M-1).
-            Order::whereKey($subOrder->parent_order_id)->lockForUpdate()->first();
+        // AR-16: once the seller has packed it, the buyer asks the seller (or support) instead
+        if ($statusSlug === 'processing') {
+            throw new Exception("Consignment #{$subOrder->sub_order_number} has already been packed by the seller, so it can't be cancelled online. Please contact the seller or B2Bhaat support.");
+        }
 
-            // Re-read under a row lock: a concurrent cancel, delivery or return must not be cancelled again (final review I7)
-            $subOrder = SubOrder::whereKey($subOrder->id)->lockForUpdate()->with('fulfillmentStatus', 'items')->firstOrFail();
-            $currentSlug = $subOrder->fulfillmentStatus?->slug;
-            if ($currentSlug === 'cancelled') {
-                return;
-            }
-            if (! CourierStatusService::canTransition($currentSlug, 'cancelled')) {
-                throw new Exception("Consignment #{$subOrder->sub_order_number} is {$currentSlug} and can no longer be cancelled.");
-            }
-
-            $cancelledFulfillment = FulfillmentStatus::where('slug', 'cancelled')->firstOrFail();
-
-            // Customer already paid for this consignment → record what we owe back (PRA-027)
-            $this->refundRecorder->recordIfPaid($subOrder, "Cancelled: {$reason}");
-
-            // 1. Release reserved stock back to variations
-            $stockItems = [];
-            foreach ($subOrder->items as $item) {
-                if ($item->variation_id) {
-                    $stockItems[] = [
-                        'variation_id' => $item->variation_id,
-                        'quantity' => $item->quantity,
-                    ];
-                }
-            }
-            app(FlashSaleAllocationService::class)->release($subOrder->items);
-
-            if (! empty($stockItems)) {
-                $this->stockReservationService->releaseStock($stockItems);
-            }
-
-            // 2. Update sub-order fulfillment status
-            $subOrder->update([
-                'fulfillment_status_id' => $cancelledFulfillment->id,
-            ]);
-
-            // 3. Refund held escrow if funds were locked upon customer payment
-            $this->escrowLedgerService->refundCancelledEscrow($subOrder, $reason);
-
-            // 4. Create tracking log
-            OrderTrackingLog::create([
-                'sub_order_id' => $subOrder->id,
-                'fulfillment_status_id' => $cancelledFulfillment->id,
-                'title' => 'Consignment Cancelled',
-                'description' => "Order cancelled: {$reason}. Reserved stock restored to catalog inventory.",
-                'hub_location' => 'Merchant Hub',
-                'logged_at' => now(),
-            ]);
-
-            // 5. The order's status follows its parcels (ORD-1)
-            if ($subOrder->order) {
-                $this->statusReconciler->reconcile($subOrder->order);
-            }
-        });
+        try {
+            $this->parcelCancellation->cancel($subOrder, ParcelCancellationService::BY_BUYER, $reason, onlyFrom: ['unfulfilled']);
+        } catch (DomainException $e) {
+            throw new Exception($e->getMessage(), previous: $e);
+        }
     }
 
     /**
-     * Cancel every parcel of the order that has not left the seller yet. Parcels already on their way are kept (the
-     * buyer can request a return after delivery), and the order's status then follows its parcels (ORD-1).
+     * Cancel every parcel of the order the seller has not packed yet. Packed parcels and parcels already on their way
+     * are kept (the buyer can request a return after delivery), and the order's status then follows its parcels
+     * (ORD-1, AR-16).
      *
      * @return array{cancelled: int, kept: int}
      *
@@ -124,11 +76,11 @@ class OrderDisputeService
             Order::whereKey($order->getKey())->lockForUpdate()->first();
 
             $parcels = $order->subOrders()->with('fulfillmentStatus')->get();
-            $cancellable = $parcels->filter(fn (SubOrder $subOrder): bool => in_array($subOrder->fulfillmentStatus?->slug, ['unfulfilled', 'processing'], true));
+            $cancellable = $parcels->filter(fn (SubOrder $subOrder): bool => $subOrder->fulfillmentStatus?->slug === 'unfulfilled');
             $kept = $parcels->filter(fn (SubOrder $subOrder): bool => $subOrder->fulfillmentStatus?->slug !== 'cancelled')->count() - $cancellable->count();
 
             if ($cancellable->isEmpty()) {
-                throw new Exception("Order #{$order->order_number} cannot be cancelled: everything in it is already on its way, delivered or cancelled. You can request a return after delivery.");
+                throw new Exception("Order #{$order->order_number} cannot be cancelled: everything in it is already packed, on its way, delivered or cancelled. You can contact the seller about a packed parcel, or request a return after delivery.");
             }
 
             foreach ($cancellable as $subOrder) {

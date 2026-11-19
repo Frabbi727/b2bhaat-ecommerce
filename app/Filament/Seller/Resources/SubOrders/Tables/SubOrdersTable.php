@@ -8,6 +8,7 @@ use App\Models\SubOrder;
 use App\Services\Logistics\CourierBookingService;
 use App\Services\Logistics\CourierStatusService;
 use App\Services\Logistics\SelfDeliveryService;
+use App\Services\Orders\ParcelCancellationService;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -143,6 +144,26 @@ class SubOrdersTable
     public static function fulfilmentActions(): array
     {
         return [
+            // AR-16: packed parcels can no longer be cancelled by the buyer online
+            Action::make('markPacked')
+                ->label('Mark as Packed')
+                ->icon('heroicon-o-archive-box')
+                ->color('gray')
+                ->visible(fn (SubOrder $record) => $record->fulfillmentStatus?->slug === 'unfulfilled')
+                ->requiresConfirmation()
+                ->modalDescription('The buyer sees the parcel is packed and can no longer cancel it online.')
+                ->action(function (SubOrder $record): void {
+                    try {
+                        app(ParcelCancellationService::class)->markPacked($record, auth()->user());
+                    } catch (DomainException|InvalidStatusTransitionException $exception) {
+                        Notification::make()->title('Not marked as packed')->body($exception->getMessage())->danger()->send();
+
+                        return;
+                    }
+
+                    Notification::make()->title('Marked as packed')->success()->send();
+                }),
+
             // 1. Dispatch Courier Action
             Action::make('dispatchCourier')
                 ->label('Dispatch Courier')
@@ -433,6 +454,42 @@ class SubOrdersTable
                         ->body("Tracking number {$updated->tracking_number} assigned by {$data['courier_name']}.")
                         ->success()
                         ->send();
+                }),
+
+            // WA-ORD-01: the seller can't fill the parcel; stock goes back and the buyer is told why by SMS
+            Action::make('declineParcel')
+                ->label('Decline Order')
+                ->icon('heroicon-o-x-circle')
+                ->color('danger')
+                ->visible(fn (SubOrder $record) => in_array($record->fulfillmentStatus?->slug, ParcelCancellationService::NOT_YET_DISPATCHED, true))
+                ->modalHeading('Decline this order?')
+                ->modalDescription('The parcel is cancelled, its stock goes back on sale and the buyer gets an SMS with your reason. A paid order is refunded to the buyer. This cannot be undone.')
+                ->modalSubmitActionLabel('Decline order')
+                ->schema([
+                    Select::make('reason')
+                        ->label('Reason')
+                        ->options(ParcelCancellationService::DECLINE_REASONS)
+                        ->required(),
+                    TextInput::make('note')
+                        ->label('Note for the buyer (optional)')
+                        ->maxLength(120)
+                        ->required(fn (callable $get): bool => $get('reason') === 'other'),
+                ])
+                ->action(function (SubOrder $record, array $data): void {
+                    $reason = ParcelCancellationService::DECLINE_REASONS[$data['reason']] ?? 'Other reason';
+                    if (filled($data['note'] ?? null)) {
+                        $reason = $data['reason'] === 'other' ? trim($data['note']) : "{$reason}: ".trim($data['note']);
+                    }
+
+                    try {
+                        app(ParcelCancellationService::class)->declineBySeller($record, auth()->user(), $reason);
+                    } catch (DomainException $exception) {
+                        Notification::make()->title('Order not declined')->body($exception->getMessage())->danger()->send();
+
+                        return;
+                    }
+
+                    Notification::make()->title('Order declined')->body('The buyer has been told by SMS.')->success()->send();
                 }),
         ];
     }

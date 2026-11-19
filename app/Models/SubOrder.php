@@ -26,6 +26,10 @@ class SubOrder extends Model
         'seller_id',
         'sub_order_number',
         'fulfillment_status_id',
+        'cancelled_by',
+        'cancelled_by_user_id',
+        'cancel_reason',
+        'cancelled_at',
         'courier_name',
         'tracking_number',
         'subtotal',
@@ -70,6 +74,8 @@ class SubOrder extends Model
             'is_self_delivered' => 'boolean',
             'handover_confirmed_at' => 'datetime',
             'courier_settled_at' => 'datetime',
+            'cancelled_at' => 'datetime',
+            'cancelled_by_user_id' => 'integer',
         ];
     }
 
