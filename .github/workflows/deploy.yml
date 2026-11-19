@@ -2,10 +2,8 @@ name: deploy
 
 # Push to `production` → front-end build → a ready-to-run commit on `production-deploy`.
 #
-# Tests are not run here (they run on pull requests via tests.yml). The PostgreSQL suite
-# currently fails ~225 tests that are test-setup bugs, not app bugs; to gate deploys on
-# tests again, add a `tests: { uses: ./.github/workflows/tests.yml }` job and
-# `needs: tests` on the build job.
+# The full test suite (tests.yml, on PostgreSQL) must pass before anything is built or
+# published; a red suite stops the deploy and production-deploy does not move.
 #
 # The server cannot be reached over SSH from outside and has no Node, so GitHub does not
 # log in to it. Instead the server's cron runs deploy/auto-deploy.sh, which notices the new
@@ -24,7 +22,11 @@ permissions:
   contents: write
 
 jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+
   build:
+    needs: tests
     runs-on: ubuntu-latest
     # One publish at a time; a newer push waits for the running one instead of racing it.
     concurrency:
