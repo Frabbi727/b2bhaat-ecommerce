@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Models\PaymentStatus;
 use App\Models\SubOrder;
 use App\Models\User;
 use App\Notifications\Orders\ParcelsAwaitingDispatch;
@@ -35,7 +36,7 @@ class AlertUnshippedParcelsCommand extends Command
             ->whereHas('fulfillmentStatus', fn (Builder $query) => $query->whereIn('slug', ParcelCancellationService::NOT_YET_DISPATCHED))
             ->whereHas('order', fn (Builder $order) => $order
                 ->whereHas('paymentMethod', fn (Builder $method) => $method->where('slug', 'cod'))
-                ->orWhereHas('paymentStatus', fn (Builder $status) => $status->where('slug', 'paid')))
+                ->orWhereHas('paymentStatus', fn (Builder $status) => $status->whereIn('slug', PaymentStatus::MONEY_RECEIVED)))
             ->with('seller')
             ->orderBy('id')
             ->get();

@@ -8,6 +8,7 @@ use App\Models\FulfillmentStatus;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderTrackingLog;
+use App\Models\PaymentStatus;
 use App\Models\Refund;
 use App\Models\ReturnRequest;
 use App\Models\ReturnRequestItem;
@@ -139,7 +140,7 @@ class PartialReturnService
 
         $this->escrowLedgerService->reversePartialReturn($subOrder, $returnRequest, $amounts, $reason);
 
-        if ($subOrder->order?->paymentStatus?->slug === 'paid' && $amounts['refund'] > 0) {
+        if (in_array($subOrder->order?->paymentStatus?->slug, PaymentStatus::MONEY_RECEIVED, true) && $amounts['refund'] > 0) {
             Refund::create([
                 'order_id' => $subOrder->parent_order_id,
                 'sub_order_id' => $subOrder->id,

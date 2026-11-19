@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Refunds;
 
-use App\Events\Finance\RefundSettledEvent;
 use App\Filament\Admin\Resources\Refunds\Pages\ListRefunds;
 use App\Models\Refund;
-use App\Services\Accounting\EventPipeline\CustomerRefundDisbursementJournalHandler;
 use App\Services\Formatting\Money;
+use App\Services\Orders\RefundService;
 use BackedEnum;
+use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -18,8 +18,6 @@ use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use UnitEnum;
 
 /**
@@ -81,7 +79,7 @@ class RefundResource extends Resource
                     ->schema([
                         Select::make('method')
                             ->label('Refund Method')
-                            ->options(['bkash' => 'bKash', 'nagad' => 'Nagad', 'bank' => 'Bank Transfer', 'cash' => 'Cash'])
+                            ->options(RefundService::METHODS)
                             ->required(),
                         TextInput::make('reference')
                             ->label('Transaction / Reference ID')
@@ -89,31 +87,15 @@ class RefundResource extends Resource
                             ->maxLength(100),
                     ])
                     ->action(function (Refund $record, array $data): void {
-                        $updated = DB::transaction(function () use ($record, $data): bool {
-                            $locked = Refund::whereKey($record->id)->lockForUpdate()->first();
-                            if (! $locked || ! $locked->isPending()) {
-                                return false;
-                            }
+                        try {
+                            $updated = app(RefundService::class)->markPaid($record, (string) $data['method'], (string) $data['reference']);
+                        } catch (DomainException $exception) {
+                            Notification::make()->title('Refund not marked as paid')->body($exception->getMessage())->danger()->send();
 
-                            $locked->update([
-                                'status' => Refund::STATUS_PAID,
-                                'method' => $data['method'],
-                                'reference' => trim((string) $data['reference']),
-                                'paid_at' => now(),
-                            ]);
-
-                            app(CustomerRefundDisbursementJournalHandler::class)->recordRefundDisbursed($locked);
-
-                            return true;
-                        });
+                            return;
+                        }
 
                         if ($updated) {
-                            try {
-                                event(new RefundSettledEvent($record->fresh()));
-                            } catch (\Throwable $e) {
-                                Log::warning('Refund settled event failed: '.$e->getMessage());
-                            }
-
                             Notification::make()->title('Refund marked as paid')->success()->send();
                         } else {
                             Notification::make()->title('Refund was already settled')->warning()->send();

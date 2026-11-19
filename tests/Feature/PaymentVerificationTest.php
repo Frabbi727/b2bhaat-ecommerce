@@ -239,8 +239,8 @@ class PaymentVerificationTest extends TestCase
 
         app(PaymentVerificationService::class)->markVerified($order);
 
-        // Wave 1 review M-3: everything was cancelled, so the money is owed back, not kept.
-        $this->assertSame('refunded', $order->fresh()->paymentStatus->slug);
+        // Wave 1 review M-3: everything was cancelled, so the money is owed back, not kept (AR-05: until paid out)
+        $this->assertSame('refund_pending', $order->fresh()->paymentStatus->slug);
         $refund = Refund::where('sub_order_id', $subOrder->id)->first();
         $this->assertNotNull($refund);
         $this->assertSame(round($subOrder->fresh()->paidAmount(), 2), round((float) $refund->amount, 2));
@@ -249,8 +249,8 @@ class PaymentVerificationTest extends TestCase
     }
 
     /**
-     * Wave 1 review M-3: an order cancelled in full before its payment was verified ends Cancelled / Refunded,
-     * never Cancelled / Paid.
+     * Wave 1 review M-3: an order cancelled in full before its payment was verified ends Cancelled / Refund pending
+     * (Refunded once the refund is paid out, AR-05), never Cancelled / Paid.
      */
     public function test_an_order_cancelled_before_verification_ends_cancelled_and_refunded(): void
     {
@@ -261,7 +261,7 @@ class PaymentVerificationTest extends TestCase
 
         $order->refresh();
         $this->assertSame('cancelled', $order->orderStatus->slug);
-        $this->assertSame('refunded', $order->paymentStatus->slug);
+        $this->assertSame('refund_pending', $order->paymentStatus->slug);
     }
 
     /**

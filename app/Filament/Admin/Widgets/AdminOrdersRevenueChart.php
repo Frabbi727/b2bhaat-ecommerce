@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Widgets;
 
 use App\Models\Order;
+use App\Models\PaymentStatus;
 use App\Services\Reporting\DailyTotals;
 use Filament\Widgets\ChartWidget;
 
@@ -32,7 +33,7 @@ class AdminOrdersRevenueChart extends ChartWidget
     protected function getData(): array
     {
         $series = app(DailyTotals::class)->lastDays(
-            Order::query()->whereHas('paymentStatus', fn ($q) => $q->where('slug', 'paid')),
+            Order::query()->whereHas('paymentStatus', fn ($q) => $q->whereIn('slug', PaymentStatus::MONEY_RECEIVED)),
             'total_amount',
             14,
         );

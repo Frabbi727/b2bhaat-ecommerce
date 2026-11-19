@@ -135,7 +135,7 @@ class SubOrder extends Model
         $order = $this->order;
 
         return $order !== null
-            && ($order->paymentMethod?->slug === 'cod' || $order->paymentStatus?->slug === 'paid');
+            && ($order->paymentMethod?->slug === 'cod' || in_array($order->paymentStatus?->slug, PaymentStatus::MONEY_RECEIVED, true));
     }
 
     /**

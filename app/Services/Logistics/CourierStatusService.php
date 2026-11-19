@@ -268,7 +268,7 @@ class CourierStatusService
             // COD: the courier collected the cash at the door, so the order is now paid.
             // Prepaid orders are marked paid only by payment verification, never by delivery (PRA-006).
             $paidStatus = PaymentStatus::where('slug', 'paid')->first();
-            if ($paidStatus && $parentOrder->paymentMethod?->slug === 'cod' && $parentOrder->payment_status_id !== $paidStatus->id) {
+            if ($paidStatus && $parentOrder->paymentMethod?->slug === 'cod' && ! in_array($parentOrder->paymentStatus?->slug, PaymentStatus::MONEY_RECEIVED, true)) {
                 $parentOrder->update(['payment_status_id' => $paidStatus->id]);
             }
 

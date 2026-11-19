@@ -134,7 +134,7 @@ class OrderStatusFromConsignmentsTest extends TestCase
         $this->disputes->cancelSubOrder($second, 'Changed mind');
 
         $this->assertSame('cancelled', $this->orderStatus($order));
-        $this->assertSame('refunded', $order->fresh()->paymentStatus?->slug);
+        $this->assertSame('refund_pending', $order->fresh()->paymentStatus?->slug, 'owed back until the refunds are paid (AR-05)');
     }
 
     public function test_a_wrongly_closed_order_reopens_when_a_parcel_is_still_on_its_way(): void

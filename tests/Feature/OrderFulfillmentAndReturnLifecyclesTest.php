@@ -458,9 +458,9 @@ class OrderFulfillmentAndReturnLifecyclesTest extends TestCase
         // 4. Stock restored (+2 restored to 20 = 22)
         $this->assertEquals(22, $variation->fresh()->stock_quantity);
 
-        // 5. Parent order updated to cancelled / refunded
+        // 5. Parent order updated to cancelled; the refund is owed until paid out (AR-05)
         $this->assertEquals('cancelled', $order->fresh()->orderStatus?->slug);
-        $this->assertEquals('refunded', $order->fresh()->paymentStatus?->slug);
+        $this->assertEquals('refund_pending', $order->fresh()->paymentStatus?->slug);
     }
 
     public function test_sub_order_dynamic_tracking_url_generation(): void

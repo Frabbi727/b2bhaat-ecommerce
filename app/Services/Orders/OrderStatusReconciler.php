@@ -6,7 +6,6 @@ namespace App\Services\Orders;
 
 use App\Models\Order;
 use App\Models\OrderStatus;
-use App\Models\PaymentStatus;
 
 /**
  * ORD-1: an order's status is worked out from its parcels (sub-orders), never set by hand.
@@ -61,12 +60,8 @@ class OrderStatusReconciler
 
         $this->setStatus($order, 'cancelled');
 
-        if ($order->paymentStatus?->slug === 'paid') {
-            $refunded = PaymentStatus::where('slug', 'refunded')->value('id');
-            if ($refunded) {
-                $order->update(['payment_status_id' => $refunded]);
-            }
-        }
+        // AR-05: the payment status says "Refunded" only once the refunds are paid out (RefundService)
+        app(RefundService::class)->syncPaymentStatus($order);
     }
 
     private function setStatus(Order $order, string $slug): void

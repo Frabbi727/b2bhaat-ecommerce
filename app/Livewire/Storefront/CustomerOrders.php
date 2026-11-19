@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Livewire\Storefront;
 
 use App\Models\Order;
+use App\Models\PaymentStatus;
 use App\Models\SubOrder;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
@@ -44,7 +45,7 @@ class CustomerOrders extends Component
 
         $totalOrdersCount = $userId ? Order::where('customer_id', $userId)->count() : 0;
         $totalSpentAmount = $userId ? (float) Order::where('customer_id', $userId)
-            ->whereHas('paymentStatus', fn ($q) => $q->where('slug', 'paid'))
+            ->whereHas('paymentStatus', fn ($q) => $q->whereIn('slug', PaymentStatus::MONEY_RECEIVED))
             ->sum('total_amount') : 0.00;
 
         $inTransitCount = $userId ? SubOrder::whereHas('order', fn ($q) => $q->where('customer_id', $userId))
