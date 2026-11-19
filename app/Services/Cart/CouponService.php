@@ -8,6 +8,7 @@ use App\Models\Coupon;
 use App\Models\CouponUsage;
 use App\Models\Order;
 use DomainException;
+use Illuminate\Support\Facades\DB;
 
 class CouponService
 {
@@ -98,6 +99,22 @@ class CouponService
     /**
      * Record coupon usage when an order is finalized.
      */
+    /**
+     * AR-04 (owner decision 2026-11-19): an order that ended fully cancelled gives its coupon use back, so the buyer
+     * can use a one-per-customer coupon again and the use frees a place under the total limit. Given back once.
+     */
+    public function releaseForOrder(Order $order): void
+    {
+        DB::transaction(function () use ($order): void {
+            $usages = CouponUsage::where('order_id', $order->id)->whereNull('reversed_at')->lockForUpdate()->get();
+
+            foreach ($usages as $usage) {
+                $usage->update(['reversed_at' => now()]);
+                Coupon::whereKey($usage->coupon_id)->where('used_count', '>', 0)->decrement('used_count');
+            }
+        });
+    }
+
     public function recordUsage(Coupon $coupon, int $userId, ?int $orderId, float $discountAmount): CouponUsage
     {
         // The total limit is enforced by the update itself, so a use can never be counted past it

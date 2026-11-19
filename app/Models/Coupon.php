@@ -102,7 +102,8 @@ class Coupon extends Model
         }
 
         if ($userId && $this->usage_limit_per_user) {
-            $userUsage = $this->usages()->where('user_id', $userId)->count();
+            // A use given back by a cancelled order doesn't count (AR-04)
+            $userUsage = $this->usages()->where('user_id', $userId)->whereNull('reversed_at')->count();
             if ($userUsage >= $this->usage_limit_per_user) {
                 return ['valid' => false, 'message' => 'You have already utilized this coupon code.'];
             }

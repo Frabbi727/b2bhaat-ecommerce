@@ -19,12 +19,14 @@ class CouponUsage extends Model
         'user_id',
         'order_id',
         'discount_amount',
+        'reversed_at',
     ];
 
     protected function casts(): array
     {
         return [
             'discount_amount' => 'decimal:2',
+            'reversed_at' => 'datetime',
         ];
     }
 
