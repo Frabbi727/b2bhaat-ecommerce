@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Traits\Auditable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CouponUsage extends Model
 {
+    use Auditable;
     use HasFactory;
 
     protected $fillable = [
@@ -17,12 +19,14 @@ class CouponUsage extends Model
         'user_id',
         'order_id',
         'discount_amount',
+        'reversed_at',
     ];
 
     protected function casts(): array
     {
         return [
             'discount_amount' => 'decimal:2',
+            'reversed_at' => 'datetime',
         ];
     }
 

@@ -129,9 +129,9 @@ class EscrowSettlementAndPayoutAuditTest extends TestCase
             'amount' => 4500.00,
         ]);
 
-        // 6. Verify parent order is marked cancelled and payment refunded
+        // 6. Verify parent order is marked cancelled and the buyer's money is owed back (AR-05: "Refunded" once paid out)
         $this->assertEquals(OrderStatus::where('slug', 'cancelled')->value('id'), $order->order_status_id);
-        $this->assertEquals(PaymentStatus::where('slug', 'refunded')->value('id'), $order->payment_status_id);
+        $this->assertEquals(PaymentStatus::where('slug', 'refund_pending')->value('id'), $order->payment_status_id);
 
         // 7. Verify refund idempotency: repeat refund does nothing
         $repeatRefundTx = $this->escrowService->refundCancelledEscrow($subOrder);
@@ -386,6 +386,7 @@ class EscrowSettlementAndPayoutAuditTest extends TestCase
             'regular_price' => 2000.00,
             'is_active' => true,
         ]);
+        $this->approveProducts($productB);
         $variationB = ProductVariation::create([
             'product_id' => $productB->id,
             'sku' => 'MVS-SPEAKER-01',

@@ -3,15 +3,20 @@
 namespace App\Services\Logistics;
 
 use App\Models\FulfillmentStatus;
-use App\Models\OrderTrackingLog;
 use App\Models\SubOrder;
+use App\Services\Sms\OrderNotificationService;
 use Exception;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
+use Throwable;
 
 class SelfDeliveryService
 {
     public const MAX_HANDOVER_ATTEMPTS = 5;
+
+    public const MAX_CODE_RESENDS = 3;
 
     public function __construct(
         protected CourierStatusService $courierStatusService
@@ -26,35 +31,80 @@ class SelfDeliveryService
         ?string $driverContact = null,
         ?string $dispatchNote = null
     ): string {
-        $inTransitStatus = FulfillmentStatus::where('slug', 'in_transit')->first()
-            ?? FulfillmentStatus::where('slug', 'shipped')->firstOrFail();
+        $statusSlug = FulfillmentStatus::where('slug', 'in_transit')->exists() ? 'in_transit' : 'shipped';
 
         $handoverCode = str_pad((string) random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
         $trackingNumber = 'FD-'.strtoupper(Str::random(8));
-
-        $subOrder->update([
-            'is_self_delivered' => true,
-            'handover_code' => $handoverCode,
-            'courier_name' => 'Factory Direct Fleet',
-            'tracking_number' => $trackingNumber,
-            'fulfillment_status_id' => $inTransitStatus->id,
-        ]);
 
         $description = $dispatchNote ?: 'Package is out for direct factory fleet delivery. Secure 6-digit handover verification code issued to recipient.';
         if ($driverContact) {
             $description .= " Fleet driver/rep contact: {$driverContact}.";
         }
 
-        OrderTrackingLog::create([
-            'sub_order_id' => $subOrder->id,
-            'fulfillment_status_id' => $inTransitStatus->id,
-            'title' => 'Dispatched via Factory Direct Fleet',
-            'description' => $description,
-            'hub_location' => $hubLocation,
-            'logged_at' => now(),
-        ]);
+        // Same status rules and lock as every other parcel move (ORD-2)
+        $this->courierStatusService->handOver(
+            $subOrder,
+            $statusSlug,
+            [
+                'is_self_delivered' => true,
+                'handover_code' => $handoverCode,
+                'courier_name' => 'Factory Direct Fleet',
+                'tracking_number' => $trackingNumber,
+            ],
+            'Dispatched via Factory Direct Fleet',
+            $description,
+            $hubLocation,
+        );
+
+        DB::afterCommit(fn () => $this->textHandoverCode($subOrder));
 
         return $handoverCode;
+    }
+
+    /**
+     * Send the buyer their handover code again (lost SMS). Limited so the buyer's phone can't be flooded.
+     *
+     * @throws Exception when the parcel is not waiting for a handover or the limit is reached
+     */
+    public function resendHandoverCode(SubOrder $subOrder): void
+    {
+        if (! $subOrder->is_self_delivered || ! filled($subOrder->handover_code) || $subOrder->fulfillmentStatus?->slug === 'delivered') {
+            throw new Exception('This parcel is not waiting for a delivery code.');
+        }
+
+        $limiterKey = 'handover-code-resend:'.$subOrder->id;
+        if (RateLimiter::tooManyAttempts($limiterKey, self::MAX_CODE_RESENDS)) {
+            throw new Exception('The code was already sent '.self::MAX_CODE_RESENDS.' times in the last hour. Ask the buyer to open their tracking link, or try again later.');
+        }
+
+        RateLimiter::hit($limiterKey, 3600);
+
+        if (! app(OrderNotificationService::class)->sendHandoverCode($subOrder->fresh() ?? $subOrder)) {
+            throw new Exception('No valid phone number on this order, so the code could not be sent by SMS.');
+        }
+    }
+
+    private function textHandoverCode(SubOrder $subOrder): void
+    {
+        try {
+            app(OrderNotificationService::class)->sendHandoverCode($subOrder->fresh() ?? $subOrder);
+        } catch (Throwable $exception) {
+            Log::warning('Handover code SMS not sent: '.$exception->getMessage(), ['sub_order_id' => $subOrder->id]);
+        }
+    }
+
+    /**
+     * The code as the buyer shared it, reduced to its digits: a copy from the tracking page brings spaces and line
+     * breaks, a code read out may be split "473 333", and a Bangla keyboard types ০-৯.
+     */
+    public static function normalizeHandoverCode(string $inputCode): string
+    {
+        $westernDigits = strtr($inputCode, array_combine(
+            ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'],
+            ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+        ));
+
+        return (string) preg_replace('/\D/', '', $westernDigits);
     }
 
     /**
@@ -74,7 +124,7 @@ class SelfDeliveryService
             throw new Exception('Too many wrong handover codes for this consignment. Try again later or contact support.');
         }
 
-        if (! is_string($subOrder->handover_code) || ! hash_equals($subOrder->handover_code, trim($inputCode))) {
+        if (! is_string($subOrder->handover_code) || ! hash_equals($subOrder->handover_code, self::normalizeHandoverCode($inputCode))) {
             RateLimiter::hit($limiterKey, 3600);
 
             throw new Exception('Invalid Handover Code. Please ask the recipient for the 6-digit verification code shown on their tracking page.');
@@ -82,16 +132,19 @@ class SelfDeliveryService
 
         RateLimiter::clear($limiterKey);
 
-        $subOrder->update([
-            'handover_confirmed_at' => now(),
-        ]);
+        // One unit: if settlement fails, the parcel must not look received
+        DB::transaction(function () use ($subOrder): void {
+            $subOrder->update([
+                'handover_confirmed_at' => now(),
+            ]);
 
-        $this->courierStatusService->updateStatus(
-            subOrder: $subOrder,
-            statusSlug: 'delivered',
-            hubLocation: 'Customer Destination',
-            title: 'Delivered via Factory Fleet (Code Verified)',
-            description: 'Package successfully delivered and confirmed using buyer 6-digit handover verification code.'
-        );
+            $this->courierStatusService->updateStatus(
+                subOrder: $subOrder,
+                statusSlug: 'delivered',
+                hubLocation: 'Customer Destination',
+                title: 'Delivered via Factory Fleet (Code Verified)',
+                description: 'Package successfully delivered and confirmed using buyer 6-digit handover verification code.'
+            );
+        });
     }
 }

@@ -7,18 +7,26 @@ namespace Tests\Feature;
 use App\Filament\Admin\Resources\Orders\Pages\ListOrders;
 use App\Filament\Seller\Resources\SubOrders\Pages\ListSubOrders;
 use App\Livewire\Storefront\CheckoutComponent;
+use App\Models\Accounting\AccountingJournalEntry;
 use App\Models\FulfillmentStatus;
 use App\Models\Order;
 use App\Models\PaymentMethod;
 use App\Models\Product;
+use App\Models\Refund;
 use App\Models\SalesChannel;
 use App\Models\User;
 use App\Models\WalletTransaction;
+use App\Services\Accounting\GeneralLedgerService;
 use App\Services\Cart\CartSessionService;
+use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Logistics\CourierStatusService;
+use App\Services\Orders\OrderDisputeService;
+use App\Services\Payments\PaymentVerificationService;
 use App\Services\Settings\StoreConfigurationService;
+use Database\Seeders\AccountingChartOfAccountsSeeder;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\SystemLookupSeeder;
+use DomainException;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -93,6 +101,30 @@ class PaymentVerificationTest extends TestCase
         $this->checkout('mock_gateway')->assertHasErrors(['selectedPaymentMethodId']);
 
         $this->assertSame($ordersBefore, Order::count());
+    }
+
+    public function test_mock_gateway_payment_posts_the_same_journal_as_a_verified_payment(): void
+    {
+        $this->seed(AccountingChartOfAccountsSeeder::class);
+
+        $this->checkout('mock_gateway')->assertHasNoErrors();
+        $order = $this->latestOrder();
+
+        $this->assertSame('paid', $order->paymentStatus->slug);
+        // ACC-2: the escrow is held, so the books must show the money too.
+        $this->assertSame(1, AccountingJournalEntry::where('financial_event', 'order_prepaid_received')
+            ->whereHas('lines', fn ($lines) => $lines->where('order_id', $order->id))->count());
+        $this->assertSame(round((float) $order->total_amount, 2), app(GeneralLedgerService::class)->getBalanceForSlug('gateway_clearing'));
+    }
+
+    public function test_the_mock_gateway_is_only_seeded_active_in_local_and_testing(): void
+    {
+        PaymentMethod::where('slug', PaymentMethod::MOCK)->delete();
+        $this->app->detectEnvironment(fn (): string => 'production');
+
+        $this->app->make(SystemLookupSeeder::class)->setContainer($this->app)->run();
+
+        $this->assertFalse((bool) PaymentMethod::where('slug', PaymentMethod::MOCK)->value('is_active'));
     }
 
     public function test_inactive_method_rejected(): void
@@ -181,8 +213,106 @@ class PaymentVerificationTest extends TestCase
         $subOrder = $order->subOrders->firstOrFail();
         $subOrder->update(['fulfillment_status_id' => FulfillmentStatus::where('slug', 'shipped')->value('id')]);
 
-        app(CourierStatusService::class)->updateStatus($subOrder->fresh(), 'delivered');
+        // AR-03: an unverified prepaid parcel can't be marked delivered at all, so it is never marked paid by delivery
+        try {
+            app(CourierStatusService::class)->updateStatus($subOrder->fresh(), 'delivered');
+            $this->fail('An unverified prepaid parcel was marked delivered.');
+        } catch (DomainException $e) {
+            $this->assertStringContainsString("payment hasn't been confirmed", $e->getMessage());
+        }
 
         $this->assertSame('awaiting_verification', $order->fresh()->paymentStatus->slug);
+        $this->assertSame('shipped', $subOrder->fresh()->fulfillmentStatus->slug);
+    }
+
+    /**
+     * PAY-1: a buyer cancels while the bKash payment is still being checked. Once the admin confirms the
+     * money arrived, the buyer is owed a refund and no seller escrow is held for the cancelled consignment.
+     */
+    public function test_verifying_payment_after_buyer_cancelled_records_a_refund_and_holds_no_escrow(): void
+    {
+        $order = $this->bkashOrder();
+        $subOrder = $order->subOrders->firstOrFail();
+
+        app(OrderDisputeService::class)->cancelSubOrder($subOrder, 'Changed my mind');
+        $this->assertSame(0, Refund::where('sub_order_id', $subOrder->id)->count(), 'nothing is owed before the money is confirmed');
+
+        app(PaymentVerificationService::class)->markVerified($order);
+
+        // Wave 1 review M-3: everything was cancelled, so the money is owed back, not kept (AR-05: until paid out)
+        $this->assertSame('refund_pending', $order->fresh()->paymentStatus->slug);
+        $refund = Refund::where('sub_order_id', $subOrder->id)->first();
+        $this->assertNotNull($refund);
+        $this->assertSame(round($subOrder->fresh()->paidAmount(), 2), round((float) $refund->amount, 2));
+        $this->assertFalse(WalletTransaction::where('sub_order_id', $subOrder->id)->exists());
+        $this->assertSame('cancelled', $subOrder->fresh()->fulfillmentStatus->slug);
+    }
+
+    /**
+     * Wave 1 review M-3: an order cancelled in full before its payment was verified ends Cancelled / Refund pending
+     * (Refunded once the refund is paid out, AR-05), never Cancelled / Paid.
+     */
+    public function test_an_order_cancelled_before_verification_ends_cancelled_and_refunded(): void
+    {
+        $order = $this->bkashOrder();
+        app(OrderDisputeService::class)->cancelFullOrder($order, 'Changed my mind');
+
+        app(PaymentVerificationService::class)->markVerified($order);
+
+        $order->refresh();
+        $this->assertSame('cancelled', $order->orderStatus->slug);
+        $this->assertSame('refund_pending', $order->paymentStatus->slug);
+    }
+
+    /**
+     * Wave 1 review M-4: a TrxID on an order whose payment expired unchecked, or was rejected, was never accepted, so
+     * the buyer can use it on a new order. The order keeps a record of what was entered.
+     */
+    public function test_a_trxid_from_an_expired_or_rejected_order_can_be_used_again(): void
+    {
+        $expired = $this->bkashOrder();
+        $this->travel(73)->hours();
+        $this->assertNotNull(app(PaymentVerificationService::class)->expireUnverified($expired, 72));
+
+        $rejected = $this->bkashOrder();
+        $this->assertNotSame($expired->id, $rejected->id, 'the same TrxID is accepted on a new order after expiry');
+        app(PaymentVerificationService::class)->rejectPayment($rejected, 'No such TrxID');
+
+        $third = $this->bkashOrder();
+        $this->assertNotSame($rejected->id, $third->id, 'the same TrxID is accepted on a new order after rejection');
+
+        $this->assertNull($expired->fresh()->mfs_transaction_id);
+        $this->assertSame('FAKE000000', $expired->fresh()->shipping_address['mfs_transaction_id']);
+        $this->assertSame('FAKE000000', $third->fresh()->mfs_transaction_id);
+    }
+
+    public function test_books_owe_the_cancelled_part_to_the_buyer_not_the_seller(): void
+    {
+        $this->seed(AccountingChartOfAccountsSeeder::class);
+        $order = $this->bkashOrder();
+        $subOrder = $order->subOrders->firstOrFail();
+        app(OrderDisputeService::class)->cancelSubOrder($subOrder, 'Changed my mind');
+
+        app(PaymentVerificationService::class)->markVerified($order);
+
+        $ledger = app(GeneralLedgerService::class);
+        $this->assertSame(0.0, $ledger->getBalanceForSlug('seller_escrow_payable', sellerId: $subOrder->seller_id));
+        $this->assertSame(0.0, $ledger->getBalanceForSlug('commission_revenue'));
+        $this->assertSame(0.0, $ledger->getBalanceForSlug('shipping_service_revenue'));
+        $this->assertSame(round($subOrder->fresh()->paidAmount(), 2), $ledger->getBalanceForSlug('customer_refund_payable'));
+    }
+
+    public function test_escrow_is_never_held_for_a_cancelled_consignment(): void
+    {
+        $subOrder = $this->bkashOrder()->subOrders->firstOrFail();
+        $subOrder->update(['fulfillment_status_id' => FulfillmentStatus::where('slug', 'cancelled')->value('id')]);
+
+        $this->expectException(DomainException::class);
+
+        try {
+            app(EscrowLedgerService::class)->holdInEscrow($subOrder->fresh());
+        } finally {
+            $this->assertFalse(WalletTransaction::where('sub_order_id', $subOrder->id)->exists());
+        }
     }
 }

@@ -1,20 +1,44 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Escrow;
 
+use App\DTOs\Accounting\JournalEntryData;
+use App\Enums\Accounting\AccountingEvent;
+use App\Enums\Accounting\JournalEntryStatus;
+use App\Events\Finance\PayoutStatusUpdatedEvent;
+use App\Models\Accounting\AccountingJournalEntry;
+use App\Models\PaymentStatus;
+use App\Models\ReturnRequest;
+use App\Models\SellerInvoice;
 use App\Models\SellerWallet;
 use App\Models\SubOrder;
 use App\Models\User;
 use App\Models\WalletTransaction;
+use App\Services\Accounting\EventPipeline\EscrowReleaseJournalHandler;
+use App\Services\Accounting\EventPipeline\PayoutJournalHandler;
+use App\Services\Accounting\EventPipeline\RefundJournalHandler;
+use App\Services\Accounting\SettlementService;
 use App\Services\Settings\StoreConfigurationService;
+use DomainException;
 use Exception;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class EscrowLedgerService
 {
     public function __construct(
-        protected StoreConfigurationService $config
-    ) {}
+        protected StoreConfigurationService $config,
+        protected ?EscrowReleaseJournalHandler $escrowReleaseJournalHandler = null,
+        protected ?RefundJournalHandler $refundJournalHandler = null,
+        protected ?PayoutJournalHandler $payoutJournalHandler = null,
+    ) {
+        $this->escrowReleaseJournalHandler ??= app(EscrowReleaseJournalHandler::class);
+        $this->refundJournalHandler ??= app(RefundJournalHandler::class);
+        $this->payoutJournalHandler ??= app(PayoutJournalHandler::class);
+    }
 
     /**
      * Hold what the platform owes the seller for this sub-order (net earnings, plus the delivery fee when the
@@ -23,6 +47,10 @@ class EscrowLedgerService
      */
     public function holdInEscrow(SubOrder $subOrder): WalletTransaction
     {
+        if ($subOrder->fulfillmentStatus()->value('slug') === 'cancelled') {
+            throw new DomainException("Consignment #{$subOrder->sub_order_number} was cancelled, so no money is held for the seller.");
+        }
+
         return DB::transaction(function () use ($subOrder) {
             $wallet = $this->lockWallet($subOrder->seller_id, createIfMissing: true);
 
@@ -37,7 +65,7 @@ class EscrowLedgerService
                     "Escrow hold for Sub-Order #{$subOrder->sub_order_number}");
             }
 
-            $shortfall = round($payable - $this->heldAmountFor($subOrder), 2);
+            $shortfall = round($payable - $this->grossHeldFor($subOrder), 2);
             $alreadySettled = $this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_RELEASE)
                 || $this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_REFUND);
 
@@ -46,6 +74,7 @@ class EscrowLedgerService
                 $wallet->refresh();
                 $this->record($wallet, $subOrder, WalletTransaction::TYPE_ESCROW_HOLD_ADJUSTMENT, $shortfall,
                     "Self-delivery fee added to escrow for Sub-Order #{$subOrder->sub_order_number}");
+                $this->escrowReleaseJournalHandler->recordSelfDeliveryFeeTopUp($subOrder, $shortfall);
             }
 
             return $hold;
@@ -78,13 +107,115 @@ class EscrowLedgerService
     }
 
     /**
-     * Total currently attributed to this sub-order's hold (hold plus any self-delivery top-up).
+     * Total currently attributed to this sub-order's hold (hold plus any self-delivery top-up), less what item
+     * returns already took back out of it (PAY-4).
      */
     public function heldAmountFor(SubOrder $subOrder): float
+    {
+        $returned = (float) WalletTransaction::where('sub_order_id', $subOrder->id)
+            ->where('transaction_type', WalletTransaction::TYPE_PARTIAL_RETURN_HELD)
+            ->sum('amount');
+
+        return round($this->grossHeldFor($subOrder) - $returned, 2);
+    }
+
+    private function grossHeldFor(SubOrder $subOrder): float
     {
         return round((float) WalletTransaction::where('sub_order_id', $subOrder->id)
             ->whereIn('transaction_type', [WalletTransaction::TYPE_ESCROW_HOLD, WalletTransaction::TYPE_ESCROW_HOLD_ADJUSTMENT])
             ->sum('amount'), 2);
+    }
+
+    /**
+     * PAY-4: undo the seller side of a return of some items. Still on hold → the hold shrinks; already released →
+     * the available balance drops (it may go negative); self-collected COD → the commission share, less the
+     * coupon share, is given back. One wallet row and one journal per return.
+     *
+     * @param  array{seller: float, commission: float, discount: float, refund: float, courier_fee: float, completes: bool}  $amounts
+     */
+    public function reversePartialReturn(SubOrder $subOrder, ReturnRequest $returnRequest, array $amounts, string $reason): ?WalletTransaction
+    {
+        return DB::transaction(function () use ($subOrder, $returnRequest, $amounts, $reason): ?WalletTransaction {
+            $wallet = $this->lockWallet($subOrder->seller_id, createIfMissing: true);
+
+            $existing = WalletTransaction::where('return_request_id', $returnRequest->id)->first();
+            if ($existing) {
+                return $existing;
+            }
+
+            if ($selfCollected = $this->findTransaction($subOrder, WalletTransaction::TYPE_COD_SELF_COLLECTED)) {
+                $givenBack = (float) WalletTransaction::where('sub_order_id', $subOrder->id)
+                    ->where('transaction_type', WalletTransaction::TYPE_PARTIAL_RETURN_COD)
+                    ->sum('amount');
+                // Net = commission share given back − coupon share taken back; negative when the coupon is bigger
+                // (review R-2). The last return settles whatever is left of the delivery charge.
+                $commission = round($amounts['commission'], 2);
+                $amount = $amounts['completes']
+                    ? round((float) $selfCollected->amount - $givenBack, 2)
+                    : round($commission - $amounts['discount'], 2);
+                $discount = round($commission - $amount, 2);
+                $refund = $this->buyerRefundForSelfCollected($subOrder, $amounts['refund']);
+
+                if ($commission == 0.0 && $discount == 0.0 && $refund == 0.0) {
+                    return null;
+                }
+
+                $tx = null;
+                if ($commission != 0.0 || $discount != 0.0) {
+                    $wallet->increment('available_balance', $amount);
+                    $wallet->refresh();
+
+                    $tx = $this->recordForReturn($wallet, $subOrder, $returnRequest, WalletTransaction::TYPE_PARTIAL_RETURN_COD, $amount,
+                        "Commission and coupon share settled for items returned from Sub-Order #{$subOrder->sub_order_number}: {$reason}");
+                }
+
+                // Item 8: the seller kept the buyer's cash, so the buyer's refund comes out of the seller's balance
+                if ($refund > 0.0) {
+                    $wallet->decrement('available_balance', $refund);
+                    $wallet->refresh();
+
+                    $refundTx = $this->recordForReturn($wallet, $subOrder, $returnRequest, WalletTransaction::TYPE_COD_RETURN_REFUND, $refund,
+                        "Refund to the buyer for items returned from Sub-Order #{$subOrder->sub_order_number} (you kept the COD cash): {$reason}");
+                    $tx ??= $refundTx;
+                }
+
+                $this->refundJournalHandler->recordSelfCollectedPartialReturn($subOrder, $returnRequest, $commission, $discount, $refund, $reason);
+
+                return $tx;
+            }
+
+            $released = $this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_RELEASE) !== null;
+            $amount = round($amounts['seller'], 2);
+
+            if ($released) {
+                $wallet->decrement('available_balance', $amount);
+            } else {
+                $wallet->decrement('escrow_held_balance', $amount);
+            }
+            $wallet->refresh();
+
+            $tx = $this->recordForReturn($wallet, $subOrder, $returnRequest,
+                $released ? WalletTransaction::TYPE_PARTIAL_RETURN_RELEASED : WalletTransaction::TYPE_PARTIAL_RETURN_HELD,
+                $amount,
+                "Items returned from Sub-Order #{$subOrder->sub_order_number}: {$reason}");
+
+            $this->refundJournalHandler->recordPartialReturnRefund($subOrder, $returnRequest, $released, $amounts, $reason);
+
+            return $tx;
+        });
+    }
+
+    private function recordForReturn(SellerWallet $wallet, SubOrder $subOrder, ReturnRequest $returnRequest, string $type, float $amount, string $note): WalletTransaction
+    {
+        return WalletTransaction::create([
+            'seller_wallet_id' => $wallet->id,
+            'sub_order_id' => $subOrder->id,
+            'return_request_id' => $returnRequest->id,
+            'transaction_type' => $type,
+            'amount' => $amount,
+            'running_balance' => $wallet->available_balance,
+            'reference_note' => $note,
+        ]);
     }
 
     /**
@@ -116,8 +247,12 @@ class EscrowLedgerService
             $wallet->increment('available_balance', $amount);
             $wallet->refresh();
 
-            return $this->record($wallet, $subOrder, WalletTransaction::TYPE_ESCROW_RELEASE, $amount,
+            $tx = $this->record($wallet, $subOrder, WalletTransaction::TYPE_ESCROW_RELEASE, $amount,
                 "Released to available balance for delivered Sub-Order #{$subOrder->sub_order_number}");
+
+            $this->escrowReleaseJournalHandler->recordEscrowRelease($subOrder, $amount);
+
+            return $tx;
         });
     }
 
@@ -148,8 +283,12 @@ class EscrowLedgerService
             $wallet->decrement('escrow_held_balance', $amount);
             $wallet->refresh();
 
-            return $this->record($wallet, $subOrder, WalletTransaction::TYPE_ESCROW_REFUND, $amount,
+            $tx = $this->record($wallet, $subOrder, WalletTransaction::TYPE_ESCROW_REFUND, $amount,
                 "Escrow hold refunded for Sub-Order #{$subOrder->sub_order_number}: {$reason}");
+
+            $this->refundJournalHandler->recordPrepaidCancellationRefund($subOrder, $amount, $reason);
+
+            return $tx;
         });
     }
 
@@ -180,8 +319,22 @@ class EscrowLedgerService
                 $wallet->increment('available_balance', $amount);
                 $wallet->refresh();
 
-                return $this->record($wallet, $subOrder, WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL, $amount,
+                $tx = $this->record($wallet, $subOrder, WalletTransaction::TYPE_COD_SELF_COLLECTED_REVERSAL, $amount,
                     "Commission charge reversed for returned Sub-Order #{$subOrder->sub_order_number}: {$reason}");
+
+                // Item 8: the seller kept the buyer's cash, so the buyer's refund comes out of the seller's balance
+                $refund = $this->buyerRefundForSelfCollected($subOrder, $subOrder->paidAmount());
+                if ($refund > 0.0) {
+                    $wallet->decrement('available_balance', $refund);
+                    $wallet->refresh();
+
+                    $this->record($wallet, $subOrder, WalletTransaction::TYPE_COD_RETURN_REFUND, $refund,
+                        "Refund to the buyer for returned Sub-Order #{$subOrder->sub_order_number} (you kept the COD cash): {$reason}");
+                }
+
+                $this->refundJournalHandler->recordReturnedSubOrderRefund($subOrder, $reason);
+
+                return $tx;
             }
 
             $release = $this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_RELEASE);
@@ -193,9 +346,24 @@ class EscrowLedgerService
             $wallet->decrement('available_balance', $amount);
             $wallet->refresh();
 
-            return $this->record($wallet, $subOrder, WalletTransaction::TYPE_RETURN_REVERSAL, $amount,
+            $tx = $this->record($wallet, $subOrder, WalletTransaction::TYPE_RETURN_REVERSAL, $amount,
                 "Settlement reversed for returned Sub-Order #{$subOrder->sub_order_number}: {$reason}");
+
+            $this->refundJournalHandler->recordReturnedSubOrderRefund($subOrder, $reason);
+
+            return $tx;
         });
+    }
+
+    /**
+     * What the buyer is refunded for a self-collected COD return: the refund owed when the order counts as paid
+     * (the same rule that raises the buyer's Refund row), otherwise nothing.
+     */
+    public function buyerRefundForSelfCollected(SubOrder $subOrder, float $refund): float
+    {
+        $paid = in_array($subOrder->order()->with('paymentStatus')->first()?->paymentStatus?->slug, PaymentStatus::MONEY_RECEIVED, true);
+
+        return $paid ? max(0.0, round($refund, 2)) : 0.0;
     }
 
     private function lockWallet(int $sellerId, bool $createIfMissing = false): ?SellerWallet
@@ -243,6 +411,22 @@ class EscrowLedgerService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            // MON-12: an overdue marketplace bill is paid before money leaves the platform.
+            $overdue = SellerInvoice::where('seller_id', $seller->id)
+                ->where('status', SellerInvoice::STATUS_UNPAID)
+                ->whereDate('due_date', '<', JournalEntryData::businessDate())
+                ->orderBy('due_date')
+                ->first();
+
+            if ($overdue) {
+                throw new DomainException(sprintf(
+                    'Bill %s for ৳%s was due on %s and is still unpaid. Pay it on Subscription & Billing (you can pay from your balance), then request your payout.',
+                    $overdue->invoice_number,
+                    number_format((float) $overdue->total_amount, 2),
+                    $overdue->due_date->format('d M Y'),
+                ));
+            }
+
             if ((float) $wallet->available_balance <= 0 || $wallet->available_balance < $amount) {
                 throw new Exception("Insufficient available balance. Requested: {$amount}, Available: {$wallet->available_balance}");
             }
@@ -250,7 +434,7 @@ class EscrowLedgerService
             $wallet->decrement('available_balance', $amount);
             $wallet->refresh();
 
-            return WalletTransaction::create([
+            $transaction = WalletTransaction::create([
                 'seller_wallet_id' => $wallet->id,
                 'sub_order_id' => null,
                 'transaction_type' => WalletTransaction::TYPE_PAYOUT,
@@ -259,29 +443,66 @@ class EscrowLedgerService
                 'running_balance' => $wallet->available_balance,
                 'reference_note' => $note ?? 'Seller payout withdrawal request',
             ]);
+
+            $this->payoutJournalHandler->recordPayoutRequested($transaction);
+
+            return $transaction;
         });
     }
 
     /**
      * Mark a requested payout as paid out by the platform, recording the MFS/bank TrxID.
      *
+     * @param  string  $channel  Disbursement channel ('bank', 'bkash', 'nagad', 'sslcommerz', etc.)
+     *
      * @throws Exception
      */
-    public function disbursePayout(WalletTransaction $payout, string $trxId): void
+    public function disbursePayout(WalletTransaction $payout, string $trxId, string $channel = 'bank'): void
     {
         $trxId = trim($trxId);
         if ($trxId === '') {
             throw new Exception('A transaction ID is required to disburse a payout.');
         }
 
-        DB::transaction(function () use ($payout, $trxId): void {
+        // UX-ACC-3: one transfer reference settles one payout per channel; the lock stops two admins racing
+        Cache::lock('payout-disbursement', 15)->block(10, fn () => DB::transaction(function () use ($payout, $trxId, $channel): void {
+            $this->assertTrxIdUnused($trxId, $channel);
             $locked = $this->lockPendingPayout($payout);
 
             $locked->update([
                 'status' => WalletTransaction::STATUS_DISBURSED,
                 'reference_note' => trim(($locked->reference_note ?? '')." [DISBURSED - TrxID: {$trxId}]"),
             ]);
-        });
+
+            $this->payoutJournalHandler->recordPayoutDisbursed($locked, $channel, $trxId);
+
+            DB::afterCommit(function () use ($payout, $trxId): void {
+                try {
+                    event(new PayoutStatusUpdatedEvent($payout->fresh(), 'disbursed', $trxId));
+                } catch (\Throwable $e) {
+                    Log::warning('Payout disbursed email event failed: '.$e->getMessage());
+                }
+            });
+        }));
+    }
+
+    /**
+     * @throws Exception
+     */
+    private function assertTrxIdUnused(string $trxId, string $channel): void
+    {
+        $key = SettlementService::referenceKey($trxId);
+
+        $existing = AccountingJournalEntry::query()
+            ->where('financial_event', AccountingEvent::PAYOUT_DISBURSED->value)
+            ->where('status', JournalEntryStatus::POSTED)
+            ->where('metadata->channel', $channel)
+            ->where(fn ($query) => $query->where('metadata->trx_key', $key)->orWhere('metadata->trx_id', $trxId))
+            ->first();
+
+        if ($existing !== null) {
+            throw new Exception("TrxID {$trxId} was already used for payout #{$existing->reference_id} ({$existing->journal_number}). Check the transfer and enter its own TrxID.");
+        }
     }
 
     /**
@@ -308,6 +529,16 @@ class EscrowLedgerService
                 'status' => WalletTransaction::STATUS_REJECTED,
                 'reference_note' => trim(($locked->reference_note ?? '')." [REJECTED - {$reason}]"),
             ]);
+
+            $this->payoutJournalHandler->recordPayoutRejected($locked, $reason);
+
+            DB::afterCommit(function () use ($payout, $reason): void {
+                try {
+                    event(new PayoutStatusUpdatedEvent($payout->fresh(), 'rejected', $reason));
+                } catch (\Throwable $e) {
+                    Log::warning('Payout rejected email event failed: '.$e->getMessage());
+                }
+            });
 
             return WalletTransaction::create([
                 'seller_wallet_id' => $wallet->id,

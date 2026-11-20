@@ -44,8 +44,8 @@
     <!-- Address Cards Grid -->
     @if ($addresses->isEmpty())
         <div class="p-12 text-center rounded-2xl border-2 border-dashed border-slate-200 bg-white">
-            <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3 text-xl">
-                📍
+            <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3">
+                <x-storefront.icon name="map-pin" class="w-6 h-6" />
             </div>
             <h3 class="font-bold text-slate-800 text-sm">No saved addresses yet</h3>
             <p class="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
@@ -101,7 +101,7 @@
                                 </button>
                             @else
                                 <span class="text-indigo-600 font-bold text-[11px] flex items-center gap-1">
-                                    ✓ Primary Address
+                                    <x-storefront.icon name="check" class="w-3.5 h-3.5" /> Primary Address
                                 </span>
                             @endif
                         </div>

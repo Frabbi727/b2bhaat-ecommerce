@@ -36,6 +36,16 @@ class InvoiceController extends Controller
             if (! $isAdmin && ! $isCustomer && ! $isAssignedSeller) {
                 abort(403, 'Unauthorized. You do not have permission to view this commercial tax invoice.');
             }
+
+            // SEC-9: a seller sees only their own packages, never another seller's lines or the order total.
+            if (! $isAdmin && ! $isCustomer) {
+                $order->setRelation('subOrders', $order->subOrders->where('seller_id', $user->id)->values());
+
+                return view('storefront.invoice', [
+                    'order' => $order,
+                    'sellerScoped' => true,
+                ]);
+            }
         }
 
         return view('storefront.invoice', [
@@ -59,6 +69,8 @@ class InvoiceController extends Controller
         ])
             ->where('invoice_token', $token)
             ->firstOrFail();
+
+        abort_if($order->invoiceLinkExpired(), 410, 'This invoice link has expired. Sign in to your account to view the invoice.');
 
         return view('storefront.invoice', [
             'order' => $order,

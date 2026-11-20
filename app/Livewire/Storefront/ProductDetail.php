@@ -4,14 +4,17 @@ namespace App\Livewire\Storefront;
 
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\ProductDailyView;
 use App\Models\ProductReview;
 use App\Models\RfqRequest;
 use App\Models\SalesChannel;
 use App\Models\Wishlist;
 use App\Services\Cart\CartSessionService;
-use App\Services\Settings\StoreConfigurationService;
+use App\Services\Promotions\FlashSalePricing;
+use App\Services\Rfq\RfqNotificationService;
 use Exception;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Validation\Validator;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -45,6 +48,14 @@ class ProductDetail extends Component
 
     public int $rfqTargetQuantity = 100;
 
+    /**
+     * WA-PRC-03: on a product with options, units requested per option (variation id => quantity). The RFQ total
+     * is their sum, so the seller quotes on, and later ships, exactly these options.
+     *
+     * @var array<int, int|string|null>
+     */
+    public array $rfqOptionQuantities = [];
+
     public ?float $rfqTargetPrice = null;
 
     public string $rfqDestinationDistrict = 'Dhaka';
@@ -75,18 +86,29 @@ class ProductDetail extends Component
 
     public bool $showFullscreenGallery = false;
 
+    /**
+     * PERF-3: what the page shows for a product. Livewire does not bring nested relations back between requests,
+     * so they are loaded again on every update instead of one query per price or variation.
+     */
+    private const PRODUCT_RELATIONS = [
+        'seller.sellerProfile',
+        'category',
+        'brand',
+        'salesChannel',
+        'unit',
+        'images',
+        'prices.salesChannel',
+        'variations.attributeValues.attribute',
+    ];
+
+    public function hydrate(): void
+    {
+        $this->product->loadMissing(self::PRODUCT_RELATIONS);
+    }
+
     public function mount(string $slug): void
     {
-        $this->product = Product::with([
-            'seller.sellerProfile',
-            'category',
-            'brand',
-            'salesChannel',
-            'unit',
-            'images',
-            'prices.salesChannel',
-            'variations.attributeValues.attribute',
-        ])->sellable()->where('slug', $slug)->firstOrFail();
+        $this->product = Product::with(self::PRODUCT_RELATIONS)->sellable()->where('slug', $slug)->firstOrFail();
 
         // Initialize default selected variation for retail
         if ($this->product->variations->isNotEmpty()) {
@@ -96,6 +118,9 @@ class ProductDetail extends Component
         // Initialize matrix quantities to 0
         foreach ($this->product->variations as $var) {
             $this->matrixQuantities[$var->id] = 0;
+            if ($this->product->has_variations && $var->is_active) {
+                $this->rfqOptionQuantities[$var->id] = 0;
+            }
         }
 
         // Prefill RFQ fields if user is logged in
@@ -116,6 +141,7 @@ class ProductDetail extends Component
 
         // Increment view count
         $this->product->increment('views_count');
+        ProductDailyView::record($this->product->id);
     }
 
     public function selectImage(int $index): void
@@ -143,9 +169,10 @@ class ProductDetail extends Component
     {
         $this->resetMessages();
 
-        $secondary = Product::with(['retailPrice', 'variations', 'seller.sellerProfile'])->find($secondaryProductId);
+        $secondary = Product::with(['retailPrice', 'variations', 'seller.sellerProfile'])->sellable()->find($secondaryProductId);
         if (! $secondary) {
             $this->errorMessage = 'Bundle product not found.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
@@ -169,9 +196,11 @@ class ProductDetail extends Component
             );
 
             $this->feedbackMessage = "Added bundle lot ({$this->product->title} + {$secondary->title}) to your cart!";
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: true);
             $this->dispatch('cartUpdated');
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
         }
     }
 
@@ -186,6 +215,7 @@ class ProductDetail extends Component
 
         if ($this->isSellerOnVacation) {
             $this->errorMessage = 'This merchant is currently on vacation mode. Ordering is temporarily disabled.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
@@ -195,6 +225,7 @@ class ProductDetail extends Component
         if ($this->product->variations->isNotEmpty()) {
             if (! $this->selectedVariationId) {
                 $this->errorMessage = 'Please select a variation before adding to cart.';
+                $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
                 return;
             }
@@ -202,13 +233,15 @@ class ProductDetail extends Component
             $variation = $this->product->variations->firstWhere('id', $this->selectedVariationId);
             if (! $variation || ! $variation->is_active) {
                 $this->errorMessage = 'Selected variation is currently unavailable.';
+                $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
                 return;
             }
 
-            $allowBackorders = app(StoreConfigurationService::class)->isBackorderAllowed();
-            if (! $allowBackorders && $this->retailQuantity > $variation->stock_quantity) {
+            // AR-09: no backorders, so never more than the stock
+            if ($this->retailQuantity > $variation->stock_quantity) {
                 $this->errorMessage = "Requested quantity ({$this->retailQuantity}) exceeds available stock ({$variation->stock_quantity} units).";
+                $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
                 return;
             }
@@ -225,9 +258,11 @@ class ProductDetail extends Component
             );
 
             $this->feedbackMessage = "Added {$this->retailQuantity} unit(s) to your cart.";
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: true);
             $this->dispatch('cartUpdated');
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
         }
     }
 
@@ -238,32 +273,28 @@ class ProductDetail extends Component
         $user = auth()->user();
         if (! $user || ! $user->canSeeWholesalePrices()) {
             $this->errorMessage = 'Wholesale volume tier sourcing is reserved for verified wholesale business accounts. Please upgrade your account.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
 
         if ($this->isSellerOnVacation) {
             $this->errorMessage = 'This merchant is currently on vacation mode. Ordering is temporarily disabled.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
 
         $cart = app(CartSessionService::class);
 
-        $wholesalePrice = $this->product->prices
-            ->first(fn ($p) => $p->salesChannel?->slug === SalesChannel::WHOLESALE && is_null($p->variation_id));
-
-        $wholesaleTiers = $this->product->prices
-            ->filter(fn ($p) => $p->salesChannel?->slug === SalesChannel::WHOLESALE && is_null($p->variation_id))
-            ->sortBy('min_quantity')
-            ->values();
-
-        $moq = $wholesalePrice?->min_quantity ?? 1;
+        // The cart's rule: the lowest wholesale tier, all options together (UX-7)
+        $moq = $cart->wholesaleMinimumQuantity($this->product->id) ?? 1;
 
         $totalUnits = array_sum(array_map('intval', $this->matrixQuantities));
 
         if ($totalUnits < $moq) {
             $this->errorMessage = "Wholesale bulk order requires at least {$moq} units. You currently selected {$totalUnits}.";
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
@@ -273,15 +304,16 @@ class ProductDetail extends Component
             $qty = (int) $qty;
             if ($qty < 0) {
                 $this->errorMessage = 'Quantities must be positive numbers.';
+                $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
                 return;
             }
 
             if ($qty > 0) {
-                $allowBackorders = app(StoreConfigurationService::class)->isBackorderAllowed();
                 $var = $this->product->variations->firstWhere('id', (int) $variationId);
-                if (! $allowBackorders && $var && $qty > $var->stock_quantity) {
+                if ($var && $qty > $var->stock_quantity) {
                     $this->errorMessage = "Requested quantity ({$qty}) for SKU '{$var->sku}' exceeds available stock ({$var->stock_quantity} units).";
+                    $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
                     return;
                 }
@@ -299,9 +331,11 @@ class ProductDetail extends Component
             }
 
             $this->feedbackMessage = "Successfully added wholesale bulk lot ({$addedCount} units) to your cart!";
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: true);
             $this->dispatch('cartUpdated');
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
         }
     }
 
@@ -323,6 +357,7 @@ class ProductDetail extends Component
             $existing->delete();
             $this->isInWishlist = false;
             $this->feedbackMessage = 'Product removed from your Wishlist.';
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: false);
         } else {
             Wishlist::create([
                 'user_id' => $userId,
@@ -330,6 +365,7 @@ class ProductDetail extends Component
             ]);
             $this->isInWishlist = true;
             $this->feedbackMessage = 'Product added to your Wishlist!';
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: false);
         }
     }
 
@@ -346,12 +382,30 @@ class ProductDetail extends Component
 
     public function submitRfq(): void
     {
-        $this->validate([
+        $hasOptions = (bool) $this->product->has_variations;
+        $optionQuantities = null;
+
+        // WA-PRC-03: on a product with options the split is checked in the same pass, so every error shows at once
+        $this->withValidator(function (Validator $validator) use ($hasOptions, &$optionQuantities): void {
+            $validator->after(function (Validator $validator) use ($hasOptions, &$optionQuantities): void {
+                if (! $hasOptions) {
+                    return;
+                }
+
+                $result = $this->rfqOptionSplit();
+                if (is_string($result)) {
+                    $validator->errors()->add('rfqOptionQuantities', $result);
+
+                    return;
+                }
+                $optionQuantities = $result;
+            });
+        })->validate([
             'rfqBuyerName' => 'required|string|min:3|max:255',
             'rfqBuyerEmail' => 'required|email|max:255',
             'rfqBuyerPhone' => ['required', 'string', 'regex:/^(\+?8801|01)\d{7,9}$/'],
             'rfqCompanyName' => 'nullable|string|max:255',
-            'rfqTargetQuantity' => 'required|integer|min:1',
+            'rfqTargetQuantity' => $hasOptions ? 'nullable' : 'required|integer|min:1',
             'rfqTargetPrice' => 'nullable|numeric|min:1',
             'rfqDestinationDistrict' => 'required|string|max:100',
             'rfqSpecifications' => 'nullable|string|max:2000',
@@ -360,7 +414,11 @@ class ProductDetail extends Component
             'rfqTargetQuantity.min' => 'Target quantity must be at least 1 unit.',
         ]);
 
-        RfqRequest::create([
+        if ($optionQuantities !== null) {
+            $this->rfqTargetQuantity = array_sum($optionQuantities);
+        }
+
+        $rfq = RfqRequest::create([
             'product_id' => $this->product->id,
             'seller_id' => $this->product->seller_id,
             'buyer_id' => auth()->id(),
@@ -369,13 +427,43 @@ class ProductDetail extends Component
             'buyer_phone' => $this->rfqBuyerPhone,
             'company_name' => $this->rfqCompanyName,
             'target_quantity' => $this->rfqTargetQuantity,
+            'option_quantities' => $optionQuantities,
             'target_unit_price' => $this->rfqTargetPrice,
             'destination_district' => $this->rfqDestinationDistrict,
             'specifications' => $this->rfqSpecifications,
             'status' => 'pending',
         ]);
 
+        app(RfqNotificationService::class)->notifySellerOfNewInquiry($rfq);
+
         $this->rfqSuccess = true;
+    }
+
+    /**
+     * The option split of an RFQ: only this product's options that are still sold, at least one unit in total.
+     *
+     * @return array<int, int>|string the split, or the reason it can't be used
+     */
+    private function rfqOptionSplit(): array|string
+    {
+        $sellableIds = $this->product->variations->where('is_active', true)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $quantities = [];
+
+        foreach ($this->rfqOptionQuantities as $variationId => $quantity) {
+            $quantity = (int) $quantity;
+            if ($quantity < 0) {
+                return 'Quantities cannot be negative.';
+            }
+            if ($quantity === 0) {
+                continue;
+            }
+            if (! in_array((int) $variationId, $sellableIds, true)) {
+                return 'One of the options is not sold for this product. Please reload the page.';
+            }
+            $quantities[(int) $variationId] = $quantity;
+        }
+
+        return $quantities === [] ? 'Enter how many units you need of at least one option.' : $quantities;
     }
 
     public function setFilterRating(string $filter): void
@@ -456,6 +544,8 @@ class ProductDetail extends Component
             ->sortBy('min_quantity')
             ->values();
 
+        $wholesaleMinimum = app(CartSessionService::class)->wholesaleMinimumQuantity($this->product->id);
+
         // Reviews calculations
         $approvedReviewsQuery = $this->product->reviews()->where('is_approved', true);
         $totalReviews = (clone $approvedReviewsQuery)->count();
@@ -512,7 +602,7 @@ class ProductDetail extends Component
                 $q->where('category_id', $this->product->category_id)
                     ->orWhere('brand_id', $this->product->brand_id);
             })
-            ->with(['primaryImage', 'brand', 'retailPrice'])
+            ->with(['primaryImage', 'brand', 'retailPrice', 'variations', 'seller.sellerProfile', 'salesChannel'])
             ->take(4)
             ->get();
 
@@ -529,6 +619,8 @@ class ProductDetail extends Component
             ? Product::query()->listable()->whereIn('id', $recentIds)->with(['primaryImage', 'brand', 'retailPrice'])->take(4)->get()
             : collect();
 
+        app(FlashSalePricing::class)->primeFor([$this->product, ...$relatedProducts, ...$frequentlyBoughtTogether, ...$recentlyViewed]);
+
         return view('livewire.storefront.product-detail', [
             'isWholesaleUser' => $isWholesaleUser,
             'isWholesalePending' => (bool) $user?->isWholesalePending(),
@@ -536,6 +628,7 @@ class ProductDetail extends Component
             'retailPrice' => $retailPrice,
             'wholesalePrice' => $wholesalePrice,
             'wholesaleTiers' => $wholesaleTiers,
+            'wholesaleMinimum' => $wholesaleMinimum,
             'totalReviews' => $totalReviews,
             'averageRating' => $averageRating,
             'ratingDistribution' => $ratingDistribution,

@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Events\Orders\ConsignmentStatusUpdatedEvent;
+use App\Models\Traits\Auditable;
 use App\Services\Sms\OrderNotificationService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,6 +14,8 @@ use Illuminate\Support\Facades\Log;
 
 class SubOrder extends Model
 {
+    use Auditable;
+
     /** The buyer's secret; never serialised (final review C1). */
     protected $hidden = [
         'handover_code',
@@ -20,8 +24,15 @@ class SubOrder extends Model
     protected $fillable = [
         'parent_order_id',
         'seller_id',
+        'replaces_sub_order_id',
+        'replaces_return_request_id',
         'sub_order_number',
         'fulfillment_status_id',
+        'cancelled_by',
+        'cancelled_by_user_id',
+        'cancel_reason',
+        'cancelled_at',
+        'unshipped_alerted_at',
         'courier_name',
         'tracking_number',
         'subtotal',
@@ -40,11 +51,18 @@ class SubOrder extends Model
             }
 
             DB::afterCommit(function () use ($subOrder): void {
+                $slug = (string) FulfillmentStatus::whereKey($subOrder->fulfillment_status_id)->value('slug');
+
                 try {
-                    $slug = FulfillmentStatus::whereKey($subOrder->fulfillment_status_id)->value('slug');
-                    app(OrderNotificationService::class)->sendParcelStatusUpdate($subOrder, (string) $slug);
+                    app(OrderNotificationService::class)->sendParcelStatusUpdate($subOrder, $slug);
                 } catch (\Throwable $exception) {
                     Log::warning('Parcel status SMS not sent: '.$exception->getMessage(), ['sub_order_id' => $subOrder->id]);
+                }
+
+                try {
+                    event(new ConsignmentStatusUpdatedEvent($subOrder, $slug));
+                } catch (\Throwable $exception) {
+                    Log::warning('Parcel status email event not sent: '.$exception->getMessage(), ['sub_order_id' => $subOrder->id]);
                 }
             });
         });
@@ -58,6 +76,10 @@ class SubOrder extends Model
             'shipping_amount' => 'decimal:2',
             'is_self_delivered' => 'boolean',
             'handover_confirmed_at' => 'datetime',
+            'courier_settled_at' => 'datetime',
+            'cancelled_at' => 'datetime',
+            'unshipped_alerted_at' => 'datetime',
+            'cancelled_by_user_id' => 'integer',
         ];
     }
 
@@ -102,6 +124,22 @@ class SubOrder extends Model
         return $loggedAt !== null ? Carbon::parse($loggedAt) : $this->updated_at;
     }
 
+    /** The parcel this free replacement was sent for (WA-ORD-03) */
+    public function replaces(): BelongsTo
+    {
+        return $this->belongsTo(SubOrder::class, 'replaces_sub_order_id');
+    }
+
+    public function replacements(): HasMany
+    {
+        return $this->hasMany(SubOrder::class, 'replaces_sub_order_id');
+    }
+
+    public function isReplacement(): bool
+    {
+        return $this->replaces_sub_order_id !== null;
+    }
+
     public function returnRequests(): HasMany
     {
         return $this->hasMany(ReturnRequest::class);
@@ -115,7 +153,7 @@ class SubOrder extends Model
         $order = $this->order;
 
         return $order !== null
-            && ($order->paymentMethod?->slug === 'cod' || $order->paymentStatus?->slug === 'paid');
+            && ($order->paymentMethod?->slug === 'cod' || in_array($order->paymentStatus?->slug, PaymentStatus::MONEY_RECEIVED, true));
     }
 
     /**

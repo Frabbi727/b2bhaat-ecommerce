@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Traits\Auditable;
 use App\Services\Sms\OrderNotificationService;
 use App\Services\Sms\Support\PhoneNormalizer;
 use Filament\Models\Contracts\FilamentUser;
@@ -20,7 +21,13 @@ use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable implements FilamentUser
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    use Auditable, HasApiTokens, HasFactory, Notifiable;
+
+    /** AUD-4: account changes (role, password, active, wholesale approval) are security records, kept and written at once. */
+    protected string $auditModule = 'auth';
+
+    /** @var list<string> The remember-me token changes on every sign-in and sign-out; sign-ins are logged separately. */
+    protected array $auditIgnoredAttributes = ['remember_token'];
 
     protected $fillable = [
         'role_id',
@@ -42,6 +49,10 @@ class User extends Authenticatable implements FilamentUser
     protected $hidden = [
         'password',
         'remember_token',
+    ];
+
+    protected $attributes = [
+        'is_active' => true,
     ];
 
     protected function casts(): array
@@ -101,6 +112,28 @@ class User extends Authenticatable implements FilamentUser
         return $this->hasOne(SellerWallet::class, 'seller_id');
     }
 
+    public function sellerSubscriptions(): HasMany
+    {
+        return $this->hasMany(SellerSubscription::class, 'seller_id');
+    }
+
+    public function activeSellerSubscription(): HasOne
+    {
+        return $this->hasOne(SellerSubscription::class, 'seller_id')
+            ->whereIn('status', [SellerSubscription::STATUS_ACTIVE, SellerSubscription::STATUS_GRACE_PERIOD])
+            ->latestOfMany();
+    }
+
+    public function sellerInvoices(): HasMany
+    {
+        return $this->hasMany(SellerInvoice::class, 'seller_id');
+    }
+
+    public function sellerSuspensionEvents(): HasMany
+    {
+        return $this->hasMany(SellerSuspensionEvent::class, 'seller_id');
+    }
+
     public function reviews(): HasMany
     {
         return $this->hasMany(ProductReview::class);
@@ -151,6 +184,14 @@ class User extends Authenticatable implements FilamentUser
     public function isSuperAdmin(): bool
     {
         return $this->role?->slug === 'super_admin';
+    }
+
+    /**
+     * Admins and super admins review product and price changes.
+     */
+    public function isCatalogReviewer(): bool
+    {
+        return in_array($this->role?->slug, ['super_admin', 'admin'], true);
     }
 
     public function isSeller(): bool

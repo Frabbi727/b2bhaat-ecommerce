@@ -9,15 +9,18 @@ use App\Filament\Admin\Resources\Users\Pages\ListUsers;
 use App\Filament\Admin\Resources\WalletTransactions\Pages\ListWalletTransactions;
 use App\Filament\Admin\Widgets\AdminStatsOverview;
 use App\Filament\Admin\Widgets\LatestOrdersWidget;
+use App\Filament\Seller\Pages\Accounts\AccountsOverview;
 use App\Filament\Seller\Pages\StoreSettings;
 use App\Filament\Seller\Resources\ProductReviews\Pages\ListProductReviews;
 use App\Filament\Seller\Resources\Products\Pages\ListProducts;
 use App\Filament\Seller\Resources\ReturnRequests\Pages\ListReturnRequests;
 use App\Filament\Seller\Resources\RfqRequests\Pages\ListRfqRequests;
+use App\Filament\Seller\Resources\SellerAccounts\Pages\ListSellerAccounts;
+use App\Filament\Seller\Resources\SellerJournalEntries\Pages\ListSellerJournalEntries;
 use App\Filament\Seller\Resources\SellerWallets\Pages\ListSellerWallets;
 use App\Filament\Seller\Resources\SubOrders\Pages\ListSubOrders;
 use App\Filament\Seller\Widgets\SellerRecentOrdersWidget;
-use App\Filament\Seller\Widgets\SellerStatsOverview;
+use App\Filament\Seller\Widgets\SellerTodayWidget;
 use App\Models\User;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\SystemLookupSeeder;
@@ -84,10 +87,11 @@ class FilamentPanelsSmokeTest extends TestCase
 
         $this->get('/seller')->assertSuccessful();
 
-        Livewire::test(SellerStatsOverview::class)
+        Livewire::test(SellerTodayWidget::class)
             ->assertSuccessful()
-            ->assertSee('Available Payout Balance')
-            ->assertSee('Escrow In-Transit Reserve');
+            ->assertSee('To do today')
+            ->assertSee('Ready to withdraw')
+            ->assertSee('On hold');
 
         Livewire::test(SellerRecentOrdersWidget::class)
             ->assertSuccessful();
@@ -98,6 +102,9 @@ class FilamentPanelsSmokeTest extends TestCase
         Livewire::test(ListRfqRequests::class)->assertSuccessful();
         Livewire::test(ListSellerWallets::class)->assertSuccessful();
         Livewire::test(ListSubOrders::class)->assertSuccessful();
+        Livewire::test(ListSellerJournalEntries::class)->assertSuccessful();
+        Livewire::test(ListSellerAccounts::class)->assertSuccessful();
+        Livewire::test(AccountsOverview::class)->assertSuccessful();
         Livewire::test(StoreSettings::class)->assertSuccessful();
 
         $this->get('/seller/products/create')->assertSuccessful();

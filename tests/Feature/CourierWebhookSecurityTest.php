@@ -83,7 +83,7 @@ class CourierWebhookSecurityTest extends TestCase
 
     public function test_delivered_twice_is_idempotent(): void
     {
-        $this->signedCourierPost(['tracking_number' => 'ST-SEC-1', 'status' => 'delivered'])->assertOk();
+        $this->signedCourierPost(['tracking_number' => 'ST-SEC-1', 'status' => 'delivered'], timestamp: now()->getTimestamp() - 1)->assertOk();
         $logsAfterFirst = OrderTrackingLog::where('sub_order_id', $this->subOrder->id)->count();
         $walletRowsAfterFirst = WalletTransaction::where('sub_order_id', $this->subOrder->id)->count();
 
@@ -116,5 +116,64 @@ class CourierWebhookSecurityTest extends TestCase
             ->latest('id')->firstOrFail();
 
         $this->assertTrue($log->logged_at->greaterThan(now()->subMinute()), 'Delivery time was backdated from client timestamp');
+    }
+
+    /**
+     * SEC-11: a captured message cannot be sent again.
+     */
+    public function test_a_replayed_message_is_refused(): void
+    {
+        $payload = ['tracking_number' => 'ST-SEC-1', 'status' => 'in_transit'];
+        $timestamp = now()->getTimestamp();
+        $this->signedCourierPost($payload, timestamp: $timestamp)->assertOk();
+        $logs = OrderTrackingLog::where('sub_order_id', $this->subOrder->id)->count();
+
+        $this->signedCourierPost($payload, timestamp: $timestamp)
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'This courier message was already received.');
+
+        $this->assertSame($logs, OrderTrackingLog::where('sub_order_id', $this->subOrder->id)->count());
+    }
+
+    public function test_an_old_message_is_refused(): void
+    {
+        $this->signedCourierPost(['tracking_number' => 'ST-SEC-1', 'status' => 'in_transit'], timestamp: now()->subMinutes(10)->getTimestamp())
+            ->assertStatus(401);
+        $this->signedCourierPost(['tracking_number' => 'ST-SEC-1', 'status' => 'in_transit'], timestamp: now()->addMinutes(10)->getTimestamp())
+            ->assertStatus(401);
+
+        $this->assertSame('shipped', $this->statusSlug());
+    }
+
+    public function test_a_message_without_a_signed_timestamp_is_refused(): void
+    {
+        config(['services.courier.webhook_secret' => self::COURIER_WEBHOOK_SECRET]);
+        $body = (string) json_encode(['tracking_number' => 'ST-SEC-1', 'status' => 'in_transit']);
+        $bodyOnly = hash_hmac('sha256', $body, self::COURIER_WEBHOOK_SECRET);
+
+        // The old body-only signature, with and without a timestamp header
+        $this->rawCourierPost($body, ['HTTP_X_COURIER_SIGNATURE' => $bodyOnly])->assertStatus(401);
+        $this->rawCourierPost($body, ['HTTP_X_COURIER_SIGNATURE' => $bodyOnly, 'HTTP_X_COURIER_TIMESTAMP' => (string) now()->getTimestamp()])->assertStatus(401);
+
+        // A timestamp changed after signing
+        $signedAt = now()->getTimestamp() - 30;
+        $this->rawCourierPost($body, [
+            'HTTP_X_COURIER_SIGNATURE' => hash_hmac('sha256', $signedAt.'.'.$body, self::COURIER_WEBHOOK_SECRET),
+            'HTTP_X_COURIER_TIMESTAMP' => (string) now()->getTimestamp(),
+        ])->assertStatus(401);
+
+        $this->assertSame('shipped', $this->statusSlug());
+    }
+
+    public function test_a_message_that_failed_can_be_retried(): void
+    {
+        $payload = ['tracking_number' => 'ST-SEC-LATE', 'status' => 'in_transit'];
+        $timestamp = now()->getTimestamp();
+        $this->signedCourierPost($payload, timestamp: $timestamp)->assertNotFound();
+
+        $this->subOrder->update(['tracking_number' => 'ST-SEC-LATE']);
+
+        $this->signedCourierPost($payload, timestamp: $timestamp)->assertOk();
+        $this->assertSame('in_transit', $this->statusSlug());
     }
 }

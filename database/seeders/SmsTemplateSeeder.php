@@ -69,6 +69,14 @@ class SmsTemplateSeeder extends Seeder
                 'is_active' => true,
             ],
             [
+                'key' => 'self_delivery_handover_code',
+                'name' => 'Buyer: Delivery Code (seller delivers)',
+                'content_en' => 'B2Bhaat: your parcel from {store_name} (order #{order_number}) is on the way.{cash_note} Check the parcel, then give code {handover_code} to the delivery person. Do not share it before. Track: {tracking_url}',
+                'content_bn' => 'B2Bhaat: {store_name} থেকে আপনার পার্সেল (অর্ডার #{order_number}) আসছে।{cash_note} পার্সেল দেখে নিয়ে ডেলিভারি ম্যানকে কোড {handover_code} দিন। আগে দেবেন না। ট্র্যাক: {tracking_url}',
+                'placeholders' => ['order_number', 'store_name', 'handover_code', 'cash_note', 'tracking_url'],
+                'is_active' => true,
+            ],
+            [
                 'key' => 'wholesale_approved',
                 'name' => 'Wholesale Account Approved',
                 'content_en' => 'Dear {customer_name}, your wholesale account on {store_name} is approved. Sign in to see bulk prices: {shop_url}',

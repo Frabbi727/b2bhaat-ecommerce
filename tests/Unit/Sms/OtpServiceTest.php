@@ -82,10 +82,11 @@ class OtpServiceTest extends TestCase
             $this->assertFalse($res['success']);
         }
 
-        // 6th attempt should return MAX_ATTEMPTS_EXCEEDED
+        // 6th attempt is refused; since SEC-6 the whole phone is paused (not just this code), so it reports LOCKED
         $res = $this->otpService->verify('01712345678', '000000', 'login');
         $this->assertFalse($res['success']);
-        $this->assertSame('MAX_ATTEMPTS_EXCEEDED', $res['error']);
+        $this->assertSame('LOCKED', $res['error']);
+        $this->assertSame(5, Otp::where('phone', '8801712345678')->value('attempts'));
     }
 
     public function test_rejects_expired_otp(): void

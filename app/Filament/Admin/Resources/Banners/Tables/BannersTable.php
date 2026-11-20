@@ -2,12 +2,13 @@
 
 namespace App\Filament\Admin\Resources\Banners\Tables;
 
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
+use App\Models\Banner;
 use Filament\Actions\EditAction;
-use Filament\Tables\Columns\IconColumn;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ToggleColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class BannersTable
@@ -15,54 +16,52 @@ class BannersTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->defaultSort(fn ($query) => $query->orderBy('position')->orderBy('sort_order'))
             ->columns([
                 ImageColumn::make('desktop_image_url')
-                    ->label('Preview')
-                    ->circular(false)
-                    ->square(),
+                    ->label('')
+                    ->disk('public')
+                    ->height(44)
+                    ->width(96)
+                    ->extraImgAttributes(['class' => 'rounded-md object-cover']),
 
                 TextColumn::make('title')
-                    ->label('Title')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold'),
+                    ->label('Banner')
+                    ->weight('medium')
+                    ->description(fn (Banner $record): ?string => $record->subtitle)
+                    ->wrap()
+                    ->searchable(),
 
                 TextColumn::make('position')
-                    ->label('Placement')
+                    ->label('Where')
                     ->badge()
-                    ->sortable(),
+                    ->color('gray')
+                    ->formatStateUsing(fn (string $state): string => Banner::POSITIONS[$state] ?? $state),
 
                 TextColumn::make('sort_order')
-                    ->label('Sort')
+                    ->label('Order')
                     ->numeric()
                     ->sortable(),
 
-                IconColumn::make('is_active')
-                    ->label('Active')
-                    ->boolean(),
+                TextColumn::make('live_status')
+                    ->label('Right now')
+                    ->badge()
+                    ->state(fn (Banner $record): string => $record->liveStatusLabel())
+                    ->color(fn (Banner $record): string => $record->isAvailableNow() ? 'success' : ($record->is_active && $record->start_at?->isFuture() ? 'info' : 'gray')),
 
-                TextColumn::make('start_at')
-                    ->label('Starts')
-                    ->dateTime('M d, Y')
-                    ->sortable()
-                    ->placeholder('Always'),
-
-                TextColumn::make('end_at')
-                    ->label('Expires')
-                    ->dateTime('M d, Y')
-                    ->sortable()
-                    ->placeholder('Never'),
+                ToggleColumn::make('is_active')
+                    ->label('On'),
             ])
             ->filters([
-                //
+                SelectFilter::make('position')
+                    ->label('Where')
+                    ->options(Banner::POSITIONS),
             ])
             ->recordActions([
                 EditAction::make(),
             ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
-            ]);
+            ->emptyStateIcon(Heroicon::OutlinedPhoto)
+            ->emptyStateHeading('No banners yet')
+            ->emptyStateDescription('Add one for the home page slider, the offer cards or the announcement bar.');
     }
 }

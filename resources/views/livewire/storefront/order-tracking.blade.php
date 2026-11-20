@@ -85,7 +85,7 @@
 
                         @php
                             $canCancelOrder = $order->orderStatus?->slug !== 'cancelled' && 
-                                $order->subOrders->every(fn($s) => in_array($s->fulfillmentStatus?->slug, ['unfulfilled', 'processing']));
+                                $order->subOrders->every(fn($s) => $s->fulfillmentStatus?->slug === 'unfulfilled');
                         @endphp
 
                         @if ($canCancelOrder)
@@ -111,7 +111,7 @@
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs text-slate-600">
                     <div>
                         <span class="text-slate-400 block">Placed on</span>
-                        <strong class="text-slate-800">{{ $order->created_at->format('M d, Y h:i A') }}</strong>
+                        <strong class="text-slate-800">{{ $order->created_at->format('d M Y, g:i A') }}</strong>
                     </div>
                     <div>
                         <span class="text-slate-400 block">Payment</span>
@@ -180,7 +180,7 @@
                                         </div>
                                         <p class="text-xs text-slate-600">
                                             @if ($subOrder->fulfillmentStatus?->slug === 'delivered')
-                                                Received on {{ $subOrder->handover_confirmed_at?->format('M d, Y h:i A') ?? 'delivery' }}.
+                                                Received on {{ $subOrder->handover_confirmed_at?->format('d M Y, g:i A') ?? 'delivery' }}.
                                             @else
                                                 Check your parcel first, then give this 6-digit code to the delivery person. Don't share it before you have the parcel.
                                             @endif
@@ -189,9 +189,7 @@
                                     @if ($canSeeHandoverCode && $subOrder->handover_code && $subOrder->fulfillmentStatus?->slug !== 'delivered')
                                         <div class="text-center sm:text-right shrink-0">
                                             <span class="text-[10px] uppercase font-bold text-slate-500 block">Your delivery code</span>
-                                            <div class="inline-block px-4 py-1.5 rounded-lg bg-amber-200/80 border border-amber-400 font-mono font-black text-xl text-amber-950 tracking-widest shadow-inner">
-                                                {{ $subOrder->handover_code }}
-                                            </div>
+                                            <div class="inline-block px-4 py-1.5 rounded-lg bg-amber-200/80 border border-amber-400 font-mono font-black text-xl text-amber-950 tracking-widest shadow-inner select-all">{{ $subOrder->handover_code }}</div>
                                         </div>
                                     @endif
                                 </div>
@@ -244,6 +242,12 @@
                                     >
                                         Cancel parcel
                                     </button>
+                                @elseif ($subOrder->fulfillmentStatus?->slug === 'processing')
+                                    <span class="text-[11px] text-gray-500">Packed by the seller. To cancel, contact the seller or support.</span>
+                                @elseif ($subOrder->fulfillmentStatus?->slug === 'cancelled' && filled($subOrder->cancel_reason))
+                                    <span class="text-[11px] text-rose-700">
+                                        Cancelled{{ match ($subOrder->cancelled_by) { 'seller' => ' by the seller', 'admin' => ' by B2Bhaat', default => '' } }}: {{ $subOrder->cancel_reason }}
+                                    </span>
                                 @endif
                             </div>
                         </div>
@@ -258,7 +262,7 @@
                                         <li class="mb-4 ml-4">
                                             <div class="absolute w-2.5 h-2.5 bg-indigo-600 rounded-full mt-1 -left-1.25 border border-white"></div>
                                             <time class="mb-1 text-[11px] font-normal leading-none text-slate-400">
-                                                {{ $log->logged_at ? $log->logged_at->format('M d, Y h:i A') : $log->created_at->format('M d, Y h:i A') }}
+                                                {{ $log->logged_at ? $log->logged_at->format('d M Y, g:i A') : $log->created_at->format('d M Y, g:i A') }}
                                                 @if ($log->hub_location) • Hub: {{ $log->hub_location }} @endif
                                             </time>
                                             <h6 class="text-xs font-bold text-slate-900">{{ $log->title }}</h6>
@@ -316,6 +320,33 @@
                         </select>
                     </div>
 
+                    @if (count($returnableItems) > 0)
+                        <fieldset>
+                            <legend class="block font-semibold text-slate-700 mb-1">Which items are you sending back? *</legend>
+                            <p class="text-[11px] text-slate-500 mb-2">Set an item to 0 to keep it. The delivery charge is refunded only when the whole parcel comes back.</p>
+                            <ul class="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                                @foreach ($returnableItems as $itemId => $line)
+                                    <li wire:key="return-item-{{ $itemId }}" class="flex items-center justify-between gap-3 p-3">
+                                        <label for="return-qty-{{ $itemId }}" class="min-w-0">
+                                            <span class="block font-semibold text-slate-900 truncate">{{ $line['name'] }}</span>
+                                            <span class="text-[11px] text-slate-500">{{ $line['remaining'] }} with you · {{ \App\Services\Formatting\Money::taka($line['unit_price']) }} each</span>
+                                        </label>
+                                        <input
+                                            id="return-qty-{{ $itemId }}"
+                                            type="number"
+                                            min="0"
+                                            max="{{ $line['remaining'] }}"
+                                            inputmode="numeric"
+                                            wire:model="returnQuantities.{{ $itemId }}"
+                                            class="w-20 py-2 px-2 border border-slate-300 rounded-lg text-right focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                    </li>
+                                @endforeach
+                            </ul>
+                            @error('returnQuantities.*') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
+                        </fieldset>
+                    @endif
+
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">What would you like? *</label>
                         <div class="grid grid-cols-2 gap-3">
@@ -347,6 +378,10 @@
                         ></textarea>
                         @error('returnDescription') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
                     </div>
+
+                    @if ($actionError)
+                        <p role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-rose-700">{{ $actionError }}</p>
+                    @endif
 
                     <div class="pt-2 flex items-center justify-end gap-3">
                         <button 

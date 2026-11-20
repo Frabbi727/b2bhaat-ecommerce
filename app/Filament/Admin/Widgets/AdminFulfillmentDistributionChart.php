@@ -9,11 +9,14 @@ use Filament\Widgets\ChartWidget;
 
 class AdminFulfillmentDistributionChart extends ChartWidget
 {
+    /** PERF-2: refresh once a minute rather than Filament's default of every 5 seconds. */
+    protected ?string $pollingInterval = '60s';
+
     protected static ?int $sort = 3;
 
-    protected ?string $heading = 'Consignment Fulfillment Distribution';
+    protected ?string $heading = 'Packages by status';
 
-    protected ?string $description = 'Real-time multi-vendor package dispatch statuses.';
+    protected ?string $description = 'Where every seller package is right now.';
 
     protected int|string|array $columnSpan = [
         'md' => 1,

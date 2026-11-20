@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Delivery Challan - {{ $subOrder->sub_order_number }}</title>
+    <x-brand.favicons />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         @page {
@@ -31,7 +32,7 @@
     <!-- Non-print Action Bar -->
     <div class="no-print w-full max-w-4xl mb-4 flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-300 shadow-sm">
         <a href="/seller/sub-orders" class="text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1">
-            &larr; Back to Sub-Orders
+            &larr; Back to orders
         </a>
         <div class="flex items-center gap-3">
             <a 
@@ -59,23 +60,27 @@
             <div class="flex justify-between items-start gap-4">
                 <div class="space-y-1 max-w-lg">
                     <div class="inline-block px-2.5 py-0.5 rounded text-[10px] font-black tracking-wider uppercase bg-emerald-100 text-emerald-800 mb-1">
-                        Factory Direct Consignment
+                        Factory direct delivery
                     </div>
                     <h1 class="text-2xl font-black tracking-tight text-slate-900">
                         {{ $subOrder->seller?->sellerProfile?->store_name ?? 'Factory Shipper' }}
                     </h1>
                     <div class="text-[11px] text-slate-600 space-y-0.5">
-                        <div>Trade License: <strong class="font-mono text-slate-900">{{ $subOrder->seller?->sellerProfile?->trade_license_number ?? 'Verified' }}</strong> | TIN: <strong class="font-mono text-slate-900">{{ $subOrder->seller?->sellerProfile?->tax_id_number ?? 'Verified' }}</strong></div>
-                        <div>Authorized Contact: {{ $subOrder->seller?->name }} ({{ $subOrder->seller?->phone ?? '+8801700000000' }})</div>
+                        <div>Trade License: <strong class="font-mono text-slate-900">{{ $subOrder->seller?->sellerProfile?->trade_license_number ?: '—' }}</strong> | TIN: <strong class="font-mono text-slate-900">{{ $subOrder->seller?->sellerProfile?->tax_id_number ?: '—' }}</strong></div>
+                        @if ($subOrder->seller?->sellerProfile?->business_address)
+                            <div>{{ $subOrder->seller->sellerProfile->business_address }}</div>
+                        @endif
+                        <div>Authorized Contact: {{ $subOrder->seller?->name }}@if ($subOrder->seller?->sellerProfile?->business_phone ?: $subOrder->seller?->phone) ({{ $subOrder->seller?->sellerProfile?->business_phone ?: $subOrder->seller?->phone }})@endif</div>
                     </div>
                 </div>
 
                 <div class="text-right space-y-1">
+                    <x-brand.logo :full="true" width="86" height="48" class="h-12 w-auto object-contain ml-auto mb-1" />
                     <div class="text-lg font-black uppercase tracking-tight text-slate-900 bg-slate-100 px-3 py-1 rounded-lg border border-slate-300 inline-block">
                         DELIVERY CHALLAN
                     </div>
                     <div class="font-mono text-[11px] font-bold text-slate-700">Challan #: CH-{{ $subOrder->sub_order_number }}</div>
-                    <div class="text-[11px] text-slate-500">Date: {{ now()->format('d M Y, h:i A') }}</div>
+                    <div class="text-[11px] text-slate-500">Date: {{ now()->format('d M Y, g:i A') }}</div>
                 </div>
             </div>
         </div>
@@ -91,7 +96,7 @@
                 <strong class="text-indigo-600">{{ $subOrder->courier_name ?? 'Pending Handover' }}</strong>
             </div>
             <div class="text-right">
-                <span class="text-slate-500 block text-[10px] uppercase font-sans">Consignment / Tracking:</span>
+                <span class="text-slate-500 block text-[10px] uppercase font-sans">Tracking:</span>
                 <strong class="text-emerald-700 text-sm">
                     @if ($subOrder->tracking_url)
                         <a href="{{ $subOrder->tracking_url }}" target="_blank" rel="noopener noreferrer" class="hover:underline text-emerald-700 inline-flex items-center gap-1">
@@ -121,7 +126,7 @@
                 <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Delivery Instructions & Terms</span>
                 <div>
                     <span class="inline-block px-2.5 py-1 rounded text-xs font-black uppercase {{ $isPrepaid ? 'bg-indigo-100 text-indigo-900' : 'bg-amber-100 text-amber-900' }}">
-                        {{ $isPrepaid ? 'PREPAID ESCROW (COLLECT ৳0.00)' : 'CASH ON DELIVERY (COD)' }}
+                        {{ $isPrepaid ? 'PREPAID (COLLECT ৳0.00)' : 'CASH ON DELIVERY (COD)' }}
                     </span>
                 </div>
                 @if (! $isPrepaid)
@@ -130,7 +135,7 @@
                         <div class="text-xl font-black text-rose-700 font-mono">৳{{ number_format($codAmount, 2) }}</div>
                     </div>
                 @else
-                    <p class="text-[10px] text-slate-500">Pre-settled through B2B Haat escrow gateway. No cash collection required from buyer.</p>
+                    <p class="text-[10px] text-slate-500">Paid online through B2B Haat. Do not collect cash from the buyer.</p>
                 @endif
             </div>
         </div>
@@ -139,7 +144,7 @@
         <div class="space-y-2">
             <div class="flex items-center justify-between text-xs font-bold text-slate-800 uppercase tracking-wider">
                 <span>Dispatched Inventory Manifest</span>
-                <span class="font-normal normal-case text-slate-500">{{ $subOrder->items->count() }} item(s) manifested</span>
+                <span class="font-normal normal-case text-slate-500">{{ $subOrder->items->count() }} item(s) in this parcel</span>
             </div>
 
             <table class="w-full text-left border-collapse border border-slate-300">
@@ -179,7 +184,7 @@
                 </tbody>
                 <tfoot>
                     <tr class="bg-slate-50 font-bold border-t-2 border-slate-300">
-                        <td colspan="4" class="p-2 text-right text-slate-600 uppercase text-[10px]">Total Consignment Lot:</td>
+                        <td colspan="4" class="p-2 text-right text-slate-600 uppercase text-[10px]">Total:</td>
                         <td class="p-2 text-right font-black font-mono text-indigo-700 border-r border-slate-200">{{ $totalManifestUnits }} pcs</td>
                         <td class="p-2 text-right text-slate-600 uppercase text-[10px]">Package Total:</td>
                         <td class="p-2 text-right font-black font-mono text-emerald-700">৳{{ number_format($subOrder->subtotal, 2) }}</td>

@@ -7,6 +7,9 @@ use App\Models\Role;
 use App\Models\SellerProfile;
 use App\Models\SellerWallet;
 use App\Models\User;
+use App\Services\Settings\StoreConfigurationService;
+use Illuminate\Auth\Events\Failed;
+use Illuminate\Auth\Events\Login;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -119,7 +122,7 @@ class AuthController extends Controller
             'store_slug' => Str::slug($validated['store_name']).'-'.Str::random(4),
             'trade_license_number' => $validated['trade_license_number'] ?? null,
             'tax_id_number' => $validated['tax_id_number'] ?? null,
-            'commission_rate_percentage' => 10.00,
+            'commission_rate_percentage' => app(StoreConfigurationService::class)->getDefaultCommissionRate(),
             'is_approved' => false, // Requires admin review
         ]);
 
@@ -154,10 +157,14 @@ class AuthController extends Controller
         $user = User::with('role', 'sellerProfile')->where('email', $validated['email'])->first();
 
         if (! $user || ! $user->is_active || ! Hash::check($validated['password'], $user->password)) {
+            event(new Failed('sanctum', $user, ['email' => $validated['email'], 'password' => '***']));
+
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials do not match our records.'],
             ]);
         }
+
+        event(new Login('sanctum', $user, false));
 
         $token = $user->createToken('auth-token')->plainTextToken;
 

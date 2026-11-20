@@ -8,6 +8,8 @@ use App\Http\Controllers\Controller;
 use App\Models\RfqRequest;
 use App\Models\SalesChannel;
 use App\Services\Cart\CartSessionService;
+use App\Services\Rfq\RfqNotificationService;
+use Exception;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -73,29 +75,109 @@ class QuotationController extends Controller
             abort(403, 'Only the prospective buyer can accept this custom quotation.');
         }
 
+        if ($rfq->isExpired()) {
+            return redirect()->back()->with('error', 'This quotation has expired and can no longer be accepted.');
+        }
+
         if (empty($rfq->seller_quoted_price)) {
             return redirect()->back()->with('error', 'This RFQ has not yet received an official quotation from the seller.');
         }
 
-        // Only an open quote can be accepted, and only once (final review I6)
-        $accepted = RfqRequest::whereKey($rfq->id)->where('status', 'quoted')->update(['status' => 'accepted']);
-        if ($accepted === 0) {
+        if ($rfq->status !== 'quoted') {
             return redirect()->back()->with('error', 'This quotation is no longer open for acceptance.');
         }
 
-        // 2. Add item to cart with locked wholesale quotation unit price
+        // WA-PRC-03: on a product with options the quote must say which options to ship
+        $optionQuantities = $rfq->optionQuantities();
+        if ($rfq->product?->has_variations && $optionQuantities === []) {
+            return redirect()->back()->with('error', "This quotation doesn't say which options (colour, size…) you need, so it can't be ordered. Please request a new quotation and enter a quantity for each option.");
+        }
+
+        // WA-PRC-04: put the quote in the cart first, so a failed add (product hidden, merchant on vacation) leaves
+        // the quote open instead of using it up with nothing in the cart
         $cart = app(CartSessionService::class);
-        $cart->addItem(
-            productId: $rfq->product_id,
-            variationId: null,
-            channelSlug: SalesChannel::WHOLESALE,
-            quantity: (int) $rfq->target_quantity,
-            overrideUnitPrice: (float) $rfq->seller_quoted_price
-        );
+        /** @var list<array{variation_id: ?int, quantity: int}> $lines */
+        $lines = $optionQuantities !== []
+            ? array_map(fn (int $variationId, int $quantity): array => ['variation_id' => $variationId, 'quantity' => $quantity], array_keys($optionQuantities), $optionQuantities)
+            : [['variation_id' => null, 'quantity' => (int) $rfq->target_quantity]];
+        try {
+            foreach ($lines as $line) {
+                $cart->addItem(
+                    productId: $rfq->product_id,
+                    variationId: $line['variation_id'],
+                    channelSlug: SalesChannel::WHOLESALE,
+                    quantity: $line['quantity'],
+                    overrideUnitPrice: (float) $rfq->seller_quoted_price,
+                    rfqId: $rfq->id,
+                );
+            }
+        } catch (Exception $e) {
+            // All options or none: take back any line of this quote already added
+            $cart->removeQuotedLine($rfq->id);
+
+            return redirect()->back()->with('error', "This quotation can't be added to your cart: {$e->getMessage()}");
+        }
+
+        // Only an open quote can be accepted, and only once (final review I6); a lost race takes the line back out
+        $accepted = RfqRequest::whereKey($rfq->id)->where('status', 'quoted')->update(['status' => 'accepted']);
+        if ($accepted === 0) {
+            $cart->removeQuotedLine($rfq->id);
+
+            return redirect()->back()->with('error', 'This quotation is no longer open for acceptance.');
+        }
+
+        $rfq->refresh();
+        // The guarded update above skips model events, so record the acceptance explicitly (AUD-4)
+        $rfq->recordAuditActivity('updated', ['status' => 'quoted'], ['status' => 'accepted']);
+        app(RfqNotificationService::class)->notifySellerOfAcceptedQuote($rfq);
 
         return redirect()->route('checkout.index')->with(
             'success',
             "Quotation #QT-RFQ-{$rfq->id} accepted! Added {$rfq->target_quantity}x units at the agreed factory rate of ৳".number_format((float) $rfq->seller_quoted_price, 2).'.'
+        );
+    }
+
+    /**
+     * Decline an open commercial quotation.
+     */
+    public function decline(Request $request, int $id): RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            abort(401, 'Please log in to decline commercial quotations.');
+        }
+
+        $rfq = RfqRequest::findOrFail($id);
+
+        $isBuyer = $rfq->buyer_id === $user->id
+            || ($rfq->buyer_email && strtolower($rfq->buyer_email) === strtolower((string) $user->email));
+
+        if (! $isBuyer && ! $user->isSuperAdmin()) {
+            abort(403, 'Unauthorized');
+        }
+
+        $request->validate([
+            'rejection_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $rejectedBy = ($user->isSuperAdmin() && ! $isBuyer) ? 'admin' : 'buyer';
+
+        $affected = RfqRequest::whereKey($rfq->id)
+            ->whereIn('status', ['pending', 'quoted'])
+            ->update([
+                'status' => 'rejected',
+                'rejected_by' => $rejectedBy,
+                'rejection_reason' => $request->input('rejection_reason'),
+            ]);
+
+        if ($affected === 0) {
+            return redirect()->back()->with('error', 'This quotation can no longer be declined.');
+        }
+
+        return redirect()->back()->with(
+            'success',
+            'Quotation #QT-RFQ-'.$rfq->id.' has been declined.'
         );
     }
 }

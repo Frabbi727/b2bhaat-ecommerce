@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>403 - Access Denied | B2B Haat</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <x-brand.favicons />
     @vite(['resources/css/app.css'])
 </head>
 <body class="min-h-full flex flex-col justify-between text-slate-800 antialiased font-sans">
@@ -12,9 +12,7 @@
     <header class="bg-white border-b border-slate-200 py-4 px-6 shadow-xs">
         <div class="max-w-7xl mx-auto flex items-center justify-between">
             <a href="/" class="flex items-center gap-2.5 text-xl font-black tracking-tight text-slate-900">
-                <span class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-700 to-indigo-500 text-white flex items-center justify-center font-black text-base shadow-sm">
-                    B2B
-                </span>
+                <img src="{{ asset('images/brand/logo-mark.png') }}" alt="B2B Haat logo" width="40" height="40" class="w-10 h-10 object-contain shrink-0">
                 <span>B2B Haat</span>
             </a>
             <a href="/" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition">

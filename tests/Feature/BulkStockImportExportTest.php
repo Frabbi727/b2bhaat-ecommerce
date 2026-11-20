@@ -29,6 +29,37 @@ class BulkStockImportExportTest extends TestCase
         $this->seed(DemoCatalogSeeder::class);
     }
 
+    public function test_sheet_listing_products_that_were_never_added_reports_no_change_instead_of_success(): void
+    {
+        $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
+        $this->actingAs($seller);
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+
+        $variation = Product::where('seller_id', $seller->id)->firstOrFail()->variations()->firstOrFail();
+        $csv = "variation_id,sku,new_stock_quantity\n"
+            ."{$variation->id},{$variation->sku},{$variation->stock_quantity}\n"
+            ."999999,PON-NUDE-ALM-SHO,450\n";
+
+        Livewire::test(ListProducts::class)
+            ->callAction('bulk_update_stock', data: ['csv_text' => $csv])
+            ->assertNotified(ListProducts::importResultNotification([
+                'total_rows' => 2,
+                'updated' => 0,
+                'unchanged' => 1,
+                'errors' => ["Row 3: 'PON-NUDE-ALM-SHO' not found in your catalog."],
+            ]));
+
+        $this->assertDatabaseMissing('product_variations', ['sku' => 'PON-NUDE-ALM-SHO']);
+    }
+
+    public function test_import_result_messages_match_what_happened(): void
+    {
+        $this->assertSame('No stock was changed', ListProducts::importResultNotification(['total_rows' => 3, 'updated' => 0, 'unchanged' => 0, 'errors' => ['a', 'b', 'c']])->getTitle());
+        $this->assertSame('Stock partly updated', ListProducts::importResultNotification(['total_rows' => 3, 'updated' => 2, 'unchanged' => 0, 'errors' => ['a']])->getTitle());
+        $this->assertSame('Nothing to update', ListProducts::importResultNotification(['total_rows' => 2, 'updated' => 0, 'unchanged' => 2, 'errors' => []])->getTitle());
+        $this->assertSame('Stock updated for 2 variation(s)', ListProducts::importResultNotification(['total_rows' => 2, 'updated' => 2, 'unchanged' => 0, 'errors' => []])->getTitle());
+    }
+
     public function test_seller_can_export_csv_stock_sheet(): void
     {
         $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
@@ -94,6 +125,46 @@ class BulkStockImportExportTest extends TestCase
 
         $this->assertSame(450, $v1->fresh()->stock_quantity);
         $this->assertSame(600, $v2->fresh()->stock_quantity);
+    }
+
+    /**
+     * SEC-2: pasted text that happens to be a file path must never make the server read that file.
+     */
+    public function test_pasted_file_path_is_treated_as_text_and_the_file_is_not_read(): void
+    {
+        $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
+        $variation = $seller->products()->firstOrFail()->variations()->firstOrFail();
+        $originalStock = $variation->stock_quantity;
+
+        $path = tempnam(sys_get_temp_dir(), 'stock');
+        file_put_contents($path, "variation_id,sku,new_stock_quantity\n{$variation->id},{$variation->sku},999\n");
+
+        $rejection = null;
+        try {
+            app(StockBulkUpdateService::class)->importCsvForSeller($seller, $path);
+        } catch (\Exception $exception) {
+            $rejection = $exception->getMessage();
+        } finally {
+            unlink($path);
+        }
+
+        $this->assertStringContainsString('Missing required identifier column', (string) $rejection);
+        $this->assertSame($originalStock, $variation->fresh()->stock_quantity);
+    }
+
+    public function test_uploaded_sheet_on_the_stock_page_still_updates_stock(): void
+    {
+        $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
+        $this->actingAs($seller);
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+        $variation = $seller->products()->firstOrFail()->variations()->firstOrFail();
+
+        $file = UploadedFile::fake()->createWithContent('stock.csv', "variation_id,sku,new_stock_quantity\n{$variation->id},{$variation->sku},321\n");
+
+        Livewire::test(ListProducts::class)
+            ->callAction('bulk_update_stock', data: ['csv_file' => $file]);
+
+        $this->assertSame(321, $variation->fresh()->stock_quantity);
     }
 
     public function test_bulk_stock_service_enforces_multi_tenant_isolation(): void

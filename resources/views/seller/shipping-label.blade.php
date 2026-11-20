@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shipping Label - {{ $subOrder->sub_order_number }}</title>
+    <x-brand.favicons />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         @page {
@@ -33,7 +34,7 @@
     <!-- Non-print Action Bar -->
     <div class="no-print w-full max-w-md mb-4 flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-300 shadow-sm">
         <a href="/seller/sub-orders" class="text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1">
-            &larr; Back to Sub-Orders
+            &larr; Back to orders
         </a>
         <button 
             onclick="window.print()" 
@@ -82,7 +83,7 @@
         <!-- Section 2: Consignment References -->
         <div class="grid grid-cols-2 border-b-2 border-slate-900 py-1.5 text-[10px]">
             <div>
-                <span class="text-slate-500 block">Package Sub-Order:</span>
+                <span class="text-slate-500 block">Package:</span>
                 <strong class="font-mono text-xs">{{ $subOrder->sub_order_number }}</strong>
             </div>
             <div class="text-right">
@@ -131,10 +132,13 @@
                 {{ $subOrder->seller?->sellerProfile?->store_name ?? 'Factory Merchant' }}
             </div>
             <div class="text-slate-600 font-mono">
-                Trade Lic: {{ $subOrder->seller?->sellerProfile?->trade_license_number ?? 'Verified Manufacturer' }}
+                Trade Lic: {{ $subOrder->seller?->sellerProfile?->trade_license_number ?: '—' }}
             </div>
             <div class="text-slate-600">
-                Supplier Contact: {{ $subOrder->seller?->phone ?? '+8801700000002' }}
+                @if ($subOrder->seller?->sellerProfile?->business_address)
+                    <div>{{ $subOrder->seller->sellerProfile->business_address }}</div>
+                @endif
+                Supplier Contact: {{ $subOrder->seller?->sellerProfile?->business_phone ?: ($subOrder->seller?->phone ?: '—') }}
             </div>
         </div>
 
@@ -159,7 +163,7 @@
 
         <!-- Section 7: Footer Routing Footer -->
         <div class="border-t-2 border-slate-900 pt-1 flex justify-between items-center text-[8px] font-mono text-slate-500">
-            <span>B2B HAAT ESCROW LOGISTICS</span>
+            <span class="flex items-center gap-1"><x-brand.logo alt="" width="12" height="12" class="w-3 h-3 object-contain" />{{ strtoupper(app(\App\Services\Settings\StoreConfigurationService::class)->getStoreIdentity()['name']) }}</span>
             <span>GEN: {{ now()->format('Y-m-d H:i') }}</span>
         </div>
     </div>

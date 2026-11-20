@@ -2,10 +2,12 @@
 
 namespace App\Livewire\Storefront;
 
+use App\Events\Sellers\SellerRegisteredEvent;
 use App\Models\Role;
 use App\Models\SellerProfile;
 use App\Models\SellerWallet;
 use App\Models\User;
+use App\Services\Settings\StoreConfigurationService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
@@ -69,13 +71,13 @@ class BecomeSeller extends Component
                 'is_active' => true,
             ]);
 
-            SellerProfile::create([
+            $profile = SellerProfile::create([
                 'user_id' => $user->id,
                 'store_name' => $this->storeName,
                 'store_slug' => Str::slug($this->storeName).'-'.Str::random(4),
                 'trade_license_number' => $this->tradeLicense ?: null,
                 'tax_id_number' => $this->tinNumber ?: null,
-                'commission_rate_percentage' => 10.00,
+                'commission_rate_percentage' => app(StoreConfigurationService::class)->getDefaultCommissionRate(),
                 'is_approved' => false, // Under admin review
             ]);
 
@@ -84,6 +86,12 @@ class BecomeSeller extends Component
                 'available_balance' => 0.00,
                 'escrow_held_balance' => 0.00,
             ]);
+
+            try {
+                event(new SellerRegisteredEvent($profile));
+            } catch (\Throwable $e) {
+                // Non-blocking log
+            }
 
             $this->isSubmitted = true;
         } catch (\Exception $e) {

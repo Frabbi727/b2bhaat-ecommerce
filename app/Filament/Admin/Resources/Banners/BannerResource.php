@@ -21,9 +21,15 @@ class BannerResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedPhoto;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Promotions & Marketing';
+    protected static UnitEnum|string|null $navigationGroup = 'Marketing';
 
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 3;
+
+    protected static ?string $modelLabel = 'banner';
+
+    protected static ?string $pluralModelLabel = 'banners';
+
+    protected static ?string $recordTitleAttribute = 'title';
 
     public static function form(Schema $schema): Schema
     {

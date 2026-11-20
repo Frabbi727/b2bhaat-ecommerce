@@ -9,6 +9,7 @@ use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\PromotionsAndStoreSettingsSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class ProductionUiUxSecurityTest extends TestCase
@@ -67,13 +68,54 @@ class ProductionUiUxSecurityTest extends TestCase
         $this->assertStringContainsString('Allow: /', $content);
     }
 
-    public function test_favicon_svg_exists_and_is_valid_vector(): void
+    public function test_brand_icons_and_logos_exist(): void
     {
-        $faviconPath = public_path('favicon.svg');
-        $this->assertFileExists($faviconPath);
+        foreach (['favicon.ico', 'favicon-16x16.png', 'favicon-32x32.png', 'apple-touch-icon.png', 'images/brand/logo.png', 'images/brand/logo-mark.png', 'images/brand/og-image.png'] as $asset) {
+            $this->assertFileExists(public_path($asset));
+            $this->assertGreaterThan(0, filesize(public_path($asset)), "{$asset} is empty.");
+        }
 
-        $svgContent = file_get_contents($faviconPath);
-        $this->assertStringContainsString('<svg', $svgContent);
-        $this->assertStringContainsString('B2B', $svgContent);
+        /** @var array{icons: list<array{src: string}>} $manifest */
+        $manifest = json_decode((string) file_get_contents(public_path('site.webmanifest')), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertNotEmpty($manifest['icons']);
+
+        foreach ($manifest['icons'] as $icon) {
+            $this->assertFileExists(public_path(ltrim($icon['src'], '/')));
+        }
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function brandedPageProvider(): array
+    {
+        return [
+            'storefront home' => ['/'],
+            'customer login' => ['/login'],
+            'order tracking' => ['/track'],
+            'flash sales' => ['/flash-sales'],
+            'become a seller' => ['/become-a-seller'],
+            'admin login' => ['/admin/login'],
+            'seller login' => ['/seller/login'],
+        ];
+    }
+
+    #[DataProvider('brandedPageProvider')]
+    public function test_page_shows_the_brand_favicon_and_logo(string $path): void
+    {
+        $this->get($path)
+            ->assertOk()
+            ->assertSee('favicon-32x32.png', false)
+            ->assertSee('images/brand/logo-mark.png', false);
+    }
+
+    public function test_error_page_links_the_brand_favicons(): void
+    {
+        $this->get('/this-page-does-not-exist-'.uniqid())
+            ->assertNotFound()
+            ->assertSee('favicon-32x32.png', false)
+            ->assertSee('apple-touch-icon.png', false)
+            ->assertSee('images/brand/logo-mark.png', false);
     }
 }

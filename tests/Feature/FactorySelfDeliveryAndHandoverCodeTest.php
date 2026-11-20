@@ -3,17 +3,25 @@
 namespace Tests\Feature;
 
 use App\Filament\Seller\Resources\SubOrders\Pages\ListSubOrders;
+use App\Filament\Seller\Resources\SubOrders\Pages\ViewSubOrder;
+use App\Jobs\SendSmsJob;
 use App\Livewire\Storefront\CustomerOrders;
 use App\Livewire\Storefront\OrderTracking;
 use App\Models\FulfillmentStatus;
+use App\Models\PaymentMethod;
 use App\Models\SubOrder;
 use App\Models\User;
 use App\Services\Logistics\SelfDeliveryService;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use Filament\Facades\Filament;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class FactorySelfDeliveryAndHandoverCodeTest extends TestCase
@@ -157,5 +165,122 @@ class FactorySelfDeliveryAndHandoverCodeTest extends TestCase
 
         $this->subOrder->refresh();
         $this->assertEquals('delivered', $this->subOrder->fulfillmentStatus->slug);
+    }
+
+    /**
+     * @return array<string, array{0: callable(string): string}>
+     */
+    public static function codeAsSharedByTheBuyer(): array
+    {
+        $banglaDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+
+        return [
+            'copied from the page with spaces and line breaks' => [fn (string $code): string => "\n            {$code}\n        "],
+            'read out in two groups' => [fn (string $code): string => substr($code, 0, 3).' '.substr($code, 3)],
+            'typed on a Bangla keyboard' => [fn (string $code): string => strtr($code, array_combine(range(0, 9), $banglaDigits))],
+        ];
+    }
+
+    /**
+     * @param  callable(string): string  $asShared
+     */
+    #[DataProvider('codeAsSharedByTheBuyer')]
+    public function test_seller_can_confirm_the_code_however_the_buyer_shared_it(callable $asShared): void
+    {
+        $code = app(SelfDeliveryService::class)->dispatchSelfDelivery($this->subOrder);
+
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+        $this->actingAs($this->seller);
+
+        Livewire::test(ListSubOrders::class)
+            ->callTableAction('verifyHandoverCode', $this->subOrder, ['handover_code' => $asShared($code)])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame('delivered', $this->subOrder->fresh()->fulfillmentStatus->slug);
+    }
+
+    public function test_dispatch_texts_the_buyer_their_handover_code(): void
+    {
+        Queue::fake();
+
+        $code = app(SelfDeliveryService::class)->dispatchSelfDelivery($this->subOrder);
+        $cashToPay = $this->subOrder->fresh()->codCollectAmount();
+
+        Queue::assertPushed(SendSmsJob::class, fn (SendSmsJob $job): bool => $job->purpose === 'self_delivery_handover_code'
+            && str_contains($job->message, $code)
+            && ($cashToPay <= 0 || str_contains($job->message, 'BDT '.number_format($cashToPay, 2))));
+    }
+
+    public function test_seller_can_resend_the_code_a_limited_number_of_times(): void
+    {
+        $service = app(SelfDeliveryService::class);
+        $service->dispatchSelfDelivery($this->subOrder);
+        RateLimiter::clear('handover-code-resend:'.$this->subOrder->id);
+        Queue::fake();
+
+        for ($i = 0; $i < SelfDeliveryService::MAX_CODE_RESENDS; $i++) {
+            $service->resendHandoverCode($this->subOrder->fresh());
+        }
+        Queue::assertPushed(SendSmsJob::class, SelfDeliveryService::MAX_CODE_RESENDS);
+
+        $this->expectExceptionMessage('already sent');
+        $service->resendHandoverCode($this->subOrder->fresh());
+    }
+
+    public function test_failed_settlement_leaves_the_parcel_undelivered_and_names_the_missing_account(): void
+    {
+        $service = app(SelfDeliveryService::class);
+        $code = $service->dispatchSelfDelivery($this->subOrder);
+        $this->subOrder->order->update(['payment_method_id' => PaymentMethod::where('slug', 'cod')->value('id')]);
+        $this->subOrder->update(['commission_amount' => 50]);
+        DB::table('accounting_accounts')->where('system_slug', 'commission_revenue')->update(['system_slug' => null]);
+
+        try {
+            $service->verifyAndConfirmHandover($this->subOrder->fresh(), $code);
+            $this->fail('Confirming should fail while a ledger account is missing.');
+        } catch (ModelNotFoundException $exception) {
+            $this->assertStringContainsString('"commission_revenue" is missing', $exception->getMessage());
+        }
+
+        $parcel = $this->subOrder->fresh();
+        $this->assertNotSame('delivered', $parcel->fulfillmentStatus->slug);
+        $this->assertNull($parcel->handover_confirmed_at);
+    }
+
+    public function test_migration_adds_the_chart_to_a_site_that_has_orders_but_no_chart(): void
+    {
+        DB::table('accounting_journal_lines')->delete();
+        DB::table('accounting_journal_entries')->delete();
+        DB::table('accounting_accounts')->delete();
+
+        (require database_path('migrations/2026_11_11_062735_seed_missing_chart_of_accounts.php'))->up();
+
+        $this->assertTrue(DB::table('accounting_accounts')->where('system_slug', 'commission_revenue')->exists());
+        $this->assertTrue(DB::table('accounting_accounts')->where('system_slug', 'deferred_commission_revenue')->exists());
+    }
+
+    public function test_seller_can_deliver_from_the_order_page(): void
+    {
+        $this->subOrder->update([
+            'fulfillment_status_id' => FulfillmentStatus::where('slug', 'unfulfilled')->value('id'),
+            'is_self_delivered' => false,
+        ]);
+
+        Filament::setCurrentPanel(Filament::getPanel('seller'));
+        $this->actingAs($this->seller);
+
+        Livewire::test(ViewSubOrder::class, ['record' => $this->subOrder->getRouteKey()])
+            ->assertActionVisible('dispatchFactoryFleet')
+            ->callAction('dispatchFactoryFleet', [
+                'hub_location' => 'Main Warehouse',
+                'driver_contact' => '+8801811223344',
+                'dispatch_note' => 'Direct dispatch.',
+            ])
+            ->assertHasNoActionErrors()
+            ->assertActionVisible('verifyHandoverCode')
+            ->callAction('verifyHandoverCode', ['handover_code' => $this->subOrder->fresh()->handover_code])
+            ->assertHasNoActionErrors();
+
+        $this->assertSame('delivered', $this->subOrder->fresh()->fulfillmentStatus->slug);
     }
 }

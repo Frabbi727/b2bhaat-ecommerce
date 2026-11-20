@@ -10,10 +10,15 @@ class ListBanners extends ListRecords
 {
     protected static string $resource = BannerResource::class;
 
+    public function getSubheading(): ?string
+    {
+        return 'Pictures and messages on the shop home page. Turn a banner off to take it down without deleting it.';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make(),
+            CreateAction::make()->label('New banner'),
         ];
     }
 }

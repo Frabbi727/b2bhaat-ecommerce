@@ -64,7 +64,7 @@ class FilamentSmsManagementTest extends TestCase
 
         Livewire::test(SmsSettings::class)
             ->call('checkLiveBalance')
-            ->assertSet('liveBalance', 'BDT 420.75');
+            ->assertSet('liveBalance', '৳420.75');
     }
 
     public function test_retry_sms_action_re_dispatches_failed_message(): void

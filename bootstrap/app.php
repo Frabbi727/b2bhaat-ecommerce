@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AuditRequestContextMiddleware;
 use App\Http\Middleware\SecurityHeadersMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -16,6 +17,11 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
             SecurityHeadersMiddleware::class,
+            AuditRequestContextMiddleware::class,
+        ]);
+
+        $middleware->api(append: [
+            AuditRequestContextMiddleware::class,
         ]);
 
         $middleware->redirectGuestsTo(function (Request $request): string {

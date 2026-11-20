@@ -5,6 +5,7 @@ namespace App\Livewire\Storefront;
 use App\Models\Product;
 use App\Models\SalesChannel;
 use App\Services\Cart\CartSessionService;
+use App\Services\Promotions\FlashSalePricing;
 use Exception;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
@@ -30,6 +31,7 @@ class CustomerWishlist extends Component
         $wishlist->delete();
 
         $this->feedbackMessage = 'Item removed from your wishlist.';
+        $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: false);
     }
 
     public function quickAddToCart(int $productId, CartSessionService $cart): void
@@ -53,8 +55,10 @@ class CustomerWishlist extends Component
 
             $this->dispatch('cartUpdated');
             $this->feedbackMessage = 'Product added to your cart successfully!';
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: true);
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
         }
     }
 
@@ -63,6 +67,7 @@ class CustomerWishlist extends Component
         $wishlists = Auth::check()
             ? Auth::user()->wishlists()
                 ->with([
+                    'product' => fn ($product) => $product->sellable(),
                     'product.seller.sellerProfile',
                     'product.images',
                     'product.category',
@@ -73,6 +78,8 @@ class CustomerWishlist extends Component
                 ->latest()
                 ->get()
             : collect();
+
+        app(FlashSalePricing::class)->primeFor($wishlists->pluck('product')->filter());
 
         return view('livewire.storefront.customer-wishlist', [
             'wishlists' => $wishlists,

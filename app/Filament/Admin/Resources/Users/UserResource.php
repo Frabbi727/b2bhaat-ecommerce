@@ -21,7 +21,11 @@ class UserResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUsers;
 
-    protected static UnitEnum|string|null $navigationGroup = 'User & Sourcing Management';
+    protected static UnitEnum|string|null $navigationGroup = 'Sellers & Customers';
+
+    protected static ?int $navigationSort = 3;
+
+    protected static ?string $navigationLabel = 'Users';
 
     public static function getNavigationBadge(): ?string
     {

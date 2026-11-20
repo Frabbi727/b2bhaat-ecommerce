@@ -118,7 +118,7 @@ class SimpleProductStockTest extends TestCase
         $this->assertGreaterThan(0, DB::table('product_variations')->count(), 'Real variations must survive down()');
     }
 
-    public function test_seller_sets_simple_product_stock_in_form(): void
+    public function test_seller_adds_simple_product_stock_from_the_edit_page(): void
     {
         $product = $this->makeSimpleProduct();
         $product->update(['buy_price' => 42.5]);
@@ -126,9 +126,11 @@ class SimpleProductStockTest extends TestCase
         $this->actingAs($this->seller);
         Filament::setCurrentPanel(Filament::getPanel('seller'));
 
+        // INV-3: stock is read-only in the form and changes through "Adjust stock"
         Livewire::test(EditProduct::class, ['record' => $product->getRouteKey()])
             ->assertFormFieldExists('simple_stock_quantity')
-            ->fillForm(['simple_stock_quantity' => 7])
+            ->callAction('adjustStock', ['change' => 7, 'reason' => 'received'])
+            ->assertHasNoActionErrors()
             ->call('save')
             ->assertHasNoFormErrors();
 

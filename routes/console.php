@@ -14,5 +14,29 @@ Schedule::command('escrow:release-delivered')->hourly()->withoutOverlapping()->o
 // Automatically cancel expired unpaid reservations and release stock every 5 minutes
 Schedule::command('inventory:release-expired-reservations')->everyFiveMinutes()->withoutOverlapping()->onOneServer();
 
-// Automatically synchronize active flash sales, banners, and coupon promotions hourly
+// PAY-2: remind admins about unchecked bKash/Nagad payments; cancel the ones past the time limit
+Schedule::command('payments:expire-unverified')->hourly()->withoutOverlapping()->onOneServer();
+
+// AR-16: remind sellers and admins about COD/paid parcels still not shipped after the set number of days
+Schedule::command('orders:alert-unshipped-parcels')->dailyAt('10:00')->timezone(config('app.display_timezone'))->withoutOverlapping()->onOneServer();
+
+// Automatically synchronize flash sale campaign statuses every minute
+Schedule::command('flash-sales:sync-statuses')->everyMinute()->withoutOverlapping()->onOneServer();
+
+// Automatically synchronize active banners and coupon promotions hourly
 Schedule::command('promotions:sync-active-campaigns')->hourly()->withoutOverlapping()->onOneServer();
+
+// Monetization automation: Daily renewals at 00:05 Dhaka time (PERF-5)
+Schedule::command('monetization:process-renewals')->dailyAt('00:05')->timezone(config('app.display_timezone'))->withoutOverlapping()->onOneServer();
+
+// Monetization automation: Daily grace period check at 01:00
+Schedule::command('monetization:check-grace-periods')->dailyAt('01:00')->timezone(config('app.display_timezone'))->withoutOverlapping()->onOneServer();
+
+// MON-11: bill sellers whose wallet stayed below zero after collecting COD cash themselves
+Schedule::command('monetization:bill-cod-deficits')->dailyAt('01:30')->timezone(config('app.display_timezone'))->withoutOverlapping()->onOneServer();
+
+// Monetization automation: Hourly suspension enforcement for expired grace accounts
+Schedule::command('monetization:enforce-suspensions')->hourly()->withoutOverlapping()->onOneServer();
+
+// Automatically prune historical audit logs older than retention period (default 180 days)
+Schedule::command('audit:prune --force')->dailyAt('03:30')->timezone(config('app.display_timezone'))->withoutOverlapping()->onOneServer();

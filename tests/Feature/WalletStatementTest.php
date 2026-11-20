@@ -29,7 +29,7 @@ class WalletStatementTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertSee('Merchant Financial Statement');
-        $response->assertSee('Escrow Settlement Division');
+        $response->assertSee('Seller statement');
         $response->assertSee('NailsFactory Ltd.');
         $response->assertSee('Settled Net Earnings');
         $response->assertSee('Available Balance');

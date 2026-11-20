@@ -19,25 +19,14 @@
     </div>
 
     <!-- Feedback Alerts -->
+    {{-- Shown to the shopper as a toast (see the storefront layout); kept here as text for screen readers and tests. --}}
     @if ($feedbackMessage)
-        <div class="mt-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <svg class="w-5 h-5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
-                <span>{{ $feedbackMessage }}</span>
-            </div>
-            <a href="{{ route('cart.index') }}" class="font-bold underline text-emerald-900 text-xs">View Cart &rarr;</a>
-        </div>
+        <p class="sr-only">{{ $feedbackMessage }}</p>
     @endif
 
+    {{-- Shown to the shopper as a toast (see the storefront layout); kept here as text for screen readers and tests. --}}
     @if ($errorMessage)
-        <div class="mt-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-center gap-2">
-            <svg class="w-5 h-5 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-            <span>{{ $errorMessage }}</span>
-        </div>
+        <p class="sr-only">{{ $errorMessage }}</p>
     @endif
 
     <!-- Wishlist Grid -->
@@ -58,6 +47,21 @@
         @else
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 @foreach ($wishlists as $wishlist)
+                    @if ($wishlist->product === null)
+                        {{-- Not sellable right now: no title, photo or price, only a way to remove it --}}
+                        <div wire:key="wishlist-{{ $wishlist->id }}" class="bg-white rounded-2xl border border-dashed border-slate-300 p-6 flex flex-col items-center justify-center text-center gap-3">
+                            <h4 class="font-bold text-sm text-slate-700">No longer available</h4>
+                            <p class="text-xs text-slate-500">This product can't be bought right now.</p>
+                            <button
+                                wire:click="removeFromWishlist({{ $wishlist->id }})"
+                                type="button"
+                                class="py-2 px-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition"
+                            >
+                                Remove
+                            </button>
+                        </div>
+                        @continue
+                    @endif
                     @php
                         $product = $wishlist->product;
                         $imgUrl = $product->primaryImage?->public_url ?? 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800';

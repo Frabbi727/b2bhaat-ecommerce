@@ -1,0 +1,172 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Services\Accounting\EventPipeline;
+
+use App\DTOs\Accounting\JournalEntryData;
+use App\DTOs\Accounting\JournalLineData;
+use App\Enums\Accounting\AccountingEvent;
+use App\Models\Accounting\AccountingJournalEntry;
+use App\Models\SubOrder;
+use App\Services\Accounting\JournalPostingService;
+
+class CodDeliveryJournalHandler
+{
+    public function __construct(
+        protected JournalPostingService $journalPostingService,
+    ) {}
+
+    public function recordCourierCodDelivery(SubOrder $subOrder): AccountingJournalEntry
+    {
+        $lines = [];
+        $order = $subOrder->order;
+
+        $paidAmount = round((float) $subOrder->paidAmount(), 2);
+        if ($paidAmount > 0.0) {
+            $lines[] = new JournalLineData(
+                accountSlug: 'courier_cod_receivable',
+                debit: $paidAmount,
+                credit: 0.00,
+                customerId: $order?->customer_id,
+                subOrderId: $subOrder->id,
+                orderId: $order?->id,
+                narration: "Courier COD receivable for Sub-Order #{$subOrder->sub_order_number}",
+            );
+        }
+
+        $allocatedDiscount = round((float) $subOrder->allocatedDiscount(), 2);
+        if ($allocatedDiscount > 0.0) {
+            $lines[] = new JournalLineData(
+                accountSlug: 'promotional_discount_expense',
+                debit: $allocatedDiscount,
+                credit: 0.00,
+                customerId: $order?->customer_id,
+                subOrderId: $subOrder->id,
+                orderId: $order?->id,
+                narration: "Allocated promotional coupon discount for Sub-Order #{$subOrder->sub_order_number}",
+            );
+        }
+
+        $netEarnings = round((float) $subOrder->net_earnings, 2);
+        if ($netEarnings > 0.0) {
+            $lines[] = new JournalLineData(
+                accountSlug: 'seller_escrow_payable',
+                debit: 0.00,
+                credit: $netEarnings,
+                sellerId: $subOrder->seller_id,
+                subOrderId: $subOrder->id,
+                orderId: $order?->id,
+                narration: "Seller net escrow for delivered COD Sub-Order #{$subOrder->sub_order_number}",
+            );
+        }
+
+        $commission = round((float) $subOrder->commission_amount, 2);
+        if ($commission > 0.0) {
+            $lines[] = new JournalLineData(
+                accountSlug: 'commission_revenue',
+                debit: 0.00,
+                credit: $commission,
+                sellerId: $subOrder->seller_id,
+                subOrderId: $subOrder->id,
+                orderId: $order?->id,
+                narration: "Commission revenue for delivered COD Sub-Order #{$subOrder->sub_order_number}",
+            );
+        }
+
+        $shipping = round((float) $subOrder->shipping_amount, 2);
+        if ($shipping > 0.0) {
+            $lines[] = new JournalLineData(
+                accountSlug: 'shipping_service_revenue',
+                debit: 0.00,
+                credit: $shipping,
+                subOrderId: $subOrder->id,
+                orderId: $order?->id,
+                narration: "Shipping fee earned by the platform for Sub-Order #{$subOrder->sub_order_number}",
+            );
+        }
+
+        $entryData = new JournalEntryData(
+            entryDate: JournalEntryData::businessDate(),
+            financialEvent: AccountingEvent::COD_DELIVERED->value,
+            idempotencyKey: "suborder_cod_delivered_{$subOrder->id}",
+            description: "Courier COD delivery recorded for Sub-Order #{$subOrder->sub_order_number}",
+            lines: $lines,
+            referenceType: SubOrder::class,
+            referenceId: $subOrder->id,
+        );
+
+        return $this->journalPostingService->post($entryData);
+    }
+
+    /**
+     * Self-collected COD: the seller kept the buyer's cash, so the seller owes the platform its commission, and the
+     * platform owes the seller the coupon share it funded. This mirrors the wallet charge in
+     * `EscrowLedgerService::settleSelfCollectedCod` (commission − coupon share), so wallet and ledger agree (ACC-3).
+     */
+    public function recordSelfDeliveredCod(SubOrder $subOrder): ?AccountingJournalEntry
+    {
+        $order = $subOrder->order;
+        $commission = round((float) $subOrder->commission_amount, 2);
+        $allocatedDiscount = round((float) $subOrder->allocatedDiscount(), 2);
+
+        if ($commission <= 0.0 && $allocatedDiscount <= 0.0) {
+            return null;
+        }
+
+        $lines = [];
+
+        if ($commission > 0.0) {
+            $lines[] = new JournalLineData(
+                accountSlug: 'seller_wallet_payable',
+                debit: $commission,
+                credit: 0.00,
+                sellerId: $subOrder->seller_id,
+                subOrderId: $subOrder->id,
+                orderId: $order?->id,
+                narration: "Platform commission charged on self-collected COD for Sub-Order #{$subOrder->sub_order_number}",
+            );
+            $lines[] = new JournalLineData(
+                accountSlug: 'commission_revenue',
+                debit: 0.00,
+                credit: $commission,
+                sellerId: $subOrder->seller_id,
+                subOrderId: $subOrder->id,
+                orderId: $order?->id,
+                narration: "Platform commission earned on self-collected COD for Sub-Order #{$subOrder->sub_order_number}",
+            );
+        }
+
+        if ($allocatedDiscount > 0.0) {
+            $lines[] = new JournalLineData(
+                accountSlug: 'promotional_discount_expense',
+                debit: $allocatedDiscount,
+                credit: 0.00,
+                subOrderId: $subOrder->id,
+                orderId: $order?->id,
+                narration: "Platform-funded coupon share for self-collected COD Sub-Order #{$subOrder->sub_order_number}",
+            );
+            $lines[] = new JournalLineData(
+                accountSlug: 'seller_wallet_payable',
+                debit: 0.00,
+                credit: $allocatedDiscount,
+                sellerId: $subOrder->seller_id,
+                subOrderId: $subOrder->id,
+                orderId: $order?->id,
+                narration: "Coupon share owed to the seller for Sub-Order #{$subOrder->sub_order_number}",
+            );
+        }
+
+        $entryData = new JournalEntryData(
+            entryDate: JournalEntryData::businessDate(),
+            financialEvent: AccountingEvent::COD_SELF_DELIVERED->value,
+            idempotencyKey: "suborder_self_cod_delivered_{$subOrder->id}",
+            description: "Seller self-collected COD delivery recorded for Sub-Order #{$subOrder->sub_order_number}",
+            lines: $lines,
+            referenceType: SubOrder::class,
+            referenceId: $subOrder->id,
+        );
+
+        return $this->journalPostingService->post($entryData);
+    }
+}

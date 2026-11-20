@@ -9,6 +9,7 @@ use App\Livewire\Storefront\WholesaleUpgrade;
 use App\Models\User;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\SystemLookupSeeder;
+use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -99,8 +100,8 @@ class WholesaleApprovalGateTest extends TestCase
 
         $this->actingAs(User::where('email', 'admin@b2bhaat.com')->firstOrFail());
         Livewire::test(KycApprovals::class)
-            ->call('openApproveWholesale', $customer->id)
-            ->call('confirmApproveWholesale');
+            ->set('activeTab', 'wholesale')
+            ->callAction(TestAction::make('approveWholesale')->table($customer));
 
         $customer->refresh();
         $this->assertSame('wholesale_buyer', $customer->role->slug);

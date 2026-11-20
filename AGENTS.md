@@ -29,7 +29,7 @@
   - Tracking: `/track/{tracking_token}` (real-time timeline, courier name, tracking code).
 
 ## 4. Key Developer & Verification Commands
-- **Run Tests:** `php artisan test --compact` (266 tests passing, uses `SMS_DRIVER=mock`).
+- **Run Tests:** `php artisan test --compact` (572 tests passing, uses `SMS_DRIVER=mock`).
 - **Code Formatter:** `vendor/bin/pint --dirty --format agent` (PHP 8.5 with strict typing).
 - **Queue Worker:** `php artisan queue:work --once` (SMS jobs run via `App\Jobs\SendSmsJob`).
 

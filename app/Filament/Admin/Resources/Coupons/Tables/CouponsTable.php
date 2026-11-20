@@ -2,11 +2,12 @@
 
 namespace App\Filament\Admin\Resources\Coupons\Tables;
 
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
+use App\Models\Coupon;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
-use Filament\Tables\Columns\IconColumn;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Table;
 
 class CouponsTable
@@ -14,60 +15,52 @@ class CouponsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('code')
                     ->label('Code')
                     ->fontFamily('mono')
                     ->weight('bold')
-                    ->searchable()
+                    ->copyable()
+                    ->copyMessage('Code copied')
+                    ->description(fn (Coupon $record): string => $record->name)
+                    ->searchable(['code', 'name'])
                     ->sortable(),
 
-                TextColumn::make('name')
-                    ->label('Campaign')
-                    ->searchable(),
-
-                TextColumn::make('discount_value')
-                    ->label('Discount')
-                    ->formatStateUsing(fn ($record) => $record->discount_type === 'percentage'
-                        ? "{$record->discount_value}%"
-                        : "৳{$record->discount_value}")
-                    ->sortable(),
-
-                TextColumn::make('min_order_amount')
-                    ->label('Min Subtotal')
-                    ->money('BDT')
-                    ->sortable(),
+                TextColumn::make('offer')
+                    ->label('Shoppers get')
+                    ->state(fn (Coupon $record): string => $record->offerSummary())
+                    ->wrap(),
 
                 TextColumn::make('used_count')
                     ->label('Used')
-                    ->numeric()
+                    ->formatStateUsing(fn (Coupon $record): string => number_format($record->used_count)
+                        .($record->usage_limit_total ? ' / '.number_format($record->usage_limit_total) : ''))
                     ->sortable(),
 
-                TextColumn::make('usage_limit_total')
-                    ->label('Limit')
-                    ->placeholder('Unlimited')
-                    ->sortable(),
-
-                IconColumn::make('is_active')
-                    ->label('Active')
-                    ->boolean(),
+                TextColumn::make('status')
+                    ->label('Right now')
+                    ->badge()
+                    ->state(fn (Coupon $record): string => $record->statusLabel())
+                    ->color(fn (Coupon $record): string => $record->statusColor()),
 
                 TextColumn::make('expires_at')
-                    ->label('Expires')
-                    ->dateTime('M d, Y')
-                    ->placeholder('Never')
+                    ->label('Works until')
+                    ->date('d M Y')
+                    ->placeholder('No end date')
                     ->sortable(),
-            ])
-            ->filters([
-                //
+
+                ToggleColumn::make('is_active')
+                    ->label('On'),
             ])
             ->recordActions([
                 EditAction::make(),
+                DeleteAction::make()
+                    ->iconButton()
+                    ->hidden(fn (Coupon $record): bool => $record->hasBeenUsed()),
             ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
-            ]);
+            ->emptyStateIcon(Heroicon::OutlinedTicket)
+            ->emptyStateHeading('No coupons yet')
+            ->emptyStateDescription('Make a code shoppers can type at checkout for a discount.');
     }
 }

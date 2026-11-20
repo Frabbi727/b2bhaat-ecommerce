@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Traits\Auditable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProductPrice extends Model
 {
+    use Auditable;
+
     protected $fillable = [
         'product_id',
         'variation_id',

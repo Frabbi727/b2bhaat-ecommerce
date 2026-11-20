@@ -16,31 +16,26 @@ class ListSellerProfiles extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make(),
+            CreateAction::make()
+                ->label('Add seller manually')
+                ->color('gray'),
         ];
     }
 
     public function getTabs(): array
     {
+        $pending = SellerProfile::where('is_approved', false)->whereNull('rejected_at')->count();
+
         return [
-            'pending' => Tab::make('Pending Verification')
-                ->badge((string) SellerProfile::where('is_approved', false)->whereNull('rejected_at')->count())
+            'all' => Tab::make('All sellers'),
+            'pending' => Tab::make('Waiting for review')
+                ->badge($pending ?: null)
                 ->badgeColor('warning')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('is_approved', false)->whereNull('rejected_at')),
-            'approved' => Tab::make('Approved Factories')
-                ->badge((string) SellerProfile::where('is_approved', true)->count())
-                ->badgeColor('success')
+            'approved' => Tab::make('Approved')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('is_approved', true)),
             'rejected' => Tab::make('Rejected')
-                ->badge((string) SellerProfile::where('is_approved', false)->whereNotNull('rejected_at')->count())
-                ->badgeColor('danger')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('is_approved', false)->whereNotNull('rejected_at')),
-            'all' => Tab::make('All Stores'),
         ];
-    }
-
-    public function getDefaultActiveTab(): string|int|null
-    {
-        return 'pending';
     }
 }

@@ -138,9 +138,9 @@ class WholesaleLotMoqTest extends TestCase
 
     public function test_quoted_rfq_line_quantity_is_fixed_at_negotiated_price(): void
     {
-        $this->cart->addItem($this->product->id, null, SalesChannel::WHOLESALE, 40, 70.0);
+        $this->cart->addItem($this->product->id, null, SalesChannel::WHOLESALE, 40, 70.0, rfqId: 7);
 
-        $key = "{$this->product->id}_base_".SalesChannel::WHOLESALE;
+        $key = CartSessionService::quotedLineKey($this->product->id, null, 7);
         $this->assertTrue($this->cart->getItems()[$key]['is_quoted']);
 
         try {

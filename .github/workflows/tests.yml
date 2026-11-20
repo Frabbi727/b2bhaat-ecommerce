@@ -2,8 +2,10 @@ name: tests
 
 on:
   push:
-    branches: [main, production]
+    branches: [main]
   pull_request:
+  # Lets deploy.yml run this suite as a gate before deploying.
+  workflow_call:
 
 jobs:
   tests:

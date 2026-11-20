@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Enums\FlashSaleDiscountType;
 use App\Livewire\Storefront\HeaderSearch;
 use App\Livewire\Storefront\ProductCatalog;
 use App\Models\Banner;
 use App\Models\Category;
+use App\Models\FlashSale;
+use App\Models\FlashSaleProduct;
 use App\Models\Product;
 use App\Models\ProductPrice;
 use App\Models\Role;
@@ -64,6 +67,7 @@ class HeaderSearchAndHomepageTest extends TestCase
             'buy_price' => 70000.00,
             'is_active' => true,
         ]);
+        $this->approveProducts($product);
 
         ProductPrice::create([
             'product_id' => $product->id,
@@ -104,7 +108,7 @@ class HeaderSearchAndHomepageTest extends TestCase
         $unit = Unit::where('symbol', 'pc')->firstOrFail();
         $cat = Category::create(['name' => 'Phones', 'slug' => 'phones', 'is_active' => true]);
 
-        $this->withRetailPrice(Product::create([
+        $phone = $this->withRetailPrice(Product::create([
             'seller_id' => $seller->id,
             'category_id' => $cat->id,
             'sales_channel_id' => $channel->id,
@@ -113,11 +117,15 @@ class HeaderSearchAndHomepageTest extends TestCase
             'slug' => 'flash-sale-phone',
             'regular_price' => 50000.00,
             'buy_price' => 30000.00,
-            'is_flash_sale' => true,
-            'flash_sale_price' => 39999.00,
-            'flash_sale_end' => now()->addDays(2),
             'is_active' => true,
         ]));
+        $this->approveProducts($phone);
+        FlashSaleProduct::factory()->create([
+            'flash_sale_id' => FlashSale::factory()->live()->create()->id,
+            'product_id' => $phone->id,
+            'discount_type' => FlashSaleDiscountType::FixedPrice,
+            'discount_value' => 39999.00,
+        ]);
 
         $response = $this->get('/');
         $response->assertStatus(200);
@@ -125,6 +133,67 @@ class HeaderSearchAndHomepageTest extends TestCase
         $response->assertSee('Flash Sale');
         $response->assertSee('Flash Sale Phone');
         $response->assertSee('39,999');
+    }
+
+    public function test_featured_products_skip_items_already_shown_in_the_live_flash_sale(): void
+    {
+        $sellerRole = Role::where('slug', 'seller')->firstOrFail();
+        $seller = User::create([
+            'role_id' => $sellerRole->id,
+            'name' => 'Featured Seller',
+            'email' => 'featured@seller.com',
+            'password' => bcrypt('password'),
+        ]);
+        SellerProfile::create(['user_id' => $seller->id, 'store_name' => $seller->name, 'store_slug' => Str::slug($seller->name).'-'.$seller->id, 'is_approved' => true]);
+
+        $channel = SalesChannel::where('slug', SalesChannel::RETAIL)->firstOrFail();
+        $unit = Unit::where('symbol', 'pc')->firstOrFail();
+        $cat = Category::create(['name' => 'Gadgets', 'slug' => 'gadgets', 'is_active' => true]);
+
+        $makeFeatured = fn (string $title): Product => $this->withRetailPrice(tap(Product::create([
+            'seller_id' => $seller->id,
+            'category_id' => $cat->id,
+            'sales_channel_id' => $channel->id,
+            'unit_id' => $unit->id,
+            'title' => $title,
+            'slug' => Str::slug($title),
+            'regular_price' => 5000.00,
+            'buy_price' => 3000.00,
+            'is_active' => true,
+        ]), fn (Product $product) => $product->forceFill(['is_featured' => true])->save()));
+
+        $flashProduct = $makeFeatured('Flash Deal Speaker');
+        $featuredOnly = $makeFeatured('Featured Only Watch');
+        $this->approveProducts($flashProduct, $featuredOnly);
+
+        FlashSaleProduct::factory()->create([
+            'flash_sale_id' => FlashSale::factory()->live()->create()->id,
+            'product_id' => $flashProduct->id,
+            'discount_type' => FlashSaleDiscountType::FixedPrice,
+            'discount_value' => 3999.00,
+        ]);
+
+        Livewire::test(ProductCatalog::class)
+            ->assertViewHas('flashSaleProducts', fn ($products) => $products->contains('id', $flashProduct->id))
+            ->assertViewHas('featuredProducts', fn ($products) => $products->pluck('id')->all() === [$featuredOnly->id]);
+    }
+
+    public function test_homepage_offers_one_searchable_category_picker_and_keeps_filters_in_a_panel(): void
+    {
+        $parent = Category::create(['name' => 'Kitchen Appliances', 'slug' => 'kitchen-appliances', 'is_active' => true]);
+        Category::create(['name' => 'Rice Cookers', 'slug' => 'rice-cookers', 'parent_id' => $parent->id, 'is_active' => true]);
+
+        $this->get(route('catalog.index'))
+            ->assertOk()
+            // Header: a single searchable picker that lists parents and their sub-categories
+            ->assertSee('id="nav-category-search"', false)
+            ->assertSee('Rice Cookers')
+            // The search bar no longer carries its own category dropdown or invented "popular" products
+            ->assertDontSee('Popular Searches')
+            ->assertDontSee('Haier Mini LED')
+            // Catalog filters live in one panel, with searchable category and brand lists
+            ->assertSee('id="filter-category-search"', false)
+            ->assertSee('Filters');
     }
 
     public function test_catalog_sorting_and_quick_cart(): void
@@ -153,6 +222,7 @@ class HeaderSearchAndHomepageTest extends TestCase
             'buy_price' => 50.00,
             'is_active' => true,
         ]));
+        $this->approveProducts($itemA);
         ProductPrice::create([
             'product_id' => $itemA->id,
             'sales_channel_id' => $channel->id,
@@ -171,6 +241,7 @@ class HeaderSearchAndHomepageTest extends TestCase
             'buy_price' => 500.00,
             'is_active' => true,
         ]));
+        $this->approveProducts($itemB);
         ProductPrice::create([
             'product_id' => $itemB->id,
             'sales_channel_id' => $channel->id,
@@ -221,6 +292,7 @@ class HeaderSearchAndHomepageTest extends TestCase
             'warranty_period' => '1 Year Official Warranty',
             'is_active' => true,
         ]);
+        $this->approveProducts($product);
 
         ProductPrice::create([
             'product_id' => $product->id,

@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Filament\Admin\Resources\Orders\Pages\EditOrder;
+use App\Filament\Admin\Resources\Orders\OrderResource;
 use App\Filament\Admin\Resources\Orders\Pages\ListOrders;
+use App\Filament\Admin\Resources\Orders\Pages\ViewOrder;
 use App\Filament\Admin\Resources\Users\Pages\EditUser;
 use App\Filament\Admin\Resources\Users\Pages\ListUsers;
 use App\Models\Order;
@@ -51,11 +52,26 @@ class FinancialRecordRetentionTest extends TestCase
             ->assertActionDoesNotExist(TestAction::make('delete')->table($order))
             ->assertActionDoesNotExist(TestAction::make('delete')->table()->bulk());
 
-        Livewire::test(EditOrder::class, ['record' => $order->getRouteKey()])
+        Livewire::test(ViewOrder::class, ['record' => $order->getRouteKey()])
             ->assertActionDoesNotExist('delete');
 
         $this->assertFalse($this->admin->can('delete', $order));
         $this->assertFalse($this->admin->can('forceDelete', $order));
+    }
+
+    public function test_admin_order_page_shows_items_customer_and_payment_without_delete(): void
+    {
+        $order = Order::with('subOrders.seller.sellerProfile')->firstOrFail();
+
+        Livewire::test(ViewOrder::class, ['record' => $order->getRouteKey()])
+            ->assertSuccessful()
+            ->assertSee($order->order_number)
+            ->assertSee('Items by seller')
+            ->assertSee('Customer & delivery')
+            ->assertSee($order->subOrders->first()->seller->sellerProfile->store_name)
+            ->assertActionDoesNotExist('delete');
+
+        $this->get("/admin/orders/{$order->getRouteKey()}")->assertOk();
     }
 
     public function test_admin_order_create_route_absent(): void
@@ -70,12 +86,9 @@ class FinancialRecordRetentionTest extends TestCase
         $originalTotal = (float) $order->total_amount;
         $originalPaymentStatus = $order->payment_status_id;
 
-        Livewire::test(EditOrder::class, ['record' => $order->getRouteKey()])
-            ->assertFormFieldIsDisabled('total_amount')
-            ->assertFormFieldIsDisabled('payment_status_id')
-            ->assertFormFieldIsDisabled('customer_id')
-            ->fillForm(['total_amount' => 1.00])
-            ->call('save');
+        // ORD-1: orders have no edit page at all; money, payment and status change only through their own flows.
+        $this->assertFalse(OrderResource::hasPage('edit'));
+        $this->get('/admin/orders/'.$order->getRouteKey().'/edit')->assertNotFound();
 
         $this->assertEquals($originalTotal, (float) $order->fresh()->total_amount);
         $this->assertSame($originalPaymentStatus, $order->fresh()->payment_status_id);

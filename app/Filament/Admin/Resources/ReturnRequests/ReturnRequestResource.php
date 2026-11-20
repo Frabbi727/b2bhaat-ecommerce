@@ -8,6 +8,7 @@ use App\Filament\Admin\Resources\ReturnRequests\Pages\ListReturnRequests;
 use App\Models\ReturnRequest;
 use App\Services\Orders\OrderDisputeService;
 use BackedEnum;
+use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -28,9 +29,15 @@ class ReturnRequestResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-arrow-uturn-left';
 
-    protected static ?string $navigationLabel = 'Returns & problems';
+    protected static UnitEnum|string|null $navigationGroup = 'Orders & Fulfilment';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Moderation';
+    protected static ?int $navigationSort = 3;
+
+    protected static ?string $navigationLabel = 'Returns & disputes';
+
+    protected static ?string $modelLabel = 'return request';
+
+    protected static ?string $pluralModelLabel = 'returns & disputes';
 
     public static function canAccess(): bool
     {
@@ -42,13 +49,14 @@ class ReturnRequestResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['subOrder.seller.sellerProfile', 'customer']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['subOrder.seller.sellerProfile', 'customer', 'items.orderItem.product:id,title']))
             ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('subOrder.sub_order_number')->label('Parcel')->searchable()->copyable(),
                 TextColumn::make('subOrder.seller.sellerProfile.store_name')->label('Seller'),
                 TextColumn::make('customer.name')->label('Buyer')->searchable(),
                 TextColumn::make('reason')->formatStateUsing(fn (string $state): string => str_replace('_', ' ', ucfirst($state))),
+                TextColumn::make('items_summary')->label('Items coming back')->state(fn (ReturnRequest $record): string => $record->itemsSummary())->wrap(),
                 TextColumn::make('requested_action')->label('Wants'),
                 TextColumn::make('description')->label('Buyer says')->wrap()->limit(80),
                 TextColumn::make('status')->badge()->color(fn (string $state): string => match ($state) {
@@ -84,8 +92,13 @@ class ReturnRequestResource extends Resource
             ->schema([
                 Textarea::make('note')->label('Your note')->required()->minLength(5),
             ])
-            ->action(function (ReturnRequest $record, array $data) use ($status): void {
-                app(OrderDisputeService::class)->resolveReturnRequest($record, $status, $data['note']);
+            ->action(function (ReturnRequest $record, array $data, Action $action) use ($status): void {
+                try {
+                    app(OrderDisputeService::class)->resolveReturnRequest($record, $status, $data['note']);
+                } catch (DomainException $exception) {
+                    Notification::make()->title('Return not approved')->body($exception->getMessage())->danger()->send();
+                    $action->halt();
+                }
                 $record->update(['admin_arbitration_note' => $data['note']]);
 
                 Notification::make()->title($status === ReturnRequest::STATUS_APPROVED ? 'Return approved' : 'Return rejected')->success()->send();

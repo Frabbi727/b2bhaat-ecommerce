@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Storefront;
 
+use App\Models\Product;
 use App\Models\Wishlist;
 use App\Services\Cart\CartSessionService;
 use App\Services\Logistics\ShippingCalculatorService;
@@ -60,10 +61,12 @@ class CartComponent extends Component
             return;
         }
 
-        Wishlist::firstOrCreate([
-            'user_id' => Auth::id(),
-            'product_id' => $productId,
-        ]);
+        if (Product::sellable()->whereKey($productId)->exists()) {
+            Wishlist::firstOrCreate([
+                'user_id' => Auth::id(),
+                'product_id' => $productId,
+            ]);
+        }
 
         $this->removeItem($key);
         $this->couponSuccessMessage = 'Item moved to your wishlist.';
@@ -99,6 +102,7 @@ class CartComponent extends Component
     public function render()
     {
         $cart = app(CartSessionService::class);
+        $cart->refreshPrices();
         $items = $cart->getItems();
         $subtotal = $cart->getSubtotal();
         $itemCount = $cart->getItemCount();
@@ -114,7 +118,14 @@ class CartComponent extends Component
         }
         $insideDhakaShipping = $shippingByZone['inside_dhaka']['total_shipping'];
 
+        $productImages = Product::query()
+            ->with('primaryImage')
+            ->whereIn('id', collect($items)->pluck('product_id')->unique())
+            ->get()
+            ->mapWithKeys(fn (Product $product): array => [$product->id => $product->primaryImage?->public_url]);
+
         return view('livewire.storefront.cart-component', [
+            'productImages' => $productImages,
             'shippingByZone' => $shippingByZone,
             'insideDhakaShipping' => $insideDhakaShipping,
             'estimatedTotal' => round($subtotalAfterDiscount + $insideDhakaShipping, 2),
@@ -124,6 +135,8 @@ class CartComponent extends Component
             'appliedCoupon' => $appliedCoupon,
             'discountAmount' => $discountAmount,
             'subtotalAfterDiscount' => $subtotalAfterDiscount,
+            // Wholesale lots below their minimum, by product id; checkout refuses them, so say so here first (UX-7)
+            'wholesaleShortfalls' => collect($cart->wholesaleMoqViolations())->keyBy('product_id')->all(),
         ]);
     }
 }

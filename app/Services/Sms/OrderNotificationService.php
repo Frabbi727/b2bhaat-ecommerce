@@ -7,6 +7,8 @@ namespace App\Services\Sms;
 use App\Filament\Seller\Resources\SubOrders\SubOrderResource;
 use App\Jobs\SendSmsJob;
 use App\Models\Order;
+use App\Models\SellerInvoice;
+use App\Models\SellerSubscription;
 use App\Models\SmsTemplate;
 use App\Models\SubOrder;
 use App\Models\User;
@@ -156,6 +158,36 @@ class OrderNotificationService
     }
 
     /**
+     * Text the buyer the 6-digit code for a parcel the seller delivers themselves, with the cash to pay on a COD
+     * order. The seller never sees the code; the buyer gives it to the delivery person after receiving the parcel.
+     */
+    public function sendHandoverCode(SubOrder $subOrder): bool
+    {
+        $order = $subOrder->order;
+        if ($order === null || ! filled($subOrder->handover_code)) {
+            return false;
+        }
+
+        $phone = $this->extractCustomerPhone($order);
+        if (! $phone || ! PhoneNormalizer::isValid($phone)) {
+            return false;
+        }
+
+        $cashToPay = $subOrder->codCollectAmount();
+        $message = $this->render('self_delivery_handover_code', [
+            'order_number' => $order->order_number,
+            'store_name' => $subOrder->seller?->sellerProfile?->store_name ?? $this->storeName(),
+            'handover_code' => (string) $subOrder->handover_code,
+            'cash_note' => $cashToPay > 0 ? ' Pay BDT '.number_format($cashToPay, 2).' cash on delivery.' : '',
+            'tracking_url' => route('order.track.token', ['token' => $order->tracking_token]),
+        ], 'B2Bhaat: your parcel from {store_name} (order #{order_number}) is on the way.{cash_note} Check the parcel, then give code {handover_code} to the delivery person. Do not share it before. Track: {tracking_url}');
+
+        SendSmsJob::dispatch(PhoneNormalizer::normalize($phone), $message, 'self_delivery_handover_code', bypassDeduplication: true);
+
+        return true;
+    }
+
+    /**
      * Tell each seller in the order that they have a parcel to prepare.
      * Called once the order can be fulfilled: at checkout for cash on delivery, after the payment check for mobile wallets.
      */
@@ -182,6 +214,28 @@ class OrderNotificationService
     }
 
     /**
+     * AR-16: remind the seller that a parcel they can ship has waited too long.
+     */
+    public function sendUnshippedParcelReminder(SubOrder $subOrder, int $days): bool
+    {
+        $phone = $subOrder->seller?->phone;
+        if (! $phone || ! PhoneNormalizer::isValid($phone)) {
+            return false;
+        }
+
+        $message = $this->render('seller_unshipped_reminder', [
+            'order_number' => $subOrder->sub_order_number,
+            'days' => (string) $days,
+            'seller_orders_url' => SubOrderResource::getUrl('index', panel: 'seller'),
+            'store_name' => $this->storeName(),
+        ], 'Order #{order_number} on {store_name} has waited {days} days to ship. Please ship it, or decline it if you can\'t fill it: {seller_orders_url}');
+
+        SendSmsJob::dispatch(PhoneNormalizer::normalize($phone), $message, 'seller_unshipped_reminder', bypassDeduplication: true);
+
+        return true;
+    }
+
+    /**
      * Tell a wholesale applicant whether their business account was approved.
      */
     public function sendWholesaleDecision(User $user): bool
@@ -197,6 +251,88 @@ class OrderNotificationService
                 'Dear {customer_name}, your wholesale application on {store_name} was not approved: {reason}. You can apply again: {apply_url}');
 
         SendSmsJob::dispatch(PhoneNormalizer::normalize($user->phone), $message, 'wholesale_decision', bypassDeduplication: true);
+
+        return true;
+    }
+
+    public function sendSubscriptionRenewalReminder(User $seller, SellerSubscription $subscription, SellerInvoice $invoice): bool
+    {
+        if (empty($seller->phone) || ! PhoneNormalizer::isValid($seller->phone)) {
+            return false;
+        }
+
+        $message = "Dear {$seller->name}, your B2Bhaat subscription renewal is due on {$invoice->due_date?->format('d M Y')}. Amount: BDT ".number_format((float) $invoice->total_amount, 2).'. Pay via your seller dashboard.';
+        SendSmsJob::dispatch(PhoneNormalizer::normalize($seller->phone), $message, 'subscription_renewal', bypassDeduplication: true);
+
+        return true;
+    }
+
+    public function sendGracePeriodWarning(User $seller, SellerSubscription $subscription, int $graceDays): bool
+    {
+        if (empty($seller->phone) || ! PhoneNormalizer::isValid($seller->phone)) {
+            return false;
+        }
+
+        $message = "Important: Your B2Bhaat subscription is overdue. You have {$graceDays} days grace period before your active products are hidden.";
+        SendSmsJob::dispatch(PhoneNormalizer::normalize($seller->phone), $message, 'grace_period_warning', bypassDeduplication: true);
+
+        return true;
+    }
+
+    public function sendAccountSuspendedNotice(User $seller, string $reason): bool
+    {
+        if (empty($seller->phone) || ! PhoneNormalizer::isValid($seller->phone)) {
+            return false;
+        }
+
+        $message = "Your B2Bhaat store selling privileges have been suspended: {$reason}. Settle your invoice in the seller dashboard to restore your store.";
+        SendSmsJob::dispatch(PhoneNormalizer::normalize($seller->phone), $message, 'account_suspended', bypassDeduplication: true);
+
+        return true;
+    }
+
+    public function sendAccountRestoredNotice(User $seller, int $restoredCount): bool
+    {
+        if (empty($seller->phone) || ! PhoneNormalizer::isValid($seller->phone)) {
+            return false;
+        }
+
+        $message = "Payment received! Your B2Bhaat store and {$restoredCount} products have been restored. Thank you for partnering with B2Bhaat.";
+        SendSmsJob::dispatch(PhoneNormalizer::normalize($seller->phone), $message, 'account_restored', bypassDeduplication: true);
+
+        return true;
+    }
+
+    /**
+     * PAY-2: tell the buyer their bKash/Nagad order was cancelled because the payment was not confirmed in time.
+     */
+    public function sendPaymentNotConfirmed(Order $order): bool
+    {
+        $phone = $this->extractCustomerPhone($order);
+        if (! $phone || ! PhoneNormalizer::isValid($phone)) {
+            return false;
+        }
+
+        $trxId = $order->shipping_address['mfs_transaction_id'] ?? null;
+        $trxText = $trxId ? " (TrxID {$trxId})" : '';
+        $message = "B2Bhaat: we could not confirm the payment for Order #{$order->order_number}{$trxText}, so the order was cancelled. If you paid, contact support with your TrxID and we will refund you.";
+        SendSmsJob::dispatch(PhoneNormalizer::normalize($phone), $message, 'payment_not_confirmed', bypassDeduplication: true);
+
+        return true;
+    }
+
+    /**
+     * Tell a seller their plan's terms were changed and that their own terms stay until renewal (MON-2).
+     */
+    public function sendPlanTermsChangeNotice(User $seller, SellerSubscription $subscription, string $planName): bool
+    {
+        if (empty($seller->phone) || ! PhoneNormalizer::isValid($seller->phone)) {
+            return false;
+        }
+
+        $renewsOn = $subscription->ends_at?->format('d M Y') ?? 'your next renewal';
+        $message = "B2Bhaat: the {$planName} plan's price, limits or commission have changed. Your current terms stay the same until your renewal on {$renewsOn}; the new terms apply from then. See Billing in your seller dashboard.";
+        SendSmsJob::dispatch(PhoneNormalizer::normalize($seller->phone), $message, 'plan_terms_changed', bypassDeduplication: true);
 
         return true;
     }

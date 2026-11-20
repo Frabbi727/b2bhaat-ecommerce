@@ -13,6 +13,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use UnitEnum;
 
 class ProductReviewResource extends Resource
 {
@@ -20,7 +21,11 @@ class ProductReviewResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedStar;
 
-    protected static ?string $navigationLabel = 'Buyer Reviews';
+    protected static UnitEnum|string|null $navigationGroup = 'Catalog';
+
+    protected static ?int $navigationSort = 2;
+
+    protected static ?string $navigationLabel = 'Buyer reviews';
 
     protected static ?string $modelLabel = 'Review';
 

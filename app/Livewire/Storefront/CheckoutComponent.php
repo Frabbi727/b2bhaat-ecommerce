@@ -3,25 +3,40 @@
 namespace App\Livewire\Storefront;
 
 use App\Actions\Checkout\ResolveCheckoutCustomer;
+use App\Events\Orders\OrderPlacedEvent;
+use App\Exceptions\FlashSaleUnavailableException;
 use App\Models\Coupon;
 use App\Models\CustomerAddress;
+use App\Models\Order;
 use App\Models\OrderStatus;
 use App\Models\PaymentMethod;
 use App\Models\PaymentStatus;
 use App\Models\SalesChannel;
+use App\Models\User;
+use App\Services\Accounting\EventPipeline\OrderPaymentJournalHandler;
 use App\Services\Cart\CartSessionService;
 use App\Services\Cart\CouponService;
+use App\Services\Email\EmailRecipientResolver;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Logistics\BangladeshDistricts;
 use App\Services\Logistics\ShippingCalculatorService;
 use App\Services\Orders\OrderSplitterService;
 use App\Services\Settings\StoreConfigurationService;
 use App\Services\Sms\OrderNotificationService;
+use App\Services\Sms\OtpService;
+use App\Services\Sms\Support\OtpMessages;
+use App\Services\Sms\Support\PhoneNormalizer;
+use DomainException;
 use Exception;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 #[Layout('layouts.storefront')]
@@ -36,6 +51,8 @@ class CheckoutComponent extends Component
     public string $recipientName = '';
 
     public string $recipientPhone = '';
+
+    public string $recipientEmail = '';
 
     public string $streetAddress = '';
 
@@ -53,7 +70,16 @@ class CheckoutComponent extends Component
 
     public string $checkoutCouponCode = '';
 
+    /** Display only: the coupon used at Place order is read from the server-side cart (WA-CHK-01). */
+    #[Locked]
     public ?array $appliedCoupon = null;
+
+    /**
+     * WA-CHK-03: one-time token for this checkout page. Two Place order requests from the same page carry the same
+     * token, and only the first can claim it, so a double click or a resent request cannot place a second order.
+     */
+    #[Locked]
+    public string $checkoutToken = '';
 
     public string $couponMessage = '';
 
@@ -61,8 +87,28 @@ class CheckoutComponent extends Component
 
     public string $errorMessage = '';
 
+    /** A shopper without an account confirms their phone with an SMS code before the order is placed. */
+    public bool $awaitingPhoneCode = false;
+
+    public string $phoneCode = '';
+
+    public string $phoneCodeNotice = '';
+
+    /** The phone the code was sent to is kept on the server, where the shopper cannot change it. */
+    private const VERIFYING_PHONE_SESSION_KEY = 'checkout.verifying_phone';
+
+    /** How long a claimed checkout token stays spent; covers a slow order plus any late duplicate of it. */
+    private const ORDER_LOCK_SECONDS = 300;
+
+    public static function orderLockKey(int $userId, string $checkoutToken): string
+    {
+        return "checkout:{$userId}:{$checkoutToken}";
+    }
+
     public function mount(): void
     {
+        $this->checkoutToken = Str::random(40);
+
         $cart = app(CartSessionService::class);
         if ($cart->getItemCount() === 0) {
             $this->redirectRoute('cart.index');
@@ -75,6 +121,12 @@ class CheckoutComponent extends Component
             $this->recipientName = $user->name;
             $this->recipientPhone = $user->phone ?? '';
             $this->mfsSenderNumber = $user->phone ?? '';
+
+            $resolver = app(EmailRecipientResolver::class);
+            if ($user->email && $resolver->isDeliverable($user->email)) {
+                $this->recipientEmail = $user->email;
+            }
+
             $defaultAddress = $user->addresses()->where('is_default', true)->first()
                 ?? $user->addresses()->first();
 
@@ -186,11 +238,19 @@ class CheckoutComponent extends Component
 
     public function placeOrder(): void
     {
+        // Pressing Enter in the code box submits the form: treat it as confirming the code
+        if ($this->awaitingPhoneCode && ! Auth::check()) {
+            $this->confirmPhoneCode();
+
+            return;
+        }
+
         $this->errorMessage = '';
 
         $this->validate([
             'recipientName' => 'required|string|min:3|max:255',
             'recipientPhone' => ['required', 'string', 'regex:/^(\+?8801|01)\d{7,9}$/'],
+            'recipientEmail' => 'nullable|email|max:255',
             'streetAddress' => 'required|string|min:5',
             'city' => ['required', 'string', function (string $attribute, mixed $value, \Closure $fail): void {
                 if (BangladeshDistricts::normalize((string) $value) === null) {
@@ -212,6 +272,7 @@ class CheckoutComponent extends Component
         ], [
             'recipientPhone.regex' => 'Enter an 11-digit Bangladeshi mobile number, for example 01712345678.',
             'recipientName.min' => 'Enter the full name of the person receiving the parcel.',
+            'recipientEmail.email' => 'Please enter a valid email address.',
             'streetAddress.min' => 'Add your house, road and area so the courier can find you.',
         ]);
 
@@ -228,16 +289,34 @@ class CheckoutComponent extends Component
                 'mfsSenderNumber.regex' => 'Enter an 11-digit mobile number, for example 01712345678.',
                 'mfsTransactionId.required' => "Enter the transaction ID from your {$paymentMethod->name} confirmation SMS.",
             ]);
+
+            // PAY-3: one TrxID pays for one order.
+            if (Order::trxIdAlreadyUsed($paymentMethod->slug, $this->mfsTransactionId)) {
+                $this->addError('mfsTransactionId', self::trxIdUsedMessage($paymentMethod->name));
+
+                return;
+            }
         }
 
         $cart = app(CartSessionService::class);
         $items = $cart->getItems();
+        // WA-CHK-01: only the coupon stored in the server-side cart counts. It is read before anything below re-checks
+        // (and could silently drop) it, and is checked again under a row lock when the order is written.
+        $storedCouponId = $cart->storedCouponId();
 
         if (empty($items)) {
             $this->errorMessage = 'Your cart is empty.';
 
             return;
         }
+
+        $changedTitles = $cart->refreshPrices();
+        if ($changedTitles !== []) {
+            $this->errorMessage = 'Prices changed for '.implode(', ', $changedTitles).' because a flash sale ended. Please check your cart and place the order again.';
+
+            return;
+        }
+        $items = $cart->getItems();
 
         $config = app(StoreConfigurationService::class);
 
@@ -286,41 +365,52 @@ class CheckoutComponent extends Component
             return;
         }
 
+        // 4. A shopper without an account confirms their phone by SMS code before anything is reserved
+        if (! Auth::check()) {
+            $this->sendPhoneCode();
+
+            return;
+        }
+
+        // A page loaded before this token existed gets one now
+        if ($this->checkoutToken === '') {
+            $this->checkoutToken = Str::random(40);
+        }
+
+        $orderLock = Cache::lock(self::orderLockKey((int) Auth::id(), $this->checkoutToken), self::ORDER_LOCK_SECONDS);
+        if (! $orderLock->get()) {
+            $this->errorMessage = 'Your order is already being placed. Please wait a moment. If nothing happens within a minute, reload the page.';
+
+            return;
+        }
+        $orderPlaced = false;
+
         try {
-            // Determine customer
-            $customer = app(ResolveCheckoutCustomer::class)->handle(Auth::user(), $this->recipientName, $this->recipientPhone);
+            $customer = Auth::user();
 
             $shippingFee = $this->getShippingFee();
-            $appliedCoupon = $this->appliedCoupon ?? $cart->getCoupon();
-            $discountAmount = $cart->getDiscountAmount();
 
-            if ($appliedCoupon && ! empty($appliedCoupon['code'])) {
-                $couponService = app(CouponService::class);
-                $validation = $couponService->applyCoupon(
-                    code: (string) $appliedCoupon['code'],
-                    subtotal: $subtotal,
-                    userId: $customer->id
-                );
-
-                if (! $validation['valid']) {
-                    $cart->removeCoupon();
-                    $this->appliedCoupon = null;
-                    throw new Exception("Promotional coupon cannot be redeemed: {$validation['message']}");
-                }
-
-                $discountAmount = (float) $validation['discount'];
-            } else {
-                $discountAmount = 0.00;
-            }
+            $cleanEmail = trim(strtolower($this->recipientEmail));
 
             $shippingAddressPayload = [
                 'recipient_name' => $this->recipientName,
                 'recipient_phone' => $this->recipientPhone,
+                'recipient_email' => $cleanEmail !== '' ? $cleanEmail : null,
                 'street_address' => $this->streetAddress,
                 'city' => $this->city,
                 'postal_code' => $this->postalCode,
                 'delivery_zone' => $this->deliveryZone,
             ];
+
+            if (Auth::check() && $cleanEmail !== '') {
+                $authUser = Auth::user();
+                $resolver = app(EmailRecipientResolver::class);
+                if (! $resolver->isDeliverable($authUser->email)) {
+                    if (! User::where('email', $cleanEmail)->where('id', '!=', $authUser->id)->exists()) {
+                        $authUser->update(['email' => $cleanEmail]);
+                    }
+                }
+            }
 
             if ($paymentMethod && in_array($paymentMethod->slug, ['bkash', 'nagad'])) {
                 $shippingAddressPayload['mfs_gateway'] = $paymentMethod->slug;
@@ -331,9 +421,9 @@ class CheckoutComponent extends Component
             $orderPayload = [
                 'payment_method_id' => $this->selectedPaymentMethodId,
                 'shipping_amount' => $shippingFee,
-                'coupon_id' => $appliedCoupon['id'] ?? null,
-                'coupon_code' => $appliedCoupon['code'] ?? null,
-                'discount_amount' => $discountAmount,
+                'coupon_id' => null,
+                'coupon_code' => null,
+                'discount_amount' => 0.00,
                 'shipping_address' => $shippingAddressPayload,
                 'items' => array_values(array_map(function ($item) {
                     return [
@@ -342,66 +432,94 @@ class CheckoutComponent extends Component
                         'sales_channel_id' => $item['sales_channel_id'],
                         'quantity' => $item['quantity'],
                         'unit_price' => $item['unit_price'],
+                        'flash_sale_product_id' => $item['flash_sale_product_id'] ?? null,
+                        'original_unit_price' => $item['original_unit_price'] ?? null,
+                        'is_quoted' => (bool) ($item['is_quoted'] ?? false),
+                        'rfq_id' => $item['rfq_id'] ?? null,
                     ];
                 }, $items)),
             ];
 
-            $splitter = app(OrderSplitterService::class);
-            $order = $splitter->createAndSplitOrder($customer, $orderPayload);
+            // ORD-3: the order, its payment status, the coupon use and the saved address commit together or not at all.
+            $order = DB::transaction(function () use ($customer, $orderPayload, $paymentMethod, $storedCouponId, $subtotal, $cart): Order {
+                // Lock, validate and price the same coupon row that is then redeemed, so its limits hold under concurrency
+                $couponQuote = null;
+                if ($storedCouponId !== null) {
+                    try {
+                        $couponQuote = app(CouponService::class)->lockForOrder($storedCouponId, $customer->id, $subtotal);
+                    } catch (DomainException $e) {
+                        $cart->removeCoupon();
+                        $this->appliedCoupon = null;
 
-            $escrowService = app(EscrowLedgerService::class);
+                        throw $e;
+                    }
 
-            if ($paymentMethod && in_array($paymentMethod->slug, ['bkash', 'nagad'], true)) {
-                // Manual MFS: the TrxID is checked by an admin before anything is paid, held or shipped (PRA-006).
-                $order->update([
-                    'payment_status_id' => PaymentStatus::where('slug', 'awaiting_verification')->firstOrFail()->id,
-                    'order_status_id' => OrderStatus::where('slug', 'confirmed')->firstOrFail()->id,
-                ]);
-            } elseif ($paymentMethod && $paymentMethod->slug === 'mock_gateway') {
-                $paidStatus = PaymentStatus::where('slug', 'paid')->firstOrFail();
-                $confirmedStatus = OrderStatus::where('slug', 'confirmed')->firstOrFail();
-
-                $order->update([
-                    'payment_status_id' => $paidStatus->id,
-                    'order_status_id' => $confirmedStatus->id,
-                ]);
-
-                foreach ($order->subOrders as $subOrder) {
-                    $escrowService->holdInEscrow($subOrder);
+                    $orderPayload['coupon_id'] = $couponQuote['coupon']->id;
+                    $orderPayload['coupon_code'] = $couponQuote['coupon']->code;
+                    $orderPayload['discount_amount'] = $couponQuote['discount'];
                 }
-            } elseif ($paymentMethod && $paymentMethod->slug === 'cod') {
-                $confirmedStatus = OrderStatus::where('slug', 'confirmed')->firstOrFail();
-                $order->update([
-                    'order_status_id' => $confirmedStatus->id,
-                ]);
-            }
 
-            // Record coupon usage if applied
-            if ($appliedCoupon && ! empty($appliedCoupon['id'])) {
-                $couponModel = Coupon::find($appliedCoupon['id']);
-                if ($couponModel) {
-                    app(CouponService::class)->recordUsage(
-                        coupon: $couponModel,
-                        userId: $customer->id,
-                        orderId: $order->id,
-                        discountAmount: $discountAmount
-                    );
+                $splitter = app(OrderSplitterService::class);
+                $order = $splitter->createAndSplitOrder($customer, $orderPayload);
+
+                $escrowService = app(EscrowLedgerService::class);
+
+                if ($paymentMethod && in_array($paymentMethod->slug, ['bkash', 'nagad'], true)) {
+                    // Manual MFS: the TrxID is checked by an admin before anything is paid, held or shipped (PRA-006).
+                    $order->update([
+                        'payment_status_id' => PaymentStatus::where('slug', 'awaiting_verification')->firstOrFail()->id,
+                        'order_status_id' => OrderStatus::where('slug', 'confirmed')->firstOrFail()->id,
+                    ]);
+                } elseif ($paymentMethod && $paymentMethod->slug === 'mock_gateway') {
+                    $paidStatus = PaymentStatus::where('slug', 'paid')->firstOrFail();
+                    $confirmedStatus = OrderStatus::where('slug', 'confirmed')->firstOrFail();
+
+                    $order->update([
+                        'payment_status_id' => $paidStatus->id,
+                        'order_status_id' => $confirmedStatus->id,
+                    ]);
+
+                    foreach ($order->subOrders as $subOrder) {
+                        $escrowService->holdInEscrow($subOrder);
+                    }
+
+                    // ACC-2: book the money exactly as a verified payment does
+                    app(OrderPaymentJournalHandler::class)->recordPrepaidPayment($order);
+                } elseif ($paymentMethod && $paymentMethod->slug === 'cod') {
+                    $confirmedStatus = OrderStatus::where('slug', 'confirmed')->firstOrFail();
+                    $order->update([
+                        'order_status_id' => $confirmedStatus->id,
+                    ]);
                 }
-            }
 
-            // Save address to address book if requested by customer
-            if ($this->saveToAddressBook && Auth::check()) {
-                CustomerAddress::create([
-                    'user_id' => $customer->id,
-                    'address_title' => $this->newAddressTitle ?: 'Consignment Address',
-                    'recipient_name' => $this->recipientName,
-                    'recipient_phone' => $this->recipientPhone,
-                    'street_address' => $this->streetAddress,
-                    'city' => $this->city,
-                    'postal_code' => $this->postalCode,
-                    'is_default' => $customer->addresses()->count() === 0,
-                ]);
-            }
+                // ORD-3: the use is counted on the coupon row locked above, in the order's transaction
+                if ($couponQuote !== null) {
+                    try {
+                        app(CouponService::class)->recordUsage($couponQuote['coupon'], $customer->id, $order->id, $couponQuote['discount']);
+                    } catch (DomainException $e) {
+                        $cart->removeCoupon();
+                        $this->appliedCoupon = null;
+
+                        throw $e;
+                    }
+                }
+
+                // Save address to address book if requested by customer
+                if ($this->saveToAddressBook && Auth::check()) {
+                    CustomerAddress::create([
+                        'user_id' => $customer->id,
+                        'address_title' => $this->newAddressTitle ?: 'Consignment Address',
+                        'recipient_name' => $this->recipientName,
+                        'recipient_phone' => $this->recipientPhone,
+                        'street_address' => $this->streetAddress,
+                        'city' => $this->city,
+                        'postal_code' => $this->postalCode,
+                        'is_default' => $customer->addresses()->count() === 0,
+                    ]);
+                }
+
+                return $order;
+            });
 
             // Send transactional Order Confirmation SMS with tokenized invoice & tracking
             try {
@@ -414,15 +532,132 @@ class CheckoutComponent extends Component
                 Log::warning('Order SMS dispatch failure: '.$e->getMessage());
             }
 
+            // Trigger OrderPlacedEvent for asynchronous email notification dispatching
+            try {
+                event(new OrderPlacedEvent($order));
+            } catch (\Throwable $e) {
+                Log::warning('Order email event dispatch failure: '.$e->getMessage());
+            }
+
             $cart->clear();
+            $orderPlaced = true;
 
             $this->redirectRoute('tracking.show', [
                 'order' => $order->order_number,
                 'phone' => $this->recipientPhone,
             ]);
+        } catch (UniqueConstraintViolationException $e) {
+            // Two orders with the same TrxID at the same moment: the second one is refused (PAY-3).
+            if (! str_contains($e->getMessage(), 'mfs_')) {
+                throw $e;
+            }
+            $this->addError('mfsTransactionId', self::trxIdUsedMessage($paymentMethod?->name ?? 'bKash/Nagad'));
+        } catch (FlashSaleUnavailableException $e) {
+            $this->errorMessage = $e->getMessage();
+            if ($e->saleEnded) {
+                $cart->refreshPrices();
+            }
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
+        } finally {
+            // A failed attempt gives the token back so the buyer can fix the problem and try again; a placed order keeps it spent
+            if (! $orderPlaced) {
+                $orderLock->release();
+            }
         }
+    }
+
+    public function resendPhoneCode(): void
+    {
+        $this->sendPhoneCode();
+    }
+
+    public function changePhoneNumber(): void
+    {
+        $this->resetPhoneCodeStep();
+    }
+
+    /**
+     * Check the SMS code, sign the shopper in to the account for that phone (made if new), then place the order.
+     */
+    public function confirmPhoneCode(): void
+    {
+        $this->errorMessage = '';
+        $this->phoneCodeNotice = '';
+
+        $this->validate(['phoneCode' => 'required|string|min:4|max:8'], ['phoneCode.required' => 'Enter the code we sent by SMS.']);
+
+        $phone = (string) session(self::VERIFYING_PHONE_SESSION_KEY, '');
+        if ($phone === '' || ! PhoneNormalizer::isValid($this->recipientPhone) || PhoneNormalizer::normalize($this->recipientPhone) !== $phone) {
+            $this->resetPhoneCodeStep();
+            $this->errorMessage = 'The phone number changed. Please press Place order again to get a code for the new number.';
+
+            return;
+        }
+
+        $result = app(OtpService::class)->verify($phone, trim($this->phoneCode), 'checkout');
+        if (! $result['success']) {
+            $this->addError('phoneCode', OtpMessages::verifyFailure($result));
+
+            return;
+        }
+
+        try {
+            $customer = app(ResolveCheckoutCustomer::class)->forConfirmedPhone(trim($this->recipientName), $phone);
+        } catch (DomainException $exception) {
+            $this->resetPhoneCodeStep();
+            $this->errorMessage = $exception->getMessage();
+
+            return;
+        }
+
+        Auth::login($customer, true);
+        if (request()->hasSession()) {
+            request()->session()->regenerate();
+        }
+
+        $this->resetPhoneCodeStep();
+        $this->placeOrder();
+    }
+
+    private function sendPhoneCode(): void
+    {
+        $phone = PhoneNormalizer::normalize($this->recipientPhone);
+
+        try {
+            app(ResolveCheckoutCustomer::class)->ensureMayConfirmByPhone($phone);
+        } catch (DomainException $exception) {
+            $this->errorMessage = $exception->getMessage();
+
+            return;
+        }
+
+        $result = app(OtpService::class)->sendOtp($phone, 'checkout');
+        if (! $result['success']) {
+            $this->errorMessage = OtpMessages::sendFailure($result);
+
+            return;
+        }
+
+        session()->put(self::VERIFYING_PHONE_SESSION_KEY, $phone);
+        $this->awaitingPhoneCode = true;
+        $this->phoneCode = '';
+        $this->resetErrorBag('phoneCode');
+        $this->phoneCodeNotice = "We sent a code by SMS to {$this->recipientPhone}. Enter it to place your order.";
+    }
+
+    private function resetPhoneCodeStep(): void
+    {
+        session()->forget(self::VERIFYING_PHONE_SESSION_KEY);
+        $this->awaitingPhoneCode = false;
+        $this->phoneCode = '';
+        $this->phoneCodeNotice = '';
+        $this->resetErrorBag('phoneCode');
+    }
+
+    private static function trxIdUsedMessage(string $gatewayName): string
+    {
+        return "This TrxID has already been used for another order. Check the transaction ID in your {$gatewayName} confirmation SMS.";
     }
 
     public function render()

@@ -14,6 +14,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class SendSmsJob implements ShouldQueue
@@ -59,7 +60,8 @@ class SendSmsJob implements ShouldQueue
 
         // 2. Deduplication guard (60 seconds)
         $lockKey = 'sms_lock:'.$normalizedPhone.':'.md5($this->message);
-        if (! $this->bypassDeduplication && ! Cache::add($lockKey, true, 60)) {
+        // A retry (attempt 2+) is the same message, not a duplicate (PERF-4)
+        if (! $this->bypassDeduplication && $this->attempts() <= 1 && ! Cache::add($lockKey, true, 60)) {
             return; // Duplicate prevented
         }
 
@@ -73,7 +75,14 @@ class SendSmsJob implements ShouldQueue
             'retries_count' => $this->attempts(),
         ]);
 
-        $response = $sms->send($normalizedPhone, $this->message, $this->purpose);
+        try {
+            $response = $sms->send($normalizedPhone, $this->message, $this->purpose);
+        } catch (\Throwable $e) {
+            // PERF-4: a gateway error must not leave the log row "pending"
+            $log->update(['status' => 'failed', 'error_message' => mb_substr($e->getMessage(), 0, 1000)]);
+
+            throw $e;
+        }
 
         $log->update([
             'status' => $response->isSuccessful() ? 'sent' : 'failed',
@@ -87,6 +96,11 @@ class SendSmsJob implements ShouldQueue
         if (! $response->isSuccessful() && $response->responseCode() !== '1001') {
             throw new RuntimeException('SMS dispatch failed: '.($response->errorMessage() ?? 'Unknown provider error'));
         }
+    }
+
+    public function failed(\Throwable $e): void
+    {
+        Log::warning('SMS gave up after all retries: '.$e->getMessage(), ['purpose' => $this->purpose]);
     }
 
     /**

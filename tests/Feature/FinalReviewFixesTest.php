@@ -72,11 +72,17 @@ class FinalReviewFixesTest extends TestCase
         return [$sub->fresh(), $variation];
     }
 
-    // I1 — approved replacement must not strand the escrow hold
+    // I1 — approved replacement must not strand the escrow hold; it is released once the replacement is delivered (WA-ORD-03)
     public function test_approved_replacement_keeps_delivery_and_escrow_releases(): void
     {
         $order = MixedOrderFixture::create('cod', 'unpaid');
         $sub = $order->subOrders->firstWhere('subtotal', 500);
+        $variation = ProductVariation::where('product_id', '!=', 0)->orderBy('id')->firstOrFail();
+        OrderItem::create([
+            'sub_order_id' => $sub->id, 'product_id' => $variation->product_id, 'variation_id' => $variation->id,
+            'sales_channel_id' => SalesChannel::where('slug', SalesChannel::RETAIL)->value('id'),
+            'quantity' => 2, 'unit_price' => 250, 'total_price' => 500,
+        ]);
         app(CourierStatusService::class)->updateStatus($sub, 'delivered');
 
         $disputes = app(OrderDisputeService::class);
@@ -87,6 +93,11 @@ class FinalReviewFixesTest extends TestCase
 
         $this->assertSame('delivered', $sub->fresh()->fulfillmentStatus->slug);
         $this->assertSame(0, Refund::count());
+
+        $replacement = SubOrder::where('replaces_sub_order_id', $sub->id)->firstOrFail();
+        $replacement->update(['tracking_number' => 'TRK-RPL-'.$replacement->id, 'courier_name' => 'Steadfast Courier']);
+        app(CourierStatusService::class)->updateStatus($replacement->fresh(), 'shipped');
+        app(CourierStatusService::class)->updateStatus($replacement->fresh(), 'delivered');
 
         $this->travel(49)->hours();
         $this->artisan('escrow:release-delivered')->assertSuccessful();
@@ -163,14 +174,14 @@ class FinalReviewFixesTest extends TestCase
         $rfq = RfqRequest::create([
             'product_id' => $product->id, 'seller_id' => $product->seller_id, 'buyer_id' => $buyer->id,
             'buyer_name' => 'B', 'buyer_email' => $buyer->email, 'buyer_phone' => '01711000000',
-            'target_quantity' => 500, 'destination_district' => 'Dhaka', 'status' => 'quoted', 'seller_quoted_price' => 70,
+            'target_quantity' => 500, 'option_quantities' => [$product->variations()->orderBy('id')->value('id') => 500], 'destination_district' => 'Dhaka', 'status' => 'quoted', 'seller_quoted_price' => 70,
         ]);
 
         $this->actingAs($buyer)->post(route('rfq.quotation.accept', $rfq->id))->assertRedirect();
         $this->actingAs($buyer)->post(route('rfq.quotation.accept', $rfq->id))->assertRedirect();
 
         $cart = app(CartSessionService::class);
-        $key = "{$product->id}_base_".SalesChannel::WHOLESALE;
+        $key = CartSessionService::quotedLineKey($product->id, $product->variations()->orderBy('id')->value('id'), $rfq->id);
         $this->assertSame(500, $cart->getItems()[$key]['quantity'], 'Accepting twice must not double the line');
 
         try {
@@ -260,10 +271,10 @@ class FinalReviewFixesTest extends TestCase
         $this->test_editing_simple_product_without_touching_stock_keeps_live_stock();
         $product = Product::where('slug', 'simple-race')->firstOrFail();
 
+        // INV-3: through "Adjust stock" (5 in stock + 35), not by typing a new total into the form
         Livewire::test(EditProduct::class, ['record' => $product->getRouteKey()])
-            ->fillForm(['simple_stock_quantity' => 40])
-            ->call('save')
-            ->assertHasNoFormErrors();
+            ->callAction('adjustStock', ['change' => 35, 'reason' => 'received'])
+            ->assertHasNoActionErrors();
 
         $this->assertSame(40, $product->variations()->sole()->stock_quantity);
     }

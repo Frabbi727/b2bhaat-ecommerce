@@ -79,7 +79,7 @@ class AdminModerationTest extends TestCase
 
     public function test_admin_can_show_a_hidden_product_again(): void
     {
-        $this->nails->update(['blocked_at' => now(), 'blocked_reason' => 'Check']);
+        $this->nails->forceFill(['blocked_at' => now(), 'blocked_reason' => 'Check'])->save();
         $this->actAsAdmin();
 
         Livewire::test(ListModeratedProducts::class)->callTableAction('unhide', $this->nails);
@@ -91,7 +91,7 @@ class AdminModerationTest extends TestCase
     public function test_product_in_a_cart_that_becomes_unavailable_cannot_be_ordered(): void
     {
         app(CartSessionService::class)->addItem($this->nails->id, $this->nails->variations()->firstOrFail()->id, SalesChannel::RETAIL, 1);
-        $this->nails->update(['blocked_at' => now()]);
+        $this->nails->forceFill(['blocked_at' => now()])->save();
         $ordersBefore = Order::count();
 
         Livewire::test(CheckoutComponent::class)
@@ -118,6 +118,28 @@ class AdminModerationTest extends TestCase
 
         $this->assertFalse($review->fresh()->is_approved);
         Livewire::test(ProductDetail::class, ['slug' => $this->nails->slug])->assertDontSee($review->title);
+    }
+
+    public function test_admin_reads_a_full_review_and_finds_hidden_ones_on_their_tab(): void
+    {
+        $review = ProductReview::where('product_id', $this->nails->id)->firstOrFail();
+        $review->update(['seller_reply' => 'Thank you for ordering again!', 'seller_replied_at' => now()]);
+        $this->actAsAdmin();
+
+        Livewire::test(ListProductReviews::class)
+            ->mountTableAction('read', $review)
+            ->assertMountedActionModalSee([$review->comment, 'Thank you for ordering again!']);
+
+        Livewire::test(ListProductReviews::class)
+            ->set('activeTab', 'hidden')
+            ->assertCanNotSeeTableRecords([$review])
+            ->set('activeTab', 'shown')
+            ->callTableAction('hide', $review)
+            ->set('activeTab', 'hidden')
+            ->assertCanSeeTableRecords([$review])
+            ->callTableAction('show', $review);
+
+        $this->assertTrue($review->fresh()->is_approved);
     }
 
     // Returns

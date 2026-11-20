@@ -112,7 +112,7 @@
                         <div>
                             <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider">Order</span>
                             <div class="text-lg font-black text-slate-900 font-mono">{{ $order->order_number }}</div>
-                            <div class="text-xs text-slate-500 mt-0.5">Placed on {{ $order->created_at->format('M d, Y h:i A') }}</div>
+                            <div class="text-xs text-slate-500 mt-0.5">Placed on {{ $order->created_at->format('d M Y, g:i A') }}</div>
                         </div>
 
                         <!-- Actions & Badges -->
@@ -195,9 +195,7 @@
                                     @if ($sub->is_self_delivered && $sub->handover_code && $sub->fulfillmentStatus?->slug !== 'delivered')
                                         <div class="mt-2 p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 flex items-center justify-between text-xs">
                                             <span class="text-[11px] font-semibold">Your delivery code (give it to the delivery person after you check the parcel):</span>
-                                            <span class="font-mono font-black text-xs px-2 py-0.5 rounded bg-amber-200/90 text-amber-950 tracking-wider">
-                                                {{ $sub->handover_code }}
-                                            </span>
+                                            <span class="font-mono font-black text-xs px-2 py-0.5 rounded bg-amber-200/90 text-amber-950 tracking-wider select-all">{{ $sub->handover_code }}</span>
                                         </div>
                                     @endif
                                 </div>

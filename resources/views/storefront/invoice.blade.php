@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Commercial Tax Invoice - {{ $order->order_number }}</title>
+    <x-brand.favicons />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         @media print {
@@ -31,6 +32,7 @@
         @php
             $storeConfig = app(\App\Services\Settings\StoreConfigurationService::class);
             $identity = $storeConfig->getStoreIdentity();
+            $invoiceDisplay = $storeConfig->getInvoiceDisplaySettings();
         @endphp
         <!-- Invoice Printable Paper -->
         <div class="invoice-box bg-white p-8 sm:p-12 rounded-3xl border border-slate-200 shadow-sm space-y-8">
@@ -38,10 +40,12 @@
             <div class="flex justify-between items-start border-b border-slate-200 pb-8">
                 <div>
                     <div class="flex items-center gap-2">
-                        <span class="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-black text-lg">B2B</span>
+                        <img src="{{ $identity['logo_url'] }}" alt="{{ $identity['name'] }} logo" width="44" height="44" class="w-11 h-11 object-contain">
                         <h1 class="text-2xl font-black text-slate-900 tracking-tight">{{ $identity['name'] }}</h1>
                     </div>
-                    <p class="text-xs text-slate-500 mt-1">Hybrid Wholesale & Retail Marketplace Platform</p>
+                    @if ($identity['tagline'])
+                        <p class="text-xs text-slate-500 mt-1">{{ $identity['tagline'] }}</p>
+                    @endif
                     @if ($identity['address'])
                         <p class="text-[11px] text-slate-500 font-mono mt-0.5">{{ $identity['address'] }}</p>
                     @endif
@@ -58,7 +62,7 @@
                         TAX INVOICE / CHALLAN
                     </span>
                     <div class="text-xs text-slate-500 mt-1">Invoice #: <strong class="text-slate-900 font-mono">{{ $order->order_number }}</strong></div>
-                    <div class="text-xs text-slate-500">Date: <strong class="text-slate-900">{{ $order->created_at->format('d M, Y') }}</strong></div>
+                    <div class="text-xs text-slate-500">Date: <strong class="text-slate-900">{{ $order->created_at->format('d M Y') }}</strong></div>
                     <div class="text-xs">
                         Payment: 
                         <span class="font-bold uppercase {{ $order->paymentStatus?->slug === 'paid' ? 'text-emerald-600' : 'text-amber-600' }}">
@@ -76,6 +80,9 @@
                     <div class="text-slate-600 mt-0.5">{{ $order->shipping_address['street_address'] ?? '' }}</div>
                     <div class="text-slate-600">{{ $order->shipping_address['city'] ?? '' }} - {{ $order->shipping_address['postal_code'] ?? '' }}</div>
                     <div class="text-slate-600 font-mono mt-1">Contact: {{ $order->shipping_address['recipient_phone'] ?? $order->customer?->phone }}</div>
+                    @if (! empty($order->shipping_address['recipient_email']))
+                        <div class="text-slate-600 text-xs mt-0.5">Email: {{ $order->shipping_address['recipient_email'] }}</div>
+                    @endif
                 </div>
 
                 <div class="text-right">
@@ -100,6 +107,16 @@
                                 @if ($subOrder->seller?->sellerProfile?->trade_license_number)
                                     <span class="text-[10px] text-slate-400 font-mono">({{ $subOrder->seller?->sellerProfile?->trade_license_number }})</span>
                                 @endif
+                                @php
+                                    $vendorProfile = $subOrder->seller?->sellerProfile;
+                                    $vendorContact = $vendorProfile ? collect([
+                                        $vendorProfile->showsContactOnInvoice($invoiceDisplay['show_seller_address']) ? $vendorProfile->business_address : null,
+                                        $vendorProfile->showsContactOnInvoice($invoiceDisplay['show_seller_phone']) && $vendorProfile->business_phone ? 'Phone: '.$vendorProfile->business_phone : null,
+                                    ])->filter()->implode(' • ') : '';
+                                @endphp
+                                @if ($vendorContact !== '')
+                                    <div class="text-[11px] text-slate-500 mt-0.5" data-testid="vendor-contact">{{ $vendorContact }}</div>
+                                @endif
                             </div>
                             <div>
                                 @if ($subOrder->tracking_number)
@@ -114,8 +131,8 @@
                                     <th class="py-2.5 px-4">Item & Specifications</th>
                                     <th class="py-2.5 px-4">Channel</th>
                                     <th class="py-2.5 px-4 text-center">Quantity</th>
-                                    <th class="py-2.5 px-4 text-right">Unit Rate (Tk)</th>
-                                    <th class="py-2.5 px-4 text-right">Line Total (Tk)</th>
+                                    <th class="py-2.5 px-4 text-right">Unit Rate (৳)</th>
+                                    <th class="py-2.5 px-4 text-right">Line Total (৳)</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 bg-white">
@@ -153,6 +170,25 @@
             <!-- Financial Calculation Table -->
             <div class="flex justify-end pt-4">
                 <div class="w-80 space-y-2 text-xs border-t border-slate-200 pt-4">
+                    @if ($sellerScoped ?? false)
+                        @php
+                            $packageSubtotal = (float) $order->subOrders->sum('subtotal');
+                            $packageShipping = (float) $order->subOrders->sum('shipping_amount');
+                        @endphp
+                        <div class="flex justify-between text-slate-600">
+                            <span>Your Items Subtotal:</span>
+                            <span class="font-mono font-bold text-slate-900">৳{{ number_format($packageSubtotal, 2) }}</span>
+                        </div>
+                        <div class="flex justify-between text-slate-600">
+                            <span>Delivery / Freight:</span>
+                            <span class="font-mono font-bold text-slate-800">৳{{ number_format($packageShipping, 2) }}</span>
+                        </div>
+                        <div class="border-t border-slate-900 pt-2 flex justify-between items-baseline text-sm">
+                            <span class="font-black text-slate-900">Your Packages Total:</span>
+                            <span class="font-black text-indigo-600 text-lg font-mono">৳{{ number_format($packageSubtotal + $packageShipping, 2) }}</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400">This copy shows only your packages. Order-wide discounts are not included.</p>
+                    @else
                     @php
                         $rawSubtotal = $order->subOrders->sum('subtotal');
                     @endphp
@@ -180,8 +216,13 @@
                         <span class="font-black text-slate-900">Total Payable:</span>
                         <span class="font-black text-indigo-600 text-lg font-mono">৳{{ number_format($order->total_amount, 2) }}</span>
                     </div>
+                    @endif
                 </div>
             </div>
+
+            @if ($identity['invoice_footer_note'])
+                <div class="text-[11px] text-slate-500 whitespace-pre-line border-t border-slate-100 pt-4">{{ $identity['invoice_footer_note'] }}</div>
+            @endif
 
             <!-- Footer Signatures & Terms -->
             <div class="border-t border-slate-200 pt-8 mt-12 grid grid-cols-2 text-center text-xs text-slate-400">

@@ -45,7 +45,10 @@ class SystemLookupSeeder extends Seeder
             ['name' => 'Awaiting Verification', 'slug' => 'awaiting_verification', 'badge_color' => '#F59E0B', 'is_terminal' => false],
             ['name' => 'Paid', 'slug' => 'paid', 'badge_color' => '#10B981', 'is_terminal' => true],
             ['name' => 'Failed', 'slug' => 'failed', 'badge_color' => '#EF4444', 'is_terminal' => true],
+            ['name' => 'Refund Pending', 'slug' => 'refund_pending', 'badge_color' => '#F97316', 'is_terminal' => false],
+            ['name' => 'Partially Refunded', 'slug' => 'partially_refunded', 'badge_color' => '#8B5CF6', 'is_terminal' => false],
             ['name' => 'Refunded', 'slug' => 'refunded', 'badge_color' => '#6B7280', 'is_terminal' => true],
+            ['name' => 'Not Confirmed', 'slug' => 'expired', 'badge_color' => '#9CA3AF', 'is_terminal' => true],
         ];
         foreach ($paymentStatuses as $status) {
             PaymentStatus::firstOrCreate(['slug' => $status['slug']], $status);
@@ -83,6 +86,12 @@ class SystemLookupSeeder extends Seeder
             ['name' => 'Carton', 'symbol' => 'ctn'],
             ['name' => 'Box', 'symbol' => 'box'],
             ['name' => 'Kilogram', 'symbol' => 'kg'],
+            ['name' => 'Set', 'symbol' => 'set'],
+            ['name' => 'Pack', 'symbol' => 'pack'],
+            ['name' => 'Bottle', 'symbol' => 'bottle'],
+            ['name' => 'Jar', 'symbol' => 'jar'],
+            ['name' => 'Tube', 'symbol' => 'tube'],
+            ['name' => 'Roll', 'symbol' => 'roll'],
         ];
         foreach ($units as $unit) {
             Unit::firstOrCreate(['symbol' => $unit['symbol']], $unit);
@@ -94,10 +103,14 @@ class SystemLookupSeeder extends Seeder
             ['name' => 'bKash Gateway', 'slug' => 'bkash', 'is_active' => true],
             ['name' => 'Nagad Gateway', 'slug' => 'nagad', 'is_active' => true],
             ['name' => 'SSLCommerz Gateway', 'slug' => 'sslcommerz', 'is_active' => true],
-            ['name' => 'Mock Sandbox Gateway', 'slug' => 'mock_gateway', 'is_active' => true],
+            // ACC-2: the sandbox gateway is never switched on outside local/testing
+            ['name' => 'Mock Sandbox Gateway', 'slug' => 'mock_gateway', 'is_active' => app()->environment('local', 'testing')],
         ];
         foreach ($paymentMethods as $pm) {
             PaymentMethod::firstOrCreate(['slug' => $pm['slug']], $pm);
         }
+
+        // 8. Accounting Chart of Accounts
+        $this->call(AccountingChartOfAccountsSeeder::class);
     }
 }

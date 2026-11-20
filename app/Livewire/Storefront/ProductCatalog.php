@@ -7,12 +7,16 @@ namespace App\Livewire\Storefront;
 use App\Models\Banner;
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\FlashSale;
 use App\Models\Product;
+use App\Models\ProductPrice;
 use App\Models\SalesChannel;
 use App\Models\SellerProfile;
 use App\Models\Wishlist;
 use App\Services\Cart\CartSessionService;
+use App\Services\Promotions\FlashSalePricing;
 use Exception;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
@@ -91,10 +95,11 @@ class ProductCatalog extends Component
             'wholesalePrice',
             'prices',
             'variations.attributeValues.attribute',
-        ])->find($productId);
+        ])->sellable()->find($productId);
 
         if (! $this->quickViewProduct) {
             $this->errorMessage = 'Product not found.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
@@ -145,6 +150,7 @@ class ProductCatalog extends Component
 
         if ($this->quickViewProduct->seller?->sellerProfile?->is_on_vacation) {
             $this->errorMessage = 'This merchant is on vacation mode and cannot accept orders right now.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
@@ -158,10 +164,12 @@ class ProductCatalog extends Component
             );
 
             $this->feedbackMessage = "Added {$this->quickViewQuantity}x '{$this->quickViewProduct->title}' to your cart.";
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: true);
             $this->dispatch('cartUpdated');
             $this->closeQuickView();
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
         }
     }
 
@@ -173,6 +181,7 @@ class ProductCatalog extends Component
 
         if ($this->quickViewProduct->seller?->sellerProfile?->is_on_vacation) {
             $this->errorMessage = 'This merchant is on vacation mode and cannot accept orders right now.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
@@ -189,6 +198,7 @@ class ProductCatalog extends Component
             $this->redirect(route('checkout.index'));
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
         }
     }
 
@@ -284,12 +294,17 @@ class ProductCatalog extends Component
         if ($existing) {
             $existing->delete();
             $this->feedbackMessage = 'Product removed from your Wishlist.';
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: false);
+        } elseif (! Product::sellable()->whereKey($productId)->exists()) {
+            $this->errorMessage = 'This product is not available right now.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
         } else {
             Wishlist::create([
                 'user_id' => $userId,
                 'product_id' => $productId,
             ]);
             $this->feedbackMessage = 'Product saved to your Wishlist!';
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: false);
         }
     }
 
@@ -300,12 +315,14 @@ class ProductCatalog extends Component
         $product = Product::with(['retailPrice', 'variations', 'seller.sellerProfile'])->find($productId);
         if (! $product) {
             $this->errorMessage = 'Product not found.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
 
         if ($product->seller?->sellerProfile?->is_on_vacation) {
             $this->errorMessage = 'This merchant is on vacation mode and cannot accept orders right now.';
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
             return;
         }
@@ -329,9 +346,11 @@ class ProductCatalog extends Component
             );
 
             $this->feedbackMessage = "Added '{$product->title}' to your cart.";
+            $this->dispatch('toast', message: $this->feedbackMessage, tone: 'success', cart: true);
             $this->dispatch('cartUpdated');
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
+            $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
         }
     }
 
@@ -349,21 +368,45 @@ class ProductCatalog extends Component
         $heroBanners = Banner::active()->forPosition('hero_slider')->get();
         $promoStripBanners = Banner::active()->forPosition('promo_strip')->get();
 
-        // Flash Sales Section Products
-        $flashSaleProducts = Product::query()
-            ->listable()
-            ->flashSale()
-            ->with(['seller.sellerProfile', 'category', 'brand', 'primaryImage', 'retailPrice'])
-            ->take(6)
-            ->get();
+        // Top priority live campaign for the homepage section
+        // Only a campaign with approved, sellable products earns the homepage slot
+        $activeFlashSale = FlashSale::query()->live()
+            ->whereHas('approvedProducts', fn ($products) => $products->listable())
+            ->orderByDesc('is_featured')
+            ->orderByDesc('display_priority')
+            ->orderBy('ends_at')
+            ->first();
+
+        $liveCampaignsCount = FlashSale::query()->live()
+            ->whereHas('approvedProducts', fn ($products) => $products->listable())
+            ->count();
+
+        $flashSaleProducts = $activeFlashSale
+            ? $activeFlashSale->approvedProducts()
+                ->listable()
+                ->with(['seller.sellerProfile', 'category', 'brand', 'primaryImage', 'retailPrice', 'variations'])
+                ->take(6)
+                ->get()
+            : collect();
+
+        $flashDealStock = [];
+        if ($flashSaleProducts->isNotEmpty()) {
+            $flashDealStock = app(FlashSalePricing::class)->dealStockFor($flashSaleProducts);
+        }
 
         // Featured Products Section
         $featuredProducts = Product::query()
             ->listable()
             ->featured()
-            ->with(['seller.sellerProfile', 'category', 'brand', 'primaryImage', 'retailPrice'])
+            ->whereNotIn('id', $flashSaleProducts->pluck('id'))
+            ->with(['seller.sellerProfile', 'category', 'brand', 'primaryImage', 'retailPrice', 'variations'])
             ->take(8)
             ->get();
+
+        // Keep the featured grid to whole rows of four, so the section never ends on a half-empty row.
+        if ($featuredProducts->count() > 4) {
+            $featuredProducts = $featuredProducts->take(intdiv($featuredProducts->count(), 4) * 4);
+        }
 
         $user = auth()->user();
         $isWholesaleUser = $user && $user->isWholesaleBuyer();
@@ -460,7 +503,7 @@ class ProductCatalog extends Component
                 $query->orderBy('views_count', 'desc')->orderBy('sales_count', 'desc');
                 break;
             case 'discount':
-                $query->orderByRaw('(CASE WHEN regular_price > 0 AND flash_sale_price > 0 THEN ((regular_price - flash_sale_price) / regular_price) ELSE 0 END) DESC');
+                $this->orderByRetailDiscount($query);
                 break;
             case 'newest':
             default:
@@ -469,6 +512,8 @@ class ProductCatalog extends Component
         }
 
         $products = $query->paginate(12);
+
+        app(FlashSalePricing::class)->primeFor([...$flashSaleProducts, ...$featuredProducts, ...$products->items()]);
 
         // Determine if customer is filtering/searching or viewing standard homepage
         $isFiltering = ! empty($this->search)
@@ -490,12 +535,35 @@ class ProductCatalog extends Component
             'isWholesalePending' => (bool) $user?->isWholesalePending(),
             'heroBanners' => $heroBanners,
             'promoStripBanners' => $promoStripBanners,
+            'activeFlashSale' => $activeFlashSale,
+            'liveCampaignsCount' => $liveCampaignsCount,
             'flashSaleProducts' => $flashSaleProducts,
-            // The countdown runs to the soonest real end time; no end time means no countdown
-            'flashSaleEndsAt' => $flashSaleProducts->pluck('flash_sale_end')->filter()->min(),
+            'flashDealStock' => $flashDealStock,
+            'flashSaleEndsAt' => $activeFlashSale?->ends_at,
             'featuredProducts' => $featuredProducts,
             'userWishlistIds' => $userWishlistIds,
             'isFiltering' => $isFiltering,
         ]);
+    }
+
+    /**
+     * Biggest saving of the shop price against the list (regular) price first. Campaign prices are left out of the sort.
+     *
+     * @param  Builder<Product>  $query
+     */
+    private function orderByRetailDiscount(Builder $query): void
+    {
+        $retailPrice = ProductPrice::query()
+            ->select('unit_price')
+            ->whereColumn('product_prices.product_id', 'products.id')
+            ->whereNull('product_prices.variation_id')
+            ->whereHas('salesChannel', fn (Builder $channel): Builder => $channel->where('slug', SalesChannel::RETAIL))
+            ->orderBy('product_prices.min_quantity')
+            ->limit(1);
+
+        $query->orderByRaw(
+            "(CASE WHEN products.regular_price > 0 THEN ((products.regular_price - COALESCE(({$retailPrice->toSql()}), products.regular_price)) / products.regular_price) ELSE 0 END) DESC",
+            $retailPrice->getBindings(),
+        )->orderBy('products.id', 'desc');
     }
 }

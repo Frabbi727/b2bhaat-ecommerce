@@ -63,12 +63,26 @@ To pull the latest code, run database migrations, build frontend assets, upgrade
 
 ```bash
 cd ~/b2bhaat.com && \
-git fetch origin production && \
-git reset --hard origin/production && \
-composer install --no-dev --optimize-autoloader --no-interaction && \
-npm ci && npm run build && \
-php artisan migrate --force && \
-php artisan filament:upgrade && \
-php artisan optimize:clear && \
-php artisan optimize
+    git fetch origin production && \
+    git reset --hard origin/production && \
+    composer install --no-dev --optimize-autoloader --no-interaction && \
+    npm ci && npm run build && \
+    php artisan migrate --force && \
+    php artisan filament:upgrade && \
+    php artisan optimize:clear && \
+    php artisan optimize && \
+    php artisan queue:restart
+```
+
+
+
+```bash
+MAIL_MAILER=smtp
+MAIL_HOST=mail.b2bhaat.com
+MAIL_PORT=465
+MAIL_USERNAME=noreply@b2bhaat.com
+MAIL_PASSWORD= b2bhaat@
+MAIL_ENCRYPTION=ssl
+MAIL_FROM_ADDRESS="noreply@b2bhaat.com"
+MAIL_FROM_NAME="B2B Haat"
 ```

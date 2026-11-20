@@ -10,9 +10,16 @@ use App\Models\SmsSetting;
 use App\Services\Sms\Contracts\SmsGatewayInterface;
 use App\Services\Sms\Support\PhoneNormalizer;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\RateLimiter;
 
 class OtpService
 {
+    /** SEC-6: wrong codes allowed per phone before a pause. */
+    public const WRONG_CODES_BEFORE_LOCK = 5;
+
+    /** SEC-6: length of the pause after too many wrong codes. */
+    public const LOCK_SECONDS = 900;
+
     public function __construct(
         protected ?SmsGatewayInterface $sms = null
     ) {}
@@ -43,6 +50,22 @@ class OtpService
                 'seconds_remaining' => (int) max(1, $secondsRemaining),
             ];
         }
+
+        // 1b. Cap codes per network address and per phone per day, so the form cannot be used to send SMS in bulk (SEC-7)
+        $ipKey = 'otp-ip:'.(request()?->ip() ?? 'cli');
+        $phoneDayKey = 'otp-phone-day:'.$normalized;
+        $perIpPerHour = (int) config('sms.otp.max_per_ip_per_hour', 10);
+        $perPhonePerDay = (int) config('sms.otp.max_per_phone_per_day', 10);
+
+        if (RateLimiter::tooManyAttempts($ipKey, $perIpPerHour) || RateLimiter::tooManyAttempts($phoneDayKey, $perPhonePerDay)) {
+            return [
+                'success' => false,
+                'error' => 'RATE_LIMITED',
+            ];
+        }
+
+        RateLimiter::hit($ipKey, 3600);
+        RateLimiter::hit($phoneDayKey, 86400);
 
         // 2. Invalidate previous active unverified OTPs for this phone + purpose
         Otp::where('phone', $normalized)
@@ -87,7 +110,7 @@ class OtpService
     /**
      * Verify an OTP submitted by the user.
      *
-     * @return array{success: bool, error?: string, attempts_left?: int}
+     * @return array{success: bool, error?: string, attempts_left?: int, seconds_remaining?: int}
      */
     /**
      * The fallback OTP is a local/testing convenience only; it is never honoured in other environments.
@@ -106,6 +129,16 @@ class OtpService
     public function verify(string $phone, string $code, string $purpose = 'verification'): array
     {
         $normalized = PhoneNormalizer::normalize($phone);
+
+        // SEC-6: wrong codes are counted per phone across codes, so asking for a new code doesn't reset the count
+        $lockKey = self::verifyLockKey($normalized, $purpose);
+        if (RateLimiter::tooManyAttempts($lockKey, self::WRONG_CODES_BEFORE_LOCK)) {
+            return [
+                'success' => false,
+                'error' => 'LOCKED',
+                'seconds_remaining' => max(1, RateLimiter::availableIn($lockKey)),
+            ];
+        }
 
         if ($this->fallbackOtpMatches($code)) {
             $pendingOtp = Otp::where('phone', $normalized)
@@ -155,7 +188,9 @@ class OtpService
         $submittedHash = hash('sha256', $code);
         if (! hash_equals($otp->code_hash, $submittedHash)) {
             $otp->increment('attempts');
-            $attemptsLeft = max(0, $otp->max_attempts - ($otp->attempts + 1));
+            RateLimiter::hit($lockKey, self::LOCK_SECONDS);
+            // increment() already updated $otp->attempts
+            $attemptsLeft = max(0, $otp->max_attempts - $otp->attempts);
 
             return [
                 'success' => false,
@@ -167,9 +202,15 @@ class OtpService
         $otp->update([
             'verified_at' => Carbon::now(),
         ]);
+        RateLimiter::clear($lockKey);
 
         return [
             'success' => true,
         ];
+    }
+
+    public static function verifyLockKey(string $normalizedPhone, string $purpose): string
+    {
+        return "otp-verify:{$purpose}:{$normalizedPhone}";
     }
 }

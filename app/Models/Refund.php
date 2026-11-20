@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Traits\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -12,6 +13,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Refund extends Model
 {
+    use Auditable;
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_PAID = 'paid';
@@ -19,11 +22,13 @@ class Refund extends Model
     protected $fillable = [
         'order_id',
         'sub_order_id',
+        'return_request_id',
         'amount',
         'reason',
         'status',
         'method',
         'reference',
+        'reference_key',
         'paid_at',
     ];
 

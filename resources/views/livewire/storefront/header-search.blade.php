@@ -1,49 +1,37 @@
 <div class="relative w-full max-w-2xl" x-data="{ focused: false }" @click.outside="$wire.closeDropdown(); focused = false">
-    <form wire:submit.prevent="submitSearch" class="relative flex items-center">
-        <!-- Category Scope Dropdown -->
-        <div class="hidden sm:flex items-center shrink-0 border-r border-slate-200 bg-slate-50 rounded-l-xl">
-            <select
-                wire:model.live="selectedCategory"
-                class="h-11 pl-3 pr-8 text-xs font-semibold text-slate-700 bg-transparent border-0 focus:ring-0 focus:outline-none cursor-pointer"
-            >
-                <option value="">All Categories</option>
-                @foreach ($allCategories as $cat)
-                    <option value="{{ $cat->id }}">{{ $cat->name }}</option>
-                @endforeach
-            </select>
-        </div>
-
-        <!-- Search Input -->
+    <form wire:submit.prevent="submitSearch" role="search" class="relative flex items-center">
+        <label for="header-search-input" class="sr-only">Search products</label>
         <div class="relative flex-1">
+            <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z"/></svg>
             <input
-                type="text"
+                id="header-search-input"
+                type="search"
                 wire:model.live.debounce.250ms="query"
                 @focus="focused = true"
-                placeholder="Search products or brands"
-                aria-label="Search products"
-                class="w-full h-11 pl-4 pr-10 text-sm text-slate-900 placeholder:text-slate-400 bg-white border border-slate-200 sm:border-l-0 rounded-l-xl sm:rounded-l-none focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition"
+                @keydown.escape="$wire.closeDropdown(); focused = false; $el.blur()"
+                placeholder="Search products, brands or model numbers"
+                enterkeyhint="search"
+                class="w-full h-11 pl-11 pr-10 text-sm text-slate-900 placeholder:text-slate-400 bg-slate-100 border border-transparent rounded-l-xl hover:bg-slate-50 hover:border-slate-200 focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition [&::-webkit-search-cancel-button]:hidden"
                 autocomplete="off"
             />
             @if (!empty($query))
                 <button
                     type="button"
                     wire:click="$set('query', '')"
-                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 grid place-items-center w-7 h-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 cursor-pointer"
+                    aria-label="Clear search"
                 >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             @endif
         </div>
 
-        <!-- Submit Button -->
         <button
             type="submit"
-            class="h-11 px-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-r-xl font-semibold text-xs tracking-wide flex items-center gap-1.5 transition shrink-0 shadow-xs"
+            class="h-11 px-4 md:px-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-r-xl font-semibold text-sm flex items-center gap-2 transition shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
             aria-label="Search"
         >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-            </svg>
+            <svg class="w-4 h-4 md:hidden" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z"/></svg>
             <span class="hidden md:inline">Search</span>
         </button>
     </form>
@@ -57,7 +45,7 @@
             <!-- Category matches if any -->
             @if ($categoryResults->isNotEmpty())
                 <div class="p-3 bg-slate-50/80">
-                    <div class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Category Suggestions</div>
+                    <div class="text-xs font-semibold text-slate-500 mb-2">Categories</div>
                     <div class="flex flex-wrap gap-1.5">
                         @foreach ($categoryResults as $c)
                             <a
@@ -143,27 +131,23 @@
                 </div>
             @endif
         </div>
-    @elseif (empty($query))
-        <!-- Popular Searches Quick Bar (visible on focus if query is empty) -->
+    @elseif (empty($query) && $allCategories->isNotEmpty())
+        <!-- On focus with an empty box: jump straight into a category -->
         <div
             x-show="focused"
             x-cloak
-            class="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-xl border border-slate-200 p-4 z-50"
+            class="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-200 p-4 z-50"
             x-transition
         >
-            <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2.5 flex items-center gap-1.5">
-                <svg class="w-3.5 h-3.5 text-amber-500" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
-                Popular Searches
-            </div>
+            <div class="text-xs font-semibold text-slate-500 mb-2.5">Shop by category</div>
             <div class="flex flex-wrap gap-2">
-                @foreach ($popularSearches as $popular)
-                    <button
-                        type="button"
-                        wire:click="selectPopular('{{ $popular }}')"
-                        class="px-3 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-xs text-slate-700 transition"
+                @foreach ($allCategories as $shortcutCategory)
+                    <a
+                        href="{{ route('catalog.index', ['category' => $shortcutCategory->id]) }}"
+                        class="inline-flex items-center h-8 px-3 rounded-full bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-xs font-medium text-slate-700 transition"
                     >
-                        {{ $popular }}
-                    </button>
+                        {{ $shortcutCategory->name }}
+                    </a>
                 @endforeach
             </div>
         </div>

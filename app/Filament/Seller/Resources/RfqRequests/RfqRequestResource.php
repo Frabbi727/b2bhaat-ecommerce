@@ -13,6 +13,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use UnitEnum;
 
 class RfqRequestResource extends Resource
 {
@@ -20,7 +21,11 @@ class RfqRequestResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChatBubbleLeftRight;
 
-    protected static ?string $navigationLabel = 'Wholesale RFQs';
+    protected static UnitEnum|string|null $navigationGroup = 'Sales';
+
+    protected static ?int $navigationSort = 3;
+
+    protected static ?string $navigationLabel = 'Wholesale quotes';
 
     public static function getEloquentQuery(): Builder
     {

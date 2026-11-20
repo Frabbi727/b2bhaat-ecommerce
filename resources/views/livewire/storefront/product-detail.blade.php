@@ -25,7 +25,7 @@
 </script>
 @endpush
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-12">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-24 lg:pb-6 space-y-12">
     <!-- Breadcrumb -->
     <nav class="flex items-center gap-2 text-xs text-slate-500 overflow-x-auto no-scrollbar">
         <a href="{{ route('catalog.index') }}" class="hover:text-indigo-600 transition shrink-0">Home</a>
@@ -42,21 +42,14 @@
     </nav>
 
     <!-- Feedback Alerts -->
+    {{-- Shown to the shopper as a toast (see the storefront layout); kept here as text for screen readers and tests. --}}
     @if ($feedbackMessage)
-        <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between shadow-xs">
-            <div class="flex items-center gap-2">
-                <svg class="w-5 h-5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                <span>{{ $feedbackMessage }}</span>
-            </div>
-            <a href="{{ route('cart.index') }}" class="font-bold underline text-emerald-900">View Cart & Checkout &rarr;</a>
-        </div>
+        <p class="sr-only">{{ $feedbackMessage }}</p>
     @endif
 
+    {{-- Shown to the shopper as a toast (see the storefront layout); kept here as text for screen readers and tests. --}}
     @if ($errorMessage)
-        <div class="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2 shadow-xs">
-            <svg class="w-5 h-5 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            <span>{{ $errorMessage }}</span>
-        </div>
+        <p class="sr-only">{{ $errorMessage }}</p>
     @endif
 
     @if ($this->isSellerOnVacation)
@@ -69,7 +62,7 @@
                 </p>
                 @if ($product->seller?->sellerProfile?->vacation_ends_at)
                     <div class="text-[11px] text-amber-900 font-semibold">
-                        Expected factory reopening: {{ \Carbon\Carbon::parse($product->seller->sellerProfile->vacation_ends_at)->format('M d, Y') }}
+                        Expected factory reopening: {{ \Carbon\Carbon::parse($product->seller->sellerProfile->vacation_ends_at)->format('d M Y') }}
                     </div>
                 @endif
             </div>
@@ -112,16 +105,11 @@
                 <div class="absolute top-4 left-4 flex flex-col gap-1.5 pointer-events-none">
                     @if ($product->is_flash_sale_active)
                         <span class="px-2.5 py-1 rounded-lg bg-rose-600 text-white font-black text-xs shadow-md">
-                            ⚡ Flash Sale -{{ $product->discount_percentage }}%
+                            <span class="inline-flex items-center gap-1"><x-storefront.icon name="bolt" class="w-3.5 h-3.5" /> Flash Sale -{{ $product->discount_percentage }}%</span>
                         </span>
                     @elseif ($product->discount_percentage)
                         <span class="px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-extrabold text-xs shadow-md">
                             -{{ $product->discount_percentage }}% OFF
-                        </span>
-                    @endif
-                    @if ($product->warranty_period)
-                        <span class="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold">
-                            🛡️ {{ $product->warranty_period }}
                         </span>
                     @endif
                 </div>
@@ -205,21 +193,61 @@
                 </h1>
 
                 <!-- Rating & Reviews Anchor -->
-                <div class="flex items-center gap-3 text-xs">
-                    <div class="flex items-center text-amber-400">
-                        @for ($i = 1; $i <= 5; $i++)
-                            <span>{{ $i <= round($averageRating) ? '★' : '☆' }}</span>
-                        @endfor
-                    </div>
+                @php
+                    $selectedVariation = $selectedVariationId ? $product->variations->firstWhere('id', $selectedVariationId) : null;
+                    $stockOnHand = $selectedVariation
+                        ? (int) $selectedVariation->stock_quantity
+                        : (int) $product->variations->where('is_active', true)->sum('stock_quantity');
+                @endphp
+                <div class="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs">
+                    <x-storefront.stars :rating="$averageRating" class="w-4 h-4" />
                     <span class="font-bold text-slate-800">{{ $averageRating > 0 ? number_format($averageRating, 1) : 'New' }}</span>
                     <span class="text-slate-300">•</span>
                     <button type="button" @click="$wire.set('activeTab', 'reviews')" class="text-indigo-600 font-semibold hover:underline cursor-pointer">
                         {{ $totalReviews }} {{ Str::plural('rating', $totalReviews) }}
                     </button>
                     <span class="text-slate-300">•</span>
-                    <span class="text-emerald-700 font-semibold">In Stock & Ready to Dispatch</span>
+                    @if ($product->variations->isNotEmpty())
+                        @if ($stockOnHand > 0)
+                            <span class="text-emerald-700 font-semibold">{{ $stockOnHand <= 5 ? 'Only '.$stockOnHand.' left in stock' : 'In stock' }}</span>
+                        @else
+                            <span class="text-rose-600 font-semibold">Out of stock</span>
+                        @endif
+                    @endif
                 </div>
             </div>
+
+            @if ($product->is_flash_sale_active && ($offer = $product->liveFlashOffer()))
+                <div class="p-4 rounded-3xl bg-gradient-to-r from-rose-950 via-slate-900 to-indigo-950 text-white border border-rose-800/40 space-y-2">
+                    <div class="flex items-center justify-between gap-3 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <span class="w-7 h-7 rounded-lg bg-rose-600 text-white flex items-center justify-center"><x-storefront.icon name="bolt" class="w-4 h-4" /></span>
+                            <a href="{{ route('flash-sales.show', $offer->flashSale->slug) }}" class="text-sm font-bold text-rose-100 hover:text-white underline underline-offset-4">
+                                {{ $offer->flashSale->name }}
+                            </a>
+                        </div>
+                        <x-storefront.flash-countdown :ends-at="$offer->flashSale->ends_at" label="Ends in:" />
+                    </div>
+                    @if ($offer->per_customer_limit || $offer->stock_limit !== null)
+                        @php
+                            $unitsLeft = $offer->stock_limit !== null ? max(0, $offer->stock_limit - $offer->unitsSold()) : null;
+                        @endphp
+                        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-rose-100">
+                            @if ($unitsLeft !== null)
+                                <span class="font-bold text-white tabular-nums">{{ $unitsLeft > 0 ? $unitsLeft.' of '.$offer->stock_limit.' left at this price' : 'Deal stock sold out' }}</span>
+                            @endif
+                            @if ($offer->per_customer_limit)
+                                <span>Limit {{ $offer->per_customer_limit }} per customer</span>
+                            @endif
+                        </div>
+                        @if ($unitsLeft !== null && $offer->stock_limit > 0)
+                            <div class="h-1.5 rounded-full bg-white/15 overflow-hidden" aria-hidden="true">
+                                <div class="h-full rounded-full bg-rose-500" style="width: {{ ((int) round(100 * ($offer->stock_limit - $unitsLeft) / $offer->stock_limit)) }}%"></div>
+                            </div>
+                        @endif
+                    @endif
+                </div>
+            @endif
 
             <!-- Pricing & Savings Block (Pickaboo Standard) -->
             <div class="p-5 rounded-3xl bg-slate-50 border border-slate-200/80 space-y-3">
@@ -246,10 +274,10 @@
                         <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                         <span>{{ $product->delivery_info ?: 'Delivery inside Dhaka in '.app(\App\Services\Settings\StoreConfigurationService::class)->getDeliverySla('inside_dhaka') }}</span>
                     </div>
-                    @if ($product->warranty_period)
+                    @if ($product->displayableWarranty())
                     <div class="flex items-center gap-1.5">
                         <svg class="w-4 h-4 text-indigo-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                        <span>{{ $product->warranty_period }}</span>
+                        <span>{{ $product->displayableWarranty() }}</span>
                     </div>
                     @endif
                 </div>
@@ -385,9 +413,22 @@
                     </div>
                 @endif
 
+                @if ($wholesaleMinimum)
+                    <div class="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
+                        <svg class="w-4 h-4 mt-px shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <p><strong>Minimum order: {{ $wholesaleMinimum }} {{ $product->unit?->symbol }}</strong>, all options together. Mix colours and sizes as you like.</p>
+                    </div>
+                @endif
+
                 <!-- If Wholesale Buyer is logged in, show Bulk Variation Matrix Table -->
                 @if ($isWholesaleUser && $product->variations->isNotEmpty())
-                    <div class="space-y-3 pt-2">
+                    <div
+                        class="space-y-3 pt-2"
+                        x-data="{
+                            minimum: {{ (int) ($wholesaleMinimum ?? 1) }},
+                            get chosen() { return Object.values($wire.matrixQuantities ?? {}).reduce((sum, quantity) => sum + Math.max(0, parseInt(quantity) || 0), 0) },
+                        }"
+                    >
                         <div class="text-xs font-bold text-slate-900">B2B Bulk Variation Order Matrix</div>
                         <div class="border border-slate-200 rounded-2xl overflow-hidden">
                             <table class="w-full text-left text-xs">
@@ -427,6 +468,12 @@
                                 Factory dispatches paused in Vacation Mode
                             </button>
                         @else
+                            <div class="flex items-center justify-between text-xs" aria-live="polite">
+                                <span class="text-slate-500">Chosen so far</span>
+                                <span class="font-bold" :class="chosen >= minimum ? 'text-emerald-700' : 'text-slate-800'">
+                                    <span x-text="chosen">0</span> of {{ (int) ($wholesaleMinimum ?? 1) }} {{ $product->unit?->symbol }} minimum
+                                </span>
+                            </div>
                             <button
                                 type="button"
                                 wire:click="addBulkMatrixToCart"
@@ -446,7 +493,7 @@
                         <p>You will see bulk prices for this product once your business account is approved.</p>
                     @else
                         <div class="font-bold text-indigo-900">Lower prices for bulk orders</div>
-                        <p>Business buyers get lower prices when they buy in bulk.
+                        <p>Business buyers get lower prices when they buy in bulk.@if ($wholesaleMinimum) Bulk orders start at {{ $wholesaleMinimum }} {{ $product->unit?->symbol }}.@endif
                             <a href="{{ route('wholesale.upgrade') }}" class="font-bold text-indigo-600 hover:underline">Apply for wholesale prices &rarr;</a>
                         </p>
                     @endif
@@ -612,7 +659,7 @@
                     <ul class="space-y-3 text-xs text-slate-800">
                         @foreach ($product->features as $feature)
                             <li class="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                                <span class="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">✓</span>
+                                <span class="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5"><x-storefront.icon name="check" class="w-3 h-3" /></span>
                                 <span class="leading-relaxed">{{ $feature }}</span>
                             </li>
                         @endforeach
@@ -642,9 +689,9 @@
                 </div>
 
                 <div class="p-5 rounded-2xl bg-indigo-50/50 border border-indigo-100 space-y-3 text-xs">
-                    @if ($product->warranty_period || $product->warranty_policy)
-                        @if ($product->warranty_period)
-                            <div class="font-bold text-indigo-900 text-sm">🛡️ {{ $product->warranty_period }}</div>
+                    @if ($product->displayableWarranty() || $product->warranty_policy)
+                        @if ($product->displayableWarranty())
+                            <div class="font-bold text-indigo-900 text-sm flex items-center gap-1.5"><x-storefront.icon name="shield" class="w-4 h-4 text-indigo-600" /> {{ $product->displayableWarranty() }}</div>
                         @endif
                         @if ($product->warranty_policy)
                             <p class="text-slate-700 leading-relaxed">{{ $product->warranty_policy }}</p>
@@ -699,11 +746,7 @@
                                 <div class="text-xs text-slate-500 font-medium mt-1">out of 5.0</div>
                             </div>
                             <div>
-                                <div class="flex items-center text-amber-400 text-lg">
-                                    @for ($i = 1; $i <= 5; $i++)
-                                        <span>{{ $i <= round($averageRating) ? '★' : '☆' }}</span>
-                                    @endfor
-                                </div>
+                                <x-storefront.stars :rating="$averageRating" class="w-5 h-5" />
                                 <div class="text-xs font-semibold text-slate-700 mt-1">
                                     {{ $totalReviews }} verified ratings
                                 </div>
@@ -716,7 +759,8 @@
                                 <div class="flex items-center gap-3">
                                     <button type="button" wire:click="setFilterRating('{{ $star }}')" class="w-12 text-left font-semibold text-slate-600 hover:text-indigo-600 flex items-center gap-1">
                                         <span>{{ $star }}</span>
-                                        <span class="text-amber-400">★</span>
+                                        <svg class="w-3.5 h-3.5 text-amber-400" viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                                        <span class="sr-only">stars</span>
                                     </button>
                                     <div class="flex-1 h-2 rounded-full bg-slate-200 overflow-hidden">
                                         <div class="h-full bg-amber-400 rounded-full" style="width: {{ $ratingDistribution[$star]['percentage'] }}%"></div>
@@ -746,16 +790,18 @@
                                 @endif
 
                                 <form wire:submit="submitReview" class="space-y-3 text-xs">
-                                    <div>
-                                        <label class="block font-semibold text-slate-700 mb-1">Your Rating *</label>
-                                        <select wire:model="reviewRating" class="py-2 px-3 border border-slate-300 rounded-xl text-xs font-bold">
-                                            <option value="5">★★★★★ 5 Stars (Exceptional)</option>
-                                            <option value="4">★★★★☆ 4 Stars (Very Good)</option>
-                                            <option value="3">★★★☆☆ 3 Stars (Average)</option>
-                                            <option value="2">★★☆☆☆ 2 Stars (Below Expectation)</option>
-                                            <option value="1">★☆☆☆☆ 1 Star (Poor)</option>
-                                        </select>
-                                    </div>
+                                    <fieldset x-data="{ hovered: 0 }">
+                                        <legend class="block font-semibold text-slate-700 mb-1">Your Rating *</legend>
+                                        <div class="flex items-center gap-1" @mouseleave="hovered = 0">
+                                            @foreach ([1 => 'Poor', 2 => 'Below expectation', 3 => 'Average', 4 => 'Very good', 5 => 'Exceptional'] as $ratingValue => $ratingLabel)
+                                                <label class="cursor-pointer rounded-md has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-indigo-500" @mouseenter="hovered = {{ $ratingValue }}" title="{{ $ratingLabel }}">
+                                                    <input type="radio" wire:model="reviewRating" value="{{ $ratingValue }}" class="sr-only"/>
+                                                    <svg class="w-7 h-7 transition" :class="(hovered || Number($wire.reviewRating)) >= {{ $ratingValue }} ? 'text-amber-400' : 'text-slate-200'" viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                                                    <span class="sr-only">{{ $ratingValue }} {{ str('star')->plural($ratingValue) }} – {{ $ratingLabel }}</span>
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                    </fieldset>
                                     <div>
                                         <label class="block font-semibold text-slate-700 mb-1">Review Headline *</label>
                                         <input type="text" wire:model="reviewTitle" placeholder="e.g. Unmatched 4K Picture Quality" class="w-full py-2 px-3 border border-slate-300 rounded-xl"/>
@@ -792,11 +838,7 @@
                                             <span class="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">Verified Purchase</span>
                                         @endif
                                     </div>
-                                    <div class="text-amber-400 text-xs">
-                                        @for ($i = 1; $i <= 5; $i++)
-                                            <span>{{ $i <= $rev->rating ? '★' : '☆' }}</span>
-                                        @endfor
-                                    </div>
+                                    <x-storefront.stars :rating="$rev->rating" />
                                 </div>
                                 <div class="text-xs font-bold text-slate-800">{{ $rev->title }}</div>
                                 <p class="text-xs text-slate-600 leading-relaxed">{{ $rev->comment }}</p>
@@ -819,37 +861,21 @@
         <div class="space-y-4">
             <div class="flex items-center justify-between">
                 <div>
-                    <h2 class="text-lg font-extrabold text-slate-900">Related Products</h2>
+                    <h2 class="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900">Related Products</h2>
                     <p class="text-xs text-slate-500">More options from {{ $product->category?->name }}</p>
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 @foreach ($relatedProducts as $rel)
-                    <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs hover:border-indigo-400 hover:shadow-md transition flex flex-col justify-between group">
-                        <div>
-                            <div class="rounded-xl overflow-hidden bg-slate-100 aspect-square mb-2.5">
-                                <a href="{{ route('catalog.show', $rel->slug) }}">
-                                    <img src="{{ $rel->primaryImage?->public_url ?? 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=400' }}" alt="{{ $rel->title }}" class="w-full h-full object-cover group-hover:scale-105 transition" loading="lazy"/>
-                                </a>
-                            </div>
-                            <div class="text-[10px] font-bold text-indigo-600 uppercase">{{ $rel->brand?->name ?? 'Direct' }}</div>
-                            <h3 class="text-xs font-bold text-slate-900 line-clamp-2 mt-1">
-                                <a href="{{ route('catalog.show', $rel->slug) }}" class="hover:text-indigo-600 transition">{{ $rel->title }}</a>
-                            </h3>
-                        </div>
-                        <div class="pt-2 border-t border-slate-100 mt-2 flex items-baseline justify-between">
-                            <span class="text-xs font-black text-slate-900">৳{{ number_format($rel->effective_selling_price, 0) }}</span>
-                            <a href="{{ route('catalog.show', $rel->slug) }}" class="text-[11px] font-bold text-indigo-600 hover:underline">View</a>
-                        </div>
-                    </div>
+                    <x-storefront.product-card :product="$rel" :actions="false" wire:key="related-{{ $rel->id }}" />
                 @endforeach
             </div>
         </div>
     @endif
 
     <!-- ================= STICKY MOBILE PURCHASE BOTTOM BAR ================= -->
-    <div class="fixed bottom-0 left-0 right-0 z-30 lg:hidden bg-white/95 backdrop-blur-md border-t border-slate-200 p-3 shadow-2xl">
+    <div class="fixed bottom-14 md:bottom-0 left-0 right-0 z-30 lg:hidden bg-white border-t border-slate-200 px-4 py-2.5 shadow-[0_-8px_24px_-12px_rgb(15_23_42/0.25)]">
         <div class="flex items-center justify-between gap-3 max-w-lg mx-auto">
             <div class="min-w-0">
                 <div class="text-[11px] font-bold text-slate-900 truncate">{{ $product->title }}</div>
@@ -859,14 +885,14 @@
                 <button
                     type="button"
                     wire:click="addToCartRetail"
-                    class="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs shadow-xs"
+                    class="h-10 px-4 rounded-xl bg-slate-900 text-white font-bold text-sm cursor-pointer"
                 >
-                    Add
+                    Add to Cart
                 </button>
                 <button
                     type="button"
                     wire:click="buyNowRetail"
-                    class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-xs"
+                    class="h-10 px-4 rounded-xl bg-indigo-600 text-white font-bold text-sm cursor-pointer"
                 >
                     Buy Now
                 </button>
@@ -933,14 +959,37 @@
                     </div>
 
                     <form wire:submit="submitRfq" class="space-y-4 text-xs">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        @if ($product->has_variations && $rfqOptionQuantities !== [])
+                            {{-- WA-PRC-03: the seller quotes on, and ships, exactly these options --}}
                             <div>
-                                <label class="block font-semibold text-slate-700 mb-1">Target Quantity (Units) *</label>
-                                <input type="number" min="1" wire:model="rfqTargetQuantity" placeholder="e.g. 500" class="w-full py-2 px-3 border border-slate-300 rounded-xl font-bold focus:ring-2 focus:ring-indigo-500"/>
-                                @error('rfqTargetQuantity') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
+                                <label class="block font-semibold text-slate-700 mb-1">Quantity per option (units) *</label>
+                                <div class="border border-slate-200 rounded-xl divide-y divide-slate-100">
+                                    @foreach ($product->variations->where('is_active', true) as $rfqVariation)
+                                        <div wire:key="rfq-option-{{ $rfqVariation->id }}" class="flex items-center justify-between gap-3 px-3 py-2">
+                                            <span class="text-slate-700 min-w-0 truncate">
+                                                {{ $rfqVariation->attributeValues->map(fn ($value) => $value->value)->implode(' / ') ?: $rfqVariation->sku }}
+                                            </span>
+                                            <input type="number" min="0" inputmode="numeric" wire:model.live.debounce.300ms="rfqOptionQuantities.{{ $rfqVariation->id }}" aria-label="Units of {{ $rfqVariation->sku }}" class="w-24 shrink-0 py-1.5 px-2 border border-slate-300 rounded-lg font-bold text-right focus:ring-2 focus:ring-indigo-500"/>
+                                        </div>
+                                    @endforeach
+                                </div>
+                                <div class="flex justify-between mt-1 text-[11px] text-slate-500">
+                                    <span>Leave an option at 0 if you don't need it.</span>
+                                    <span>Total: <strong class="text-slate-800">{{ number_format(collect($rfqOptionQuantities)->sum(fn ($quantity) => max(0, (int) $quantity))) }}</strong></span>
+                                </div>
+                                @error('rfqOptionQuantities') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
                             </div>
+                        @endif
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            @unless ($product->has_variations && $rfqOptionQuantities !== [])
+                                <div>
+                                    <label class="block font-semibold text-slate-700 mb-1">Target Quantity (Units) *</label>
+                                    <input type="number" min="1" wire:model="rfqTargetQuantity" placeholder="e.g. 500" class="w-full py-2 px-3 border border-slate-300 rounded-xl font-bold focus:ring-2 focus:ring-indigo-500"/>
+                                    @error('rfqTargetQuantity') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
+                                </div>
+                            @endunless
                             <div>
-                                <label class="block font-semibold text-slate-700 mb-1">Target Price / Unit (৳ Tk)</label>
+                                <label class="block font-semibold text-slate-700 mb-1">Target Price / Unit (৳)</label>
                                 <input type="number" step="0.01" wire:model="rfqTargetPrice" placeholder="Your budget in ৳" class="w-full py-2 px-3 border border-slate-300 rounded-xl font-bold focus:ring-2 focus:ring-indigo-500"/>
                             </div>
                             <div>

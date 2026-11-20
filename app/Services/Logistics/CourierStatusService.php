@@ -6,14 +6,24 @@ namespace App\Services\Logistics;
 
 use App\Exceptions\InvalidStatusTransitionException;
 use App\Models\FulfillmentStatus;
-use App\Models\OrderStatus;
+use App\Models\Order;
 use App\Models\OrderTrackingLog;
 use App\Models\PaymentStatus;
+use App\Models\ReturnRequest;
+use App\Models\StockMovement;
 use App\Models\SubOrder;
+use App\Services\Accounting\EventPipeline\CodDeliveryJournalHandler;
+use App\Services\Accounting\EventPipeline\CommissionRecognitionJournalHandler;
 use App\Services\Escrow\EscrowLedgerService;
+use App\Services\Inventory\StockMovementContext;
 use App\Services\Inventory\StockReservationService;
+use App\Services\Orders\OrderStatusReconciler;
+use App\Services\Orders\PartialReturnService;
 use App\Services\Orders\RefundRecorder;
+use App\Services\Promotions\FlashSaleAllocationService;
+use App\Services\Settings\StoreConfigurationService;
 use Carbon\Carbon;
+use DomainException;
 use Illuminate\Support\Facades\DB;
 
 class CourierStatusService
@@ -34,6 +44,9 @@ class CourierStatusService
         'cancelled' => [],
     ];
 
+    /** Statuses that mean the goods have left the seller: reachable only once the payment is cleared (AR-03). */
+    private const DISPATCHED_STATUSES = ['shipped', 'in_transit', 'out_for_delivery', 'delivered'];
+
     public static function canTransition(?string $from, string $to): bool
     {
         if ($from === null) {
@@ -46,14 +59,21 @@ class CourierStatusService
     public function __construct(
         protected EscrowLedgerService $escrowLedgerService,
         protected StockReservationService $stockReservationService,
-        protected RefundRecorder $refundRecorder
+        protected RefundRecorder $refundRecorder,
+        protected CodDeliveryJournalHandler $codDeliveryJournalHandler,
+        protected CommissionRecognitionJournalHandler $commissionRecognitionJournalHandler,
+        protected OrderStatusReconciler $statusReconciler,
     ) {}
 
     /**
      * Update courier status for a sub-order, record tracking log, and trigger settlement if delivered.
      * Repeating the current status is a no-op; an illegal move throws.
      *
-     * @throws InvalidStatusTransitionException
+     * $adminOverride: an admin recording what the courier panel shows (with a note) may record a return after the
+     * return window; nobody may ship or deliver a parcel whose payment isn't cleared.
+     *
+     * @throws InvalidStatusTransitionException when the parcel can't move to that status
+     * @throws DomainException when the payment isn't cleared, or a late return isn't recorded by an admin
      */
     public function updateStatus(
         SubOrder $subOrder,
@@ -61,10 +81,14 @@ class CourierStatusService
         ?string $hubLocation = null,
         ?string $title = null,
         ?string $description = null,
-        ?Carbon $timestamp = null
+        ?Carbon $timestamp = null,
+        bool $adminOverride = false,
     ): void {
-        DB::transaction(function () use ($subOrder, $statusSlug, $hubLocation, $title, $description, $timestamp) {
-            $subOrder = SubOrder::whereKey($subOrder->getKey())->lockForUpdate()->with('fulfillmentStatus')->firstOrFail();
+        DB::transaction(function () use ($subOrder, $statusSlug, $hubLocation, $title, $description, $timestamp, $adminOverride) {
+            // Order before parcel, as everywhere else (Wave 1 review M-1).
+            Order::whereKey($subOrder->parent_order_id)->lockForUpdate()->first();
+
+            $subOrder = SubOrder::whereKey($subOrder->getKey())->lockForUpdate()->with(['fulfillmentStatus', 'order.paymentMethod', 'order.paymentStatus'])->firstOrFail();
             $currentSlug = $subOrder->fulfillmentStatus?->slug;
 
             if ($currentSlug === $statusSlug) {
@@ -73,6 +97,16 @@ class CourierStatusService
 
             if (! self::canTransition($currentSlug, $statusSlug)) {
                 throw InvalidStatusTransitionException::between($currentSlug, $statusSlug);
+            }
+
+            // AR-03: the same payment rule as hand-over, so a courier update can't ship (or hold escrow for) an unpaid parcel
+            if (in_array($statusSlug, self::DISPATCHED_STATUSES, true) && ! $subOrder->isClearedForDispatch()) {
+                throw new DomainException("Sub-Order #{$subOrder->sub_order_number} can't be marked {$statusSlug}: the buyer's payment hasn't been confirmed.");
+            }
+
+            // AR-02: after the return window the sale may already be settled, so only an admin can record a late return
+            if ($currentSlug === 'delivered' && $statusSlug === 'returned' && ! $adminOverride && $this->returnWindowHasClosed($subOrder)) {
+                throw new DomainException("Sub-Order #{$subOrder->sub_order_number} was delivered more than ".$this->returnWindowHours().' hours ago, so a return can only be recorded by an admin.');
             }
 
             $fulfillmentStatus = FulfillmentStatus::where('slug', $statusSlug)->firstOrFail();
@@ -90,6 +124,13 @@ class CourierStatusService
                 'logged_at' => $timestamp ?? now(),
             ]);
 
+            // A free replacement moves no money; the order still follows its parcels (WA-ORD-03)
+            if ($subOrder->isReplacement() && in_array($statusSlug, ['delivered', 'returned'], true)) {
+                $this->handleReplacementEnd($subOrder, $statusSlug);
+
+                return;
+            }
+
             // Lifecycle event: Delivered
             if ($statusSlug === 'delivered') {
                 $this->handleDeliveredSettlement($subOrder);
@@ -102,8 +143,84 @@ class CourierStatusService
         });
     }
 
+    /**
+     * ORD-2: the seller hands a parcel over (courier dispatch, pickup booking or self-delivery). Same lock and status
+     * rules as courier updates, and only once the order's payment is cleared. The parcel's courier details are saved
+     * with the new status. Handing over again in the same status updates the details (for example a rebooking).
+     *
+     * @param  array<string, mixed>  $parcelDetails  courier_name, tracking_number, is_self_delivered, handover_code
+     *
+     * @throws InvalidStatusTransitionException when the parcel can't move to that status
+     * @throws DomainException when the order's payment isn't cleared
+     */
+    public function handOver(SubOrder $subOrder, string $statusSlug, array $parcelDetails, string $title, string $description, string $hubLocation): SubOrder
+    {
+        DB::transaction(function () use ($subOrder, $statusSlug, $parcelDetails, $title, $description, $hubLocation): void {
+            Order::whereKey($subOrder->parent_order_id)->lockForUpdate()->first();
+
+            $subOrder = SubOrder::whereKey($subOrder->getKey())->lockForUpdate()->with(['fulfillmentStatus', 'order.paymentMethod', 'order.paymentStatus'])->firstOrFail();
+            $currentSlug = $subOrder->fulfillmentStatus?->slug;
+
+            if ($currentSlug !== $statusSlug && ! self::canTransition($currentSlug, $statusSlug)) {
+                throw InvalidStatusTransitionException::between($currentSlug, $statusSlug);
+            }
+
+            if (! $subOrder->isClearedForDispatch()) {
+                throw new DomainException("Sub-Order #{$subOrder->sub_order_number} can't be sent yet: the buyer's payment hasn't been confirmed.");
+            }
+
+            $status = FulfillmentStatus::where('slug', $statusSlug)->firstOrFail();
+            $subOrder->forceFill($parcelDetails + ['fulfillment_status_id' => $status->id])->save();
+
+            OrderTrackingLog::create([
+                'sub_order_id' => $subOrder->id,
+                'fulfillment_status_id' => $status->id,
+                'title' => $title,
+                'description' => $description,
+                'hub_location' => $hubLocation,
+                'logged_at' => now(),
+            ]);
+        });
+
+        // The caller's copy shows the saved state
+        return $subOrder->refresh();
+    }
+
+    private function returnWindowHours(): int
+    {
+        return app(StoreConfigurationService::class)->getEscrowHoldingPeriodHours();
+    }
+
+    /** The return window is the escrow holding period, counted from delivery (as in OrderDisputeService). */
+    private function returnWindowHasClosed(SubOrder $subOrder): bool
+    {
+        $deliveredAt = $subOrder->deliveredAt();
+
+        return $deliveredAt !== null && $deliveredAt->copy()->addHours($this->returnWindowHours())->isPast();
+    }
+
     protected function handleReturnedConsignment(SubOrder $subOrder): void
     {
+        // Review R-1: the whole parcel is back and refunded below, so a return still waiting for the seller is
+        // settled by this one and must never be approved on top of it
+        $subOrder->returnRequests()
+            ->where('status', ReturnRequest::STATUS_PENDING)
+            ->lockForUpdate()
+            ->get()
+            ->each(fn (ReturnRequest $pending) => $pending->update([
+                'status' => ReturnRequest::STATUS_RESOLVED,
+                'seller_note' => 'Closed: the courier brought the whole parcel back, so it is refunded in full.',
+                'resolved_at' => now(),
+            ]));
+
+        // PAY-4: some items already came back on their own; settle only what was still with the buyer
+        $partialReturns = app(PartialReturnService::class);
+        if ($partialReturns->hasItemReturns($subOrder)) {
+            $partialReturns->returnRemainder($subOrder, 'Returned to origin (RTO) by courier service');
+
+            return;
+        }
+
         // 1. Release reserved stock back to variation catalog
         $stockItems = [];
         foreach ($subOrder->items as $item) {
@@ -115,8 +232,10 @@ class CourierStatusService
             }
         }
 
+        // Offers before stock rows, as checkout locks them (review R-5)
+        app(FlashSaleAllocationService::class)->release($subOrder->items);
         if (! empty($stockItems)) {
-            $this->stockReservationService->releaseStock($stockItems);
+            StockMovementContext::run(StockMovement::REASON_RETURNED, $subOrder, fn () => $this->stockReservationService->releaseStock($stockItems), 'Returned to seller by courier');
         }
 
         // 2. Undo the seller side: refund the hold, or reverse an already released credit
@@ -125,27 +244,27 @@ class CourierStatusService
         // 3. A paid buyer is owed this consignment back (final review I3); before the parent flips to "refunded"
         $this->refundRecorder->recordIfPaid($subOrder, 'Returned to origin (RTO) by courier service');
 
-        // 3. Reconcile parent order if all sub-orders are returned/cancelled
-        $parentOrder = $subOrder->order;
-        if ($parentOrder) {
-            $terminalSlugs = ['returned', 'cancelled'];
-            $terminalIds = FulfillmentStatus::whereIn('slug', $terminalSlugs)->pluck('id');
+        // 4. The order's status follows its parcels (ORD-1)
+        if ($subOrder->order) {
+            $this->statusReconciler->reconcile($subOrder->order);
+        }
+    }
 
-            $allTerminal = $parentOrder->subOrders()
-                ->whereNotIn('fulfillment_status_id', $terminalIds)
-                ->doesntExist();
-
-            if ($allTerminal) {
-                $cancelledStatus = OrderStatus::where('slug', 'cancelled')->first();
-                if ($cancelledStatus) {
-                    $parentOrder->update(['order_status_id' => $cancelledStatus->id]);
-                }
-
-                $refundedPaymentStatus = PaymentStatus::where('slug', 'refunded')->first();
-                if ($refundedPaymentStatus && $parentOrder->paymentStatus?->slug === 'paid') {
-                    $parentOrder->update(['payment_status_id' => $refundedPaymentStatus->id]);
-                }
+    /**
+     * A replacement parcel reached the buyer, or came back (its units go back on the shelf). No money moves.
+     */
+    protected function handleReplacementEnd(SubOrder $subOrder, string $statusSlug): void
+    {
+        if ($statusSlug === 'returned') {
+            $stockItems = $subOrder->items->filter(fn ($item) => $item->variation_id)
+                ->map(fn ($item): array => ['variation_id' => $item->variation_id, 'quantity' => $item->quantity])->values()->all();
+            if ($stockItems !== []) {
+                StockMovementContext::run(StockMovement::REASON_RETURNED, $subOrder, fn () => $this->stockReservationService->releaseStock($stockItems), 'Replacement returned to seller by courier');
             }
+        }
+
+        if ($subOrder->order) {
+            $this->statusReconciler->reconcile($subOrder->order);
         }
     }
 
@@ -157,8 +276,15 @@ class CourierStatusService
         $isCod = $subOrder->order?->paymentMethod?->slug === 'cod';
         if ($isCod && $subOrder->is_self_delivered) {
             $this->escrowLedgerService->settleSelfCollectedCod($subOrder);
+            $this->codDeliveryJournalHandler->recordSelfDeliveredCod($subOrder);
         } else {
             $this->escrowLedgerService->holdInEscrow($subOrder);
+            if ($isCod) {
+                $this->codDeliveryJournalHandler->recordCourierCodDelivery($subOrder);
+            } else {
+                // Prepaid: the commission held since payment is earned now that the parcel is delivered (ACC-11).
+                $this->commissionRecognitionJournalHandler->recordCommissionEarned($subOrder);
+            }
         }
 
         // 2. Reconcile parent order
@@ -167,22 +293,12 @@ class CourierStatusService
             // COD: the courier collected the cash at the door, so the order is now paid.
             // Prepaid orders are marked paid only by payment verification, never by delivery (PRA-006).
             $paidStatus = PaymentStatus::where('slug', 'paid')->first();
-            if ($paidStatus && $parentOrder->paymentMethod?->slug === 'cod' && $parentOrder->payment_status_id !== $paidStatus->id) {
+            if ($paidStatus && $parentOrder->paymentMethod?->slug === 'cod' && ! in_array($parentOrder->paymentStatus?->slug, PaymentStatus::MONEY_RECEIVED, true)) {
                 $parentOrder->update(['payment_status_id' => $paidStatus->id]);
             }
 
-            // Check if ALL sibling sub-orders are delivered
-            $deliveredStatusId = FulfillmentStatus::where('slug', 'delivered')->value('id');
-            $allDelivered = $parentOrder->subOrders()
-                ->where('fulfillment_status_id', '!=', $deliveredStatusId)
-                ->doesntExist();
-
-            if ($allDelivered) {
-                $completedOrderStatus = OrderStatus::where('slug', 'completed')->first();
-                if ($completedOrderStatus) {
-                    $parentOrder->update(['order_status_id' => $completedOrderStatus->id]);
-                }
-            }
+            // The order's status follows its parcels (ORD-1)
+            $this->statusReconciler->reconcile($parentOrder);
         }
     }
 }

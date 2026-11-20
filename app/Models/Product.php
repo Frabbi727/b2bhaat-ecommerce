@@ -2,6 +2,10 @@
 
 namespace App\Models;
 
+use App\Enums\ProductApprovalStatus;
+use App\Models\Traits\Auditable;
+use App\Services\Inventory\ProductCodeGenerator;
+use App\Services\Promotions\FlashSalePricing;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,6 +15,11 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Product extends Model
 {
+    use Auditable;
+
+    /**
+     * SEC-10: moderation (blocked_*), featuring (INV-9), counters and the suspension flag are set only by platform code with forceFill().
+     */
     protected $fillable = [
         'seller_id',
         'category_id',
@@ -20,6 +29,7 @@ class Product extends Model
         'title',
         'slug',
         'sku',
+        'barcode',
         'model_number',
         'short_description',
         'full_description',
@@ -31,15 +41,16 @@ class Product extends Model
         'warranty_policy',
         'delivery_info',
         'has_variations',
-        'is_featured',
-        'is_flash_sale',
-        'flash_sale_price',
-        'flash_sale_end',
-        'views_count',
-        'sales_count',
         'is_active',
-        'blocked_at',
-        'blocked_reason',
+    ];
+
+    /**
+     * New products start as drafts; approval columns are never mass assignable.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'approval_status' => 'draft',
     ];
 
     protected $hidden = [
@@ -49,11 +60,26 @@ class Product extends Model
     public const DEFAULT_VARIATION_SUFFIX = '-DEFAULT';
 
     /**
-     * Simple products (no variations) get one default variation so stock is reserved like any SKU (PRA-011).
+     * Products get a generated SKU and barcode; simple products (no variations) get one default variation so stock is reserved like any SKU (PRA-011).
      */
     protected static function booted(): void
     {
+        // A copied product is a different item: it must not inherit the original's SKU or barcode
+        static::replicating(function (Product $replica): void {
+            $replica->sku = null;
+            $replica->barcode = null;
+        });
+
         static::created(function (Product $product): void {
+            // SKU and barcode are generated, never typed, so they are always present and unique
+            $codes = array_filter([
+                'sku' => blank($product->sku) ? ProductCodeGenerator::productSku($product) : null,
+                'barcode' => blank($product->barcode) ? ProductCodeGenerator::barcode($product->id) : null,
+            ]);
+            if ($codes !== []) {
+                $product->forceFill($codes)->saveQuietly();
+            }
+
             if (! $product->has_variations) {
                 $product->ensureDefaultVariation();
             }
@@ -79,6 +105,28 @@ class Product extends Model
     }
 
     /**
+     * The storefront uses the first photo by sort order as the cover; keep `is_primary` pointing at that same photo.
+     */
+    public function syncPrimaryImageFlag(): void
+    {
+        $coverId = $this->images()->reorder()->orderBy('sort_order')->orderBy('id')->value('id');
+
+        $this->images()->where('id', '!=', $coverId ?? 0)->where('is_primary', true)->update(['is_primary' => false]);
+
+        if ($coverId) {
+            $this->images()->whereKey($coverId)->update(['is_primary' => true]);
+        }
+    }
+
+    /**
+     * Products that appear on an order must stay on record for invoices and disputes; sellers hide them instead.
+     */
+    public function hasBeenOrdered(): bool
+    {
+        return OrderItem::where('product_id', $this->id)->exists();
+    }
+
+    /**
      * `{product sku or slug}-DEFAULT`, suffixed with the product id if that SKU is already taken.
      */
     public static function defaultVariationSku(int $productId, ?string $sku, string $slug): string
@@ -97,18 +145,30 @@ class Product extends Model
         return [
             'regular_price' => 'decimal:2',
             'buy_price' => 'decimal:2',
-            'flash_sale_price' => 'decimal:2',
             'has_variations' => 'boolean',
             'is_featured' => 'boolean',
-            'is_flash_sale' => 'boolean',
-            'flash_sale_end' => 'datetime',
             'specifications' => 'array',
             'features' => 'array',
             'views_count' => 'integer',
             'sales_count' => 'integer',
             'is_active' => 'boolean',
+            'was_active_before_suspension' => 'boolean',
             'blocked_at' => 'datetime',
+            'approval_status' => ProductApprovalStatus::class,
+            'submitted_at' => 'datetime',
+            'approved_at' => 'datetime',
+            'rejected_at' => 'datetime',
         ];
+    }
+
+    public function changeRequests(): HasMany
+    {
+        return $this->hasMany(ProductChangeRequest::class);
+    }
+
+    public function pendingChange(): HasOne
+    {
+        return $this->hasOne(ProductChangeRequest::class)->where('status', ProductChangeRequest::STATUS_PENDING);
     }
 
     public function seller(): BelongsTo
@@ -157,6 +217,21 @@ class Product extends Model
     public function prices(): HasMany
     {
         return $this->hasMany(ProductPrice::class);
+    }
+
+    public function flashSaleItems(): HasMany
+    {
+        return $this->hasMany(FlashSaleProduct::class);
+    }
+
+    /**
+     * @return BelongsToMany<FlashSale, $this>
+     */
+    public function flashSales(): BelongsToMany
+    {
+        return $this->belongsToMany(FlashSale::class, 'flash_sale_products')
+            ->withPivot(['id', 'discount_type', 'discount_value', 'stock_limit', 'per_customer_limit', 'sort_order'])
+            ->withTimestamps();
     }
 
     public function reviews(): HasMany
@@ -209,9 +284,11 @@ class Product extends Model
     public function scopeSellable(Builder $query): Builder
     {
         return $query->where($query->qualifyColumn('is_active'), true)
+            ->where($query->qualifyColumn('approval_status'), ProductApprovalStatus::Approved->value)
             ->whereNull($query->qualifyColumn('blocked_at'))
             ->whereHas('seller', fn (Builder $seller) => $seller->where('is_active', true)
-                ->whereHas('sellerProfile', fn (Builder $profile) => $profile->where('is_approved', true)));
+                ->whereHas('sellerProfile', fn (Builder $profile) => $profile->where('is_approved', true)
+                    ->where('monetization_status', 'active')));
     }
 
     /**
@@ -234,14 +311,12 @@ class Product extends Model
         return $query->where('is_featured', true);
     }
 
+    /**
+     * Products with an offer in a campaign that is live now.
+     */
     public function scopeFlashSale(Builder $query): Builder
     {
-        $now = now();
-
-        return $query->where('is_flash_sale', true)
-            ->where(function (Builder $q) use ($now) {
-                $q->whereNull('flash_sale_end')->orWhere('flash_sale_end', '>=', $now);
-            });
+        return $query->whereHas('flashSaleItems.flashSale', fn (Builder $sale): Builder => $sale->live());
     }
 
     public function scopeForChannel(Builder $query, string $channelSlug): Builder
@@ -252,33 +327,32 @@ class Product extends Model
     }
 
     /**
-     * The flash-sale price while the sale is running, otherwise null. The cart charges it for shop (retail) lines.
+     * This product's offer in a campaign that is live now, or null. Only retail prices use it.
      */
-    public function activeFlashSalePrice(): ?float
+    /**
+     * The warranty text worth showing to shoppers, or null when the seller left a placeholder such as "N/A".
+     */
+    public function displayableWarranty(): ?string
     {
-        if ($this->is_flash_sale && (float) $this->flash_sale_price > 0 && (! $this->flash_sale_end || $this->flash_sale_end->isFuture())) {
-            return (float) $this->flash_sale_price;
-        }
+        $warranty = trim((string) $this->warranty_period);
 
-        return null;
+        return in_array(strtolower($warranty), ['', 'n/a', 'na', 'none', 'no', 'no warranty', '-', '0'], true) ? null : $warranty;
     }
 
+    public function liveFlashOffer(): ?FlashSaleProduct
+    {
+        return app(FlashSalePricing::class)->offerFor($this);
+    }
+
+    /**
+     * The shop (retail) price a listing card shows: the live campaign price when there is one.
+     */
     public function getEffectiveSellingPriceAttribute(): float
     {
-        if (($flashPrice = $this->activeFlashSalePrice()) !== null) {
-            return $flashPrice;
-        }
+        $retailPrice = $this->retailPrice ? (float) $this->retailPrice->unit_price : (float) ($this->regular_price ?? 0.0);
+        $offer = $this->liveFlashOffer();
 
-        if ($this->relationLoaded('retailPrice') && $this->retailPrice) {
-            return (float) $this->retailPrice->unit_price;
-        }
-
-        $retail = $this->retailPrice;
-        if ($retail) {
-            return (float) $retail->unit_price;
-        }
-
-        return (float) ($this->regular_price ?? 0.0);
+        return $offer ? $offer->priceFrom($retailPrice) : $retailPrice;
     }
 
     public function getDiscountPercentageAttribute(): ?int
@@ -303,6 +377,6 @@ class Product extends Model
 
     public function getIsFlashSaleActiveAttribute(): bool
     {
-        return $this->is_flash_sale && (! $this->flash_sale_end || $this->flash_sale_end->isFuture());
+        return $this->liveFlashOffer() !== null;
     }
 }

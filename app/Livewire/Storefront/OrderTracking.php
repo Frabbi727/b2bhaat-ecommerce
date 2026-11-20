@@ -5,8 +5,10 @@ namespace App\Livewire\Storefront;
 use App\Models\Order;
 use App\Models\SubOrder;
 use App\Services\Orders\OrderDisputeService;
+use App\Services\Orders\PartialReturnService;
 use App\Services\Settings\StoreConfigurationService;
 use Exception;
+use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
@@ -15,6 +17,11 @@ use Livewire\Component;
 #[Layout('layouts.storefront')]
 class OrderTracking extends Component
 {
+    /** SEC-6: order lookups allowed per network address in each window. */
+    public const LOOKUPS_PER_WINDOW = 10;
+
+    public const LOOKUP_WINDOW_SECONDS = 600;
+
     #[Url(as: 'order')]
     public string $orderNumber = '';
 
@@ -51,6 +58,9 @@ class OrderTracking extends Component
 
     public string $returnDescription = '';
 
+    /** @var array<int|string, int|string|null> PAY-4: order item id => units the buyer is sending back */
+    public array $returnQuantities = [];
+
     public function mount(?string $token = null): void
     {
         $tokenToUse = $token ?: $this->token;
@@ -83,7 +93,9 @@ class OrderTracking extends Component
             'subOrders.items.product',
         ])->where('tracking_token', trim($token))->first();
 
-        if ($found) {
+        if ($found && $found->trackingLinkExpired()) {
+            $this->searchError = 'This tracking link has expired. Sign in to your account, or search with your order number and phone number.';
+        } elseif ($found) {
             $this->order = $found;
             $this->orderNumber = $found->order_number;
             $this->verifiedAccess = true;
@@ -105,6 +117,16 @@ class OrderTracking extends Component
         $trimmedOrderNumber = trim($this->orderNumber);
         if (! $trimmedOrderNumber) {
             $this->searchError = 'Please enter an order number.';
+
+            return;
+        }
+
+        // SEC-6: order numbers and phones can't be guessed by trying again and again. Only lookups that find nothing
+        // count, so refreshing a found order or reloading it after a cancel never uses up tries (Wave 1 review M-8).
+        $throttleKey = 'order-lookup:'.(request()->ip() ?? 'unknown');
+        if (RateLimiter::tooManyAttempts($throttleKey, self::LOOKUPS_PER_WINDOW)) {
+            $minutes = (int) max(1, ceil(RateLimiter::availableIn($throttleKey) / 60));
+            $this->searchError = "Too many lookups from your connection. Please try again in {$minutes} minute(s).";
 
             return;
         }
@@ -140,6 +162,7 @@ class OrderTracking extends Component
         $found = $query->first();
 
         if (! $found) {
+            RateLimiter::hit($throttleKey, self::LOOKUP_WINDOW_SECONDS);
             $this->searchError = "No matching order found for #{$trimmedOrderNumber}. Please check details.";
 
             return;
@@ -175,8 +198,10 @@ class OrderTracking extends Component
         }
 
         try {
-            $disputeService->cancelFullOrder($this->order, 'Customer requested cancellation via tracking portal');
-            $this->actionFeedback = 'Your order has been cancelled and reserved items restored to inventory.';
+            $result = $disputeService->cancelFullOrder($this->order, 'Customer requested cancellation via tracking portal');
+            $this->actionFeedback = $result['kept'] > 0
+                ? "{$result['cancelled']} parcel(s) cancelled. {$result['kept']} parcel(s) already on the way could not be cancelled; you can request a return after delivery."
+                : 'Your order has been cancelled and reserved items restored to inventory.';
             $this->searchOrder();
         } catch (Exception $e) {
             $this->actionError = $e->getMessage();
@@ -210,6 +235,7 @@ class OrderTracking extends Component
     public function openReturnModal(int $subOrderId): void
     {
         $this->selectedSubOrderId = $subOrderId;
+        $this->returnQuantities = array_map(fn (array $line): int => $line['remaining'], $this->returnableItems());
         $this->showReturnModal = true;
         $this->returnDescription = '';
         $this->actionError = '';
@@ -219,6 +245,40 @@ class OrderTracking extends Component
     {
         $this->showReturnModal = false;
         $this->selectedSubOrderId = null;
+        $this->returnQuantities = [];
+    }
+
+    /**
+     * Items of the chosen parcel the buyer still has, for the return form.
+     *
+     * @return array<int, array{name: string, remaining: int, unit_price: float}>
+     */
+    public function returnableItems(): array
+    {
+        if ($this->order === null || $this->selectedSubOrderId === null) {
+            return [];
+        }
+
+        $subOrder = SubOrder::with('items.product:id,title')
+            ->where('parent_order_id', $this->order->id)
+            ->find($this->selectedSubOrderId);
+        if (! $subOrder) {
+            return [];
+        }
+
+        $remaining = app(PartialReturnService::class)->remainingQuantities($subOrder);
+        $items = [];
+        foreach ($subOrder->items as $item) {
+            if (($remaining[$item->id] ?? 0) > 0) {
+                $items[$item->id] = [
+                    'name' => $item->product?->title ?? 'Item',
+                    'remaining' => $remaining[$item->id],
+                    'unit_price' => (float) $item->unit_price,
+                ];
+            }
+        }
+
+        return $items;
     }
 
     public function submitReturnRequest(OrderDisputeService $disputeService): void
@@ -227,6 +287,8 @@ class OrderTracking extends Component
             'returnReason' => 'required|string',
             'returnRequestedAction' => 'required|string|in:refund,replacement',
             'returnDescription' => 'required|string|min:10|max:1000',
+            'returnQuantities' => 'array',
+            'returnQuantities.*' => 'nullable|integer|min:0',
         ], [
             'returnDescription.min' => 'Please provide at least 10 characters explaining the issue.',
         ]);
@@ -258,7 +320,7 @@ class OrderTracking extends Component
                 'reason' => $this->returnReason,
                 'requested_action' => $this->returnRequestedAction,
                 'description' => $this->returnDescription,
-            ]);
+            ] + ($this->returnQuantities !== [] ? ['items' => $this->returnQuantities] : []));
 
             $this->showReturnModal = false;
             $this->actionFeedback = "Return request initiated for #{$subOrder->sub_order_number}. Escrow payout held pending resolution.";
@@ -273,6 +335,7 @@ class OrderTracking extends Component
         return view('livewire.storefront.order-tracking', [
             'order' => $this->order,
             'returnWindowHours' => app(StoreConfigurationService::class)->getEscrowHoldingPeriodHours(),
+            'returnableItems' => $this->showReturnModal ? $this->returnableItems() : [],
         ]);
     }
 }

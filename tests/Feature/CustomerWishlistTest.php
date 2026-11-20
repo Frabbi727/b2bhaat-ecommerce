@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Livewire\Storefront\CustomerWishlist;
+use App\Livewire\Storefront\ProductCatalog;
 use App\Livewire\Storefront\ProductDetail;
 use App\Models\Product;
 use App\Models\User;
@@ -122,5 +123,38 @@ class CustomerWishlistTest extends TestCase
 
         $cart = app(CartSessionService::class);
         $this->assertGreaterThan(0, $cart->getItemCount());
+    }
+
+    public function test_toggling_an_unapproved_product_from_the_catalog_saves_nothing(): void
+    {
+        $customer = User::where('email', 'customer@retail.com')->first();
+        $product = Product::first();
+        $product->forceFill(['approval_status' => 'pending_review'])->save();
+
+        $this->actingAs($customer);
+
+        Livewire::test(ProductCatalog::class)
+            ->call('toggleWishlist', $product->id)
+            ->assertSet('feedbackMessage', '')
+            ->assertSet('errorMessage', 'This product is not available right now.');
+
+        $this->assertDatabaseMissing('wishlists', ['user_id' => $customer->id, 'product_id' => $product->id]);
+    }
+
+    public function test_a_wishlist_row_for_an_unapproved_product_shows_no_details(): void
+    {
+        $customer = User::where('email', 'customer@retail.com')->first();
+        $product = Product::first();
+        $product->forceFill(['title' => 'Secret Prototype Lamp', 'regular_price' => null, 'approval_status' => 'pending_review'])->save();
+        $product->prices()->update(['unit_price' => 4321.99]);
+
+        Wishlist::create(['user_id' => $customer->id, 'product_id' => $product->id]);
+        $this->actingAs($customer);
+
+        Livewire::test(CustomerWishlist::class)
+            ->assertSee('No longer available')
+            ->assertDontSee('Secret Prototype Lamp')
+            ->assertDontSee('4,321.99')
+            ->assertDontSee($product->slug);
     }
 }

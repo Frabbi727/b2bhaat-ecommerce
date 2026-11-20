@@ -3,6 +3,7 @@
 namespace App\Services\Inventory;
 
 use App\Models\ProductVariation;
+use App\Models\StockMovement;
 use App\Models\User;
 use Exception;
 use Illuminate\Http\UploadedFile;
@@ -84,8 +85,6 @@ class StockBulkUpdateService
     {
         if ($csvInput instanceof UploadedFile) {
             $content = file_get_contents($csvInput->getRealPath());
-        } elseif (is_string($csvInput) && file_exists($csvInput)) {
-            $content = file_get_contents($csvInput);
         } else {
             $content = (string) $csvInput;
         }
@@ -103,7 +102,7 @@ class StockBulkUpdateService
             if ($line === '') {
                 continue;
             }
-            $parsed = str_getcsv($line);
+            $parsed = str_getcsv($line, ',', '"', '');
             if (! empty($parsed)) {
                 $rows[] = $parsed;
             }
@@ -142,49 +141,62 @@ class StockBulkUpdateService
         $unchanged = 0;
         $errors = [];
 
-        DB::transaction(function () use ($seller, $rows, $variationIdIdx, $skuIdx, $newStockIdx, &$updated, &$unchanged, &$errors) {
-            foreach ($rows as $rowIndex => $row) {
-                $rowNumber = $rowIndex + 2; // +1 for 0-index, +1 for header
-                $varId = ($variationIdIdx !== false && isset($row[$variationIdIdx])) ? trim((string) $row[$variationIdIdx]) : null;
-                $sku = ($skuIdx !== false && isset($row[$skuIdx])) ? trim((string) $row[$skuIdx]) : null;
-                $stockVal = isset($row[$newStockIdx]) ? trim((string) $row[$newStockIdx]) : null;
+        StockMovementContext::run(StockMovement::REASON_BULK_UPDATE, null, function () use ($seller, $rows, $variationIdIdx, $skuIdx, $newStockIdx, &$updated, &$unchanged, &$errors): void {
+            DB::transaction(function () use ($seller, $rows, $variationIdIdx, $skuIdx, $newStockIdx, &$updated, &$unchanged, &$errors) {
+                $targets = [];
 
-                if (! is_numeric($stockVal) || (int) $stockVal < 0) {
-                    $errors[] = "Row {$rowNumber}: Invalid stock quantity '{$stockVal}'. Must be a non-negative integer.";
+                foreach ($rows as $rowIndex => $row) {
+                    $rowNumber = $rowIndex + 2; // +1 for 0-index, +1 for header
+                    $varId = ($variationIdIdx !== false && isset($row[$variationIdIdx])) ? trim((string) $row[$variationIdIdx]) : null;
+                    $sku = ($skuIdx !== false && isset($row[$skuIdx])) ? trim((string) $row[$skuIdx]) : null;
+                    $stockVal = isset($row[$newStockIdx]) ? trim((string) $row[$newStockIdx]) : null;
 
-                    continue;
+                    if (! is_numeric($stockVal) || (int) $stockVal < 0) {
+                        $errors[] = "Row {$rowNumber}: '{$stockVal}' is not a valid quantity (use a whole number, 0 or more).";
+
+                        continue;
+                    }
+
+                    $newQty = (int) $stockVal;
+
+                    // Find variation belonging to this seller
+                    $variation = null;
+                    if ($varId) {
+                        $variation = ProductVariation::whereHas('product', fn ($q) => $q->where('seller_id', $seller->id))
+                            ->find($varId);
+                    }
+
+                    if (! $variation && $sku) {
+                        $variation = ProductVariation::whereHas('product', fn ($q) => $q->where('seller_id', $seller->id))
+                            ->where('sku', $sku)
+                            ->first();
+                    }
+
+                    if (! $variation) {
+                        $identifier = $sku ?: ($varId ? "ID {$varId}" : 'unknown');
+                        $errors[] = "Row {$rowNumber}: '{$identifier}' not found in your catalog.";
+
+                        continue;
+                    }
+
+                    // A later row for the same variation wins, as it did when rows were written one by one
+                    $targets[$variation->id] = $newQty;
                 }
 
-                $newQty = (int) $stockVal;
+                // PAY-6: lock and write lowest id first, the same order checkout uses, so the two cannot deadlock
+                ksort($targets);
+                foreach ($targets as $variationId => $newQty) {
+                    $variation = ProductVariation::where('id', $variationId)->lockForUpdate()->first();
 
-                // Find variation belonging to this seller
-                $variation = null;
-                if ($varId) {
-                    $variation = ProductVariation::whereHas('product', fn ($q) => $q->where('seller_id', $seller->id))
-                        ->find($varId);
+                    if ($variation->stock_quantity === $newQty) {
+                        $unchanged++;
+                    } else {
+                        $variation->update(['stock_quantity' => $newQty]);
+                        $updated++;
+                    }
                 }
-
-                if (! $variation && $sku) {
-                    $variation = ProductVariation::whereHas('product', fn ($q) => $q->where('seller_id', $seller->id))
-                        ->where('sku', $sku)
-                        ->first();
-                }
-
-                if (! $variation) {
-                    $identifier = $sku ?: ($varId ? "ID {$varId}" : 'unknown');
-                    $errors[] = "Row {$rowNumber}: Variation '{$identifier}' not found in your catalog.";
-
-                    continue;
-                }
-
-                if ($variation->stock_quantity === $newQty) {
-                    $unchanged++;
-                } else {
-                    $variation->update(['stock_quantity' => $newQty]);
-                    $updated++;
-                }
-            }
-        });
+            });
+        }, 'Stock sheet upload');
 
         return [
             'total_rows' => count($rows),

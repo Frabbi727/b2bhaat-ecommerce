@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\RfqRequests;
 
 use App\Filament\Admin\Resources\RfqRequests\Pages\ListRfqRequests;
 use App\Models\RfqRequest;
+use App\Services\Formatting\Money;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
@@ -23,9 +24,15 @@ class RfqRequestResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-chat-bubble-left-right';
 
-    protected static ?string $navigationLabel = 'Quote requests';
+    protected static UnitEnum|string|null $navigationGroup = 'Orders & Fulfilment';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Moderation';
+    protected static ?int $navigationSort = 4;
+
+    protected static ?string $navigationLabel = 'Wholesale quotes';
+
+    protected static ?string $modelLabel = 'quote request';
+
+    protected static ?string $pluralModelLabel = 'quote requests';
 
     public static function canAccess(): bool
     {
@@ -46,8 +53,8 @@ class RfqRequestResource extends Resource
                     ->description(fn (RfqRequest $record): ?string => $record->company_name),
                 TextColumn::make('buyer_phone')->label('Mobile')->copyable(),
                 TextColumn::make('target_quantity')->label('Quantity')->numeric()->sortable(),
-                TextColumn::make('target_unit_price')->label('Buyer\'s price')->money('BDT')->placeholder('—'),
-                TextColumn::make('seller_quoted_price')->label('Seller\'s quote')->money('BDT')->placeholder('—'),
+                TextColumn::make('target_unit_price')->label('Buyer\'s price')->formatStateUsing(fn ($state): string => Money::taka($state))->placeholder('—'),
+                TextColumn::make('seller_quoted_price')->label('Seller\'s quote')->formatStateUsing(fn ($state): string => Money::taka($state))->placeholder('—'),
                 TextColumn::make('status')->badge(),
                 TextColumn::make('created_at')->label('Asked')->since()->sortable(),
             ])

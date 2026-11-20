@@ -6,7 +6,10 @@ namespace App\Filament\Admin\Resources\Refunds;
 
 use App\Filament\Admin\Resources\Refunds\Pages\ListRefunds;
 use App\Models\Refund;
+use App\Services\Formatting\Money;
+use App\Services\Orders\RefundService;
 use BackedEnum;
+use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -15,7 +18,6 @@ use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\DB;
 use UnitEnum;
 
 /**
@@ -27,9 +29,15 @@ class RefundResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-receipt-refund';
 
-    protected static ?string $navigationLabel = 'Customer Refunds';
+    protected static UnitEnum|string|null $navigationGroup = 'Finance';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Financial Payouts & Logistics';
+    protected static ?int $navigationSort = 2;
+
+    protected static ?string $navigationLabel = 'Customer refunds';
+
+    protected static ?string $modelLabel = 'refund';
+
+    protected static ?string $pluralModelLabel = 'customer refunds';
 
     public static function canAccess(): bool
     {
@@ -47,13 +55,13 @@ class RefundResource extends Resource
                 TextColumn::make('subOrder.sub_order_number')->label('Consignment')->placeholder('—')->searchable(),
                 TextColumn::make('order.customer.name')->label('Customer')->searchable(),
                 TextColumn::make('order.paymentMethod.name')->label('Paid via'),
-                TextColumn::make('amount')->label('Owed (Tk)')->money('BDT')->weight('bold')->sortable(),
+                TextColumn::make('amount')->label('Owed (৳)')->formatStateUsing(fn ($state): string => Money::taka($state))->weight('bold')->sortable(),
                 TextColumn::make('reason')->wrap()->limit(60),
                 TextColumn::make('status')->badge()->color(fn (string $state): string => $state === Refund::STATUS_PAID ? 'success' : 'warning'),
                 TextColumn::make('method')->placeholder('—'),
                 TextColumn::make('reference')->label('Refund TrxID')->placeholder('—')->copyable(),
-                TextColumn::make('paid_at')->dateTime('M d, Y h:i A')->placeholder('—')->sortable(),
-                TextColumn::make('created_at')->label('Recorded')->dateTime('M d, Y h:i A')->sortable(),
+                TextColumn::make('paid_at')->dateTime('d M Y, g:i A')->placeholder('—')->sortable(),
+                TextColumn::make('created_at')->label('Recorded')->dateTime('d M Y, g:i A')->sortable(),
             ])
             ->filters([
                 SelectFilter::make('status')->options([
@@ -71,7 +79,7 @@ class RefundResource extends Resource
                     ->schema([
                         Select::make('method')
                             ->label('Refund Method')
-                            ->options(['bkash' => 'bKash', 'nagad' => 'Nagad', 'bank' => 'Bank Transfer', 'cash' => 'Cash'])
+                            ->options(RefundService::METHODS)
                             ->required(),
                         TextInput::make('reference')
                             ->label('Transaction / Reference ID')
@@ -79,25 +87,19 @@ class RefundResource extends Resource
                             ->maxLength(100),
                     ])
                     ->action(function (Refund $record, array $data): void {
-                        $updated = DB::transaction(function () use ($record, $data): bool {
-                            $locked = Refund::whereKey($record->id)->lockForUpdate()->first();
-                            if (! $locked || ! $locked->isPending()) {
-                                return false;
-                            }
+                        try {
+                            $updated = app(RefundService::class)->markPaid($record, (string) $data['method'], (string) $data['reference']);
+                        } catch (DomainException $exception) {
+                            Notification::make()->title('Refund not marked as paid')->body($exception->getMessage())->danger()->send();
 
-                            $locked->update([
-                                'status' => Refund::STATUS_PAID,
-                                'method' => $data['method'],
-                                'reference' => trim((string) $data['reference']),
-                                'paid_at' => now(),
-                            ]);
+                            return;
+                        }
 
-                            return true;
-                        });
-
-                        $updated
-                            ? Notification::make()->title('Refund marked as paid')->success()->send()
-                            : Notification::make()->title('Refund was already settled')->warning()->send();
+                        if ($updated) {
+                            Notification::make()->title('Refund marked as paid')->success()->send();
+                        } else {
+                            Notification::make()->title('Refund was already settled')->warning()->send();
+                        }
                     }),
             ]);
     }

@@ -12,14 +12,19 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use UnitEnum;
 
 class SellerWalletResource extends Resource
 {
     protected static ?string $model = SellerWallet::class;
 
-    protected static ?string $navigationLabel = 'My Wallet & Escrow';
+    protected static ?string $navigationLabel = 'Wallet & payouts';
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
+
+    protected static UnitEnum|string|null $navigationGroup = 'Finance';
+
+    protected static ?int $navigationSort = 1;
 
     public static function getEloquentQuery(): Builder
     {

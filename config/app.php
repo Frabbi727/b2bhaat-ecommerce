@@ -68,6 +68,12 @@ return [
     'timezone' => env('APP_TIMEZONE', 'UTC'),
 
     /*
+    | PERF-5: the timezone people see in the panels and the one the daily jobs are scheduled in. It is separate from
+    | 'timezone' above, which is how stored times are read and written and must not change on a live database.
+    */
+    'display_timezone' => env('APP_DISPLAY_TIMEZONE', 'Asia/Dhaka'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------

@@ -33,7 +33,7 @@ class AdminDashboardAnalyticsTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('Dashboard');
         $response->assertSee('Orders');
-        $response->assertSee('Seller Profiles');
+        $response->assertSee('Sellers');
     }
 
     public function test_non_admin_cannot_access_admin_dashboard(): void
@@ -76,7 +76,7 @@ class AdminDashboardAnalyticsTest extends TestCase
 
         $test = Livewire::test(LatestOrdersWidget::class)
             ->assertStatus(200)
-            ->assertSee('Recent Marketplace Orders (Live Feed)');
+            ->assertSee('Latest orders');
 
         if ($latestOrder) {
             $test->assertSee($latestOrder->order_number);

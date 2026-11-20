@@ -77,4 +77,26 @@ class BulkSmsBdDriverTest extends TestCase
         $balance = $driver->checkBalance();
         $this->assertSame(150.50, $balance);
     }
+
+    public function test_error_sent_as_a_list_is_reported_as_text(): void
+    {
+        Http::fake([
+            'bulksmsbd.net/api/smsapi' => Http::response(['response_code' => 1003, 'error_message' => ['The api key field is required.']], 200),
+        ]);
+
+        $response = (new BulkSmsBdDriver(apiKey: '', senderId: 'test_sender'))->send('01712345678', 'Test Message');
+
+        $this->assertFalse($response->isSuccessful());
+        $this->assertSame('1003', $response->responseCode());
+        $this->assertSame('The api key field is required.', $response->errorMessage());
+    }
+
+    public function test_balance_error_sent_as_a_list_is_reported_as_text(): void
+    {
+        Http::fake([
+            'bulksmsbd.net/api/getBalanceApi*' => Http::response(['response_code' => 1003, 'error_message' => ['The api key field is required.']], 200),
+        ]);
+
+        $this->assertSame('The api key field is required.', (new BulkSmsBdDriver(apiKey: '', senderId: 'test_sender'))->checkBalance());
+    }
 }

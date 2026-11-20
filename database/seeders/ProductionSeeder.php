@@ -15,6 +15,8 @@ class ProductionSeeder extends Seeder
             SystemLookupSeeder::class,
             StoreSettingsSeeder::class,
             SmsTemplateSeeder::class,
+            SellerPlanSeeder::class,
+            AccountingChartOfAccountsSeeder::class,
         ]);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\ProductApprovalStatus;
 use App\Models\Attribute;
 use App\Models\AttributeValue;
 use App\Models\Brand;
@@ -28,6 +29,7 @@ use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class DemoCatalogSeeder extends Seeder
 {
@@ -184,6 +186,21 @@ class DemoCatalogSeeder extends Seeder
             ]
         );
 
+        // The demo nail seller's full catalogue sheet uses these, so a reseeded database can import it again
+        foreach ([
+            'Nail Polish & Gel',
+            'Nail Tools & Implements',
+            'Nail Art & Charms',
+            'Acrylic & Polygel Systems',
+            'Nail Care & Liquids',
+            'Salon Equipment & Lamps',
+        ] as $position => $nailCategory) {
+            Category::firstOrCreate(
+                ['slug' => Str::slug($nailCategory)],
+                ['parent_id' => $parentCat->id, 'name' => $nailCategory, 'sort_order' => 10 + $position, 'is_active' => true]
+            );
+        }
+
         // 6. Brand
         $brand = Brand::firstOrCreate(
             ['slug' => 'glamourpro'],
@@ -193,6 +210,8 @@ class DemoCatalogSeeder extends Seeder
                 'is_active' => true,
             ]
         );
+
+        Brand::firstOrCreate(['slug' => 'nails-factory-ltd'], ['name' => 'Nails Factory Ltd', 'is_active' => true]);
 
         // 7. Attributes & Values
         $colorAttr = Attribute::firstOrCreate(['slug' => 'color'], ['name' => 'Color']);
@@ -235,6 +254,12 @@ class DemoCatalogSeeder extends Seeder
                 'is_active' => true,
             ]
         );
+
+        // Demo products are live from the start, so they skip the review queue
+        $product->forceFill([
+            'approval_status' => ProductApprovalStatus::Approved,
+            'approved_at' => $product->approved_at ?? now(),
+        ])->save();
 
         // Product Primary Image
         ProductImage::firstOrCreate(
@@ -376,6 +401,14 @@ class DemoCatalogSeeder extends Seeder
                     'shipping_amount' => 70.00,
                 ]
             );
+
+            // Placed 18 hours ago: before the dispatch logged 12 hours ago, and still inside the buyer's 24-hour
+            // cancellation window that tests rely on
+            if ($demoSubOrder->wasRecentlyCreated) {
+                $placedAt = now()->subHours(18);
+                $demoOrder->forceFill(['created_at' => $placedAt, 'updated_at' => $placedAt])->saveQuietly();
+                $demoSubOrder->forceFill(['created_at' => $placedAt, 'updated_at' => $placedAt])->saveQuietly();
+            }
 
             OrderItem::firstOrCreate(
                 [

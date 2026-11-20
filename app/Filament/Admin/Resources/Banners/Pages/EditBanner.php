@@ -10,10 +10,17 @@ class EditBanner extends EditRecord
 {
     protected static string $resource = BannerResource::class;
 
+    public function getTitle(): string
+    {
+        return 'Edit banner';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
-            DeleteAction::make(),
+            DeleteAction::make()
+                ->label('Delete banner')
+                ->modalDescription('It is removed from the shop straight away. To take it down for now, turn off "Show in the shop" instead.'),
         ];
     }
 }

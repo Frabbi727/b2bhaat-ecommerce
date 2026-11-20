@@ -27,26 +27,19 @@ class ListUsers extends ListRecords
             ->where(fn ($q) => $q->whereNotNull('trade_license_number')->orWhereNotNull('business_name'))
             ->count();
 
-        $approvedCount = User::where('is_wholesale_approved', true)->count();
-        $rejectedCount = User::where('is_wholesale_approved', false)->whereNotNull('wholesale_rejected_at')->count();
-
         return [
-            'all' => Tab::make('All Users'),
-            'b2b_pending' => Tab::make('B2B Pending Review')
-                ->badge((string) $pendingCount)
+            'all' => Tab::make('All users'),
+            'b2b_pending' => Tab::make('Wholesale requests')
+                ->badge($pendingCount ?: null)
                 ->badgeColor('warning')
                 ->modifyQueryUsing(function (Builder $query) {
                     $query->where('is_wholesale_approved', false)
                         ->whereNull('wholesale_rejected_at')
                         ->where(fn ($q) => $q->whereNotNull('trade_license_number')->orWhereNotNull('business_name'));
                 }),
-            'b2b_approved' => Tab::make('Approved B2B')
-                ->badge((string) $approvedCount)
-                ->badgeColor('success')
+            'b2b_approved' => Tab::make('Wholesale buyers')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('is_wholesale_approved', true)),
-            'b2b_rejected' => Tab::make('Rejected B2B')
-                ->badge((string) $rejectedCount)
-                ->badgeColor('danger')
+            'b2b_rejected' => Tab::make('Rejected requests')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('is_wholesale_approved', false)->whereNotNull('wholesale_rejected_at')),
         ];
     }

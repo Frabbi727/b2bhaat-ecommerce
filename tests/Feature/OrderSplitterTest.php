@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Order;
 use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\ProductPrice;
@@ -15,6 +16,7 @@ use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class OrderSplitterTest extends TestCase
@@ -68,6 +70,7 @@ class OrderSplitterTest extends TestCase
             'has_variations' => true,
             'is_active' => true,
         ]);
+        $this->approveProducts($product2);
         $variation2 = ProductVariation::create([
             'product_id' => $product2->id,
             'sku' => 'LIP-RED-01',
@@ -129,5 +132,110 @@ class OrderSplitterTest extends TestCase
         // Commission for seller 2 (12% of 450 = 54.00)
         $this->assertEquals(54.00, (float) $subOrder2->commission_amount);
         $this->assertEquals(396.00, $subOrder2->net_earnings);
+    }
+
+    /**
+     * WA-CHK-02 last line of defence: the splitter never writes a line that would lower the order total.
+     *
+     * @return array<string, array{int, float}>
+     */
+    public static function invalidLineProvider(): array
+    {
+        return [
+            'zero quantity' => [0, 250.00],
+            'negative quantity' => [-5, 250.00],
+            'negative unit price' => [2, -1.00],
+        ];
+    }
+
+    #[DataProvider('invalidLineProvider')]
+    public function test_order_with_an_invalid_line_is_refused_and_nothing_is_written(int $quantity, float $unitPrice): void
+    {
+        $customer = User::where('email', 'customer@retail.com')->firstOrFail();
+        $product = Product::where('seller_id', User::where('email', 'seller@nailsfactory.com')->value('id'))->firstOrFail();
+        $variation = $product->variations()->firstOrFail();
+        $stockBefore = (int) $variation->stock_quantity;
+        $ordersBefore = Order::count();
+
+        try {
+            app(OrderSplitterService::class)->createAndSplitOrder($customer, [
+                'payment_method_id' => PaymentMethod::where('slug', 'cod')->firstOrFail()->id,
+                'shipping_address' => ['recipient_name' => 'Tanvir Hasan', 'street' => 'Dhanmondi, Dhaka', 'phone' => '+8801700000004'],
+                'items' => [[
+                    'product_id' => $product->id,
+                    'variation_id' => $variation->id,
+                    'sales_channel_id' => SalesChannel::where('slug', SalesChannel::RETAIL)->value('id'),
+                    'quantity' => $quantity,
+                    'unit_price' => $unitPrice,
+                ]],
+            ]);
+            $this->fail('The order was placed.');
+        } catch (\DomainException $e) {
+            $this->assertStringContainsString('Remove it from your cart', $e->getMessage());
+        }
+
+        $this->assertSame($ordersBefore, Order::count());
+        $this->assertSame($stockBefore, (int) $variation->fresh()->stock_quantity);
+    }
+
+    /**
+     * WA-PRC-03 backstop: a line on a product with options must name the option, or the seller can't ship it and no
+     * stock is taken.
+     */
+    public function test_line_without_an_option_on_a_product_with_options_is_refused(): void
+    {
+        $customer = User::where('email', 'customer@retail.com')->firstOrFail();
+        $product = Product::where('slug', 'luxury-press-on-fake-nails-set')->firstOrFail();
+        $this->assertTrue((bool) $product->has_variations);
+        $ordersBefore = Order::count();
+
+        try {
+            app(OrderSplitterService::class)->createAndSplitOrder($customer, [
+                'payment_method_id' => PaymentMethod::where('slug', 'cod')->firstOrFail()->id,
+                'shipping_address' => ['recipient_name' => 'Tanvir Hasan', 'street' => 'Dhanmondi, Dhaka', 'phone' => '+8801700000004'],
+                'items' => [[
+                    'product_id' => $product->id,
+                    'variation_id' => null,
+                    'sales_channel_id' => SalesChannel::where('slug', SalesChannel::WHOLESALE)->value('id'),
+                    'quantity' => 60,
+                    'unit_price' => 100.00,
+                ]],
+            ]);
+            $this->fail('A line without an option was ordered.');
+        } catch (\DomainException $e) {
+            $this->assertStringContainsString('choose an option', $e->getMessage());
+        }
+
+        $this->assertSame($ordersBefore, Order::count());
+    }
+
+    public function test_each_order_line_keeps_the_sellers_cost_per_unit_at_the_time_of_ordering(): void
+    {
+        $customer = User::where('email', 'customer@retail.com')->firstOrFail();
+        $seller = User::where('email', 'seller@nailsfactory.com')->firstOrFail();
+        $retailChannel = SalesChannel::where('slug', SalesChannel::RETAIL)->firstOrFail();
+
+        $product = Product::where('seller_id', $seller->id)->firstOrFail();
+        $variation = $product->variations()->firstOrFail();
+        $variation->update(['buy_price' => 77.50, 'stock_quantity' => 50]);
+
+        $order = app(OrderSplitterService::class)->createAndSplitOrder($customer, [
+            'payment_method_id' => PaymentMethod::where('slug', 'cod')->firstOrFail()->id,
+            'shipping_address' => ['recipient_name' => 'Tanvir Hasan', 'street' => 'Dhanmondi, Dhaka', 'phone' => '+8801700000004'],
+            'items' => [[
+                'product_id' => $product->id,
+                'variation_id' => $variation->id,
+                'sales_channel_id' => $retailChannel->id,
+                'quantity' => 2,
+                'unit_price' => 250.00,
+            ]],
+        ]);
+
+        $line = $order->subOrders->first()->items->first();
+        $this->assertSame('77.50', $line->unit_cost);
+
+        // A later cost change does not rewrite the profit of an order already placed
+        $variation->update(['buy_price' => 90]);
+        $this->assertSame('77.50', $line->fresh()->unit_cost);
     }
 }
