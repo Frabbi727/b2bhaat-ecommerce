@@ -9,6 +9,7 @@ use App\Models\ReturnRequest;
 use App\Models\StockMovement;
 use App\Models\SubOrder;
 use App\Models\User;
+use App\Notifications\Orders\ReturnEscalated;
 use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Inventory\StockMovementContext;
 use App\Services\Inventory\StockReservationService;
@@ -17,6 +18,7 @@ use App\Services\Settings\StoreConfigurationService;
 use DomainException;
 use Exception;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 
 class OrderDisputeService
 {
@@ -128,7 +130,7 @@ class OrderDisputeService
         return DB::transaction(function () use ($subOrder, $customer, $data) {
             // One open request at a time, so two returns can never claim the same units (PAY-4)
             SubOrder::whereKey($subOrder->id)->lockForUpdate()->first();
-            if ($subOrder->returnRequests()->where('status', ReturnRequest::STATUS_PENDING)->exists()) {
+            if ($subOrder->returnRequests()->whereIn('status', ReturnRequest::OPEN_STATUSES)->exists()) {
                 throw new Exception('A return for this parcel is already waiting for the seller. You can ask about other items once it is decided.');
             }
 
@@ -164,9 +166,9 @@ class OrderDisputeService
     /**
      * Process resolution for a return request.
      */
-    public function resolveReturnRequest(ReturnRequest $returnRequest, string $status, ?string $note = null): void
+    public function resolveReturnRequest(ReturnRequest $returnRequest, string $status, ?string $note = null, bool $escalationDecision = false): void
     {
-        DB::transaction(function () use ($returnRequest, $status, $note) {
+        DB::transaction(function () use ($returnRequest, $status, $note, $escalationDecision) {
             // Same lock order as the courier path (order, parcel, then request), so the two never deadlock and a
             // courier return can't land between the check below and the settlement (review R-1)
             $subOrder = SubOrder::whereKey($returnRequest->sub_order_id)->firstOrFail();
@@ -175,7 +177,9 @@ class OrderDisputeService
 
             // A request is resolved once; re-resolving would restock and refund twice
             $returnRequest = ReturnRequest::whereKey($returnRequest->id)->lockForUpdate()->firstOrFail();
-            if ($returnRequest->status !== ReturnRequest::STATUS_PENDING) {
+            // 3.4: an escalated request is decided only by an admin, through decideEscalatedReturn()
+            $expected = $escalationDecision ? ReturnRequest::STATUS_ESCALATED : ReturnRequest::STATUS_PENDING;
+            if ($returnRequest->status !== $expected) {
                 return;
             }
 
@@ -193,11 +197,10 @@ class OrderDisputeService
                 }
             }
 
-            $returnRequest->update([
-                'status' => $status,
-                'seller_note' => $note,
-                'resolved_at' => now(),
-            ]);
+            // The seller's own reason stays on record when an admin overrules it
+            $returnRequest->update($escalationDecision
+                ? ['status' => $status, 'admin_arbitration_note' => $note, 'escalation_decided_at' => now(), 'resolved_at' => now()]
+                : ['status' => $status, 'seller_note' => $note, 'resolved_at' => now()]);
 
             // Replacement: the sale stands and the seller sends the items again in a ৳0 follow-up parcel, which takes
             // the units from stock; the original's payment waits until it is delivered (WA-ORD-03)
@@ -268,6 +271,99 @@ class OrderDisputeService
                     }
                 }
             }
+        });
+    }
+
+    /**
+     * Roadmap 3.4: the buyer asks B2Bhaat to review a return the seller rejected. Allowed once, within the window
+     * after the rejection. The parcel's escrow stays on hold until an admin decides, and every admin is told.
+     *
+     * @throws Exception
+     */
+    public function escalateReturnRequest(ReturnRequest $returnRequest, User $customer, string $note): ReturnRequest
+    {
+        if ($returnRequest->customer_id !== $customer->id) {
+            throw new Exception('You can only ask about returns on your own orders.');
+        }
+
+        $note = trim($note);
+        if (mb_strlen($note) < 10) {
+            throw new Exception('Tell us in a few words why the seller\'s decision is wrong (at least 10 characters).');
+        }
+
+        $escalated = DB::transaction(function () use ($returnRequest, $note): ReturnRequest {
+            $locked = ReturnRequest::whereKey($returnRequest->id)->lockForUpdate()->firstOrFail();
+
+            if (! $locked->canBeEscalated()) {
+                throw new Exception($locked->escalated_at !== null
+                    ? 'B2Bhaat has already been asked to review this return.'
+                    : 'This return can no longer be sent to B2Bhaat for review.');
+            }
+
+            // The seller's money may already have been released if the escrow ran in between; then there is nothing left to hold
+            if ($this->escrowLedgerService->isReleased($locked->subOrder)) {
+                throw new Exception('The seller has already been paid for this parcel, so B2Bhaat can\'t review it online. Please contact support.');
+            }
+
+            $locked->update([
+                'status' => ReturnRequest::STATUS_ESCALATED,
+                'escalated_at' => now(),
+                'escalation_note' => $note,
+            ]);
+
+            OrderTrackingLog::create([
+                'sub_order_id' => $locked->sub_order_id,
+                'fulfillment_status_id' => $locked->subOrder->fulfillment_status_id,
+                'title' => 'Buyer asked B2Bhaat to review the return',
+                'description' => 'The seller rejected the return and the buyer asked B2Bhaat to decide. The seller\'s payment is on hold until then.',
+                'hub_location' => 'B2Bhaat support',
+                'logged_at' => now(),
+            ]);
+
+            return $locked;
+        });
+
+        $admins = User::query()
+            ->whereHas('role', fn ($query) => $query->whereIn('slug', ['super_admin', 'admin']))
+            ->where('is_active', true)
+            ->get();
+        Notification::send($admins, new ReturnEscalated($escalated->loadMissing('subOrder')));
+
+        return $escalated;
+    }
+
+    /**
+     * Roadmap 3.4: an admin decides an escalated return. Approving runs the same steps as a seller approval (refund
+     * or replacement, stock back, escrow reversed); keeping the rejection closes it and lets the escrow release.
+     */
+    public function decideEscalatedReturn(ReturnRequest $returnRequest, bool $approve, string $note): void
+    {
+        if ($approve) {
+            $this->resolveReturnRequest($returnRequest, ReturnRequest::STATUS_APPROVED, $note, escalationDecision: true);
+
+            return;
+        }
+
+        DB::transaction(function () use ($returnRequest, $note): void {
+            $locked = ReturnRequest::whereKey($returnRequest->id)->lockForUpdate()->firstOrFail();
+            if (! $locked->isEscalated()) {
+                return;
+            }
+
+            $locked->update([
+                'status' => ReturnRequest::STATUS_REJECTED,
+                'admin_arbitration_note' => $note,
+                'escalation_decided_at' => now(),
+            ]);
+
+            OrderTrackingLog::create([
+                'sub_order_id' => $locked->sub_order_id,
+                'fulfillment_status_id' => $locked->subOrder->fulfillment_status_id,
+                'title' => 'B2Bhaat kept the seller\'s decision',
+                'description' => "The return stays rejected: {$note}",
+                'hub_location' => 'B2Bhaat support',
+                'logged_at' => now(),
+            ]);
         });
     }
 }

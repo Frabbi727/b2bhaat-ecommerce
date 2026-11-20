@@ -62,11 +62,18 @@ class ReleaseDeliveredEscrowCommand extends Command
             ->where('fulfillment_status_id', $deliveredStatus->id)
             ->whereExists($walletRows($holdTypes))
             ->whereNotExists($walletRows($doneTypes))
-            ->withExists(['returnRequests as has_open_return' => fn ($query) => $query->where('status', ReturnRequest::STATUS_PENDING)])
+            // 3.4: a return waiting for the seller or an admin, or a rejection the buyer can still escalate, keeps the money on hold
+            ->withExists(['returnRequests as has_open_return' => fn ($query) => $query->where(fn ($open) => $open
+                ->whereIn('status', ReturnRequest::OPEN_STATUSES)
+                ->orWhere(fn ($rejected) => $rejected
+                    ->where('status', ReturnRequest::STATUS_REJECTED)
+                    ->whereNull('escalated_at')
+                    ->where('resolved_at', '>', now()->subHours(ReturnRequest::escalationWindowHours()))))])
             ->with([
-                'trackingLogs' => fn ($query) => $query->where('fulfillment_status_id', $deliveredStatus->id)->latest('logged_at'),
+                // The first delivered entry is the delivery; later notes logged while delivered must not restart the clock
+                'trackingLogs' => fn ($query) => $query->where('fulfillment_status_id', $deliveredStatus->id)->reorder('logged_at', 'asc'),
                 'replacements.fulfillmentStatus',
-                'replacements.trackingLogs' => fn ($query) => $query->where('fulfillment_status_id', $deliveredStatus->id)->latest('logged_at'),
+                'replacements.trackingLogs' => fn ($query) => $query->where('fulfillment_status_id', $deliveredStatus->id)->reorder('logged_at', 'asc'),
             ])
             ->chunkById(100, function ($subOrders) use ($escrowService, $thresholdTime, &$releasedCount, &$totalReleasedAmount): void {
                 foreach ($subOrders as $subOrder) {
@@ -75,7 +82,7 @@ class ReleaseDeliveredEscrowCommand extends Command
                     $deliveredAt = $deliveryLog?->logged_at ?? $subOrder->updated_at;
 
                     if ($subOrder->has_open_return) {
-                        $this->warn("Skipped Sub-Order #{$subOrder->sub_order_number}: return request pending.");
+                        $this->warn("Skipped Sub-Order #{$subOrder->sub_order_number}: a return is open or can still be sent to B2Bhaat for review.");
 
                         continue;
                     }

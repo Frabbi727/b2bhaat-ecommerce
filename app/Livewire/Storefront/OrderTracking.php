@@ -3,6 +3,7 @@
 namespace App\Livewire\Storefront;
 
 use App\Models\Order;
+use App\Models\ReturnRequest;
 use App\Models\SubOrder;
 use App\Services\Orders\OrderDisputeService;
 use App\Services\Orders\PartialReturnService;
@@ -60,6 +61,11 @@ class OrderTracking extends Component
 
     /** @var array<int|string, int|string|null> PAY-4: order item id => units the buyer is sending back */
     public array $returnQuantities = [];
+
+    /** Roadmap 3.4: the rejected return the buyer is asking B2Bhaat to review */
+    public ?int $escalatingReturnId = null;
+
+    public string $escalationNote = '';
 
     public function mount(?string $token = null): void
     {
@@ -239,6 +245,57 @@ class OrderTracking extends Component
         $this->showReturnModal = true;
         $this->returnDescription = '';
         $this->actionError = '';
+    }
+
+    public function openEscalation(int $returnRequestId): void
+    {
+        $this->escalatingReturnId = $returnRequestId;
+        $this->escalationNote = '';
+        $this->actionError = '';
+    }
+
+    public function cancelEscalation(): void
+    {
+        $this->escalatingReturnId = null;
+        $this->escalationNote = '';
+    }
+
+    /**
+     * Roadmap 3.4: send a return the seller rejected to B2Bhaat for review.
+     */
+    public function submitEscalation(OrderDisputeService $disputeService): void
+    {
+        $this->validate(
+            ['escalationNote' => 'required|string|min:10|max:1000'],
+            ['escalationNote.min' => 'Tell us in a few words why the seller\'s decision is wrong (at least 10 characters).'],
+        );
+
+        if (! $this->canModifyOrder()) {
+            $this->actionError = 'Please sign in or verify the order with its mobile number first.';
+
+            return;
+        }
+
+        $returnRequest = ReturnRequest::query()
+            ->whereKey($this->escalatingReturnId)
+            ->whereHas('subOrder', fn ($query) => $query->where('parent_order_id', $this->order->id))
+            ->first();
+        $user = auth()->user() ?? $this->order->customer;
+
+        if (! $returnRequest || ! $user) {
+            $this->actionError = 'That return could not be found.';
+
+            return;
+        }
+
+        try {
+            $disputeService->escalateReturnRequest($returnRequest, $user, $this->escalationNote);
+            $this->cancelEscalation();
+            $this->searchOrder();
+            $this->actionFeedback = 'B2Bhaat will review this return. The seller is not paid for the parcel until we decide.';
+        } catch (Exception $e) {
+            $this->actionError = $e->getMessage();
+        }
     }
 
     public function closeReturnModal(): void

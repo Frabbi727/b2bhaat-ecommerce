@@ -204,7 +204,7 @@ class CourierStatusService
         // Review R-1: the whole parcel is back and refunded below, so a return still waiting for the seller is
         // settled by this one and must never be approved on top of it
         $subOrder->returnRequests()
-            ->where('status', ReturnRequest::STATUS_PENDING)
+            ->whereIn('status', ReturnRequest::OPEN_STATUSES)
             ->lockForUpdate()
             ->get()
             ->each(fn (ReturnRequest $pending) => $pending->update([

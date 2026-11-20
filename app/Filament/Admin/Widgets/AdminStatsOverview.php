@@ -81,7 +81,7 @@ class AdminStatsOverview extends StatsOverviewWidget
             )
             ->first();
         $pendingWholesale = (int) $userCounts->pending_wholesale;
-        $pendingReturns = ReturnRequest::where('status', ReturnRequest::STATUS_PENDING)->count();
+        $pendingReturns = ReturnRequest::whereIn('status', ReturnRequest::OPEN_STATUSES)->count();
         $totalPendingReview = $pendingMerchants + $pendingWholesale + $pendingReturns;
 
         $todayStart = now($timezone)->startOfDay()->setTimezone(config('app.timezone'));

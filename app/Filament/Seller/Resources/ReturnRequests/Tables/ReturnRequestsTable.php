@@ -80,6 +80,7 @@ class ReturnRequestsTable
             ReturnRequest::STATUS_PENDING => 'Needs your answer',
             ReturnRequest::STATUS_APPROVED => 'Approved',
             ReturnRequest::STATUS_REJECTED => 'Rejected',
+            ReturnRequest::STATUS_ESCALATED => 'B2Bhaat is reviewing',
             ReturnRequest::STATUS_RESOLVED => 'Closed',
             default => str($record->status)->headline()->toString(),
         };
@@ -91,6 +92,7 @@ class ReturnRequestsTable
             ReturnRequest::STATUS_PENDING => 'warning',
             ReturnRequest::STATUS_APPROVED => 'success',
             ReturnRequest::STATUS_REJECTED => 'danger',
+            ReturnRequest::STATUS_ESCALATED => 'warning',
             default => 'gray',
         };
     }
