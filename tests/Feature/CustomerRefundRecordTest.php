@@ -135,7 +135,7 @@ class CustomerRefundRecordTest extends TestCase
         $this->assertNotNull($refund->paid_at);
     }
 
-    public function test_return_with_exchange_records_no_refund(): void
+    public function test_return_with_replacement_records_no_refund(): void
     {
         $order = MixedOrderFixture::create('cod', 'paid');
         [, $b] = $this->subOrders($order, 'delivered');
@@ -147,9 +147,9 @@ class CustomerRefundRecordTest extends TestCase
         ]);
 
         $request = $this->disputes->submitReturnRequest($b, User::findOrFail($order->customer_id), [
-            'reason' => 'Wrong size', 'requested_action' => 'exchange', 'description' => 'Need L',
+            'reason' => 'Wrong size', 'requested_action' => 'replacement', 'description' => 'Need L',
         ]);
-        $this->disputes->resolveReturnRequest($request, ReturnRequest::STATUS_APPROVED, 'Exchange approved');
+        $this->disputes->resolveReturnRequest($request, ReturnRequest::STATUS_APPROVED, 'Replacement approved');
 
         $this->assertSame(0, Refund::count());
     }

@@ -418,7 +418,7 @@ class AuditSystemComprehensiveTest extends TestCase
             'order_id' => $order->id,
             'amount' => 500.00,
             'reason' => 'Customer received broken item',
-            'status' => 'approved',
+            'status' => Refund::STATUS_PENDING,
             'method' => 'bkash',
         ]);
 
