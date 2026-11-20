@@ -21,6 +21,15 @@ class ReturnRequest extends Model
 
     public const STATUS_RESOLVED = 'resolved';
 
+    /** reason code => what the buyer picked, in the buyer's words (the same choices as the return form) */
+    public const REASONS = [
+        'defective_item' => 'The item doesn\'t work',
+        'damaged_goods' => 'It arrived damaged',
+        'incorrect_variation' => 'Wrong item, colour or size',
+        'not_as_described' => 'Not as described',
+        'other' => 'Something else',
+    ];
+
     protected $fillable = [
         'sub_order_id',
         'customer_id',
@@ -84,6 +93,16 @@ class ReturnRequest extends Model
         return $items
             ->map(fn (ReturnRequestItem $item): string => ($item->orderItem?->product?->title ?? 'Item').' × '.$item->quantity)
             ->implode(', ');
+    }
+
+    public function reasonLabel(): string
+    {
+        return self::REASONS[$this->reason] ?? str($this->reason)->replace('_', ' ')->ucfirst()->toString();
+    }
+
+    public function wantsRefund(): bool
+    {
+        return $this->requested_action === 'refund';
     }
 
     public function isPending(): bool

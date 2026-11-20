@@ -2,7 +2,8 @@
     use App\Filament\Seller\Resources\SubOrders\Schemas\SubOrderInfolist;
     use App\Services\Formatting\Money;
 
-    $record = $getRecord();
+    // An order passes its own items; a return passes only the lines coming back, with their quantity and value
+    $lines ??= $getRecord()->items->map(fn ($item): array => ['item' => $item, 'quantity' => $item->quantity, 'total' => $item->total_price]);
 @endphp
 
 <div>
@@ -15,11 +16,12 @@
     </div>
 
     <ul class="divide-y divide-gray-200 dark:divide-white/10">
-        @foreach ($record->items as $item)
+        @foreach ($lines as $line)
             @php
+                $item = $line['item'];
                 $image = $item->product?->primaryImage?->public_url;
                 $unit = $item->product?->unit?->symbol;
-                $quantity = number_format($item->quantity).($unit ? ' '.$unit : '');
+                $quantity = number_format($line['quantity']).($unit ? ' '.$unit : '');
                 $details = SubOrderInfolist::itemDetails($item);
                 $discounted = (float) $item->original_unit_price > (float) $item->unit_price;
             @endphp
@@ -49,7 +51,7 @@
                                     <span class="text-xs text-gray-400 line-through dark:text-gray-500">{{ Money::taka($item->original_unit_price) }}</span>
                                 @endif
                             </p>
-                            <p class="text-sm font-medium text-gray-950 tabular-nums dark:text-white">{{ Money::taka($item->total_price) }}</p>
+                            <p class="text-sm font-medium text-gray-950 tabular-nums dark:text-white">{{ Money::taka($line['total']) }}</p>
                         </div>
                     </div>
                 </div>
@@ -61,7 +63,7 @@
                         <p class="text-xs text-gray-400 line-through dark:text-gray-500">{{ Money::taka($item->original_unit_price) }}</p>
                     @endif
                 </div>
-                <p class="hidden text-end text-sm font-medium text-gray-950 tabular-nums sm:block dark:text-white">{{ Money::taka($item->total_price) }}</p>
+                <p class="hidden text-end text-sm font-medium text-gray-950 tabular-nums sm:block dark:text-white">{{ Money::taka($line['total']) }}</p>
             </li>
         @endforeach
     </ul>

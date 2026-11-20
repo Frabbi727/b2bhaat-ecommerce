@@ -3,7 +3,8 @@
 namespace App\Filament\Seller\Resources\ReturnRequests;
 
 use App\Filament\Seller\Resources\ReturnRequests\Pages\ListReturnRequests;
-use App\Filament\Seller\Resources\ReturnRequests\Schemas\ReturnRequestForm;
+use App\Filament\Seller\Resources\ReturnRequests\Pages\ViewReturnRequest;
+use App\Filament\Seller\Resources\ReturnRequests\Schemas\ReturnRequestInfolist;
 use App\Filament\Seller\Resources\ReturnRequests\Tables\ReturnRequestsTable;
 use App\Models\ReturnRequest;
 use BackedEnum;
@@ -26,9 +27,9 @@ class ReturnRequestResource extends Resource
 
     protected static ?string $navigationLabel = 'Returns & disputes';
 
-    protected static ?string $modelLabel = 'Dispute / Return';
+    protected static ?string $modelLabel = 'return';
 
-    protected static ?string $pluralModelLabel = 'Returns & Disputes';
+    protected static ?string $pluralModelLabel = 'returns';
 
     public static function getEloquentQuery(): Builder
     {
@@ -45,9 +46,9 @@ class ReturnRequestResource extends Resource
         return $pendingCount > 0 ? (string) $pendingCount : null;
     }
 
-    public static function form(Schema $schema): Schema
+    public static function infolist(Schema $schema): Schema
     {
-        return ReturnRequestForm::configure($schema);
+        return ReturnRequestInfolist::configure($schema);
     }
 
     public static function table(Table $table): Table
@@ -59,6 +60,7 @@ class ReturnRequestResource extends Resource
     {
         return [
             'index' => ListReturnRequests::route('/'),
+            'view' => ViewReturnRequest::route('/{record}'),
         ];
     }
 }
