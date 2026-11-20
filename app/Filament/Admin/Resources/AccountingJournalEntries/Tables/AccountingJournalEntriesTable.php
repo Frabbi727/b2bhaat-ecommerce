@@ -175,7 +175,8 @@ class AccountingJournalEntriesTable
             ->icon(Heroicon::OutlinedArrowUturnLeft)
             ->color('danger')
             ->visible(function (?AccountingJournalEntry $record): bool {
-                if (! $record || $record->financial_event !== AccountingEvent::MANUAL_JOURNAL->value) {
+                // F7: a running cost recorded by mistake is reversed the same way as a manual journal
+                if (! $record || ! in_array($record->financial_event, [AccountingEvent::MANUAL_JOURNAL->value, AccountingEvent::RUNNING_COST_PAID->value], true)) {
                     return false;
                 }
 

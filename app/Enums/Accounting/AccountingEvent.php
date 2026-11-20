@@ -24,4 +24,5 @@ enum AccountingEvent: string
     case GATEWAY_SETTLED = 'gateway_settled';
     case SELF_DELIVERY_FEE_MOVED = 'self_delivery_fee_moved';
     case COMMISSION_EARNED = 'commission_earned';
+    case RUNNING_COST_PAID = 'running_cost_paid';
 }

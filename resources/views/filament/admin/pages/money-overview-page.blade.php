@@ -61,7 +61,7 @@
             ],
         ];
 
-        $hasRunningCosts = false;
+        $hasRunningCosts = $this->hasRunningCosts();
     @endphp
 
     <div class="space-y-8">
@@ -143,7 +143,7 @@
             </div>
 
             <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                @foreach ([['Our income', $o['income'], 'Commission, plan and listing fees and delivery charges, from the books. Commission given back on returns is already taken off.'], ['Our costs', $o['costs'], 'Discounts we paid for, payment charges and courier charges, from the books.']] as [$title, $block, $how])
+                @foreach ([['Our income', $o['income'], 'Commission, plan and listing fees and delivery charges, from the books. Commission given back on returns is already taken off.'], ['Our costs', $o['costs'], 'Discounts we paid for, payment and courier charges, and running costs recorded with "Record a cost" (hosting, SMS, staff, ads), from the books.']] as [$title, $block, $how])
                     <div class="flex flex-col rounded-xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-900">
                         <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ $title }}</p>
                         <p class="mt-1 font-mono text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">{{ $taka($block['total']) }}</p>
@@ -181,7 +181,7 @@
                     <p class="text-xs text-gray-500 dark:text-gray-400">Income minus costs</p>
                     @unless ($hasRunningCosts)
                         <p class="mt-3 rounded-lg bg-gray-50 p-2.5 text-xs leading-relaxed text-gray-600 dark:bg-white/5 dark:text-gray-400">
-                            Running costs (hosting, SMS, staff, ads) are not recorded yet, so this is profit before running costs.
+                            No running costs (hosting, SMS, staff, ads) are recorded for these dates, so this is profit before running costs. Use "Record a cost" at the top to add them.
                         </p>
                     @endunless
                 </div>

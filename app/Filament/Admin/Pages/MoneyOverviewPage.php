@@ -5,13 +5,16 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Pages;
 
 use App\Filament\Admin\Resources\AccountingJournalEntries\AccountingJournalEntryResource;
+use App\Filament\Admin\Resources\AccountingJournalEntries\Actions\RecordRunningCostAction;
 use App\Filament\Admin\Resources\Refunds\RefundResource;
 use App\Filament\Admin\Resources\SellerMonetization\SellerMonetizationResource;
 use App\Filament\Admin\Resources\WalletTransactions\WalletTransactionResource;
 use App\Models\Accounting\AccountingAccount;
 use App\Services\Accounting\MoneyOverviewService;
+use App\Services\Accounting\RunningCostService;
 use BackedEnum;
 use Carbon\Carbon;
+use Filament\Actions\Action;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use UnitEnum;
@@ -165,6 +168,21 @@ class MoneyOverviewPage extends Page
         }
 
         return AccountingJournalEntryResource::getUrl('index', ['filters' => $filters]);
+    }
+
+    public function hasRunningCosts(): bool
+    {
+        [$from, $to] = $this->period();
+
+        return app(RunningCostService::class)->hasCostsBetween($from, $to);
+    }
+
+    /**
+     * @return array<Action>
+     */
+    protected function getHeaderActions(): array
+    {
+        return [RecordRunningCostAction::make()];
     }
 
     public function sellerUrl(int $sellerId): string
