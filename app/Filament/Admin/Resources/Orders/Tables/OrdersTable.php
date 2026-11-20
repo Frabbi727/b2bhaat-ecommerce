@@ -9,6 +9,7 @@ use App\Models\PaymentMethod;
 use App\Models\PaymentStatus;
 use App\Models\SalesChannel;
 use App\Models\SubOrder;
+use App\Services\Formatting\DisplayDate;
 use App\Services\Formatting\Money;
 use App\Services\Orders\ParcelCancellationService;
 use App\Services\Payments\PaymentVerificationService;
@@ -43,7 +44,7 @@ class OrdersTable
             ->columns([
                 TextColumn::make('order_number')
                     ->label('Order')
-                    ->description(fn (Order $record): string => $record->created_at->format('d M Y, g:i A'))
+                    ->description(fn (Order $record): string => DisplayDate::at($record->created_at))
                     ->weight('medium')
                     ->copyable()
                     ->searchable(),
@@ -123,9 +124,7 @@ class OrdersTable
                         DatePicker::make('until')->label('Placed until'),
                     ])
                     ->columns(2)
-                    ->query(fn (Builder $query, array $data): Builder => $query
-                        ->when($data['from'] ?? null, fn (Builder $q, $date) => $q->whereDate('created_at', '>=', $date))
-                        ->when($data['until'] ?? null, fn (Builder $q, $date) => $q->whereDate('created_at', '<=', $date)))
+                    ->query(fn (Builder $query, array $data): Builder => DisplayDate::whereOnDays($query, $query->qualifyColumn('created_at'), $data['from'] ?? null, $data['until'] ?? null))
                     ->indicateUsing(fn (array $data): ?string => ($data['from'] ?? null) || ($data['until'] ?? null)
                         ? 'Placed '.trim(($data['from'] ?? '…').' – '.($data['until'] ?? '…'))
                         : null),

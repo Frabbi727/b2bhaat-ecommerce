@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\ProductReviews;
 
 use App\Filament\Admin\Resources\ProductReviews\Pages\ListProductReviews;
 use App\Models\ProductReview;
+use App\Services\Formatting\DisplayDate;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Infolists\Components\TextEntry;
@@ -128,7 +129,7 @@ class ProductReviewResource extends Resource
                             TextEntry::make('order.order_number')->label('Order')->placeholder('Not linked to an order')->copyable(),
                         ]),
                         TextEntry::make('seller_reply')->label('Seller reply')->placeholder('The seller has not replied')
-                            ->belowContent(fn (ProductReview $record): ?string => $record->seller_replied_at?->format('d M Y, g:i A')),
+                            ->belowContent(fn (ProductReview $record): ?string => $record->seller_replied_at ? DisplayDate::at($record->seller_replied_at) : null),
                     ]),
                 Action::make('hide')
                     ->label('Hide')
