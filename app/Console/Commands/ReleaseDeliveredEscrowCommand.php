@@ -10,6 +10,7 @@ use App\Services\Escrow\EscrowLedgerService;
 use App\Services\Settings\StoreConfigurationService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 
 class ReleaseDeliveredEscrowCommand extends Command
 {
@@ -45,68 +46,69 @@ class ReleaseDeliveredEscrowCommand extends Command
             return self::FAILURE;
         }
 
-        // Find delivered sub-orders
-        $subOrders = SubOrder::where('fulfillment_status_id', $deliveredStatus->id)
-            ->with(['trackingLogs' => function ($query) use ($deliveredStatus) {
-                $query->where('fulfillment_status_id', $deliveredStatus->id)->latest('logged_at');
-            }])
-            ->get();
+        // 4.1: only parcels that can still release money (a hold, no release, no refund), in batches, with just the
+        // delivery log each one needs. The old version loaded every delivered parcel ever, every hour.
+        $holdTypes = [WalletTransaction::TYPE_ESCROW_HOLD, WalletTransaction::TYPE_ESCROW_HOLD_ADJUSTMENT];
+        $doneTypes = [WalletTransaction::TYPE_ESCROW_RELEASE, WalletTransaction::TYPE_ESCROW_REFUND];
+        $walletRows = fn (array $types) => fn ($query) => $query->select(DB::raw(1))
+            ->from('wallet_transactions')
+            ->whereColumn('wallet_transactions.sub_order_id', 'sub_orders.id')
+            ->whereIn('wallet_transactions.transaction_type', $types);
 
         $releasedCount = 0;
         $totalReleasedAmount = 0.0;
 
-        foreach ($subOrders as $subOrder) {
-            // Check if already released
-            $alreadyReleased = WalletTransaction::where('sub_order_id', $subOrder->id)
-                ->where('transaction_type', WalletTransaction::TYPE_ESCROW_RELEASE)
-                ->exists();
+        SubOrder::query()
+            ->where('fulfillment_status_id', $deliveredStatus->id)
+            ->whereExists($walletRows($holdTypes))
+            ->whereNotExists($walletRows($doneTypes))
+            ->withExists(['returnRequests as has_open_return' => fn ($query) => $query->where('status', ReturnRequest::STATUS_PENDING)])
+            ->with([
+                'trackingLogs' => fn ($query) => $query->where('fulfillment_status_id', $deliveredStatus->id)->latest('logged_at'),
+                'replacements.fulfillmentStatus',
+                'replacements.trackingLogs' => fn ($query) => $query->where('fulfillment_status_id', $deliveredStatus->id)->latest('logged_at'),
+            ])
+            ->chunkById(100, function ($subOrders) use ($escrowService, $thresholdTime, &$releasedCount, &$totalReleasedAmount): void {
+                foreach ($subOrders as $subOrder) {
+                    // Check if delivered at least $hours ago
+                    $deliveryLog = $subOrder->trackingLogs->first();
+                    $deliveredAt = $deliveryLog?->logged_at ?? $subOrder->updated_at;
 
-            if ($alreadyReleased) {
-                continue;
-            }
+                    if ($subOrder->has_open_return) {
+                        $this->warn("Skipped Sub-Order #{$subOrder->sub_order_number}: return request pending.");
 
-            // Check if delivered at least $hours ago
-            $deliveryLog = $subOrder->trackingLogs->first();
-            $deliveredAt = $deliveryLog?->logged_at ?? $subOrder->updated_at;
+                        continue;
+                    }
 
-            $hasOpenDispute = $subOrder->returnRequests()
-                ->where('status', ReturnRequest::STATUS_PENDING)
-                ->exists();
+                    // WA-ORD-03: a free replacement must reach the buyer first, and the buyer gets the usual window to check it
+                    $replacements = $subOrder->replacements;
+                    if ($replacements->contains(fn (SubOrder $replacement): bool => $replacement->fulfillmentStatus?->slug !== 'delivered')) {
+                        $this->warn("Skipped Sub-Order #{$subOrder->sub_order_number}: its replacement has not been delivered yet.");
 
-            if ($hasOpenDispute) {
-                $this->warn("Skipped Sub-Order #{$subOrder->sub_order_number}: return request pending.");
+                        continue;
+                    }
+                    foreach ($replacements as $replacement) {
+                        $replacementDeliveredAt = $replacement->trackingLogs->first()?->logged_at ?? $replacement->updated_at;
+                        if ($replacementDeliveredAt->gt($deliveredAt)) {
+                            $deliveredAt = $replacementDeliveredAt;
+                        }
+                    }
 
-                continue;
-            }
+                    if ($deliveredAt->lte($thresholdTime)) {
+                        $tx = $escrowService->releaseFromEscrow($subOrder);
+                        if (! $tx) {
+                            $this->warn("Skipped Sub-Order #{$subOrder->sub_order_number}: no escrow hold to release.");
 
-            // WA-ORD-03: a free replacement must reach the buyer first, and the buyer gets the usual window to check it
-            $replacements = $subOrder->replacements()->with(['fulfillmentStatus', 'trackingLogs' => fn ($query) => $query->where('fulfillment_status_id', $deliveredStatus->id)->latest('logged_at')])->get();
-            if ($replacements->contains(fn (SubOrder $replacement): bool => $replacement->fulfillmentStatus?->slug !== 'delivered')) {
-                $this->warn("Skipped Sub-Order #{$subOrder->sub_order_number}: its replacement has not been delivered yet.");
+                            continue;
+                        }
 
-                continue;
-            }
-            foreach ($replacements as $replacement) {
-                $replacementDeliveredAt = $replacement->trackingLogs->first()?->logged_at ?? $replacement->updated_at;
-                if ($replacementDeliveredAt->gt($deliveredAt)) {
-                    $deliveredAt = $replacementDeliveredAt;
+                        $releasedCount++;
+                        $totalReleasedAmount += (float) $tx->amount;
+
+                        $this->info("Released ৳{$tx->amount} for Sub-Order #{$subOrder->sub_order_number} to Seller #{$subOrder->seller_id}");
+                    }
                 }
-            }
-
-            if ($deliveredAt->lte($thresholdTime)) {
-                $tx = $escrowService->releaseFromEscrow($subOrder);
-                if (! $tx) {
-                    $this->warn("Skipped Sub-Order #{$subOrder->sub_order_number}: no escrow hold to release.");
-
-                    continue;
-                }
-
-                $releasedCount++;
-                $totalReleasedAmount += (float) $tx->amount;
-
-                $this->info("Released ৳{$tx->amount} for Sub-Order #{$subOrder->sub_order_number} to Seller #{$subOrder->seller_id}");
-            }
-        }
+            });
 
         $this->info("Escrow release cycle completed: {$releasedCount} package(s) processed. Total released: ৳".number_format($totalReleasedAmount, 2));
 
