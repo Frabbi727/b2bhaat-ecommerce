@@ -24,31 +24,24 @@ class SellerBalanceService
 
     public const RESERVED = 'reserved_payout_payable';
 
-    public function __construct(
-        private readonly AccountResolverService $accountResolver,
-    ) {}
-
     /**
-     * Each seller's ledger balance in the three seller accounts, in one query.
+     * Each seller's ledger balance in the three seller accounts, in one query (it is on the admin dashboard).
      *
      * @return array<int, array{escrow: float, wallet: float, reserved: float, net: float}>
      */
     public function balancesBySeller(?string $asOfDate = null): array
     {
-        $accountIds = [
-            $this->accountResolver->resolveBySlug(self::ESCROW)->id => 'escrow',
-            $this->accountResolver->resolveBySlug(self::WALLET)->id => 'wallet',
-            $this->accountResolver->resolveBySlug(self::RESERVED)->id => 'reserved',
-        ];
+        $parts = [self::ESCROW => 'escrow', self::WALLET => 'wallet', self::RESERVED => 'reserved'];
 
         $rows = DB::table('accounting_journal_lines')
             ->join('accounting_journal_entries', 'accounting_journal_lines.journal_entry_id', '=', 'accounting_journal_entries.id')
+            ->join('accounting_accounts', 'accounting_journal_lines.account_id', '=', 'accounting_accounts.id')
             ->whereIn('accounting_journal_entries.status', [JournalEntryStatus::POSTED->value, JournalEntryStatus::REVERSED->value])
-            ->whereIn('accounting_journal_lines.account_id', array_keys($accountIds))
+            ->whereIn('accounting_accounts.system_slug', array_keys($parts))
             ->whereNotNull('accounting_journal_lines.seller_id')
             ->when($asOfDate, fn ($query) => $query->whereDate('accounting_journal_entries.entry_date', '<=', $asOfDate))
-            ->groupBy('accounting_journal_lines.seller_id', 'accounting_journal_lines.account_id')
-            ->select('accounting_journal_lines.seller_id', 'accounting_journal_lines.account_id')
+            ->groupBy('accounting_journal_lines.seller_id', 'accounting_accounts.system_slug')
+            ->select('accounting_journal_lines.seller_id', 'accounting_accounts.system_slug')
             ->selectRaw('COALESCE(SUM(accounting_journal_lines.credit), 0) - COALESCE(SUM(accounting_journal_lines.debit), 0) as balance')
             ->get();
 
@@ -57,7 +50,7 @@ class SellerBalanceService
         foreach ($rows as $row) {
             $sellerId = (int) $row->seller_id;
             $poisha[$sellerId] ??= ['escrow' => 0, 'wallet' => 0, 'reserved' => 0];
-            $poisha[$sellerId][$accountIds[(int) $row->account_id]] += (int) round(((float) $row->balance) * 100);
+            $poisha[$sellerId][$parts[$row->system_slug]] += (int) round(((float) $row->balance) * 100);
         }
 
         $balances = [];

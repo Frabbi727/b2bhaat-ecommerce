@@ -56,8 +56,8 @@ class FilamentPanelsSmokeTest extends TestCase
 
         Livewire::test(AdminStatsOverview::class)
             ->assertSuccessful()
-            ->assertSee('Platform Settled GMV')
-            ->assertSee('Active Escrow Reserve');
+            ->assertSee('Sales this month')
+            ->assertSee('We owe sellers');
 
         Livewire::test(LatestOrdersWidget::class)
             ->assertSuccessful();

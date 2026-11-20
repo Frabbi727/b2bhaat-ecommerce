@@ -60,10 +60,11 @@ class AdminDashboardAnalyticsTest extends TestCase
 
         Livewire::test(AdminStatsOverview::class)
             ->assertStatus(200)
-            ->assertSee('Platform Settled GMV')
-            ->assertSee('Active Escrow Reserve')
-            ->assertSee('Verified Factory Sellers')
-            ->assertSee('Pending Admin Actions');
+            ->assertSee('Sales this month')
+            ->assertSee('Our income this month')
+            ->assertSee('We owe sellers')
+            ->assertSee('Verified factory sellers')
+            ->assertSee('Pending admin actions');
     }
 
     public function test_latest_orders_widget_displays_recent_orders(): void
