@@ -147,7 +147,7 @@ class ReconciliationCoverageTest extends TestCase
 
         $component = Livewire::test(FinancialReconciliationPage::class)
             ->assertSee('Courier COD Receivable')
-            ->assertSee('Payment Gateway Clearing')
+            ->assertSee('bKash / Nagad Wallet')
             ->assertSee('Discrepancy Detected');
 
         $metrics = $component->instance()->getReconciliationMetrics();

@@ -82,10 +82,10 @@ class AccountingChartOfAccountsSeeder extends Seeder
                 'group_prefix' => '10',
                 'code' => '1030',
                 'system_slug' => 'gateway_clearing',
-                'name' => 'Payment Gateway Clearing',
+                'name' => 'bKash / Nagad Wallet',
                 'type' => AccountType::ASSET,
                 'normal_balance' => NormalBalance::DEBIT,
-                'description' => 'Payment gateway uncleared collections',
+                'description' => 'Money in the platform\'s bKash and Nagad numbers: buyer payments in, seller payouts and refunds out',
             ],
             [
                 'group_prefix' => '10',

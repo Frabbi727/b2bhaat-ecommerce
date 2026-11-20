@@ -98,9 +98,9 @@ class WalletTransactionsTable
                         Select::make('channel')
                             ->label('Disbursement Channel')
                             ->options([
-                                'bank' => 'Bank Transfer (Bank Operating Account)',
-                                'bkash' => 'bKash (bKash Clearing)',
-                                'nagad' => 'Nagad (Nagad Clearing)',
+                                'bank' => 'Bank transfer',
+                                'bkash' => 'bKash (from our bKash/Nagad wallet)',
+                                'nagad' => 'Nagad (from our bKash/Nagad wallet)',
                             ])
                             ->default('bank')
                             ->required(),

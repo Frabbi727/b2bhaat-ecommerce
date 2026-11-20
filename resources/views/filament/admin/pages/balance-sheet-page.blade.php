@@ -257,6 +257,9 @@
                                 </td>
                                 <td class="py-3 px-6 text-gray-900 dark:text-white font-medium">
                                     {{ $account['name'] }}
+                                    @if (! empty($account['note']))
+                                        <span class="block text-xs font-normal text-gray-500 dark:text-gray-400">{{ $account['note'] }}</span>
+                                    @endif
                                 </td>
                                 <td class="py-3 px-6 text-right font-mono font-medium text-gray-900 dark:text-white">
                                     {{ $account['formatted_amount'] }}
@@ -296,6 +299,9 @@
                                 </td>
                                 <td class="py-3 px-6 text-gray-900 dark:text-white font-medium">
                                     {{ $account['name'] }}
+                                    @if (! empty($account['note']))
+                                        <span class="block text-xs font-normal text-gray-500 dark:text-gray-400">{{ $account['note'] }}</span>
+                                    @endif
                                 </td>
                                 <td class="py-3 px-6 text-right font-mono font-medium text-gray-900 dark:text-white">
                                     {{ $account['formatted_amount'] }}
@@ -335,6 +341,9 @@
                                 </td>
                                 <td class="py-3 px-6 text-gray-900 dark:text-white font-medium">
                                     {{ $account['name'] }}
+                                    @if (! empty($account['note']))
+                                        <span class="block text-xs font-normal text-gray-500 dark:text-gray-400">{{ $account['note'] }}</span>
+                                    @endif
                                 </td>
                                 <td class="py-3 px-6 text-right font-mono font-medium text-gray-900 dark:text-white">
                                     {{ $account['formatted_amount'] }}

@@ -141,7 +141,7 @@ class FinancialStatementSignsAndCashFlowTest extends TestCase
             new JournalLineData(accountSlug: 'cash_on_hand', debit: 500.00),
             new JournalLineData(accountSlug: 'bank_operating', credit: 500.00),
         ]);
-        // Money still held by a gateway is not cash yet
+        // A buyer's bKash payment lands in the platform's own bKash number, so it is cash (F3)
         $this->postEntry('2026-11-07', 'order_prepaid_received', [
             new JournalLineData(accountSlug: 'gateway_clearing', debit: 900.00),
             new JournalLineData(accountSlug: 'seller_escrow_payable', credit: 900.00),
@@ -155,19 +155,19 @@ class FinancialStatementSignsAndCashFlowTest extends TestCase
         $cashFlow = $this->statements->getCashFlowStatement('2026-11-01', '2026-11-30');
 
         $this->assertSame(10000.0, $cashFlow['opening_cash']);
-        $this->assertSame(1500.0, $cashFlow['operating']['inflows']);
+        $this->assertSame(2400.0, $cashFlow['operating']['inflows']);
         $this->assertSame(4000.0, $cashFlow['operating']['outflows']);
-        $this->assertSame(-2500.0, $cashFlow['operating']['net']);
+        $this->assertSame(-1600.0, $cashFlow['operating']['net']);
         $this->assertSame(2000.0, $cashFlow['financing']['net']);
-        $this->assertSame(-500.0, $cashFlow['net_change']);
-        $this->assertSame(9500.0, $cashFlow['closing_cash']);
+        $this->assertSame(400.0, $cashFlow['net_change']);
+        $this->assertSame(10400.0, $cashFlow['closing_cash']);
         $this->assertTrue($cashFlow['is_consistent']);
 
         $lines = collect($cashFlow['operating']['lines'])->keyBy('event');
         $this->assertSame(1500.0, $lines['subscription_paid']['net']);
         $this->assertSame('Subscription payments', $lines['subscription_paid']['label']);
         $this->assertSame(-4000.0, $lines['payout_disbursed']['net']);
-        $this->assertArrayNotHasKey('order_prepaid_received', $lines->all());
+        $this->assertSame(900.0, $lines['order_prepaid_received']['net']);
     }
 
     public function test_admin_can_open_the_cash_flow_page(): void

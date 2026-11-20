@@ -195,6 +195,8 @@ class FinancialStatementService
 
         ['rows' => $liabilityRows, 'total' => $totalLiabilities] = $this->statementRows($liabilityAccounts, $totals, AccountType::LIABILITY);
 
+        [$assetRows, $totalAssets, $liabilityRows, $totalLiabilities] = $this->showSellerDebtsSeparately($asOf, $assetRows, $totalAssets, $liabilityRows, $totalLiabilities);
+
         // Equity (3000 series): Credit - Debit
         $equityAccounts = AccountingAccount::query()
             ->where('type', AccountType::EQUITY)
@@ -277,8 +279,11 @@ class FinancialStatementService
         ];
     }
 
-    /** Accounts that hold the platform's own cash. Money still with a gateway or courier is not cash yet. */
-    public const CASH_ACCOUNT_SLUGS = ['cash_on_hand', 'bank_operating'];
+    /**
+     * Accounts that hold the platform's own money: cash, bank, and the platform's bKash/Nagad numbers (F3: buyers
+     * "Send Money" straight to them). Money a courier still has to pay over is not cash yet.
+     */
+    public const CASH_ACCOUNT_SLUGS = ['cash_on_hand', 'bank_operating', 'gateway_clearing'];
 
     /** Plain names for the business events that move cash. */
     private const CASH_EVENT_LABELS = [
@@ -297,7 +302,7 @@ class FinancialStatementService
         'customer_refund_disbursed' => 'Refunds paid to customers',
         'shipping_reclassified' => 'Shipping corrections',
         'courier_cod_settled' => 'Courier COD remittances',
-        'gateway_settled' => 'Gateway transfers to bank',
+        'gateway_settled' => 'bKash/Nagad money moved to bank (fees)',
         'self_delivery_fee_moved' => 'Self-delivery fees',
         'commission_earned' => 'Commission earned',
         'reversal' => 'Reversals and corrections',
@@ -512,6 +517,55 @@ class FinancialStatementService
         }
 
         return ['rows' => $rows, 'total' => $this->normalizeZero($sectionTotalPoisha / 100)];
+    }
+
+    /**
+     * F1: a seller whose own balance is below zero owes the platform. The ledger keeps that debt inside the seller
+     * wallet account, where it would cancel other sellers' money. Show it as the "Seller negative balance
+     * receivable" asset instead, and gross the wallet liability up by the same amount, so the balance sheet still
+     * balances and neither figure hides the other.
+     *
+     * @param  list<array{code: string, name: string, amount: float, is_contra: bool, formatted_amount: string}>  $assetRows
+     * @param  list<array{code: string, name: string, amount: float, is_contra: bool, formatted_amount: string}>  $liabilityRows
+     * @return array{0: list<array<string, mixed>>, 1: float, 2: list<array<string, mixed>>, 3: float}
+     */
+    private function showSellerDebtsSeparately(string $asOf, array $assetRows, float $totalAssets, array $liabilityRows, float $totalLiabilities): array
+    {
+        $resolver = app(AccountResolverService::class);
+
+        try {
+            $receivableCode = (string) $resolver->resolveBySlug('seller_receivable')->code;
+            $walletCode = (string) $resolver->resolveBySlug(SellerBalanceService::WALLET)->code;
+        } catch (\Throwable) {
+            return [$assetRows, $totalAssets, $liabilityRows, $totalLiabilities];
+        }
+
+        $owedBySellers = app(SellerBalanceService::class)->split($asOf)['owed_by_sellers'];
+
+        if ($owedBySellers <= 0.0) {
+            return [$assetRows, $totalAssets, $liabilityRows, $totalLiabilities];
+        }
+
+        $grossUp = function (array $rows, string $code, string $note) use ($owedBySellers): array {
+            foreach ($rows as $index => $row) {
+                if ($row['code'] === $code) {
+                    $amount = round($row['amount'] + $owedBySellers, 2);
+                    $rows[$index] = ['amount' => $amount, 'formatted_amount' => $this->formatMoney($amount), 'note' => $note] + $row;
+                }
+            }
+
+            return $rows;
+        };
+
+        $assetRows = $grossUp($assetRows, $receivableCode, 'Sellers whose balance is below zero, e.g. commission on cash they collected themselves');
+        $liabilityRows = $grossUp($liabilityRows, $walletCode, 'Before subtracting what other sellers owe us');
+
+        return [
+            $assetRows,
+            round($totalAssets + $owedBySellers, 2),
+            $liabilityRows,
+            round($totalLiabilities + $owedBySellers, 2),
+        ];
     }
 
     private function normalizeZero(float $value): float
