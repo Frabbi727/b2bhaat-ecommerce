@@ -206,7 +206,7 @@ class CheckoutProbeTest extends TestCase
             ->update(['unit_price' => 300.00]);
 
         $ordersBefore = Order::count();
-        $form->call('placeOrder')->assertSet('errorMessage', fn (string $m) => str_contains($m, 'Prices changed'));
+        $form->call('placeOrder')->assertSet('errorMessage', fn (string $m) => str_contains($m, 'changed since you added') && str_contains($m, '→ ৳300.00'));
         $this->assertSame($ordersBefore, Order::count());
         $this->assertSame(600.0, $this->cart->getSubtotal());
 
