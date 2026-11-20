@@ -23,6 +23,7 @@ class ViewSubOrder extends ViewRecord
         'order.paymentStatus',
         'fulfillmentStatus',
         'items.product.unit',
+        'items.product.primaryImage',
         'items.variation.attributeValues',
         'items.salesChannel',
         'trackingLogs.fulfillmentStatus',

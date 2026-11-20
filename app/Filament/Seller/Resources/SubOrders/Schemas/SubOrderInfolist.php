@@ -11,8 +11,6 @@ use App\Models\WalletTransaction;
 use App\Services\Formatting\Money;
 use App\Services\Settings\StoreConfigurationService;
 use Carbon\CarbonInterface;
-use Filament\Infolists\Components\RepeatableEntry;
-use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\ViewEntry;
 use Filament\Schemas\Components\Grid;
@@ -76,39 +74,9 @@ class SubOrderInfolist
             })
             ->icon('heroicon-o-archive-box')
             ->schema([
-                RepeatableEntry::make('items')
+                ViewEntry::make('items')
                     ->hiddenLabel()
-                    ->contained(false)
-                    ->table([
-                        TableColumn::make('Product'),
-                        TableColumn::make('Qty')->width('110px')->alignment('end'),
-                        TableColumn::make('Unit price')->width('130px')->alignment('end'),
-                        TableColumn::make('Total')->width('130px')->alignment('end'),
-                    ])
-                    ->schema([
-                        TextEntry::make('product.title')
-                            ->label('Product')
-                            ->state(fn (OrderItem $record): string => $record->product?->title ?? 'Removed product')
-                            ->weight('medium')
-                            ->belowContent(fn (OrderItem $record): ?string => self::itemDetails($record)),
-                        TextEntry::make('quantity')
-                            ->label('Qty')
-                            ->formatStateUsing(fn (OrderItem $record): string => number_format($record->quantity).($record->product?->unit?->symbol ? ' '.$record->product->unit->symbol : ''))
-                            ->weight('bold')
-                            ->alignEnd(),
-                        TextEntry::make('unit_price')
-                            ->label('Unit price')
-                            ->formatStateUsing(fn ($state): string => Money::taka($state))
-                            ->belowContent(fn (OrderItem $record): ?string => (float) $record->original_unit_price > (float) $record->unit_price
-                                ? 'was '.Money::taka($record->original_unit_price)
-                                : null)
-                            ->alignEnd(),
-                        TextEntry::make('total_price')
-                            ->label('Total')
-                            ->formatStateUsing(fn ($state): string => Money::taka($state))
-                            ->weight('medium')
-                            ->alignEnd(),
-                    ]),
+                    ->view('filament.seller.sub-orders.items'),
             ]);
     }
 
@@ -278,7 +246,7 @@ class SubOrderInfolist
     /**
      * Option values and SKU under a product name, e.g. "Red · XL · SKU TS-RED-XL".
      */
-    protected static function itemDetails(OrderItem $item): ?string
+    public static function itemDetails(OrderItem $item): ?string
     {
         $parts = $item->variation?->attributeValues->pluck('value')->filter()->all() ?? [];
 

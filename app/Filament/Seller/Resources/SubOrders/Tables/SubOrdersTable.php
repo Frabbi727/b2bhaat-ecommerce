@@ -62,6 +62,7 @@ class SubOrdersTable
                     ->label('Courier')
                     ->placeholder('Not booked')
                     ->searchable()
+                    ->visibleFrom('md')
                     ->toggleable(),
                 TextColumn::make('is_self_delivered')
                     ->label('Delivery')
@@ -74,6 +75,7 @@ class SubOrdersTable
                     ->fontFamily('mono')
                     ->placeholder('—')
                     ->searchable()
+                    ->visibleFrom('md')
                     ->toggleable(),
                 TextColumn::make('subtotal')
                     ->label('Subtotal')
@@ -100,6 +102,8 @@ class SubOrdersTable
                     ->dateTimeTooltip('d M Y, g:i A')
                     ->sortable(),
             ])
+            // Sellers mostly work on a phone: each order becomes a card there
+            ->stackedOnMobile()
             ->defaultSort('created_at', 'desc')
             ->modifyQueryUsing(fn (Builder $query) => $query->with(['order.customer', 'order.paymentMethod', 'order.paymentStatus', 'fulfillmentStatus']))
             ->searchPlaceholder('Search package, customer or tracking #')
