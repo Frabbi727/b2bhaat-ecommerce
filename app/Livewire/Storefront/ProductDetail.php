@@ -12,9 +12,9 @@ use App\Models\Wishlist;
 use App\Services\Cart\CartSessionService;
 use App\Services\Promotions\FlashSalePricing;
 use App\Services\Rfq\RfqNotificationService;
-use App\Services\Settings\StoreConfigurationService;
 use Exception;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Validation\Validator;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -47,6 +47,14 @@ class ProductDetail extends Component
     public string $rfqCompanyName = '';
 
     public int $rfqTargetQuantity = 100;
+
+    /**
+     * WA-PRC-03: on a product with options, units requested per option (variation id => quantity). The RFQ total
+     * is their sum, so the seller quotes on, and later ships, exactly these options.
+     *
+     * @var array<int, int|string|null>
+     */
+    public array $rfqOptionQuantities = [];
 
     public ?float $rfqTargetPrice = null;
 
@@ -110,6 +118,9 @@ class ProductDetail extends Component
         // Initialize matrix quantities to 0
         foreach ($this->product->variations as $var) {
             $this->matrixQuantities[$var->id] = 0;
+            if ($this->product->has_variations && $var->is_active) {
+                $this->rfqOptionQuantities[$var->id] = 0;
+            }
         }
 
         // Prefill RFQ fields if user is logged in
@@ -227,8 +238,8 @@ class ProductDetail extends Component
                 return;
             }
 
-            $allowBackorders = app(StoreConfigurationService::class)->isBackorderAllowed();
-            if (! $allowBackorders && $this->retailQuantity > $variation->stock_quantity) {
+            // AR-09: no backorders, so never more than the stock
+            if ($this->retailQuantity > $variation->stock_quantity) {
                 $this->errorMessage = "Requested quantity ({$this->retailQuantity}) exceeds available stock ({$variation->stock_quantity} units).";
                 $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
@@ -299,9 +310,8 @@ class ProductDetail extends Component
             }
 
             if ($qty > 0) {
-                $allowBackorders = app(StoreConfigurationService::class)->isBackorderAllowed();
                 $var = $this->product->variations->firstWhere('id', (int) $variationId);
-                if (! $allowBackorders && $var && $qty > $var->stock_quantity) {
+                if ($var && $qty > $var->stock_quantity) {
                     $this->errorMessage = "Requested quantity ({$qty}) for SKU '{$var->sku}' exceeds available stock ({$var->stock_quantity} units).";
                     $this->dispatch('toast', message: $this->errorMessage, tone: 'error', cart: false);
 
@@ -372,12 +382,30 @@ class ProductDetail extends Component
 
     public function submitRfq(): void
     {
-        $this->validate([
+        $hasOptions = (bool) $this->product->has_variations;
+        $optionQuantities = null;
+
+        // WA-PRC-03: on a product with options the split is checked in the same pass, so every error shows at once
+        $this->withValidator(function (Validator $validator) use ($hasOptions, &$optionQuantities): void {
+            $validator->after(function (Validator $validator) use ($hasOptions, &$optionQuantities): void {
+                if (! $hasOptions) {
+                    return;
+                }
+
+                $result = $this->rfqOptionSplit();
+                if (is_string($result)) {
+                    $validator->errors()->add('rfqOptionQuantities', $result);
+
+                    return;
+                }
+                $optionQuantities = $result;
+            });
+        })->validate([
             'rfqBuyerName' => 'required|string|min:3|max:255',
             'rfqBuyerEmail' => 'required|email|max:255',
             'rfqBuyerPhone' => ['required', 'string', 'regex:/^(\+?8801|01)\d{7,9}$/'],
             'rfqCompanyName' => 'nullable|string|max:255',
-            'rfqTargetQuantity' => 'required|integer|min:1',
+            'rfqTargetQuantity' => $hasOptions ? 'nullable' : 'required|integer|min:1',
             'rfqTargetPrice' => 'nullable|numeric|min:1',
             'rfqDestinationDistrict' => 'required|string|max:100',
             'rfqSpecifications' => 'nullable|string|max:2000',
@@ -385,6 +413,10 @@ class ProductDetail extends Component
             'rfqBuyerPhone.regex' => 'Please enter a valid Bangladeshi phone number.',
             'rfqTargetQuantity.min' => 'Target quantity must be at least 1 unit.',
         ]);
+
+        if ($optionQuantities !== null) {
+            $this->rfqTargetQuantity = array_sum($optionQuantities);
+        }
 
         $rfq = RfqRequest::create([
             'product_id' => $this->product->id,
@@ -395,6 +427,7 @@ class ProductDetail extends Component
             'buyer_phone' => $this->rfqBuyerPhone,
             'company_name' => $this->rfqCompanyName,
             'target_quantity' => $this->rfqTargetQuantity,
+            'option_quantities' => $optionQuantities,
             'target_unit_price' => $this->rfqTargetPrice,
             'destination_district' => $this->rfqDestinationDistrict,
             'specifications' => $this->rfqSpecifications,
@@ -404,6 +437,33 @@ class ProductDetail extends Component
         app(RfqNotificationService::class)->notifySellerOfNewInquiry($rfq);
 
         $this->rfqSuccess = true;
+    }
+
+    /**
+     * The option split of an RFQ: only this product's options that are still sold, at least one unit in total.
+     *
+     * @return array<int, int>|string the split, or the reason it can't be used
+     */
+    private function rfqOptionSplit(): array|string
+    {
+        $sellableIds = $this->product->variations->where('is_active', true)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $quantities = [];
+
+        foreach ($this->rfqOptionQuantities as $variationId => $quantity) {
+            $quantity = (int) $quantity;
+            if ($quantity < 0) {
+                return 'Quantities cannot be negative.';
+            }
+            if ($quantity === 0) {
+                continue;
+            }
+            if (! in_array((int) $variationId, $sellableIds, true)) {
+                return 'One of the options is not sold for this product. Please reload the page.';
+            }
+            $quantities[(int) $variationId] = $quantity;
+        }
+
+        return $quantities === [] ? 'Enter how many units you need of at least one option.' : $quantities;
     }
 
     public function setFilterRating(string $filter): void

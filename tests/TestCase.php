@@ -5,7 +5,9 @@ namespace Tests;
 use App\Jobs\SendSmsJob;
 use App\Models\Product;
 use App\Services\Sms\Contracts\SmsGatewayInterface;
+use Closure;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Testing\Fakes\QueueFake;
 use Illuminate\Testing\TestResponse;
@@ -73,6 +75,45 @@ abstract class TestCase extends BaseTestCase
         preg_match('/\b(\d{6})\b/', (string) $message, $matches);
 
         return $matches[1] ?? '';
+    }
+
+    /**
+     * PostgreSQL only: pause the database's own guards (the ACC-9 journal triggers, foreign keys) on this connection,
+     * so a test can plant data those guards would refuse, such as an unbalanced posted journal. Lets tests of the
+     * application's own checks run on PostgreSQL too; the database guards themselves are tested with them on
+     * (JournalDatabaseGuardsTest). Needs a superuser, which the test database user is locally and in CI.
+     */
+    protected function pauseDatabaseGuards(): void
+    {
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('SET session_replication_role = replica');
+        }
+    }
+
+    protected function resumeDatabaseGuards(): void
+    {
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('SET session_replication_role = DEFAULT');
+        }
+    }
+
+    /**
+     * Run $plant with the database guards paused (see pauseDatabaseGuards()), then turn them back on.
+     *
+     * @template T
+     *
+     * @param  Closure(): T  $plant
+     * @return T
+     */
+    protected function withoutDatabaseGuards(Closure $plant): mixed
+    {
+        $this->pauseDatabaseGuards();
+
+        try {
+            return $plant();
+        } finally {
+            $this->resumeDatabaseGuards();
+        }
     }
 
     /**

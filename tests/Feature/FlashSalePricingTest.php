@@ -112,7 +112,7 @@ class FlashSalePricingTest extends TestCase
         $this->assertWholesaleOrQuotedLine($this->cart->getItems()[$wholesaleKey], 95.0);
 
         $this->cart->addItem($this->nails->id, $black->id, SalesChannel::RETAIL, 5, overrideUnitPrice: 180.0);
-        $this->assertWholesaleOrQuotedLine($this->cart->getItems()["{$this->nails->id}_{$black->id}_retail"], 180.0);
+        $this->assertWholesaleOrQuotedLine($this->cart->getItems()[CartSessionService::quotedLineKey($this->nails->id, $black->id, null, SalesChannel::RETAIL)], 180.0);
     }
 
     public function test_upcoming_or_paused_campaign_gives_the_normal_price(): void

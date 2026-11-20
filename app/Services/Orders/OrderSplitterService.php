@@ -9,10 +9,13 @@ use App\Models\OrderStatus;
 use App\Models\PaymentStatus;
 use App\Models\Product;
 use App\Models\ProductVariation;
+use App\Models\RfqRequest;
 use App\Models\SalesChannel;
+use App\Models\StockMovement;
 use App\Models\SubOrder;
 use App\Models\User;
 use App\Services\Formatting\Money;
+use App\Services\Inventory\StockMovementContext;
 use App\Services\Inventory\StockReservationService;
 use App\Services\Logistics\ShippingCalculatorService;
 use App\Services\Monetization\MonetizationEngineService;
@@ -53,6 +56,15 @@ class OrderSplitterService
      */
     private function assertOptionsStillSold(array $items): void
     {
+        // WA-PRC-03: a product with options must be ordered by option, or the seller can't ship it and no stock is taken
+        $productsWithOptions = Product::query()
+            ->whereIn('id', collect($items)->whereNull('variation_id')->pluck('product_id')->filter()->unique())
+            ->where('has_variations', true)
+            ->pluck('title');
+        if ($productsWithOptions->isNotEmpty()) {
+            throw new \DomainException("Please choose an option (colour, size…) for {$productsWithOptions->first()}. Remove it from your cart and add it again with an option.");
+        }
+
         $variationIds = collect($items)->pluck('variation_id')->filter()->unique()->values();
         if ($variationIds->isEmpty()) {
             return;
@@ -79,7 +91,15 @@ class OrderSplitterService
 
     public function createAndSplitOrder(User $customer, array $data): Order
     {
-        return DB::transaction(function () use ($customer, $data) {
+        // WA-CHK-02: a line with no units or a negative price would lower the order total
+        foreach ($data['items'] as $item) {
+            if ((int) $item['quantity'] < 1 || (float) $item['unit_price'] < 0) {
+                throw new \DomainException('An item in your cart has an invalid quantity or price. Remove it from your cart to continue.');
+            }
+        }
+
+        // AR-08: the stock this order takes is recorded as "order placed", linked to the order once it exists
+        return StockMovementContext::run(StockMovement::REASON_ORDER_PLACED, null, fn () => DB::transaction(function () use ($customer, $data) {
             // Only approved, live products may be ordered, even if the cart was filled earlier
             $orderedProductIds = collect($data['items'])->pluck('product_id')->unique()->filter()->values();
             if (Product::query()->sellable()->whereIn('id', $orderedProductIds)->count() !== $orderedProductIds->count()) {
@@ -103,6 +123,12 @@ class OrderSplitterService
 
             // INV-5: every option must still belong to its product and be on sale, even if the cart was filled earlier
             $this->assertOptionsStillSold($data['items']);
+
+            // WA-PRC-02: wholesale prices only for a buyer who still has wholesale access
+            $this->assertWholesaleAccess($customer, $data['items']);
+
+            // Quoted lines must match their accepted, unused quotation; the rows stay locked until the order commits
+            $quotedRfqIds = $this->lockQuotedRfqs($customer, $data['items']);
 
             // 1. Reserve stock atomically
             $reservationItems = [];
@@ -134,11 +160,11 @@ class OrderSplitterService
                 ? $this->shippingCalculatorService->calculateShipping($data['items'], $zone)
                 : ['total_shipping' => 0.0, 'vendors' => []];
 
-            $calculatedShippingAmount = $shippingResult['total_shipping'];
-
-            $shippingAmount = isset($data['shipping_amount'])
-                ? (float) $data['shipping_amount']
-                : $calculatedShippingAmount;
+            // WA-MNY-03: the order's shipping is always the sum of its parcels' fees, worked out here
+            $shippingAmount = round((float) $shippingResult['total_shipping'], 2);
+            if ($hasExplicitShipping && Money::poisha($data['shipping_amount']) !== Money::poisha($shippingAmount)) {
+                throw new \DomainException('Delivery charges changed while you were checking out. Please check the delivery charge and place the order again.');
+            }
 
             $discountAmount = isset($data['discount_amount'])
                 ? (float) $data['discount_amount']
@@ -149,7 +175,7 @@ class OrderSplitterService
             $orderNumber = 'ORD-'.date('Ymd').'-'.strtoupper(Str::random(6));
 
             // 3. Create master Order
-            $order = Order::create([
+            $order = Order::query()->create([
                 'order_number' => $orderNumber,
                 'customer_id' => $customer->id,
                 'order_status_id' => $pendingStatus->id,
@@ -163,6 +189,7 @@ class OrderSplitterService
                 'shipping_amount' => $shippingAmount,
                 'discount_amount' => $discountAmount,
             ]);
+            StockMovementContext::attachReference($order);
 
             // 4. Group order items by seller
             $itemsBySeller = [];
@@ -243,8 +270,106 @@ class OrderSplitterService
                 }
             }
 
+            if ($quotedRfqIds !== []) {
+                RfqRequest::whereIn('id', $quotedRfqIds)->update(['order_id' => $order->id]);
+            }
+
             return $order->load('subOrders.items');
-        });
+        }));
+    }
+
+    /**
+     * WA-PRC-02: normal wholesale lines are refused for a buyer whose wholesale access was withdrawn after the cart was
+     * filled. Quoted lines are checked against their quotation instead (a retail customer may accept a quote).
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     */
+    private function assertWholesaleAccess(User $customer, array $items): void
+    {
+        if ($customer->canSeeWholesalePrices()) {
+            return;
+        }
+
+        $wholesaleChannelId = SalesChannel::where('slug', SalesChannel::WHOLESALE)->value('id');
+        $hasWholesaleLine = collect($items)->contains(
+            fn (array $item): bool => (int) $item['sales_channel_id'] === (int) $wholesaleChannelId && empty($item['is_quoted'])
+        );
+
+        if ($hasWholesaleLine) {
+            throw new \DomainException('Your account no longer has wholesale access, so wholesale prices can\'t be used. Remove the wholesale items from your cart, or add them again at the retail price.');
+        }
+    }
+
+    /**
+     * Lock each quotation used by a quoted line and check it still covers that line: accepted, not used by another
+     * order, this customer's, same product, the quoted price, and exactly the quoted options and quantities.
+     * A line from a cart saved before RFQ ids were stored has no id and is not checked here.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     * @return list<int> the quotation ids to link to the order
+     */
+    private function lockQuotedRfqs(User $customer, array $items): array
+    {
+        $linesByRfq = collect($items)->filter(fn (array $item): bool => ! empty($item['rfq_id']))->groupBy(fn (array $item): int => (int) $item['rfq_id']);
+        if ($linesByRfq->isEmpty()) {
+            return [];
+        }
+
+        $rfqs = RfqRequest::whereIn('id', $linesByRfq->keys())->lockForUpdate()->get()->keyBy('id');
+
+        foreach ($linesByRfq as $rfqId => $lines) {
+            $rfq = $rfqs->get($rfqId);
+            $reason = match (true) {
+                $rfq === null => 'it no longer exists',
+                $rfq->status !== 'accepted' => 'it is no longer accepted',
+                $rfq->order_id !== null => 'it was already used for another order',
+                ! $this->isQuotationBuyer($rfq, $customer) => 'it was sent to a different buyer',
+                default => $this->quotedLinesMismatch($rfq, $lines->all()),
+            };
+
+            if ($reason !== null) {
+                throw new \DomainException("Quotation #QT-RFQ-{$rfqId} can't be ordered because {$reason}. Remove it from your cart to continue.");
+            }
+        }
+
+        return $linesByRfq->keys()->map(fn ($id): int => (int) $id)->all();
+    }
+
+    private function isQuotationBuyer(RfqRequest $rfq, User $customer): bool
+    {
+        return (int) $rfq->buyer_id === (int) $customer->id
+            || ($rfq->buyer_email && $customer->email && strtolower($rfq->buyer_email) === strtolower($customer->email));
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $lines
+     */
+    private function quotedLinesMismatch(RfqRequest $rfq, array $lines): ?string
+    {
+        foreach ($lines as $line) {
+            if ((int) $line['product_id'] !== (int) $rfq->product_id) {
+                return 'a line is for a different product';
+            }
+            if (Money::poisha($line['unit_price']) !== Money::poisha($rfq->seller_quoted_price)) {
+                return 'its price changed';
+            }
+        }
+
+        $optionQuantities = $rfq->optionQuantities();
+        if ($optionQuantities !== []) {
+            $ordered = [];
+            foreach ($lines as $line) {
+                $ordered[(int) $line['variation_id']] = ($ordered[(int) $line['variation_id']] ?? 0) + (int) $line['quantity'];
+            }
+            ksort($ordered);
+            ksort($optionQuantities);
+
+            return $ordered === $optionQuantities ? null : 'the options or quantities differ from the quotation';
+        }
+
+        return array_sum(array_map(fn (array $line): int => (int) $line['quantity'], $lines)) === (int) $rfq->target_quantity
+            ? null
+            : 'the quantity differs from the quotation';
     }
 
     /**

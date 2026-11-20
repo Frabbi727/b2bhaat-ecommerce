@@ -299,7 +299,8 @@ class EscrowIntegrityTest extends TestCase
         $this->escrow()->releaseFromEscrow($sub);
         $availableAfterRelease = (float) $this->wallet()->available_balance;
 
-        app(CourierStatusService::class)->updateStatus($sub->fresh(), 'returned');
+        // After the return window only an admin can record the return (AR-02)
+        app(CourierStatusService::class)->updateStatus($sub->fresh(), 'returned', description: 'Courier panel shows RTO', adminOverride: true);
 
         $this->assertEqualsWithDelta($availableAfterRelease - 900.00, (float) $this->wallet()->available_balance, 0.001);
         $this->assertTrue(WalletTransaction::where('sub_order_id', $sub->id)->where('transaction_type', WalletTransaction::TYPE_RETURN_REVERSAL)->exists());

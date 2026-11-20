@@ -79,6 +79,20 @@ class ReleaseDeliveredEscrowCommand extends Command
                 continue;
             }
 
+            // WA-ORD-03: a free replacement must reach the buyer first, and the buyer gets the usual window to check it
+            $replacements = $subOrder->replacements()->with(['fulfillmentStatus', 'trackingLogs' => fn ($query) => $query->where('fulfillment_status_id', $deliveredStatus->id)->latest('logged_at')])->get();
+            if ($replacements->contains(fn (SubOrder $replacement): bool => $replacement->fulfillmentStatus?->slug !== 'delivered')) {
+                $this->warn("Skipped Sub-Order #{$subOrder->sub_order_number}: its replacement has not been delivered yet.");
+
+                continue;
+            }
+            foreach ($replacements as $replacement) {
+                $replacementDeliveredAt = $replacement->trackingLogs->first()?->logged_at ?? $replacement->updated_at;
+                if ($replacementDeliveredAt->gt($deliveredAt)) {
+                    $deliveredAt = $replacementDeliveredAt;
+                }
+            }
+
             if ($deliveredAt->lte($thresholdTime)) {
                 $tx = $escrowService->releaseFromEscrow($subOrder);
                 if (! $tx) {

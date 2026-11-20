@@ -7,11 +7,9 @@ namespace App\Console\Commands;
 use App\Models\FulfillmentStatus;
 use App\Models\Order;
 use App\Models\OrderStatus;
-use App\Models\OrderTrackingLog;
 use App\Models\PaymentStatus;
-use App\Services\Inventory\StockReservationService;
 use App\Services\Logistics\CourierStatusService;
-use App\Services\Promotions\FlashSaleAllocationService;
+use App\Services\Orders\ParcelCancellationService;
 use App\Services\Settings\StoreConfigurationService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -37,9 +35,8 @@ class ReleaseExpiredStockReservationsCommand extends Command
      * Execute the console command.
      */
     public function handle(
-        StockReservationService $stockService,
         StoreConfigurationService $configService,
-        FlashSaleAllocationService $flashSales,
+        ParcelCancellationService $parcelCancellation,
     ): int {
         $minutesOption = $this->option('minutes');
         $ttlMinutes = ($minutesOption !== null && $minutesOption !== '')
@@ -71,12 +68,10 @@ class ReleaseExpiredStockReservationsCommand extends Command
         foreach ($orderIds as $orderId) {
             DB::transaction(function () use (
                 $orderId,
-                $stockService,
-                $flashSales,
+                $parcelCancellation,
                 $pendingOrderStatus,
                 $unpaidPaymentStatus,
                 $cancelledOrderStatus,
-                $cancelledFulfillmentStatus,
                 $ttlMinutes,
                 &$cancelledOrdersCount,
                 &$totalItemsRestored
@@ -93,35 +88,21 @@ class ReleaseExpiredStockReservationsCommand extends Command
                         continue;
                     }
 
-                    $stockItems = [];
                     foreach ($subOrder->items as $item) {
                         if ($item->variation_id) {
-                            $stockItems[] = [
-                                'variation_id' => $item->variation_id,
-                                'quantity' => $item->quantity,
-                            ];
                             $totalItemsRestored += $item->quantity;
                         }
                     }
 
-                    // Offers before stock rows, as checkout locks them (review R-5)
-                    $flashSales->release($subOrder->items);
-                    if (! empty($stockItems)) {
-                        $stockService->releaseStock($stockItems);
-                    }
-
-                    $subOrder->update([
-                        'fulfillment_status_id' => $cancelledFulfillmentStatus->id,
-                    ]);
-
-                    OrderTrackingLog::create([
-                        'sub_order_id' => $subOrder->id,
-                        'fulfillment_status_id' => $cancelledFulfillmentStatus->id,
-                        'title' => 'Stock Reservation Expired',
-                        'description' => "Payment not completed within {$ttlMinutes}-minute checkout window. Reserved items restored to catalog inventory.",
-                        'hub_location' => 'Inventory Control Hub',
-                        'logged_at' => now(),
-                    ]);
+                    // AR-12: through the one cancellation path (stock, flash-sale units, status, log, order status)
+                    $parcelCancellation->cancel(
+                        subOrder: $subOrder,
+                        cancelledBy: ParcelCancellationService::BY_SYSTEM,
+                        reason: "Checkout payment not completed within {$ttlMinutes} minutes",
+                        trackingTitle: 'Stock Reservation Expired',
+                        trackingDescription: "Payment not completed within {$ttlMinutes}-minute checkout window. Reserved items restored to catalog inventory.",
+                        hubLocation: 'Inventory Control Hub',
+                    );
                 }
 
                 $order->update([

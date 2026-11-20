@@ -17,6 +17,9 @@ Schedule::command('inventory:release-expired-reservations')->everyFiveMinutes()-
 // PAY-2: remind admins about unchecked bKash/Nagad payments; cancel the ones past the time limit
 Schedule::command('payments:expire-unverified')->hourly()->withoutOverlapping()->onOneServer();
 
+// AR-16: remind sellers and admins about COD/paid parcels still not shipped after the set number of days
+Schedule::command('orders:alert-unshipped-parcels')->dailyAt('10:00')->timezone(config('app.display_timezone'))->withoutOverlapping()->onOneServer();
+
 // Automatically synchronize flash sale campaign statuses every minute
 Schedule::command('flash-sales:sync-statuses')->everyMinute()->withoutOverlapping()->onOneServer();
 

@@ -41,7 +41,7 @@ class WholesaleRfqAndQuotationLifecycleTest extends TestCase
             ->set('rfqBuyerEmail', 'procurement@boutique.com')
             ->set('rfqBuyerPhone', '01711223344')
             ->set('rfqCompanyName', 'Boutique Chain Dhaka')
-            ->set('rfqTargetQuantity', 250)
+            ->set('rfqOptionQuantities', [$product->variations()->orderBy('id')->value('id') => 250])
             ->set('rfqTargetPrice', 1850.00)
             ->set('rfqDestinationDistrict', 'Chattogram')
             ->set('rfqSpecifications', 'Requires OEM logo laser etching and batch packaging.')
@@ -153,7 +153,7 @@ class WholesaleRfqAndQuotationLifecycleTest extends TestCase
             'buyer_email' => $buyer->email,
             'buyer_phone' => '01711223344',
             'company_name' => 'Boutique Chain Dhaka',
-            'target_quantity' => 150,
+            'target_quantity' => 150, 'option_quantities' => [$product->variations()->orderBy('id')->value('id') => 150],
             'target_unit_price' => 1400.00,
             'seller_quoted_price' => 1450.00,
             'destination_district' => 'Dhaka',

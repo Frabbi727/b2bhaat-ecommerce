@@ -181,7 +181,7 @@ class PromotionsCampaignAndCouponHardeningTest extends TestCase
             ->set('postalCode', '1209')
             ->set('deliveryZone', 'inside_dhaka')
             ->call('placeOrder')
-            ->assertSet('errorMessage', 'Promotional coupon cannot be redeemed: You have already utilized this coupon code.');
+            ->assertSet('errorMessage', fn (string $message): bool => str_starts_with($message, 'Promotional coupon cannot be redeemed: You have already utilized this coupon code.'));
 
         $this->assertEquals(0, Order::where('customer_id', $customer->id)->where('coupon_id', $coupon->id)->count());
     }

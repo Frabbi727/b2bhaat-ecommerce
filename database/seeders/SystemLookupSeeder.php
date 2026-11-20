@@ -45,6 +45,8 @@ class SystemLookupSeeder extends Seeder
             ['name' => 'Awaiting Verification', 'slug' => 'awaiting_verification', 'badge_color' => '#F59E0B', 'is_terminal' => false],
             ['name' => 'Paid', 'slug' => 'paid', 'badge_color' => '#10B981', 'is_terminal' => true],
             ['name' => 'Failed', 'slug' => 'failed', 'badge_color' => '#EF4444', 'is_terminal' => true],
+            ['name' => 'Refund Pending', 'slug' => 'refund_pending', 'badge_color' => '#F97316', 'is_terminal' => false],
+            ['name' => 'Partially Refunded', 'slug' => 'partially_refunded', 'badge_color' => '#8B5CF6', 'is_terminal' => false],
             ['name' => 'Refunded', 'slug' => 'refunded', 'badge_color' => '#6B7280', 'is_terminal' => true],
             ['name' => 'Not Confirmed', 'slug' => 'expired', 'badge_color' => '#9CA3AF', 'is_terminal' => true],
         ];

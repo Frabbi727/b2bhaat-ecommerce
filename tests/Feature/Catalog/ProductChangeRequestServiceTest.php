@@ -88,7 +88,7 @@ class ProductChangeRequestServiceTest extends TestCase
 
     private function product(string $status = 'approved'): Product
     {
-        $unit = Unit::firstOrCreate(['slug' => 'pcs'], ['name' => 'Pieces', 'symbol' => 'pcs']);
+        $unit = Unit::firstOrCreate(['symbol' => 'pcs'], ['name' => 'Pieces']);
 
         $product = Product::create([
             'seller_id' => $this->seller->id,

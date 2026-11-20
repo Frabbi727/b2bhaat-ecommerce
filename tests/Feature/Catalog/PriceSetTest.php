@@ -201,7 +201,7 @@ class PriceSetTest extends TestCase
             'seller_id' => $seller->id,
             'category_id' => Category::create(['name' => 'Fabrics', 'slug' => 'fabrics', 'is_active' => true])->id,
             'sales_channel_id' => $this->both->id,
-            'unit_id' => Unit::firstOrCreate(['slug' => 'pcs'], ['name' => 'Pieces', 'symbol' => 'pcs'])->id,
+            'unit_id' => Unit::firstOrCreate(['symbol' => 'pcs'], ['name' => 'Pieces'])->id,
             'title' => 'Cotton',
             'slug' => 'cotton',
             'regular_price' => 90,

@@ -198,7 +198,6 @@
                     $stockOnHand = $selectedVariation
                         ? (int) $selectedVariation->stock_quantity
                         : (int) $product->variations->where('is_active', true)->sum('stock_quantity');
-                    $backordersAllowed = app(\App\Services\Settings\StoreConfigurationService::class)->isBackorderAllowed();
                 @endphp
                 <div class="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs">
                     <x-storefront.stars :rating="$averageRating" class="w-4 h-4" />
@@ -211,8 +210,6 @@
                     @if ($product->variations->isNotEmpty())
                         @if ($stockOnHand > 0)
                             <span class="text-emerald-700 font-semibold">{{ $stockOnHand <= 5 ? 'Only '.$stockOnHand.' left in stock' : 'In stock' }}</span>
-                        @elseif ($backordersAllowed)
-                            <span class="text-amber-700 font-semibold">Available to order</span>
                         @else
                             <span class="text-rose-600 font-semibold">Out of stock</span>
                         @endif
@@ -962,12 +959,35 @@
                     </div>
 
                     <form wire:submit="submitRfq" class="space-y-4 text-xs">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        @if ($product->has_variations && $rfqOptionQuantities !== [])
+                            {{-- WA-PRC-03: the seller quotes on, and ships, exactly these options --}}
                             <div>
-                                <label class="block font-semibold text-slate-700 mb-1">Target Quantity (Units) *</label>
-                                <input type="number" min="1" wire:model="rfqTargetQuantity" placeholder="e.g. 500" class="w-full py-2 px-3 border border-slate-300 rounded-xl font-bold focus:ring-2 focus:ring-indigo-500"/>
-                                @error('rfqTargetQuantity') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
+                                <label class="block font-semibold text-slate-700 mb-1">Quantity per option (units) *</label>
+                                <div class="border border-slate-200 rounded-xl divide-y divide-slate-100">
+                                    @foreach ($product->variations->where('is_active', true) as $rfqVariation)
+                                        <div wire:key="rfq-option-{{ $rfqVariation->id }}" class="flex items-center justify-between gap-3 px-3 py-2">
+                                            <span class="text-slate-700 min-w-0 truncate">
+                                                {{ $rfqVariation->attributeValues->map(fn ($value) => $value->value)->implode(' / ') ?: $rfqVariation->sku }}
+                                            </span>
+                                            <input type="number" min="0" inputmode="numeric" wire:model.live.debounce.300ms="rfqOptionQuantities.{{ $rfqVariation->id }}" aria-label="Units of {{ $rfqVariation->sku }}" class="w-24 shrink-0 py-1.5 px-2 border border-slate-300 rounded-lg font-bold text-right focus:ring-2 focus:ring-indigo-500"/>
+                                        </div>
+                                    @endforeach
+                                </div>
+                                <div class="flex justify-between mt-1 text-[11px] text-slate-500">
+                                    <span>Leave an option at 0 if you don't need it.</span>
+                                    <span>Total: <strong class="text-slate-800">{{ number_format(collect($rfqOptionQuantities)->sum(fn ($quantity) => max(0, (int) $quantity))) }}</strong></span>
+                                </div>
+                                @error('rfqOptionQuantities') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
                             </div>
+                        @endif
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            @unless ($product->has_variations && $rfqOptionQuantities !== [])
+                                <div>
+                                    <label class="block font-semibold text-slate-700 mb-1">Target Quantity (Units) *</label>
+                                    <input type="number" min="1" wire:model="rfqTargetQuantity" placeholder="e.g. 500" class="w-full py-2 px-3 border border-slate-300 rounded-xl font-bold focus:ring-2 focus:ring-indigo-500"/>
+                                    @error('rfqTargetQuantity') <span class="text-rose-500 text-[11px]">{{ $message }}</span> @enderror
+                                </div>
+                            @endunless
                             <div>
                                 <label class="block font-semibold text-slate-700 mb-1">Target Price / Unit (৳)</label>
                                 <input type="number" step="0.01" wire:model="rfqTargetPrice" placeholder="Your budget in ৳" class="w-full py-2 px-3 border border-slate-300 rounded-xl font-bold focus:ring-2 focus:ring-indigo-500"/>

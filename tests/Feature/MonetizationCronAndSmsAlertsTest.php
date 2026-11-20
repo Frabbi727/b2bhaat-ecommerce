@@ -130,7 +130,7 @@ class MonetizationCronAndSmsAlertsTest extends TestCase
 
     public function test_enforce_suspensions_command_suspends_delinquent_sellers(): void
     {
-        $unit = Unit::firstOrCreate(['slug' => 'pcs'], ['name' => 'Pieces', 'symbol' => 'pcs']);
+        $unit = Unit::firstOrCreate(['symbol' => 'pcs'], ['name' => 'Pieces']);
         $channel = SalesChannel::firstOrCreate(['slug' => 'retail'], ['name' => 'Retail', 'is_active' => true]);
         $category = Category::firstOrCreate(['slug' => 'apparel'], ['name' => 'Apparel']);
 

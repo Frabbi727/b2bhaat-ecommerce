@@ -45,7 +45,7 @@ class ProductDailyViewTrackingTest extends TestCase
             'seller_id' => $seller->id,
             'category_id' => Category::create(['name' => 'Fabrics', 'slug' => 'fabrics', 'is_active' => true])->id,
             'sales_channel_id' => $retail->id,
-            'unit_id' => Unit::firstOrCreate(['slug' => 'pcs'], ['name' => 'Pieces', 'symbol' => 'pcs'])->id,
+            'unit_id' => Unit::firstOrCreate(['symbol' => 'pcs'], ['name' => 'Pieces'])->id,
             'title' => 'Cotton Lungi',
             'slug' => 'cotton-lungi',
             'regular_price' => 500,

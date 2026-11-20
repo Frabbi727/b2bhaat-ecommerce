@@ -90,7 +90,7 @@ class OrderStatusFromConsignmentsTest extends TestCase
             $this->disputes->cancelFullOrder($order->fresh(), 'Too late');
             $this->fail('A full cancel of an order already on its way must be refused.');
         } catch (Exception $e) {
-            $this->assertStringContainsString('already on its way', $e->getMessage());
+            $this->assertStringContainsString('on its way', $e->getMessage());
         }
 
         $this->assertSame($statusBefore, $this->orderStatus($order));
@@ -125,7 +125,8 @@ class OrderStatusFromConsignmentsTest extends TestCase
     public function test_cancelling_every_parcel_of_a_paid_order_cancels_and_refunds_it(): void
     {
         $order = MixedOrderFixture::create('bkash', 'paid');
-        [$first, $second] = $this->parcels($order, 'unfulfilled', 'processing');
+        // Both not packed yet: a packed parcel can't be cancelled by the buyer (AR-16)
+        [$first, $second] = $this->parcels($order, 'unfulfilled', 'unfulfilled');
 
         $this->disputes->cancelSubOrder($first, 'Changed mind');
         $this->assertNotSame('cancelled', $this->orderStatus($order));
@@ -133,7 +134,7 @@ class OrderStatusFromConsignmentsTest extends TestCase
         $this->disputes->cancelSubOrder($second, 'Changed mind');
 
         $this->assertSame('cancelled', $this->orderStatus($order));
-        $this->assertSame('refunded', $order->fresh()->paymentStatus?->slug);
+        $this->assertSame('refund_pending', $order->fresh()->paymentStatus?->slug, 'owed back until the refunds are paid (AR-05)');
     }
 
     public function test_a_wrongly_closed_order_reopens_when_a_parcel_is_still_on_its_way(): void

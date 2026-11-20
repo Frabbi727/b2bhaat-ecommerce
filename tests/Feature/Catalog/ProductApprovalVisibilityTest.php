@@ -59,7 +59,7 @@ class ProductApprovalVisibilityTest extends TestCase
             'is_approved' => true,
         ]);
         $this->category = Category::create(['name' => 'Fabrics', 'slug' => 'fabrics', 'is_active' => true]);
-        $this->unit = Unit::firstOrCreate(['slug' => 'pcs'], ['name' => 'Pieces', 'symbol' => 'pcs']);
+        $this->unit = Unit::firstOrCreate(['symbol' => 'pcs'], ['name' => 'Pieces']);
         $this->retail = SalesChannel::firstOrCreate(['slug' => SalesChannel::RETAIL], ['name' => 'Retail', 'is_active' => true]);
         $this->wholesale = SalesChannel::firstOrCreate(['slug' => SalesChannel::WHOLESALE], ['name' => 'Wholesale', 'is_active' => true]);
     }

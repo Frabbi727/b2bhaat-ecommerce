@@ -87,7 +87,7 @@ class SellerPlanTermsSnapshotTest extends TestCase
             'seller_id' => $this->seller->id,
             'category_id' => Category::create(['name' => 'Garments', 'slug' => 'garments-mon2'])->id,
             'sales_channel_id' => $retail->id,
-            'unit_id' => Unit::firstOrCreate(['slug' => 'pcs'], ['name' => 'Pieces', 'symbol' => 'pcs'])->id,
+            'unit_id' => Unit::firstOrCreate(['symbol' => 'pcs'], ['name' => 'Pieces'])->id,
             'title' => 'Men Oxford Shirt',
             'slug' => 'men-oxford-shirt-mon2',
             'is_active' => false,

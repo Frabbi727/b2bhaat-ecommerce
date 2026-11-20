@@ -6,7 +6,7 @@ namespace App\Services\Orders;
 
 use App\Models\Order;
 use App\Models\OrderStatus;
-use App\Models\PaymentStatus;
+use App\Services\Cart\CouponService;
 
 /**
  * ORD-1: an order's status is worked out from its parcels (sub-orders), never set by hand.
@@ -61,12 +61,13 @@ class OrderStatusReconciler
 
         $this->setStatus($order, 'cancelled');
 
-        if ($order->paymentStatus?->slug === 'paid') {
-            $refunded = PaymentStatus::where('slug', 'refunded')->value('id');
-            if ($refunded) {
-                $order->update(['payment_status_id' => $refunded]);
-            }
+        // AR-04: nothing was delivered or sent back, so the coupon use is given back (a return keeps it spent)
+        if ($parcelStates->every(fn (?string $state): bool => $state === 'cancelled')) {
+            app(CouponService::class)->releaseForOrder($order);
         }
+
+        // AR-05: the payment status says "Refunded" only once the refunds are paid out (RefundService)
+        app(RefundService::class)->syncPaymentStatus($order);
     }
 
     private function setStatus(Order $order, string $slug): void

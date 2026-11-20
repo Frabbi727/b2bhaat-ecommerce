@@ -74,7 +74,7 @@ class ProductApprovalLifecycleTest extends TestCase
     private function product(string $status = 'draft', ?User $owner = null, string $title = 'Cotton Fabric'): Product
     {
         $category = Category::firstOrCreate(['slug' => 'fabrics'], ['name' => 'Fabrics', 'is_active' => true]);
-        $unit = Unit::firstOrCreate(['slug' => 'pcs'], ['name' => 'Pieces', 'symbol' => 'pcs']);
+        $unit = Unit::firstOrCreate(['symbol' => 'pcs'], ['name' => 'Pieces']);
         $retail = SalesChannel::firstOrCreate(['slug' => SalesChannel::RETAIL], ['name' => 'Retail', 'is_active' => true]);
 
         $product = Product::create([

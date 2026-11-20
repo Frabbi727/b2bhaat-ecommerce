@@ -8,6 +8,7 @@ use App\Models\SubOrder;
 use App\Services\Logistics\CourierBookingService;
 use App\Services\Logistics\CourierStatusService;
 use App\Services\Logistics\SelfDeliveryService;
+use App\Services\Orders\ParcelCancellationService;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -55,11 +56,13 @@ class SubOrdersTable
                         'unfulfilled' => Color::Gray,
                         'returned', 'cancelled' => Color::Red,
                         default => Color::Amber,
-                    }),
+                    })
+                    ->description(fn (SubOrder $record): ?string => self::nextStepHint($record)),
                 TextColumn::make('courier_name')
                     ->label('Courier')
                     ->placeholder('Not booked')
                     ->searchable()
+                    ->visibleFrom('md')
                     ->toggleable(),
                 TextColumn::make('is_self_delivered')
                     ->label('Delivery')
@@ -72,6 +75,7 @@ class SubOrdersTable
                     ->fontFamily('mono')
                     ->placeholder('—')
                     ->searchable()
+                    ->visibleFrom('md')
                     ->toggleable(),
                 TextColumn::make('subtotal')
                     ->label('Subtotal')
@@ -98,8 +102,10 @@ class SubOrdersTable
                     ->dateTimeTooltip('d M Y, g:i A')
                     ->sortable(),
             ])
+            // Sellers mostly work on a phone: each order becomes a card there
+            ->stackedOnMobile()
             ->defaultSort('created_at', 'desc')
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['order.customer', 'fulfillmentStatus']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['order.customer', 'order.paymentMethod', 'order.paymentStatus', 'fulfillmentStatus']))
             ->searchPlaceholder('Search package, customer or tracking #')
             ->filters([
                 SelectFilter::make('fulfillment_status_id')
@@ -136,6 +142,22 @@ class SubOrdersTable
     }
 
     /**
+     * A few words under the status saying what the seller does next; nothing once the parcel is out of their hands.
+     */
+    public static function nextStepHint(SubOrder $record): ?string
+    {
+        $slug = $record->fulfillmentStatus?->slug;
+
+        return match (true) {
+            in_array($slug, ['unfulfilled', 'processing'], true) && ! $record->isClearedForDispatch() => 'Wait for payment',
+            $slug === 'unfulfilled' => 'Next: pack it',
+            $slug === 'processing' => 'Next: send it out',
+            $record->is_self_delivered && in_array($slug, ['shipped', 'in_transit', 'out_for_delivery'], true) => 'Next: get the handover code',
+            default => null,
+        };
+    }
+
+    /**
      * Everything a seller can do to send a parcel, shared by the orders list and the order's own page.
      *
      * @return list<Action>
@@ -143,11 +165,32 @@ class SubOrdersTable
     public static function fulfilmentActions(): array
     {
         return [
+            // AR-16: packed parcels can no longer be cancelled by the buyer online
+            Action::make('markPacked')
+                ->label('Mark as Packed')
+                ->icon('heroicon-o-archive-box')
+                // Packing is the next step on a new order, so it is the one coloured button
+                ->color('primary')
+                ->visible(fn (SubOrder $record) => $record->fulfillmentStatus?->slug === 'unfulfilled')
+                ->requiresConfirmation()
+                ->modalDescription('The buyer sees the parcel is packed and can no longer cancel it online.')
+                ->action(function (SubOrder $record): void {
+                    try {
+                        app(ParcelCancellationService::class)->markPacked($record, auth()->user());
+                    } catch (DomainException|InvalidStatusTransitionException $exception) {
+                        Notification::make()->title('Not marked as packed')->body($exception->getMessage())->danger()->send();
+
+                        return;
+                    }
+
+                    Notification::make()->title('Marked as packed')->success()->send();
+                }),
+
             // 1. Dispatch Courier Action
             Action::make('dispatchCourier')
                 ->label('Dispatch Courier')
                 ->icon('heroicon-o-truck')
-                ->color('primary')
+                ->color(fn (SubOrder $record): string => $record->fulfillmentStatus?->slug === 'processing' ? 'primary' : 'gray')
                 ->visible(fn (SubOrder $record) => $record->isClearedForDispatch() && in_array($record->fulfillmentStatus?->slug, ['unfulfilled', 'processing']))
                 ->schema([
                     Select::make('courier_name')
@@ -275,7 +318,7 @@ class SubOrdersTable
                 ->label('Deliver Myself')
                 ->modalDescription('Use this when you or your own delivery person takes the parcel (no courier). The customer gets a 6-digit code by SMS and gives it to the delivery person after receiving the parcel.')
                 ->icon('heroicon-o-truck')
-                ->color('warning')
+                ->color('gray')
                 ->visible(fn (SubOrder $record) => $record->isClearedForDispatch() && ! $record->is_self_delivered && in_array($record->fulfillmentStatus?->slug, ['unfulfilled', 'processing']))
                 ->schema([
                     TextInput::make('hub_location')
@@ -433,6 +476,42 @@ class SubOrdersTable
                         ->body("Tracking number {$updated->tracking_number} assigned by {$data['courier_name']}.")
                         ->success()
                         ->send();
+                }),
+
+            // WA-ORD-01: the seller can't fill the parcel; stock goes back and the buyer is told why by SMS
+            Action::make('declineParcel')
+                ->label('Decline Order')
+                ->icon('heroicon-o-x-circle')
+                ->color('danger')
+                ->visible(fn (SubOrder $record) => in_array($record->fulfillmentStatus?->slug, ParcelCancellationService::NOT_YET_DISPATCHED, true))
+                ->modalHeading('Decline this order?')
+                ->modalDescription('The parcel is cancelled, its stock goes back on sale and the buyer gets an SMS with your reason. A paid order is refunded to the buyer. This cannot be undone.')
+                ->modalSubmitActionLabel('Decline order')
+                ->schema([
+                    Select::make('reason')
+                        ->label('Reason')
+                        ->options(ParcelCancellationService::DECLINE_REASONS)
+                        ->required(),
+                    TextInput::make('note')
+                        ->label('Note for the buyer (optional)')
+                        ->maxLength(120)
+                        ->required(fn (callable $get): bool => $get('reason') === 'other'),
+                ])
+                ->action(function (SubOrder $record, array $data): void {
+                    $reason = ParcelCancellationService::DECLINE_REASONS[$data['reason']] ?? 'Other reason';
+                    if (filled($data['note'] ?? null)) {
+                        $reason = $data['reason'] === 'other' ? trim($data['note']) : "{$reason}: ".trim($data['note']);
+                    }
+
+                    try {
+                        app(ParcelCancellationService::class)->declineBySeller($record, auth()->user(), $reason);
+                    } catch (DomainException $exception) {
+                        Notification::make()->title('Order not declined')->body($exception->getMessage())->danger()->send();
+
+                        return;
+                    }
+
+                    Notification::make()->title('Order declined')->body('The buyer has been told by SMS.')->success()->send();
                 }),
         ];
     }

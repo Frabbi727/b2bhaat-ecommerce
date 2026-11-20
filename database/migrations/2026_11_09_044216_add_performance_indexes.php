@@ -67,7 +67,7 @@ return new class extends Migration
             // A concurrent build that failed leaves an invalid index under our name; drop it so it is built again
             // (Wave 1 review M-7).
             if (in_array($name, self::invalidIndexes($table), true)) {
-                DB::statement("DROP INDEX CONCURRENTLY IF EXISTS \"{$name}\"");
+                DB::statement('DROP INDEX '.self::concurrently()."IF EXISTS \"{$name}\"");
             }
 
             if (self::isCovered($table, $columns)) {
@@ -76,7 +76,7 @@ return new class extends Migration
 
             if (DB::getDriverName() === 'pgsql') {
                 $quoted = implode(', ', array_map(fn (string $column): string => '"'.$column.'"', $columns));
-                DB::statement("CREATE INDEX CONCURRENTLY IF NOT EXISTS \"{$name}\" ON \"{$table}\" ({$quoted})");
+                DB::statement('CREATE INDEX '.self::concurrently()."IF NOT EXISTS \"{$name}\" ON \"{$table}\" ({$quoted})");
 
                 continue;
             }
@@ -93,13 +93,23 @@ return new class extends Migration
             }
 
             if (DB::getDriverName() === 'pgsql') {
-                DB::statement("DROP INDEX CONCURRENTLY IF EXISTS \"{$name}\"");
+                DB::statement('DROP INDEX '.self::concurrently()."IF EXISTS \"{$name}\"");
 
                 continue;
             }
 
             Schema::table($table, fn (Blueprint $blueprint) => $blueprint->dropIndex($name));
         }
+    }
+
+    /**
+     * CONCURRENTLY keeps the shop taking orders during `php artisan migrate`, which runs this migration outside a
+     * transaction. PostgreSQL refuses CONCURRENTLY inside a transaction, as when tests roll migrations back in theirs,
+     * so there the index is built or dropped plainly.
+     */
+    private static function concurrently(): string
+    {
+        return DB::transactionLevel() === 0 ? 'CONCURRENTLY ' : '';
     }
 
     /**

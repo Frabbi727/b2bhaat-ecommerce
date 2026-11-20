@@ -10,6 +10,7 @@ use App\Filament\Admin\Support\StatusColors;
 use App\Models\SubOrder;
 use App\Services\Logistics\CourierStatusService;
 use BackedEnum;
+use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -108,8 +109,9 @@ class CourierParcelResource extends Resource
                                 hubLocation: $record->courier_name ?? 'Courier',
                                 title: 'Confirmed by admin from the courier panel',
                                 description: $data['note'].' (recorded by admin '.auth()->user()?->name.')',
+                                adminOverride: true,
                             );
-                        } catch (InvalidStatusTransitionException $exception) {
+                        } catch (InvalidStatusTransitionException|DomainException $exception) {
                             Notification::make()->title('This update is not possible')->body($exception->getMessage())->danger()->send();
 
                             return;

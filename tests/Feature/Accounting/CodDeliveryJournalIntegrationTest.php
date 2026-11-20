@@ -50,7 +50,7 @@ class CodDeliveryJournalIntegrationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-COD-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $unpaid->id,
             'payment_method_id' => $codMethod->id,
             'shipping_address' => ['address' => 'Chittagong'],
@@ -100,7 +100,7 @@ class CodDeliveryJournalIntegrationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-SELF-001',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $unpaid->id,
             'payment_method_id' => $codMethod->id,
             'shipping_address' => ['address' => 'Dhaka'],
@@ -143,7 +143,7 @@ class CodDeliveryJournalIntegrationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-SELF-ZERO',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $unpaid->id,
             'payment_method_id' => $codMethod->id,
             'shipping_address' => ['address' => 'Dhaka'],
@@ -183,7 +183,7 @@ class CodDeliveryJournalIntegrationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-COD-DISC',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $unpaid->id,
             'payment_method_id' => $codMethod->id,
             'shipping_address' => ['address' => 'Dhaka'],
@@ -233,7 +233,7 @@ class CodDeliveryJournalIntegrationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-COD-IDEMP',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $unpaid->id,
             'payment_method_id' => $codMethod->id,
             'shipping_address' => ['address' => 'Dhaka'],
@@ -276,7 +276,7 @@ class CodDeliveryJournalIntegrationTest extends TestCase
         $order = Order::create([
             'order_number' => 'ORD-PREPAID-DELIV',
             'customer_id' => $customer->id,
-            'order_status_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
             'payment_status_id' => $paid->id,
             'payment_method_id' => $bkashMethod->id,
             'shipping_address' => ['address' => 'Dhaka'],

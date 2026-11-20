@@ -60,21 +60,21 @@ class SecurityProbeTest extends TestCase
     }
 
     /**
-     * WA-SEL-01: current behaviour; the fix inverts this assertion.
-     * The seller's parcel page is a disabled generated form whose "Seller" select is filled from every user, so the
-     * page source lists the names of other sellers, admins and every customer on the platform.
+     * WA-SEL-01 fixed: the seller's parcel page is a read-only summary, so it names the parcel's own buyer but no
+     * other seller, admin or customer on the platform.
      */
-    public function test_wa_sel_01_seller_parcel_page_lists_every_users_name(): void
+    public function test_wa_sel_01_seller_parcel_page_shows_only_its_own_buyer(): void
     {
         $parcel = SubOrder::orderBy('id')->firstOrFail();
         $rival = $this->otherSeller();
-        $customer = User::where('email', 'customer@retail.com')->firstOrFail();
+        $admin = User::whereHas('role', fn ($query) => $query->whereIn('slug', ['admin', 'super_admin']))->firstOrFail();
         $this->actingAs($parcel->seller);
 
         $this->get(route('filament.seller.resources.sub-orders.view', $parcel))
             ->assertOk()
-            ->assertSee($rival->name, false)
-            ->assertSee($customer->name, false);
+            ->assertSee($parcel->order->shipping_address['recipient_name'], false)
+            ->assertDontSee($rival->name, false)
+            ->assertDontSee($admin->name, false);
     }
 
     /**
@@ -91,17 +91,20 @@ class SecurityProbeTest extends TestCase
     }
 
     /**
-     * WA-SEC-01: current behaviour; the fix inverts this assertion.
-     * Coupon codes can be guessed without limit: 30 wrong codes in a row are all answered, none throttled.
+     * WA-SEC-01 (fixed): coupon codes can no longer be guessed without limit. The first 10 wrong codes are answered
+     * normally; from the 11th, attempts are refused for 10 minutes.
      */
-    public function test_wa_sec_01_coupon_code_guessing_is_not_throttled(): void
+    public function test_wa_sec_01_coupon_code_guessing_is_throttled(): void
     {
         $this->actingAs(User::where('email', 'customer@retail.com')->firstOrFail());
         $cart = Livewire::test(CartComponent::class);
 
-        for ($attempt = 1; $attempt <= 30; $attempt++) {
+        for ($attempt = 1; $attempt <= 10; $attempt++) {
             $cart->set('couponCode', 'GUESS'.$attempt)->call('applyCoupon');
             $this->assertStringContainsString('Invalid', (string) $cart->get('couponErrorMessage'), "attempt {$attempt} answered normally");
         }
+
+        $cart->set('couponCode', 'GUESS11')->call('applyCoupon');
+        $this->assertStringContainsString('Too many wrong coupon codes', (string) $cart->get('couponErrorMessage'));
     }
 }

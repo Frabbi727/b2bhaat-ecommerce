@@ -370,7 +370,7 @@ class CustomerRfqsTest extends TestCase
             'buyer_name' => $this->buyer->name,
             'buyer_email' => $this->buyer->email,
             'buyer_phone' => $this->buyer->phone,
-            'target_quantity' => 200,
+            'target_quantity' => 200, 'option_quantities' => [$this->product->variations()->orderBy('id')->value('id') => 200],
             'target_unit_price' => 80.00,
             'seller_quoted_price' => 75.50,
             'status' => 'quoted',

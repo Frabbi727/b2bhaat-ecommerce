@@ -20,7 +20,7 @@ use App\Filament\Seller\Resources\SellerJournalEntries\Pages\ListSellerJournalEn
 use App\Filament\Seller\Resources\SellerWallets\Pages\ListSellerWallets;
 use App\Filament\Seller\Resources\SubOrders\Pages\ListSubOrders;
 use App\Filament\Seller\Widgets\SellerRecentOrdersWidget;
-use App\Filament\Seller\Widgets\SellerStatsOverview;
+use App\Filament\Seller\Widgets\SellerTodayWidget;
 use App\Models\User;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\SystemLookupSeeder;
@@ -87,10 +87,11 @@ class FilamentPanelsSmokeTest extends TestCase
 
         $this->get('/seller')->assertSuccessful();
 
-        Livewire::test(SellerStatsOverview::class)
+        Livewire::test(SellerTodayWidget::class)
             ->assertSuccessful()
-            ->assertSee('Available Payout Balance')
-            ->assertSee('On hold after delivery');
+            ->assertSee('To do today')
+            ->assertSee('Ready to withdraw')
+            ->assertSee('On hold');
 
         Livewire::test(SellerRecentOrdersWidget::class)
             ->assertSuccessful();

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Seller\Resources\RfqRequests\Schemas;
 
+use App\Models\RfqRequest;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -25,6 +26,14 @@ class RfqRequestForm
                         TextInput::make('buyer_email')->disabled()->dehydrated(false),
                         TextInput::make('buyer_phone')->disabled()->dehydrated(false),
                         TextInput::make('target_quantity')->disabled()->dehydrated(false),
+                        // WA-PRC-03: the quote covers exactly these options, and they are what the buyer's order will contain
+                        Textarea::make('option_split')
+                            ->label('Quantity per option')
+                            ->formatStateUsing(fn (?RfqRequest $record): ?string => $record?->optionSummary())
+                            ->visible(fn (?RfqRequest $record): bool => $record?->optionSummary() !== null)
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->columnSpanFull(),
                         TextInput::make('target_unit_price')->prefix('৳')->disabled()->dehydrated(false),
                         TextInput::make('destination_district')->disabled()->dehydrated(false),
                         Textarea::make('specifications')->disabled()->dehydrated(false)->columnSpanFull(),

@@ -90,68 +90,173 @@ class PricingProbeTest extends TestCase
             ->call('placeOrder');
     }
 
-    /**
-     * WA-PRC-01: current behaviour; the fix inverts this assertion.
-     * A simple product's quoted line shares its cart key with the normal wholesale line, so a later
-     * normal add of 10 units (below the MOQ of 50) is merged into the quoted line at the quoted price.
-     */
-    public function test_wa_prc_01_normal_add_merges_into_quoted_line_at_quoted_price(): void
+    private function quoteFor(Product $product, int $quantity = 60, float $price = 100.00): RfqRequest
     {
-        $simple = $this->makeSimpleProduct();
-
-        $this->cart->addItem($simple->id, null, SalesChannel::WHOLESALE, 40, 70.0);
-        $this->cart->addItem($simple->id, null, SalesChannel::WHOLESALE, 10);
-
-        $lines = collect($this->cart->getItems())->where('product_id', $simple->id);
-        $this->assertCount(1, $lines, 'today: the normal add lands on the quoted line');
-        $line = $lines->first();
-        $this->assertSame(50, $line['quantity']);
-        $this->assertEquals(70.0, $line['unit_price'], 'today: the 10 extra units get the quoted ৳70, not the ৳110 tier');
-        $this->assertTrue($line['is_quoted']);
-        $this->assertSame([], $this->cart->wholesaleMoqViolations(), 'today: the 10-unit add bypasses the MOQ of 50');
-    }
-
-    /**
-     * WA-PRC-03: current behaviour; the fix inverts this assertion.
-     * Accepting a quote on a product with options adds a line with no option, so the order line has no
-     * variation and no stock is reserved.
-     */
-    public function test_wa_prc_03_quote_on_product_with_options_orders_no_option_and_reserves_no_stock(): void
-    {
-        $seller = $this->product->seller;
-        $rfq = RfqRequest::create([
-            'product_id' => $this->product->id,
-            'seller_id' => $seller->id,
+        return RfqRequest::create([
+            'product_id' => $product->id,
+            'seller_id' => $product->seller_id,
             'buyer_id' => $this->buyer->id,
             'buyer_name' => $this->buyer->name,
             'buyer_email' => $this->buyer->email,
             'buyer_phone' => '01711223344',
             'company_name' => 'Boutique Chain Dhaka',
-            'target_quantity' => 60,
-            'target_unit_price' => 90.00,
-            'seller_quoted_price' => 100.00,
+            'target_quantity' => $quantity,
+            'target_unit_price' => $price - 10,
+            'seller_quoted_price' => $price,
             'destination_district' => 'Dhaka',
             'status' => 'quoted',
         ]);
+    }
 
-        $stockBefore = (int) ProductVariation::where('product_id', $this->product->id)->sum('stock_quantity');
+    /**
+     * WA-PRC-01 (fixed): a quoted line has its own cart line, so a later normal add of the same product gets its own
+     * line at the catalog tier price and still has to meet the MOQ on its own.
+     */
+    public function test_wa_prc_01_normal_add_does_not_merge_into_the_quoted_line(): void
+    {
+        $simple = $this->makeSimpleProduct();
+
+        $this->cart->addItem($simple->id, null, SalesChannel::WHOLESALE, 40, 70.0, rfqId: 7);
+
+        try {
+            $this->cart->addItem($simple->id, null, SalesChannel::WHOLESALE, 10);
+            $this->fail('10 normal units were accepted below the MOQ of 50.');
+        } catch (\Exception $e) {
+            $this->assertStringContainsString('minimum order quantity', $e->getMessage());
+        }
+
+        $this->cart->addItem($simple->id, null, SalesChannel::WHOLESALE, 60);
+
+        $lines = collect($this->cart->getItems())->where('product_id', $simple->id);
+        $this->assertCount(2, $lines);
+        $quoted = $lines->firstWhere('is_quoted', true);
+        $normal = $lines->firstWhere('is_quoted', false);
+        $this->assertSame([40, 70.0, 7], [$quoted['quantity'], (float) $quoted['unit_price'], $quoted['rfq_id']]);
+        $this->assertSame([60, 110.0], [$normal['quantity'], (float) $normal['unit_price']]);
+    }
+
+    /**
+     * WA-PRC-01 (fixed, carts from before the deploy): a quoted line stored under the normal key is moved to its own
+     * quoted key when the cart is read, so a normal add no longer inherits the quoted price.
+     */
+    public function test_wa_prc_01_quoted_line_from_an_old_cart_is_moved_off_the_normal_key(): void
+    {
+        $simple = $this->makeSimpleProduct();
+        $this->cart->addItem($simple->id, null, SalesChannel::WHOLESALE, 40, 70.0, rfqId: 7);
+
+        // Rewrite the session the way the old code stored the line: under the normal key, with no RFQ id
+        $line = collect($this->cart->getItems())->sole();
+        $legacyKey = "{$simple->id}_{$line['variation_id']}_".SalesChannel::WHOLESALE;
+        unset($line['rfq_id']);
+        session()->put('b2bhaat_cart_items', [$legacyKey => [...$line, 'key' => $legacyKey]]);
+
+        $this->cart->addItem($simple->id, null, SalesChannel::WHOLESALE, 60);
+
+        $lines = collect($this->cart->getItems());
+        $this->assertCount(2, $lines);
+        $this->assertSame(70.0, (float) $lines->firstWhere('is_quoted', true)['unit_price']);
+        $this->assertNull($lines->firstWhere('is_quoted', true)['rfq_id']);
+        $this->assertSame(110.0, (float) $lines->firstWhere('is_quoted', false)['unit_price']);
+        $this->assertSame($legacyKey, $lines->firstWhere('is_quoted', false)['key']);
+    }
+
+    /**
+     * WA-PRC-01 (fixed): the accepted quote is linked to the order that used it.
+     */
+    public function test_wa_prc_01_accepted_quote_is_linked_to_its_order(): void
+    {
+        $rfq = $this->quoteFor($this->makeSimpleProduct());
 
         $this->post(route('rfq.quotation.accept', $rfq->id))->assertRedirect(route('checkout.index'));
         $this->placeCodOrder()->assertSet('errorMessage', '');
 
         $order = Order::where('customer_id', $this->buyer->id)->latest('id')->firstOrFail();
-        $item = OrderItem::whereIn('sub_order_id', $order->subOrders->pluck('id'))->sole();
-        $this->assertNull($item->variation_id, 'today: the seller is not told which option to ship');
-        $this->assertSame(60, $item->quantity);
-        $this->assertSame($stockBefore, (int) ProductVariation::where('product_id', $this->product->id)->sum('stock_quantity'), 'today: no stock is reserved for the quoted units');
+        $this->assertSame($order->id, $rfq->fresh()->order_id);
+        $this->assertSame(100.0, (float) OrderItem::whereIn('sub_order_id', $order->subOrders->pluck('id'))->sole()->unit_price);
     }
 
     /**
-     * WA-PRC-02: current behaviour; the fix inverts this assertion.
-     * Wholesale access is checked only when the line is added. A buyer whose approval is withdrawn afterwards
-     * still checks out at wholesale prices.
+     * WA-PRC-03 (fixed): on a product with options the buyer splits the RFQ quantity across options, and accepting the
+     * quote adds one quoted line per option, so the seller knows what to ship and stock is taken per option.
      */
-    public function test_wa_prc_02_wholesale_lines_are_honoured_after_approval_is_withdrawn(): void
+    public function test_wa_prc_03_quote_on_product_with_options_orders_each_option_and_reserves_its_stock(): void
+    {
+        [$v1, $v2] = $this->twoVariationIds();
+        $rfq = $this->quoteFor($this->product);
+        $rfq->update(['option_quantities' => [$v1 => 40, $v2 => 20]]);
+        $stockBefore = ProductVariation::whereIn('id', [$v1, $v2])->pluck('stock_quantity', 'id');
+
+        $this->post(route('rfq.quotation.accept', $rfq->id))->assertRedirect(route('checkout.index'));
+        $this->placeCodOrder()->assertSet('errorMessage', '');
+
+        $order = Order::where('customer_id', $this->buyer->id)->latest('id')->firstOrFail();
+        $lines = OrderItem::whereIn('sub_order_id', $order->subOrders->pluck('id'))->get()->keyBy('variation_id');
+        $this->assertSame([40, 20], [$lines[$v1]->quantity, $lines[$v2]->quantity]);
+        $this->assertSame([100.0, 100.0], [(float) $lines[$v1]->unit_price, (float) $lines[$v2]->unit_price]);
+        $this->assertSame((int) $stockBefore[$v1] - 40, (int) ProductVariation::find($v1)->stock_quantity);
+        $this->assertSame((int) $stockBefore[$v2] - 20, (int) ProductVariation::find($v2)->stock_quantity);
+    }
+
+    /**
+     * WA-PRC-03: the RFQ form on a product with options asks for a quantity per option; the total is their sum.
+     */
+    public function test_wa_prc_03_rfq_on_product_with_options_records_the_option_split(): void
+    {
+        [$v1, $v2] = $this->twoVariationIds();
+
+        Livewire::test(ProductDetail::class, ['slug' => $this->product->slug])
+            ->set('rfqOptionQuantities', [$v1 => 30, $v2 => 0])
+            ->set('rfqBuyerPhone', '01711223344')
+            ->call('submitRfq')
+            ->assertHasNoErrors();
+
+        $rfq = RfqRequest::where('product_id', $this->product->id)->latest('id')->firstOrFail();
+        $this->assertSame([$v1 => 30], $rfq->option_quantities);
+        $this->assertSame(30, $rfq->target_quantity);
+    }
+
+    /**
+     * WA-PRC-03: an RFQ needs at least one option quantity, and only this product's options are accepted.
+     */
+    public function test_wa_prc_03_rfq_option_split_is_validated(): void
+    {
+        $otherVariation = ProductVariation::where('product_id', '!=', $this->product->id)->value('id');
+        [$v1] = $this->twoVariationIds();
+
+        Livewire::test(ProductDetail::class, ['slug' => $this->product->slug])
+            ->set('rfqBuyerPhone', '01711223344')
+            ->set('rfqOptionQuantities', [$v1 => 0])
+            ->call('submitRfq')
+            ->assertHasErrors('rfqOptionQuantities')
+            ->set('rfqOptionQuantities', [$otherVariation => 10])
+            ->call('submitRfq')
+            ->assertHasErrors('rfqOptionQuantities');
+
+        $this->assertSame(0, RfqRequest::where('product_id', $this->product->id)->count());
+    }
+
+    /**
+     * WA-PRC-03: a quote sent before the option split existed doesn't say which options to ship. It can't be accepted;
+     * the buyer is asked to request a new quotation, and the quote stays open.
+     */
+    public function test_wa_prc_03_quote_without_option_split_on_product_with_options_is_refused(): void
+    {
+        $rfq = $this->quoteFor($this->product);
+
+        $this->from(route('customer.rfqs'))
+            ->post(route('rfq.quotation.accept', $rfq->id))
+            ->assertRedirect(route('customer.rfqs'))
+            ->assertSessionHas('error', fn (string $message) => str_contains($message, 'which options'));
+
+        $this->assertSame('quoted', $rfq->fresh()->status);
+        $this->assertSame([], $this->cart->getItems());
+    }
+
+    /**
+     * WA-PRC-02 (fixed): wholesale access is checked again when the order is placed. A buyer whose approval was
+     * withdrawn after filling the cart is told so, and no order is placed at wholesale prices.
+     */
+    public function test_wa_prc_02_wholesale_lines_are_refused_after_approval_is_withdrawn(): void
     {
         [$v1, $v2] = $this->twoVariationIds();
         Livewire::test(ProductDetail::class, ['slug' => $this->product->slug])
@@ -162,46 +267,49 @@ class PricingProbeTest extends TestCase
 
         $this->buyer->forceFill(['is_wholesale_approved' => false, 'wholesale_rejected_at' => now()])->save();
         $this->actingAs($this->buyer->fresh());
-        $this->assertFalse($this->buyer->fresh()->canSeeWholesalePrices());
+        $ordersBefore = Order::count();
 
-        $this->placeCodOrder()->assertSet('errorMessage', '');
+        $this->placeCodOrder()->assertSet('errorMessage', fn (string $m) => str_contains($m, 'wholesale access'));
 
-        $order = Order::where('customer_id', $this->buyer->id)->latest('id')->firstOrFail();
-        $items = $order->subOrders->flatMap->items;
-        $this->assertSame(50, (int) $items->sum('quantity'));
-        $this->assertEquals(110.0, (float) $items->first()->unit_price, 'today: wholesale ৳110 charged to a buyer no longer approved');
-        $this->assertSame(
-            SalesChannel::where('slug', SalesChannel::WHOLESALE)->value('id'),
-            (int) $items->first()->sales_channel_id
-        );
+        $this->assertSame($ordersBefore, Order::count());
     }
 
     /**
-     * WA-PRC-04: current behaviour; the fix inverts this assertion.
-     * The quote is marked accepted before the cart add. If the add fails (product hidden meanwhile),
-     * the buyer gets a server error and the quote is used up with nothing in the cart.
+     * Quoted lines are checked against their RFQ when the order is placed: a quote that belongs to someone else is
+     * refused, and the RFQ is not used up.
      */
-    public function test_wa_prc_04_failed_cart_add_still_uses_up_the_quote(): void
+    public function test_quoted_line_for_another_buyers_rfq_is_refused(): void
     {
-        $rfq = RfqRequest::create([
-            'product_id' => $this->product->id,
-            'seller_id' => $this->product->seller_id,
-            'buyer_id' => $this->buyer->id,
-            'buyer_name' => $this->buyer->name,
-            'buyer_email' => $this->buyer->email,
-            'buyer_phone' => '01711223344',
-            'company_name' => 'Boutique Chain Dhaka',
-            'target_quantity' => 60,
-            'target_unit_price' => 90.00,
-            'seller_quoted_price' => 100.00,
-            'destination_district' => 'Dhaka',
-            'status' => 'quoted',
-        ]);
+        $rfq = $this->quoteFor($this->makeSimpleProduct());
+        $this->post(route('rfq.quotation.accept', $rfq->id))->assertRedirect(route('checkout.index'));
+
+        $someoneElse = User::where('email', 'customer@retail.com')->firstOrFail();
+        $rfq->forceFill(['buyer_id' => $someoneElse->id, 'buyer_email' => $someoneElse->email])->save();
+        $ordersBefore = Order::count();
+
+        $this->placeCodOrder()->assertSet('errorMessage', fn (string $m) => str_contains($m, 'Quotation #QT-RFQ-'));
+
+        $this->assertSame($ordersBefore, Order::count());
+        $this->assertNull($rfq->fresh()->order_id);
+    }
+
+    /**
+     * WA-PRC-04 (fixed): the quote is marked accepted only after it is in the cart. If the add fails (product hidden
+     * meanwhile), the buyer is told why and the quote stays open.
+     */
+    public function test_wa_prc_04_failed_cart_add_leaves_the_quote_open(): void
+    {
+        [$v1] = $this->twoVariationIds();
+        $rfq = $this->quoteFor($this->product);
+        $rfq->update(['option_quantities' => [$v1 => 60]]);
         $this->product->forceFill(['is_active' => false])->save();
 
-        $this->post(route('rfq.quotation.accept', $rfq->id))->assertStatus(500);
+        $this->from(route('customer.rfqs'))
+            ->post(route('rfq.quotation.accept', $rfq->id))
+            ->assertRedirect(route('customer.rfqs'))
+            ->assertSessionHas('error', fn (string $message) => str_contains($message, 'no longer available'));
 
-        $this->assertSame('accepted', $rfq->fresh()->status, 'today: the quote cannot be accepted again');
+        $this->assertSame('quoted', $rfq->fresh()->status);
         $this->assertSame([], $this->cart->getItems());
     }
 

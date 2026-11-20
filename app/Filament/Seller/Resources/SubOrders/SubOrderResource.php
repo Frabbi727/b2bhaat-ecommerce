@@ -4,7 +4,7 @@ namespace App\Filament\Seller\Resources\SubOrders;
 
 use App\Filament\Seller\Resources\SubOrders\Pages\ListSubOrders;
 use App\Filament\Seller\Resources\SubOrders\Pages\ViewSubOrder;
-use App\Filament\Seller\Resources\SubOrders\Schemas\SubOrderForm;
+use App\Filament\Seller\Resources\SubOrders\Schemas\SubOrderInfolist;
 use App\Filament\Seller\Resources\SubOrders\Tables\SubOrdersTable;
 use App\Models\SubOrder;
 use BackedEnum;
@@ -47,9 +47,9 @@ class SubOrderResource extends Resource
 
     protected static ?string $navigationLabel = 'Orders';
 
-    public static function form(Schema $schema): Schema
+    public static function infolist(Schema $schema): Schema
     {
-        return SubOrderForm::configure($schema);
+        return SubOrderInfolist::configure($schema);
     }
 
     public static function table(Table $table): Table

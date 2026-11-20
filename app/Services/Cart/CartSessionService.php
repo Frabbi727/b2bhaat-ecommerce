@@ -12,6 +12,7 @@ use App\Services\Promotions\FlashSalePricing;
 use DomainException;
 use Exception;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Session;
 
 class CartSessionService
@@ -25,19 +26,58 @@ class CartSessionService
      */
     public function getItems(): array
     {
-        return Session::get(self::SESSION_KEY, []);
+        return $this->moveLegacyQuotedLines(Session::get(self::SESSION_KEY, []));
+    }
+
+    /**
+     * Cart key of an accepted RFQ quotation. It never equals a normal line's key, so a normal add of the same product
+     * can't merge into it and inherit the negotiated price (WA-PRC-01). A line from before RFQ ids were stored has
+     * rfq id `legacy`.
+     */
+    public static function quotedLineKey(int $productId, ?int $variationId, ?int $rfqId, string $channelSlug = SalesChannel::WHOLESALE): string
+    {
+        return "{$productId}_".($variationId ?? 'base')."_{$channelSlug}_quote_".($rfqId ?? 'legacy');
+    }
+
+    /**
+     * WA-PRC-01: carts saved before the fix kept a quoted line under the normal key. Move it to its own quoted key
+     * (no RFQ id is known for it) so it keeps its price and a normal add gets a line of its own.
+     *
+     * @param  array<string, array<string, mixed>>  $items
+     * @return array<string, array<string, mixed>>
+     */
+    private function moveLegacyQuotedLines(array $items): array
+    {
+        $moved = false;
+
+        foreach ($items as $key => $item) {
+            if (($item['is_quoted'] ?? false) && ! str_contains((string) $key, '_quote_')) {
+                $variationId = isset($item['variation_id']) ? (int) $item['variation_id'] : null;
+                $newKey = self::quotedLineKey((int) $item['product_id'], $variationId, null, (string) $item['sales_channel_slug']);
+                unset($items[$key]);
+                $items[$newKey] = [...$item, 'key' => $newKey, 'rfq_id' => null];
+                $moved = true;
+            }
+        }
+
+        if ($moved) {
+            Session::put(self::SESSION_KEY, $items);
+        }
+
+        return $items;
     }
 
     /**
      * Add item with role, MOQ, and progressive volume discount tier validation.
      * Wholesale MOQ and tier pricing apply to the product lot (all its non-quoted wholesale lines) — D7.
-     * A line added with an override price is an accepted RFQ quotation: it is flagged `is_quoted` and never re-priced.
+     * A line added with an override price is an accepted RFQ quotation: it gets its own line (see quotedLineKey()),
+     * is flagged `is_quoted` and is never re-priced.
      *
      * @throws Exception
      */
-    public function addItem(int $productId, ?int $variationId, string $channelSlug, int $quantity, ?float $overrideUnitPrice = null): void
+    public function addItem(int $productId, ?int $variationId, string $channelSlug, int $quantity, ?float $overrideUnitPrice = null, ?int $rfqId = null): void
     {
-        $this->putItem($productId, $variationId, $channelSlug, $quantity, $overrideUnitPrice, enforceLotMoq: true);
+        $this->putItem($productId, $variationId, $channelSlug, $quantity, $overrideUnitPrice, enforceLotMoq: true, rfqId: $rfqId);
 
         if ($channelSlug === SalesChannel::WHOLESALE) {
             $this->repriceWholesaleGroup($productId);
@@ -104,8 +144,13 @@ class CartSessionService
         return $variation;
     }
 
-    private function putItem(int $productId, ?int $variationId, string $channelSlug, int $quantity, ?float $overrideUnitPrice, bool $enforceLotMoq): void
+    private function putItem(int $productId, ?int $variationId, string $channelSlug, int $quantity, ?float $overrideUnitPrice, bool $enforceLotMoq, ?int $rfqId = null): void
     {
+        // WA-CHK-02: every add goes through here, so a zero or negative quantity can never lower a cart
+        if ($quantity < 1) {
+            throw new DomainException('Quantity must be at least 1.');
+        }
+
         $product = Product::with(['prices.salesChannel', 'variations.attributeValues.attribute', 'seller.sellerProfile'])
             ->sellable()
             ->find($productId);
@@ -143,8 +188,16 @@ class CartSessionService
         $minQty = (int) $channelPrices->first()->min_quantity;
 
         $items = $this->getItems();
-        $key = "{$productId}_".($variationId ?? 'base')."_{$channelSlug}";
-        $isQuoted = ! is_null($overrideUnitPrice) || (bool) ($items[$key]['is_quoted'] ?? false);
+        // A line is quoted only when added with the quote's price; a normal add never lands on (or inherits) a quote
+        $isQuoted = ! is_null($overrideUnitPrice);
+        $key = $isQuoted
+            ? self::quotedLineKey($productId, $variationId, $rfqId, $channelSlug)
+            : "{$productId}_".($variationId ?? 'base')."_{$channelSlug}";
+
+        // One accepted quotation is one line at its negotiated quantity: adding it again changes nothing (I6)
+        if ($isQuoted && isset($items[$key])) {
+            return;
+        }
 
         if ($channelSlug === SalesChannel::WHOLESALE && $enforceLotMoq && ! $isQuoted) {
             $lotTotal = $this->lotQuantity($productId) + $quantity;
@@ -167,7 +220,7 @@ class CartSessionService
             }
         } else {
             $matchedRecord = $channelPrices->first();
-            $pricing = $this->tierOnlyPrice((float) ($overrideUnitPrice ?? $items[$key]['unit_price']));
+            $pricing = $this->tierOnlyPrice((float) $overrideUnitPrice);
         }
 
         $sku = $variation ? $variation->sku : ($product->slug.'-BASE');
@@ -197,12 +250,24 @@ class CartSessionService
                 'min_quantity' => $minQty,
                 'quantity' => $quantity,
                 'is_quoted' => $isQuoted,
+                'rfq_id' => $isQuoted ? $rfqId : null,
                 'seller_id' => $product->seller_id,
                 'seller_name' => $product->seller?->sellerProfile?->store_name ?? $product->seller?->name,
             ];
         }
 
         Session::put(self::SESSION_KEY, $items);
+    }
+
+    /** Take an accepted quotation's line back out of the cart, e.g. when the acceptance lost a race. */
+    public function removeQuotedLine(int $rfqId): void
+    {
+        $items = $this->getItems();
+        $kept = array_filter($items, fn (array $item) => ! (($item['is_quoted'] ?? false) && ($item['rfq_id'] ?? null) === $rfqId));
+
+        if (count($kept) !== count($items)) {
+            Session::put(self::SESSION_KEY, $kept);
+        }
     }
 
     public function removeItem(string $key): void
@@ -524,10 +589,31 @@ class CartSessionService
         Session::forget(self::COUPON_KEY);
     }
 
+    /** WA-SEC-01: wrong coupon codes allowed per user (or IP for a guest) before attempts are refused. */
+    private const COUPON_ATTEMPTS = 10;
+
+    private const COUPON_ATTEMPT_WINDOW_SECONDS = 600;
+
     public function applyCoupon(string $code, ?int $userId = null): array
     {
+        $attemptKey = 'coupon-attempts:'.($userId ?? request()->ip());
+        if (RateLimiter::tooManyAttempts($attemptKey, self::COUPON_ATTEMPTS)) {
+            $minutes = (int) ceil(RateLimiter::availableIn($attemptKey) / 60);
+
+            return [
+                'valid' => false,
+                'message' => "Too many wrong coupon codes. Please try again in {$minutes} minute(s).",
+                'coupon' => null,
+                'discount' => 0.00,
+            ];
+        }
+
         $couponService = app(CouponService::class);
         $result = $couponService->applyCoupon($code, $this->getSubtotal(), $userId);
+
+        if (! $result['valid']) {
+            RateLimiter::hit($attemptKey, self::COUPON_ATTEMPT_WINDOW_SECONDS);
+        }
 
         if ($result['valid'] && $result['coupon']) {
             Session::put(self::COUPON_KEY, [
@@ -539,6 +625,17 @@ class CartSessionService
         }
 
         return $result;
+    }
+
+    /**
+     * The id of the coupon stored in the cart, without re-checking it. Checkout checks it under a row lock instead,
+     * so a coupon that stopped being valid stops the order with a message rather than silently dropping the discount.
+     */
+    public function storedCouponId(): ?int
+    {
+        $id = Session::get(self::COUPON_KEY)['id'] ?? null;
+
+        return $id === null ? null : (int) $id;
     }
 
     public function removeCoupon(): void
@@ -556,18 +653,15 @@ class CartSessionService
             return null;
         }
 
-        // Re-verify against current subtotal
+        // Re-verify against current subtotal. An invalid coupon is not shown or counted, but stays stored: Place order
+        // then tells the buyer why it was dropped instead of silently charging full price (WA-CHK-01).
         $coupon = Coupon::find($couponData['id']);
         if (! $coupon || ! $coupon->is_active) {
-            $this->removeCoupon();
-
             return null;
         }
 
         $validation = $coupon->validateForSubtotal($this->getSubtotal(), auth()->id());
         if (! $validation['valid']) {
-            $this->removeCoupon();
-
             return null;
         }
 

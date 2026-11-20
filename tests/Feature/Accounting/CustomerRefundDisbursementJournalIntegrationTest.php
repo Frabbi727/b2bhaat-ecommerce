@@ -12,7 +12,11 @@ use App\Models\Accounting\AccountingFiscalYear;
 use App\Models\Accounting\AccountingJournalEntry;
 use App\Models\Accounting\AccountingJournalLine;
 use App\Models\Accounting\AccountingPeriod;
+use App\Models\FulfillmentStatus;
 use App\Models\Order;
+use App\Models\OrderStatus;
+use App\Models\PaymentMethod;
+use App\Models\PaymentStatus;
 use App\Models\Refund;
 use App\Models\Role;
 use App\Models\SubOrder;
@@ -71,9 +75,9 @@ class CustomerRefundDisbursementJournalIntegrationTest extends TestCase
         $this->order = Order::create([
             'order_number' => 'ORD-20261107-001',
             'customer_id' => $this->customer->id,
-            'order_status_id' => 1,
-            'payment_status_id' => 1,
-            'payment_method_id' => 1,
+            'order_status_id' => OrderStatus::query()->min('id'),
+            'payment_status_id' => PaymentStatus::query()->min('id'),
+            'payment_method_id' => PaymentMethod::query()->min('id'),
             'shipping_address' => ['recipient_name' => 'Test Customer', 'phone' => '01711111111'],
             'total_amount' => 2000.00,
             'tax_amount' => 0.00,
@@ -85,7 +89,7 @@ class CustomerRefundDisbursementJournalIntegrationTest extends TestCase
             'parent_order_id' => $this->order->id,
             'seller_id' => $this->seller->id,
             'sub_order_number' => 'SUB-20261107-001',
-            'fulfillment_status_id' => 1,
+            'fulfillment_status_id' => FulfillmentStatus::query()->min('id'),
             'subtotal' => 1900.00,
             'shipping_amount' => 100.00,
             'commission_amount' => 200.00,
@@ -220,7 +224,7 @@ class CustomerRefundDisbursementJournalIntegrationTest extends TestCase
             'parent_order_id' => $this->order->id,
             'seller_id' => $this->seller->id,
             'sub_order_number' => 'SUB-20261107-002',
-            'fulfillment_status_id' => 1,
+            'fulfillment_status_id' => FulfillmentStatus::query()->min('id'),
             'subtotal' => 500.00,
             'shipping_amount' => 50.00,
             'commission_amount' => 50.00,
@@ -231,7 +235,7 @@ class CustomerRefundDisbursementJournalIntegrationTest extends TestCase
             'parent_order_id' => $this->order->id,
             'seller_id' => $this->seller->id,
             'sub_order_number' => 'SUB-20261107-003',
-            'fulfillment_status_id' => 1,
+            'fulfillment_status_id' => FulfillmentStatus::query()->min('id'),
             'subtotal' => 500.00,
             'shipping_amount' => 50.00,
             'commission_amount' => 50.00,
@@ -330,7 +334,7 @@ class CustomerRefundDisbursementJournalIntegrationTest extends TestCase
             'parent_order_id' => $this->order->id,
             'seller_id' => $this->seller->id,
             'sub_order_number' => 'SUB-20261107-999',
-            'fulfillment_status_id' => 1,
+            'fulfillment_status_id' => FulfillmentStatus::query()->min('id'),
             'subtotal' => 850.00,
             'shipping_amount' => 50.00,
             'commission_amount' => 85.00,

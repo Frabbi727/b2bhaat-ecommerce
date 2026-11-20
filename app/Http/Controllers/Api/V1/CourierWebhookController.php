@@ -10,6 +10,7 @@ use App\Models\FulfillmentStatus;
 use App\Models\SubOrder;
 use App\Services\Logistics\CourierStatusService;
 use Carbon\Carbon;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -71,7 +72,8 @@ class CourierWebhookController extends Controller
                 description: $validated['description'] ?? "Status updated via {$subOrder->courier_name} webhook.",
                 timestamp: $loggedAt,
             );
-        } catch (InvalidStatusTransitionException $e) {
+        } catch (InvalidStatusTransitionException|DomainException $e) {
+            // An illegal move, an unpaid parcel or a late return: refused, and the courier is told why
             return response()->json(['success' => false, 'message' => $e->getMessage()], 409);
         }
 

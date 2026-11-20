@@ -7,13 +7,17 @@ use App\Models\Order;
 use App\Models\OrderStatus;
 use App\Models\PaymentMethod;
 use App\Models\PaymentStatus;
+use App\Models\SubOrder;
 use App\Services\Formatting\Money;
+use App\Services\Orders\ParcelCancellationService;
 use App\Services\Payments\PaymentVerificationService;
 use App\Services\Sms\OrderNotificationService;
+use DomainException;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
@@ -160,6 +164,58 @@ class OrdersTable
                     ->title("Payment rejected for #{$record->order_number}")
                     ->body('Order cancelled and stock released.')
                     ->warning()
+                    ->send();
+            });
+    }
+
+    /**
+     * WA-ORD-01: support cancels one parcel that hasn't left its seller (e.g. the seller never answers). Stock goes
+     * back, a paid parcel is recorded as a refund owed, and the buyer gets an SMS.
+     */
+    public static function cancelParcelAction(): Action
+    {
+        $cancellable = fn (Order $record) => $record->subOrders()
+            ->whereHas('fulfillmentStatus', fn (Builder $query) => $query->whereIn('slug', ParcelCancellationService::NOT_YET_DISPATCHED))
+            ->with('seller.sellerProfile')
+            ->get();
+
+        return Action::make('cancelParcel')
+            ->label('Cancel parcel')
+            ->icon(Heroicon::OutlinedNoSymbol)
+            ->color('danger')
+            ->visible(fn (Order $record): bool => $cancellable($record)->isNotEmpty())
+            ->modalHeading('Cancel a parcel?')
+            ->modalDescription('Only parcels the seller still has can be cancelled. Stock goes back on sale, a paid parcel is recorded as a refund owed to the buyer, and the buyer gets an SMS with your reason.')
+            ->modalSubmitActionLabel('Cancel parcel')
+            ->schema([
+                Select::make('sub_order_id')
+                    ->label('Parcel')
+                    ->options(fn (Order $record): array => $cancellable($record)
+                        ->mapWithKeys(fn (SubOrder $subOrder): array => [$subOrder->id => "#{$subOrder->sub_order_number} · ".($subOrder->seller?->sellerProfile?->store_name ?? $subOrder->seller?->name).' · '.Money::taka($subOrder->subtotal)])
+                        ->all())
+                    ->default(fn (Order $record): ?int => $cancellable($record)->count() === 1 ? $cancellable($record)->first()->id : null)
+                    ->required(),
+                TextInput::make('reason')
+                    ->label('Reason (sent to the buyer)')
+                    ->placeholder('e.g. Seller did not respond for 5 days')
+                    ->required()
+                    ->maxLength(120),
+            ])
+            ->action(function (Order $record, array $data): void {
+                $subOrder = $record->subOrders()->whereKey($data['sub_order_id'])->firstOrFail();
+
+                try {
+                    app(ParcelCancellationService::class)->cancelByAdmin($subOrder, auth()->user(), trim((string) $data['reason']));
+                } catch (DomainException $exception) {
+                    Notification::make()->title('Parcel not cancelled')->body($exception->getMessage())->danger()->send();
+
+                    return;
+                }
+
+                Notification::make()
+                    ->title("Parcel #{$subOrder->sub_order_number} cancelled")
+                    ->body('Stock released and the buyer told by SMS.')
+                    ->success()
                     ->send();
             });
     }

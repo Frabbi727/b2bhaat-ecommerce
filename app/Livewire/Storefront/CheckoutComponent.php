@@ -30,10 +30,13 @@ use DomainException;
 use Exception;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 #[Layout('layouts.storefront')]
@@ -67,7 +70,16 @@ class CheckoutComponent extends Component
 
     public string $checkoutCouponCode = '';
 
+    /** Display only: the coupon used at Place order is read from the server-side cart (WA-CHK-01). */
+    #[Locked]
     public ?array $appliedCoupon = null;
+
+    /**
+     * WA-CHK-03: one-time token for this checkout page. Two Place order requests from the same page carry the same
+     * token, and only the first can claim it, so a double click or a resent request cannot place a second order.
+     */
+    #[Locked]
+    public string $checkoutToken = '';
 
     public string $couponMessage = '';
 
@@ -85,8 +97,18 @@ class CheckoutComponent extends Component
     /** The phone the code was sent to is kept on the server, where the shopper cannot change it. */
     private const VERIFYING_PHONE_SESSION_KEY = 'checkout.verifying_phone';
 
+    /** How long a claimed checkout token stays spent; covers a slow order plus any late duplicate of it. */
+    private const ORDER_LOCK_SECONDS = 300;
+
+    public static function orderLockKey(int $userId, string $checkoutToken): string
+    {
+        return "checkout:{$userId}:{$checkoutToken}";
+    }
+
     public function mount(): void
     {
+        $this->checkoutToken = Str::random(40);
+
         $cart = app(CartSessionService::class);
         if ($cart->getItemCount() === 0) {
             $this->redirectRoute('cart.index');
@@ -278,6 +300,9 @@ class CheckoutComponent extends Component
 
         $cart = app(CartSessionService::class);
         $items = $cart->getItems();
+        // WA-CHK-01: only the coupon stored in the server-side cart counts. It is read before anything below re-checks
+        // (and could silently drop) it, and is checked again under a row lock when the order is written.
+        $storedCouponId = $cart->storedCouponId();
 
         if (empty($items)) {
             $this->errorMessage = 'Your cart is empty.';
@@ -347,31 +372,23 @@ class CheckoutComponent extends Component
             return;
         }
 
+        // A page loaded before this token existed gets one now
+        if ($this->checkoutToken === '') {
+            $this->checkoutToken = Str::random(40);
+        }
+
+        $orderLock = Cache::lock(self::orderLockKey((int) Auth::id(), $this->checkoutToken), self::ORDER_LOCK_SECONDS);
+        if (! $orderLock->get()) {
+            $this->errorMessage = 'Your order is already being placed. Please wait a moment. If nothing happens within a minute, reload the page.';
+
+            return;
+        }
+        $orderPlaced = false;
+
         try {
             $customer = Auth::user();
 
             $shippingFee = $this->getShippingFee();
-            $appliedCoupon = $this->appliedCoupon ?? $cart->getCoupon();
-            $discountAmount = $cart->getDiscountAmount();
-
-            if ($appliedCoupon && ! empty($appliedCoupon['code'])) {
-                $couponService = app(CouponService::class);
-                $validation = $couponService->applyCoupon(
-                    code: (string) $appliedCoupon['code'],
-                    subtotal: $subtotal,
-                    userId: $customer->id
-                );
-
-                if (! $validation['valid']) {
-                    $cart->removeCoupon();
-                    $this->appliedCoupon = null;
-                    throw new Exception("Promotional coupon cannot be redeemed: {$validation['message']}");
-                }
-
-                $discountAmount = (float) $validation['discount'];
-            } else {
-                $discountAmount = 0.00;
-            }
 
             $cleanEmail = trim(strtolower($this->recipientEmail));
 
@@ -404,9 +421,9 @@ class CheckoutComponent extends Component
             $orderPayload = [
                 'payment_method_id' => $this->selectedPaymentMethodId,
                 'shipping_amount' => $shippingFee,
-                'coupon_id' => $appliedCoupon['id'] ?? null,
-                'coupon_code' => $appliedCoupon['code'] ?? null,
-                'discount_amount' => $discountAmount,
+                'coupon_id' => null,
+                'coupon_code' => null,
+                'discount_amount' => 0.00,
                 'shipping_address' => $shippingAddressPayload,
                 'items' => array_values(array_map(function ($item) {
                     return [
@@ -417,12 +434,31 @@ class CheckoutComponent extends Component
                         'unit_price' => $item['unit_price'],
                         'flash_sale_product_id' => $item['flash_sale_product_id'] ?? null,
                         'original_unit_price' => $item['original_unit_price'] ?? null,
+                        'is_quoted' => (bool) ($item['is_quoted'] ?? false),
+                        'rfq_id' => $item['rfq_id'] ?? null,
                     ];
                 }, $items)),
             ];
 
             // ORD-3: the order, its payment status, the coupon use and the saved address commit together or not at all.
-            $order = DB::transaction(function () use ($customer, $orderPayload, $paymentMethod, $appliedCoupon, $subtotal, $discountAmount): Order {
+            $order = DB::transaction(function () use ($customer, $orderPayload, $paymentMethod, $storedCouponId, $subtotal, $cart): Order {
+                // Lock, validate and price the same coupon row that is then redeemed, so its limits hold under concurrency
+                $couponQuote = null;
+                if ($storedCouponId !== null) {
+                    try {
+                        $couponQuote = app(CouponService::class)->lockForOrder($storedCouponId, $customer->id, $subtotal);
+                    } catch (DomainException $e) {
+                        $cart->removeCoupon();
+                        $this->appliedCoupon = null;
+
+                        throw $e;
+                    }
+
+                    $orderPayload['coupon_id'] = $couponQuote['coupon']->id;
+                    $orderPayload['coupon_code'] = $couponQuote['coupon']->code;
+                    $orderPayload['discount_amount'] = $couponQuote['discount'];
+                }
+
                 $splitter = app(OrderSplitterService::class);
                 $order = $splitter->createAndSplitOrder($customer, $orderPayload);
 
@@ -456,15 +492,16 @@ class CheckoutComponent extends Component
                     ]);
                 }
 
-                // Use the coupon under a lock; a coupon used up meanwhile cancels the whole order (ORD-3)
-                if ($appliedCoupon && ! empty($appliedCoupon['id'])) {
-                    app(CouponService::class)->redeem(
-                        couponId: (int) $appliedCoupon['id'],
-                        userId: $customer->id,
-                        orderId: $order->id,
-                        subtotal: $subtotal,
-                        discountAmount: $discountAmount,
-                    );
+                // ORD-3: the use is counted on the coupon row locked above, in the order's transaction
+                if ($couponQuote !== null) {
+                    try {
+                        app(CouponService::class)->recordUsage($couponQuote['coupon'], $customer->id, $order->id, $couponQuote['discount']);
+                    } catch (DomainException $e) {
+                        $cart->removeCoupon();
+                        $this->appliedCoupon = null;
+
+                        throw $e;
+                    }
                 }
 
                 // Save address to address book if requested by customer
@@ -503,6 +540,7 @@ class CheckoutComponent extends Component
             }
 
             $cart->clear();
+            $orderPlaced = true;
 
             $this->redirectRoute('tracking.show', [
                 'order' => $order->order_number,
@@ -521,6 +559,11 @@ class CheckoutComponent extends Component
             }
         } catch (Exception $e) {
             $this->errorMessage = $e->getMessage();
+        } finally {
+            // A failed attempt gives the token back so the buyer can fix the problem and try again; a placed order keeps it spent
+            if (! $orderPlaced) {
+                $orderLock->release();
+            }
         }
     }
 

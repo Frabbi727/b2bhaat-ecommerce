@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class SellerStockAlertsWidget extends TableWidget
 {
-    protected static ?int $sort = 4;
+    protected static ?int $sort = 3;
 
     protected int|string|array $columnSpan = 'full';
 

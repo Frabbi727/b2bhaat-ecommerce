@@ -28,6 +28,7 @@ class Refund extends Model
         'status',
         'method',
         'reference',
+        'reference_key',
         'paid_at',
     ];
 

@@ -6,6 +6,7 @@ use App\Filament\Seller\Pages\StoreSettings;
 use App\Filament\Seller\Widgets\SellerStockAlertsWidget;
 use App\Livewire\Storefront\ProductDetail;
 use App\Livewire\Storefront\SellerStore;
+use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\SalesChannel;
 use App\Models\User;
@@ -191,7 +192,7 @@ class MerchantVacationModeAndStockAlertsTest extends TestCase
         $this->expectExceptionMessage('Cannot place order: NailsFactory Ltd. is currently on vacation mode.');
 
         $splitter->createAndSplitOrder($retailBuyer, [
-            'payment_method_id' => 1,
+            'payment_method_id' => PaymentMethod::query()->min('id'),
             'shipping_address' => [
                 'recipient_name' => 'Fatima Retail',
                 'recipient_phone' => '01700000004',

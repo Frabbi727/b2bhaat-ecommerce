@@ -9,6 +9,7 @@ use App\Enums\Accounting\AccountingEvent;
 use App\Enums\Accounting\JournalEntryStatus;
 use App\Events\Finance\PayoutStatusUpdatedEvent;
 use App\Models\Accounting\AccountingJournalEntry;
+use App\Models\PaymentStatus;
 use App\Models\ReturnRequest;
 use App\Models\SellerInvoice;
 use App\Models\SellerWallet;
@@ -360,7 +361,7 @@ class EscrowLedgerService
      */
     public function buyerRefundForSelfCollected(SubOrder $subOrder, float $refund): float
     {
-        $paid = $subOrder->order()->with('paymentStatus')->first()?->paymentStatus?->slug === 'paid';
+        $paid = in_array($subOrder->order()->with('paymentStatus')->first()?->paymentStatus?->slug, PaymentStatus::MONEY_RECEIVED, true);
 
         return $paid ? max(0.0, round($refund, 2)) : 0.0;
     }

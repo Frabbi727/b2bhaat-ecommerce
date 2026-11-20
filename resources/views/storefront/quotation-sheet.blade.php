@@ -182,6 +182,9 @@
                         <td class="p-2.5 border-r border-slate-200 font-bold text-slate-900">
                             <div>{{ $rfq->product?->title }}</div>
                             <div class="text-[10px] text-slate-500 font-normal mt-0.5">Category: {{ $rfq->product?->category?->name }}</div>
+                            @if ($optionSummary = $rfq->optionSummary())
+                                <div class="text-[10px] text-slate-600 font-normal mt-0.5">Options: {{ $optionSummary }}</div>
+                            @endif
                         </td>
                         <td class="p-2.5 border-r border-slate-200 text-slate-700 text-[11px] leading-relaxed">
                             {{ $rfq->specifications ?: 'Standard factory specification without custom OEM alterations.' }}

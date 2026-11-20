@@ -10,6 +10,7 @@ use App\Filament\Admin\Resources\ProductModeration\ProductModerationResource;
 use App\Filament\Admin\Resources\Users\UserResource;
 use App\Filament\Admin\Resources\WalletTransactions\WalletTransactionResource;
 use App\Models\Order;
+use App\Models\PaymentStatus;
 use App\Models\Product;
 use App\Models\ReturnRequest;
 use App\Models\SellerProfile;
@@ -38,7 +39,7 @@ class AdminStatsOverview extends StatsOverviewWidget
 
     protected function getStats(): array
     {
-        $paidOrders = fn (): Builder => Order::whereHas('paymentStatus', fn (Builder $q) => $q->where('slug', 'paid'));
+        $paidOrders = fn (): Builder => Order::whereHas('paymentStatus', fn (Builder $q) => $q->whereIn('slug', PaymentStatus::MONEY_RECEIVED));
 
         $totalGmv = (float) $paidOrders()->sum('total_amount');
         $totalEscrow = (float) SellerWallet::sum('escrow_held_balance');

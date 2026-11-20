@@ -9,6 +9,7 @@ use App\Models\RfqRequest;
 use App\Models\SalesChannel;
 use App\Services\Cart\CartSessionService;
 use App\Services\Rfq\RfqNotificationService;
+use Exception;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -82,9 +83,46 @@ class QuotationController extends Controller
             return redirect()->back()->with('error', 'This RFQ has not yet received an official quotation from the seller.');
         }
 
-        // Only an open quote can be accepted, and only once (final review I6)
+        if ($rfq->status !== 'quoted') {
+            return redirect()->back()->with('error', 'This quotation is no longer open for acceptance.');
+        }
+
+        // WA-PRC-03: on a product with options the quote must say which options to ship
+        $optionQuantities = $rfq->optionQuantities();
+        if ($rfq->product?->has_variations && $optionQuantities === []) {
+            return redirect()->back()->with('error', "This quotation doesn't say which options (colour, size…) you need, so it can't be ordered. Please request a new quotation and enter a quantity for each option.");
+        }
+
+        // WA-PRC-04: put the quote in the cart first, so a failed add (product hidden, merchant on vacation) leaves
+        // the quote open instead of using it up with nothing in the cart
+        $cart = app(CartSessionService::class);
+        /** @var list<array{variation_id: ?int, quantity: int}> $lines */
+        $lines = $optionQuantities !== []
+            ? array_map(fn (int $variationId, int $quantity): array => ['variation_id' => $variationId, 'quantity' => $quantity], array_keys($optionQuantities), $optionQuantities)
+            : [['variation_id' => null, 'quantity' => (int) $rfq->target_quantity]];
+        try {
+            foreach ($lines as $line) {
+                $cart->addItem(
+                    productId: $rfq->product_id,
+                    variationId: $line['variation_id'],
+                    channelSlug: SalesChannel::WHOLESALE,
+                    quantity: $line['quantity'],
+                    overrideUnitPrice: (float) $rfq->seller_quoted_price,
+                    rfqId: $rfq->id,
+                );
+            }
+        } catch (Exception $e) {
+            // All options or none: take back any line of this quote already added
+            $cart->removeQuotedLine($rfq->id);
+
+            return redirect()->back()->with('error', "This quotation can't be added to your cart: {$e->getMessage()}");
+        }
+
+        // Only an open quote can be accepted, and only once (final review I6); a lost race takes the line back out
         $accepted = RfqRequest::whereKey($rfq->id)->where('status', 'quoted')->update(['status' => 'accepted']);
         if ($accepted === 0) {
+            $cart->removeQuotedLine($rfq->id);
+
             return redirect()->back()->with('error', 'This quotation is no longer open for acceptance.');
         }
 
@@ -92,16 +130,6 @@ class QuotationController extends Controller
         // The guarded update above skips model events, so record the acceptance explicitly (AUD-4)
         $rfq->recordAuditActivity('updated', ['status' => 'quoted'], ['status' => 'accepted']);
         app(RfqNotificationService::class)->notifySellerOfAcceptedQuote($rfq);
-
-        // 2. Add item to cart with locked wholesale quotation unit price
-        $cart = app(CartSessionService::class);
-        $cart->addItem(
-            productId: $rfq->product_id,
-            variationId: null,
-            channelSlug: SalesChannel::WHOLESALE,
-            quantity: (int) $rfq->target_quantity,
-            overrideUnitPrice: (float) $rfq->seller_quoted_price
-        );
 
         return redirect()->route('checkout.index')->with(
             'success',

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Inventory;
 
 use App\Models\ProductVariation;
+use App\Models\StockMovement;
 use App\Services\Audit\AuditService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -51,7 +52,12 @@ class StockAdjustmentService
                 throw new DomainException("Only {$before} in stock for {$locked->sku}, so {$this->units(-$change)} can't be removed.");
             }
 
-            $locked->update(['stock_quantity' => $after]);
+            StockMovementContext::run(
+                StockMovement::REASON_ADJUSTMENT,
+                null,
+                fn () => $locked->update(['stock_quantity' => $after]),
+                self::REASONS[$reason].(filled($note) ? ': '.trim($note) : ''),
+            );
 
             $this->audit->record([
                 'module' => 'products',

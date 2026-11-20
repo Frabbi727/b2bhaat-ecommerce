@@ -214,16 +214,18 @@ class BalanceSheetPageTest extends TestCase
 
         $bankAccount = AccountingAccount::query()->where('system_slug', 'bank_operating')->firstOrFail();
 
-        // Debit only without corresponding credit
-        AccountingJournalLine::query()->create([
-            'journal_entry_id' => $entry->id,
-            'account_id' => $bankAccount->id,
-            'debit' => 999.00,
-            'credit' => 0.00,
-            'line_order' => 1,
-        ]);
+        // Debit only without corresponding credit; the database guard (ACC-9) would refuse it, so it is paused here
+        $this->withoutDatabaseGuards(function () use ($entry, $bankAccount): void {
+            AccountingJournalLine::query()->create([
+                'journal_entry_id' => $entry->id,
+                'account_id' => $bankAccount->id,
+                'debit' => 999.00,
+                'credit' => 0.00,
+                'line_order' => 1,
+            ]);
 
-        $entry->update(['status' => 'posted']);
+            $entry->update(['status' => 'posted']);
+        });
 
         $component = Livewire::test(BalanceSheetPage::class);
 

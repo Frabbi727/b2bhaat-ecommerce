@@ -468,14 +468,17 @@ class FinancialStatementServiceTest extends TestCase
             'description' => 'Unbalanced entry for testing',
         ]);
 
-        AccountingJournalLine::create([
-            'journal_entry_id' => $entry->id,
-            'account_id' => $account->id,
-            'debit' => 5000.00,
-            'credit' => 0.00,
-        ]);
+        // A one-sided journal can only exist if it was written before the database guard (ACC-9) existed
+        $this->withoutDatabaseGuards(function () use ($entry, $account): void {
+            AccountingJournalLine::create([
+                'journal_entry_id' => $entry->id,
+                'account_id' => $account->id,
+                'debit' => 5000.00,
+                'credit' => 0.00,
+            ]);
 
-        $entry->update(['status' => JournalEntryStatus::POSTED]);
+            $entry->update(['status' => JournalEntryStatus::POSTED]);
+        });
 
         $balanceSheet = $this->service->getBalanceSheet('2026-11-10');
 
