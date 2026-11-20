@@ -29,7 +29,7 @@ class SystemLookupSeeder extends Seeder
         // 2. Order Statuses
         $orderStatuses = [
             ['name' => 'Pending Confirmation', 'slug' => 'pending', 'badge_color' => '#EAB308', 'sort_order' => 1],
-            ['name' => 'Confirmed & Paid', 'slug' => 'confirmed', 'badge_color' => '#3B82F6', 'sort_order' => 2],
+            ['name' => 'Confirmed', 'slug' => 'confirmed', 'badge_color' => '#3B82F6', 'sort_order' => 2],
             ['name' => 'Processing', 'slug' => 'processing', 'badge_color' => '#6366F1', 'sort_order' => 3],
             ['name' => 'Completed', 'slug' => 'completed', 'badge_color' => '#10B981', 'sort_order' => 4],
             ['name' => 'Cancelled', 'slug' => 'cancelled', 'badge_color' => '#EF4444', 'sort_order' => 5],
