@@ -13,7 +13,7 @@ class SellerRevenueChart extends ChartWidget
     /** PERF-2: refresh once a minute rather than Filament's default of every 5 seconds. */
     protected ?string $pollingInterval = '60s';
 
-    protected static ?int $sort = 2;
+    protected static ?int $sort = 4;
 
     protected ?string $heading = 'Sales, last 14 days';
 

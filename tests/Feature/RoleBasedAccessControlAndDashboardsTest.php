@@ -10,8 +10,8 @@ use App\Filament\Admin\Widgets\AdminStatsOverview;
 use App\Filament\Admin\Widgets\LatestOrdersWidget;
 use App\Filament\Seller\Widgets\SellerRecentOrdersWidget;
 use App\Filament\Seller\Widgets\SellerRevenueChart;
-use App\Filament\Seller\Widgets\SellerStatsOverview;
 use App\Filament\Seller\Widgets\SellerStockAlertsWidget;
+use App\Filament\Seller\Widgets\SellerTodayWidget;
 use App\Livewire\Storefront\CustomerOrders;
 use App\Livewire\Storefront\ProductDetail;
 use App\Models\Order;
@@ -143,7 +143,7 @@ class RoleBasedAccessControlAndDashboardsTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('seller'));
         $this->actingAs($seller);
 
-        Livewire::test(SellerStatsOverview::class)->assertSuccessful();
+        Livewire::test(SellerTodayWidget::class)->assertSuccessful();
         Livewire::test(SellerRevenueChart::class)->assertSuccessful();
         Livewire::test(SellerStockAlertsWidget::class)->assertSuccessful();
         Livewire::test(SellerRecentOrdersWidget::class)->assertSuccessful();

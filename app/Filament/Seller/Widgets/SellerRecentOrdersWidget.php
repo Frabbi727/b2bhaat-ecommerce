@@ -12,7 +12,7 @@ use Filament\Widgets\TableWidget;
 
 class SellerRecentOrdersWidget extends TableWidget
 {
-    protected static ?int $sort = 3;
+    protected static ?int $sort = 2;
 
     protected int|string|array $columnSpan = 'full';
 
@@ -30,6 +30,7 @@ class SellerRecentOrdersWidget extends TableWidget
             )
             ->heading('Latest orders')
             ->paginated(false)
+            ->stackedOnMobile()
             ->searchable(false)
             ->headerActions([
                 Action::make('all')

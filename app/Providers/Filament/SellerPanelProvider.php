@@ -4,8 +4,8 @@ namespace App\Providers\Filament;
 
 use App\Filament\Seller\Widgets\SellerRecentOrdersWidget;
 use App\Filament\Seller\Widgets\SellerRevenueChart;
-use App\Filament\Seller\Widgets\SellerStatsOverview;
 use App\Filament\Seller\Widgets\SellerStockAlertsWidget;
+use App\Filament\Seller\Widgets\SellerTodayWidget;
 use App\Http\Middleware\AuditRequestContextMiddleware;
 use App\Services\Settings\StoreConfigurationService;
 use Filament\Http\Middleware\Authenticate;
@@ -66,10 +66,10 @@ class SellerPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Seller/Widgets'), for: 'App\Filament\Seller\Widgets')
             ->widgets([
-                SellerStatsOverview::class,
-                SellerRevenueChart::class,
-                SellerStockAlertsWidget::class,
+                SellerTodayWidget::class,
                 SellerRecentOrdersWidget::class,
+                SellerStockAlertsWidget::class,
+                SellerRevenueChart::class,
             ])
             ->middleware([
                 EncryptCookies::class,

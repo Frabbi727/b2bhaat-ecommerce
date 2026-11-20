@@ -8,7 +8,7 @@ use App\Filament\Admin\Widgets\AdminFulfillmentDistributionChart;
 use App\Filament\Admin\Widgets\AdminOrdersRevenueChart;
 use App\Filament\Admin\Widgets\AdminStatsOverview;
 use App\Filament\Seller\Widgets\SellerRevenueChart;
-use App\Filament\Seller\Widgets\SellerStatsOverview;
+use App\Filament\Seller\Widgets\SellerTodayWidget;
 use App\Models\Order;
 use App\Models\PaymentStatus;
 use App\Models\User;
@@ -39,7 +39,7 @@ class DashboardQueryEfficiencyTest extends TestCase
 
     public function test_dashboard_widgets_refresh_once_a_minute_not_every_five_seconds(): void
     {
-        foreach ([AdminStatsOverview::class, AdminOrdersRevenueChart::class, AdminFulfillmentDistributionChart::class, SellerStatsOverview::class, SellerRevenueChart::class] as $widget) {
+        foreach ([AdminStatsOverview::class, AdminOrdersRevenueChart::class, AdminFulfillmentDistributionChart::class, SellerTodayWidget::class, SellerRevenueChart::class] as $widget) {
             $method = new ReflectionMethod($widget, 'getPollingInterval');
             $this->assertSame('60s', $method->invoke(new $widget), $widget);
         }
