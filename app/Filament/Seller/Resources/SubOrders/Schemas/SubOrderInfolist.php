@@ -50,7 +50,7 @@ class SubOrderInfolist
                         Group::make([
                             self::itemsSection(),
                             self::moneySection(),
-                            self::activitySection(),
+                            self::activitySection('activity')->extraAttributes(['class' => 'max-lg:hidden']),
                         ])->columnSpan(['lg' => 2]),
 
                         Group::make([
@@ -60,6 +60,10 @@ class SubOrderInfolist
                             self::referenceSection(),
                         ])->columnSpan(['lg' => 1]),
                     ]),
+
+                // On a phone the history comes last, after the address and the cash to collect; on a wide screen it
+                // sits in the left column above, so only one of the two is ever shown
+                self::activitySection('activity_on_phone')->extraAttributes(['class' => 'lg:hidden'])->columnSpanFull(),
             ]);
     }
 
@@ -109,13 +113,14 @@ class SubOrderInfolist
             ]);
     }
 
-    protected static function activitySection(): Section
+    protected static function activitySection(string $name): Section
     {
         return Section::make('Activity')
+            ->key($name)
             ->icon('heroicon-o-clock')
             ->collapsible()
             ->schema([
-                ViewEntry::make('activity')
+                ViewEntry::make($name)
                     ->hiddenLabel()
                     ->view('filament.seller.sub-orders.activity'),
             ]);
