@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderStatus;
 use App\Models\PaymentMethod;
 use App\Models\PaymentStatus;
+use App\Models\SalesChannel;
 use App\Models\SubOrder;
 use App\Services\Formatting\Money;
 use App\Services\Orders\ParcelCancellationService;
@@ -32,7 +33,12 @@ class OrdersTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['customer', 'orderStatus', 'paymentStatus', 'paymentMethod'])->withCount('subOrders'))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['customer', 'orderStatus', 'paymentStatus', 'paymentMethod'])->withCount('subOrders')
+                // 5.4: which channels the order's lines were bought in, for the channel badge
+                ->withExists([
+                    'items as has_retail_lines' => fn (Builder $items) => $items->whereIn('order_items.sales_channel_id', self::channelIds(SalesChannel::RETAIL)),
+                    'items as has_wholesale_lines' => fn (Builder $items) => $items->whereIn('order_items.sales_channel_id', self::channelIds(SalesChannel::WHOLESALE)),
+                ]))
             ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('order_number')
@@ -46,6 +52,16 @@ class OrdersTable
                     ->label('Customer')
                     ->description(fn (Order $record): ?string => $record->shipping_address['recipient_phone'] ?? $record->customer?->phone)
                     ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereHas('customer', fn (Builder $c) => $c->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%"))),
+
+                TextColumn::make('channel')
+                    ->label('Channel')
+                    ->badge()
+                    ->state(fn (Order $record): string => self::channelOf($record))
+                    ->color(fn (string $state): string => match ($state) {
+                        'Wholesale' => 'info',
+                        'Mixed' => 'warning',
+                        default => 'gray',
+                    }),
 
                 TextColumn::make('total_amount')
                     ->label('Total')
@@ -84,6 +100,20 @@ class OrdersTable
                     ->label('Payment')
                     ->multiple()
                     ->options(fn () => PaymentStatus::pluck('name', 'id')),
+                SelectFilter::make('channel')
+                    ->label('Channel')
+                    ->options(['retail' => 'Retail only', 'wholesale' => 'Wholesale only', 'mixed' => 'Mixed'])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $retail = fn (Builder $items) => $items->whereIn('order_items.sales_channel_id', self::channelIds(SalesChannel::RETAIL));
+                        $wholesale = fn (Builder $items) => $items->whereIn('order_items.sales_channel_id', self::channelIds(SalesChannel::WHOLESALE));
+
+                        return match ($data['value'] ?? null) {
+                            'retail' => $query->whereHas('items', $retail)->whereDoesntHave('items', $wholesale),
+                            'wholesale' => $query->whereHas('items', $wholesale)->whereDoesntHave('items', $retail),
+                            'mixed' => $query->whereHas('items', $retail)->whereHas('items', $wholesale),
+                            default => $query,
+                        };
+                    }),
                 SelectFilter::make('payment_method_id')
                     ->label('Payment method')
                     ->options(fn () => PaymentMethod::pluck('name', 'id')),
@@ -248,5 +278,24 @@ class OrdersTable
                     ? Notification::make()->title('Invoice SMS sent')->success()->send()
                     : Notification::make()->title('SMS not sent')->body('Check the customer’s phone number and the SMS gateway balance.')->danger()->send();
             });
+    }
+
+    /**
+     * @return list<int>
+     */
+    private static function channelIds(string $slug): array
+    {
+        $ids = once(fn (): array => SalesChannel::query()->pluck('id', 'slug')->map(fn ($id): int => (int) $id)->all());
+
+        return isset($ids[$slug]) ? [$ids[$slug]] : [];
+    }
+
+    private static function channelOf(Order $record): string
+    {
+        return match (true) {
+            $record->has_retail_lines && $record->has_wholesale_lines => 'Mixed',
+            (bool) $record->has_wholesale_lines => 'Wholesale',
+            default => 'Retail',
+        };
     }
 }
