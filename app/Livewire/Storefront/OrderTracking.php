@@ -96,6 +96,7 @@ class OrderTracking extends Component
             'subOrders.fulfillmentStatus',
             'subOrders.trackingLogs.fulfillmentStatus',
             'subOrders.returnRequests',
+            'subOrders.refunds',
             'subOrders.items.product',
         ])->where('tracking_token', trim($token))->first();
 
@@ -145,6 +146,7 @@ class OrderTracking extends Component
             'subOrders.fulfillmentStatus',
             'subOrders.trackingLogs.fulfillmentStatus',
             'subOrders.returnRequests',
+            'subOrders.refunds',
             'subOrders.items.product',
         ])->where(function ($q) use ($trimmedOrderNumber) {
             $q->where('order_number', $trimmedOrderNumber)

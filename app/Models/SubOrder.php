@@ -147,6 +147,12 @@ class SubOrder extends Model
         return $this->hasMany(ReturnRequest::class);
     }
 
+    /** Money owed back to the buyer for this parcel, and whether it has been paid (PRA-027, roadmap 5.7) */
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(Refund::class);
+    }
+
     /**
      * Goods may leave the warehouse only for COD orders or orders whose payment has been verified (PRA-006).
      */

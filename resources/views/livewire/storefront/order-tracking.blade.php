@@ -212,6 +212,23 @@
                             </div>
                         </div>
 
+                        {{-- 5.7: what the buyer is owed back for this parcel, and whether it has been paid --}}
+                        @foreach ($subOrder->refunds as $refund)
+                            @if ($refund->isPending())
+                                <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+                                    <span class="font-bold">Refund owed to you: ৳{{ number_format((float) $refund->amount, 2) }}.</span>
+                                    B2Bhaat will send it back to the way you paid and update this page when it is done.
+                                </div>
+                            @else
+                                <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-900">
+                                    <span class="font-bold">Refund paid: ৳{{ number_format((float) $refund->amount, 2) }}</span>
+                                    @if ($refund->paid_at) on {{ $refund->paid_at->timezone(config('app.display_timezone'))->format('d M Y') }}@endif
+                                    @if (filled($refund->method)) by {{ \App\Services\Orders\RefundService::METHODS[$refund->method] ?? $refund->method }}@endif
+                                    @if (filled($refund->reference)) (ref. {{ $refund->reference }})@endif.
+                                </div>
+                            @endif
+                        @endforeach
+
                         <!-- Package Action Controls (Cancel / Return Dispute) -->
                         <div class="flex items-center justify-between text-xs pt-1">
                             <div>
@@ -275,6 +292,7 @@
                                     >
                                         Cancel parcel
                                     </button>
+                                    <span class="text-[11px] text-gray-500">You can cancel until the seller packs it.</span>
                                 @elseif ($subOrder->fulfillmentStatus?->slug === 'processing')
                                     <span class="text-[11px] text-gray-500">Packed by the seller. To cancel, contact the seller or support.</span>
                                 @elseif ($subOrder->fulfillmentStatus?->slug === 'cancelled' && filled($subOrder->cancel_reason))
