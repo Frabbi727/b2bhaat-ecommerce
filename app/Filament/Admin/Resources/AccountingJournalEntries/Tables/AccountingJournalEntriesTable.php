@@ -8,16 +8,20 @@ use App\Enums\Accounting\AccountingEvent;
 use App\Enums\Accounting\JournalEntryStatus;
 use App\Exceptions\Accounting\SettlementException;
 use App\Filament\Admin\Resources\AccountingJournalEntries\AccountingJournalEntryResource;
+use App\Models\Accounting\AccountingAccount;
 use App\Models\Accounting\AccountingJournalEntry;
+use App\Models\User;
 use App\Services\Accounting\JournalPostingService;
 use App\Services\Accounting\SettlementService;
 use App\Services\Formatting\Money;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -112,6 +116,46 @@ class AccountingJournalEntriesTable
                             ->prepend('Reversal', 'reversal')
                             ->all()
                     ),
+
+                // Phase B drill-down: the Money page links here to show the entries behind a figure
+                SelectFilter::make('account')
+                    ->label('Account')
+                    ->searchable()
+                    ->options(fn (): array => AccountingAccount::query()->orderBy('code')->get(['id', 'code', 'name'])
+                        ->mapWithKeys(fn (AccountingAccount $account): array => [$account->id => "{$account->code} {$account->name}"])
+                        ->all())
+                    ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null)
+                        ? $query->whereHas('lines', fn (Builder $lines) => $lines->where('account_id', $data['value']))
+                        : $query),
+
+                SelectFilter::make('seller')
+                    ->label('Seller')
+                    ->searchable()
+                    ->getSearchResultsUsing(fn (string $search): array => User::query()
+                        ->whereHas('sellerProfile')
+                        ->where(fn (Builder $q) => $q->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%"))
+                        ->limit(20)
+                        ->pluck('name', 'id')
+                        ->all())
+                    ->getOptionLabelUsing(fn ($value): ?string => User::query()->whereKey($value)->value('name'))
+                    ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null)
+                        ? $query->whereHas('lines', fn (Builder $lines) => $lines->where('seller_id', $data['value']))
+                        : $query),
+
+                Filter::make('dates')
+                    ->schema([
+                        DatePicker::make('from')->label('From'),
+                        DatePicker::make('until')->label('Until'),
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => $query
+                        ->when($data['from'] ?? null, fn (Builder $q, string $from) => $q->whereDate('entry_date', '>=', $from))
+                        ->when($data['until'] ?? null, fn (Builder $q, string $until) => $q->whereDate('entry_date', '<=', $until)))
+                    ->indicateUsing(fn (array $data): ?string => match (true) {
+                        filled($data['from'] ?? null) && filled($data['until'] ?? null) => "From {$data['from']} to {$data['until']}",
+                        filled($data['from'] ?? null) => "From {$data['from']}",
+                        filled($data['until'] ?? null) => "Until {$data['until']}",
+                        default => null,
+                    }),
             ])
             ->recordActions([
                 ViewAction::make(),

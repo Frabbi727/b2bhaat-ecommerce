@@ -7,7 +7,9 @@ namespace App\Console\Commands;
 use App\Models\User;
 use App\Notifications\Accounting\BooksDoNotReconcile;
 use App\Services\Accounting\AccountingReconciliationService;
+use App\Services\Accounting\MoneyOverviewService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Notification;
 
 /**
@@ -24,6 +26,13 @@ class ReconcileBooksCommand extends Command
     public function handle(AccountingReconciliationService $reconciliation): int
     {
         $result = $reconciliation->runAllChecks();
+
+        // Shown on the Money page as "last check"
+        Cache::forever(MoneyOverviewService::LAST_CHECK_CACHE_KEY, [
+            'checked_at' => now()->toIso8601String(),
+            'is_reconciled' => $result['is_reconciled'],
+            'problems' => $result['problems'],
+        ]);
 
         if ($result['is_reconciled']) {
             $this->info('The books reconcile: nothing to report.');
