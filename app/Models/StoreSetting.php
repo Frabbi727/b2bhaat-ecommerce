@@ -61,7 +61,9 @@ class StoreSetting extends Model
 
     public static function getTypedValue(string $key, mixed $default = null): mixed
     {
-        return Cache::remember("store_setting_{$key}", 3600, function () use ($key, $default) {
+        // 4.4: memo() keeps each setting in memory for the rest of the request or queued job, so a page that reads the
+        // same setting many times asks the cache store (the database on shared hosting) once
+        return Cache::memo()->remember("store_setting_{$key}", 3600, function () use ($key, $default) {
             $record = static::where('key', $key)->first();
 
             if (! $record) {
@@ -96,8 +98,8 @@ class StoreSetting extends Model
             ]
         );
 
-        Cache::forget("store_setting_{$key}");
-        Cache::forget('store_settings_all_grouped');
+        Cache::memo()->forget("store_setting_{$key}");
+        Cache::memo()->forget('store_settings_all_grouped');
 
         return $record;
     }

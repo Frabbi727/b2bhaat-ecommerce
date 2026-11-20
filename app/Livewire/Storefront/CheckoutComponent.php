@@ -667,15 +667,13 @@ class CheckoutComponent extends Component
         $subtotal = $cart->getSubtotal();
         $appliedCoupon = $cart->getCoupon();
         $discountAmount = $cart->getDiscountAmount();
-        $shippingBreakdown = $this->getShippingBreakdown();
+        // 4.4: one product lookup for the selected zone and the other zones' prices
+        $allZoneQuotes = app(ShippingCalculatorService::class)->calculateAllZones($items);
+        $shippingBreakdown = $allZoneQuotes[$this->deliveryZone] ?? app(ShippingCalculatorService::class)->calculateShipping($items, $this->deliveryZone);
         $shippingFee = (float) $shippingBreakdown['total_shipping'];
         $grandTotal = max(0.00, round($subtotal + $shippingFee - $discountAmount, 2));
         $paymentMethods = PaymentMethod::availableToBuyers()->get();
-        $calculator = app(ShippingCalculatorService::class);
-        $zoneQuotes = [];
-        foreach (ShippingCalculatorService::ZONES as $zone) {
-            $zoneQuotes[$zone] = (float) $calculator->calculateShipping($items, $zone)['total_shipping'];
-        }
+        $zoneQuotes = array_map(fn (array $quote): float => (float) $quote['total_shipping'], $allZoneQuotes);
         $selectedMethod = PaymentMethod::find($this->selectedPaymentMethodId);
         $savedAddresses = Auth::check() ? Auth::user()->addresses()->latest()->get() : collect();
 

@@ -50,7 +50,7 @@ class StoreConfigurationService
      */
     public function getAllGrouped(): array
     {
-        return Cache::remember('store_settings_all_grouped', 3600, function () {
+        return Cache::memo()->remember('store_settings_all_grouped', 3600, function () {
             $settings = StoreSetting::all();
             $grouped = [];
 

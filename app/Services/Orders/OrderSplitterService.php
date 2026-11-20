@@ -213,6 +213,14 @@ class OrderSplitterService
             $suffixIndex = 0;
             $alphabet = range('A', 'Z');
 
+            // 4.5: the commission rate depends only on the seller and the channel, so look each pair up once per
+            // order instead of once per line (each lookup reads the seller's subscription and plan)
+            $channels = SalesChannel::query()
+                ->whereIn('id', collect($data['items'])->pluck('sales_channel_id')->filter()->unique())
+                ->get()
+                ->keyBy('id');
+            $commissionRates = [];
+
             foreach ($itemsBySeller as $sellerId => $sellerItemList) {
                 $subOrderNumber = $orderNumber.'-'.($alphabet[$suffixIndex % 26]);
                 $suffixIndex++;
@@ -230,9 +238,8 @@ class OrderSplitterService
                     $subtotalPoisha += $linePoisha;
 
                     // Dynamically resolve commission rate through MonetizationEngine
-                    $channel = SalesChannel::find($itemData['sales_channel_id'])
-                        ?? $product->salesChannel;
-                    $rate = $channel
+                    $channel = $channels->get($itemData['sales_channel_id'] ?? null) ?? $product->salesChannel;
+                    $rate = $commissionRates[$sellerId][$channel?->id ?? 0] ??= $channel
                         ? $this->monetizationEngine->resolveCommissionRate($seller, $product, $channel)
                         : $this->monetizationEngine->sellerCommissionRate($seller, wholesale: false);
                     $sellerItemList[$index]['commission_rate'] = $rate;

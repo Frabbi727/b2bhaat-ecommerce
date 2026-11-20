@@ -10,11 +10,13 @@ use App\Models\ProductVariation;
 use App\Models\Role;
 use App\Models\SalesChannel;
 use App\Models\SellerProfile;
+use App\Models\StoreSetting;
 use App\Models\User;
 use App\Services\Orders\OrderSplitterService;
 use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\SystemLookupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -237,5 +239,38 @@ class OrderSplitterTest extends TestCase
         // A later cost change does not rewrite the profit of an order already placed
         $variation->update(['buy_price' => 90]);
         $this->assertSame('77.50', $line->fresh()->unit_cost);
+    }
+
+    /**
+     * Roadmap 4.5: a seller's commission rate is looked up once per order, not once per line.
+     */
+    public function test_commission_rate_is_looked_up_once_per_seller_and_channel(): void
+    {
+        StoreSetting::setTypedValue('monetization_enabled', true, 'monetization', 'boolean');
+        $customer = User::where('email', 'customer@retail.com')->firstOrFail();
+        $product = Product::where('slug', 'luxury-press-on-fake-nails-set')->firstOrFail();
+        $retail = SalesChannel::where('slug', SalesChannel::RETAIL)->value('id');
+        $variations = $product->variations()->where('is_active', true)->take(3)->get();
+        $this->assertGreaterThan(1, $variations->count());
+        $unitPrice = (float) $product->prices()->where('sales_channel_id', $retail)->orderBy('min_quantity')->value('unit_price');
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $order = app(OrderSplitterService::class)->createAndSplitOrder($customer, [
+            'payment_method_id' => PaymentMethod::where('slug', 'cod')->firstOrFail()->id,
+            'shipping_address' => ['recipient_name' => 'Tanvir Hasan', 'street' => 'Dhanmondi, Dhaka', 'phone' => '+8801700000004'],
+            'items' => $variations->map(fn (ProductVariation $variation): array => [
+                'product_id' => $product->id,
+                'variation_id' => $variation->id,
+                'sales_channel_id' => $retail,
+                'quantity' => 1,
+                'unit_price' => $unitPrice,
+            ])->all(),
+        ]);
+        $subscriptionLookups = collect(DB::getQueryLog())->filter(fn (array $q): bool => str_contains($q['query'], 'from "seller_subscriptions"'))->count();
+        DB::disableQueryLog();
+
+        $this->assertLessThanOrEqual(1, $subscriptionLookups);
+        $this->assertCount(1, $order->items()->pluck('commission_rate')->unique());
     }
 }
