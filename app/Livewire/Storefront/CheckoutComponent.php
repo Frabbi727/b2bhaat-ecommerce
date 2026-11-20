@@ -18,6 +18,7 @@ use App\Services\Cart\CartSessionService;
 use App\Services\Cart\CouponService;
 use App\Services\Email\EmailRecipientResolver;
 use App\Services\Escrow\EscrowLedgerService;
+use App\Services\Formatting\Money;
 use App\Services\Logistics\BangladeshDistricts;
 use App\Services\Logistics\ShippingCalculatorService;
 use App\Services\Orders\OrderSplitterService;
@@ -310,9 +311,9 @@ class CheckoutComponent extends Component
             return;
         }
 
-        $changedTitles = $cart->refreshPrices();
-        if ($changedTitles !== []) {
-            $this->errorMessage = 'Prices changed for '.implode(', ', $changedTitles).' because a flash sale ended. Please check your cart and place the order again.';
+        $priceChanges = $cart->refreshPricesWithChanges();
+        if ($priceChanges !== []) {
+            $this->errorMessage = self::priceChangeMessage($priceChanges);
 
             return;
         }
@@ -653,6 +654,23 @@ class CheckoutComponent extends Component
         $this->phoneCode = '';
         $this->phoneCodeNotice = '';
         $this->resetErrorBag('phoneCode');
+    }
+
+    /**
+     * Roadmap 5.3: name each product with its old and new unit price. The reason stays neutral: a sale may have
+     * ended, the seller may have changed the price, or the quantity moved the line into another price band.
+     *
+     * @param  list<array{title: string, old_price: float, new_price: float}>  $changes
+     */
+    public static function priceChangeMessage(array $changes): string
+    {
+        $described = implode(', ', array_map(
+            fn (array $change): string => $change['title'].' '.Money::taka($change['old_price']).' → '.Money::taka($change['new_price']),
+            $changes,
+        ));
+
+        return (count($changes) === 1 ? 'A price changed since you added it: ' : 'Some prices changed since you added them: ')
+            .$described.'. Prices can change when a sale ends or the seller updates them. Please check your order and place it again.';
     }
 
     private static function trxIdUsedMessage(string $gatewayName): string
