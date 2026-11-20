@@ -54,15 +54,21 @@ class ViewSubOrder extends ViewRecord
     /** Printing, resending the code and declining sit under "More" so the next delivery step stands out. */
     public const SECONDARY_ACTIONS = ['printShippingLabel', 'printDeliveryChallan', 'resendHandoverCode', 'declineParcel'];
 
+    /** On a new order the next step is packing; the ways to send it wait under "More" so a phone shows one button. */
+    public const SEND_ACTIONS = ['dispatchCourier', 'dispatchFactoryFleet', 'bookCourierPickup'];
+
     /**
      * @return list<Action|ActionGroup>
      */
     protected function getHeaderActions(): array
     {
+        $isNewOrder = $this->getRecord()->fulfillmentStatus?->slug === 'unfulfilled';
+        $secondaryNames = $isNewOrder ? [...self::SEND_ACTIONS, ...self::SECONDARY_ACTIONS] : self::SECONDARY_ACTIONS;
+
         $actions = collect(SubOrdersTable::fulfilmentActions())
             ->map(fn (Action $action): Action => $action->after(fn () => $this->getRecord()->refresh()->load(self::RELATIONS)));
 
-        [$secondary, $primary] = $actions->partition(fn (Action $action): bool => in_array($action->getName(), self::SECONDARY_ACTIONS, true));
+        [$secondary, $primary] = $actions->partition(fn (Action $action): bool => in_array($action->getName(), $secondaryNames, true));
 
         return [
             ...$primary->values()->all(),
