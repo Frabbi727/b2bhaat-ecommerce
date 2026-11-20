@@ -87,6 +87,7 @@ class UsersTable
                         ->visible(fn (User $record): bool => filled($record->trade_license_number) || filled($record->business_name)),
                     EditAction::make(),
                     ApplicationReviewActions::rejectWholesale(),
+                    ApplicationReviewActions::withdrawWholesale(),
                     Action::make('deactivate')
                         ->label('Deactivate')
                         ->icon('heroicon-o-no-symbol')

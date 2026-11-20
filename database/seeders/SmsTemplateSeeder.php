@@ -92,6 +92,14 @@ class SmsTemplateSeeder extends Seeder
                 'placeholders' => ['customer_name', 'store_name', 'reason', 'apply_url'],
                 'is_active' => true,
             ],
+            [
+                'key' => 'wholesale_withdrawn',
+                'name' => 'Wholesale Access Withdrawn',
+                'content_en' => 'Dear {customer_name}, your wholesale access on {store_name} has been withdrawn: {reason}. You can still shop at retail prices, or apply again: {apply_url}',
+                'content_bn' => 'প্রিয় {customer_name}, {store_name}-এ আপনার হোলসেল সুবিধা বন্ধ করা হয়েছে: {reason}। আপনি খুচরা দামে কেনাকাটা চালিয়ে যেতে পারেন, অথবা আবার আবেদন করুন: {apply_url}',
+                'placeholders' => ['customer_name', 'store_name', 'reason', 'apply_url'],
+                'is_active' => true,
+            ],
         ];
 
         foreach ($templates as $template) {

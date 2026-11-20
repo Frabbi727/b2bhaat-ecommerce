@@ -9,6 +9,7 @@ use App\Events\Sellers\WholesaleKycDecidedEvent;
 use App\Models\Role;
 use App\Models\SellerProfile;
 use App\Models\User;
+use App\Services\Audit\AuditService;
 use App\Services\Monetization\DefaultPlanService;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -20,6 +21,7 @@ class ApplicationReviewService
 {
     public function __construct(
         private readonly DefaultPlanService $defaultPlans,
+        private readonly AuditService $auditService,
     ) {}
 
     public function approveSeller(SellerProfile $profile, float $commissionRatePercentage): void
@@ -69,6 +71,7 @@ class ApplicationReviewService
             'wholesale_approved_at' => now(),
             'wholesale_rejected_at' => null,
             'wholesale_rejection_reason' => null,
+            'wholesale_withdrawn_at' => null,
             'role_id' => Role::where('slug', 'wholesale_buyer')->value('id') ?? $user->role_id,
         ]);
 
@@ -92,6 +95,38 @@ class ApplicationReviewService
         } catch (\Throwable $e) {
             // Non-blocking log
         }
+    }
+
+    /**
+     * Roadmap 5.5: take wholesale access away from an approved buyer, with a reason. They go back to the retail
+     * role and retail prices, get an SMS saying why (sent by User::booted), and can apply again later. Orders
+     * already placed are not touched.
+     */
+    public function withdrawWholesaleAccess(User $user, string $reason, ?User $actor = null): void
+    {
+        if (! $user->is_wholesale_approved) {
+            return;
+        }
+
+        $retailRoleId = Role::where('slug', 'retail_buyer')->value('id');
+
+        $user->update([
+            'is_wholesale_approved' => false,
+            'wholesale_rejected_at' => now(),
+            'wholesale_withdrawn_at' => now(),
+            'wholesale_rejection_reason' => $reason,
+            'role_id' => $user->role?->slug === 'wholesale_buyer' && $retailRoleId ? $retailRoleId : $user->role_id,
+        ]);
+
+        $this->auditService->record([
+            'module' => 'kyc',
+            'action' => 'wholesale_access_withdrawn',
+            'description' => 'Wholesale access withdrawn from '.($user->business_name ?: $user->name).": {$reason}",
+            'auditable_type' => User::class,
+            'auditable_id' => $user->id,
+            'status' => 'success',
+            'metadata' => ['reason' => $reason, 'withdrawn_by' => $actor?->id],
+        ]);
     }
 
     /**

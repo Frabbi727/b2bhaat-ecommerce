@@ -43,6 +43,7 @@ class User extends Authenticatable implements FilamentUser
         'wholesale_rejection_reason',
         'wholesale_approved_at',
         'wholesale_rejected_at',
+        'wholesale_withdrawn_at',
         'phone_verified_at',
     ];
 
@@ -65,6 +66,7 @@ class User extends Authenticatable implements FilamentUser
             'is_wholesale_approved' => 'boolean',
             'wholesale_approved_at' => 'datetime',
             'wholesale_rejected_at' => 'datetime',
+            'wholesale_withdrawn_at' => 'datetime',
         ];
     }
 
@@ -90,6 +92,14 @@ class User extends Authenticatable implements FilamentUser
     public function isWholesalePending(): bool
     {
         return ! $this->is_wholesale_approved && $this->wholesale_rejected_at === null && (filled($this->trade_license_number) || filled($this->business_name));
+    }
+
+    /**
+     * Roadmap 5.5: the buyer was approved for wholesale and an admin later took it away.
+     */
+    public function isWholesaleWithdrawn(): bool
+    {
+        return ! $this->is_wholesale_approved && $this->wholesale_withdrawn_at !== null;
     }
 
     public function isWholesaleRejected(): bool

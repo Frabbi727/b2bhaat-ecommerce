@@ -89,6 +89,7 @@ class WholesaleUpgrade extends Component
                     'tax_id_number' => $this->tinNumber ?: null,
                     'wholesale_rejected_at' => null,
                     'wholesale_rejection_reason' => null,
+                    'wholesale_withdrawn_at' => null,
                 ]);
             } else {
                 $user = User::create([
