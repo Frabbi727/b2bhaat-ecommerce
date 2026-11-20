@@ -38,6 +38,7 @@ class OrderForm
                         Select::make('customer_id')
                             ->label('Customer')
                             ->relationship('customer', 'name')
+                            ->searchable()
                             ->disabled()
                             ->dehydrated(false),
                         Select::make('payment_status_id')

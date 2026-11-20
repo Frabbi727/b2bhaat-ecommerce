@@ -14,6 +14,7 @@ class SellerWalletForm
             ->components([
                 Select::make('seller_id')
                     ->relationship('seller', 'name')
+                    ->searchable()
                     ->required(),
                 TextInput::make('available_balance')
                     ->required()
