@@ -58,7 +58,7 @@ class UserForm
                     ]),
 
                 Section::make('Business details')
-                    ->description('Only for wholesale buyers. To approve an application use “Approve” on the Users list or in KYC approvals, which also gives the wholesale role.')
+                    ->description('Only for wholesale buyers. To approve or withdraw wholesale access use “Approve” or “Withdraw wholesale access” on the Users list, which also changes the role and sends the buyer an SMS.')
                     ->collapsible()
                     ->columns(['default' => 1, 'sm' => 2])
                     ->schema([
@@ -71,8 +71,11 @@ class UserForm
                         TextInput::make('tax_id_number')
                             ->label('TIN')
                             ->maxLength(255),
+                        // 5.5: read-only here, so access never changes without the role, the reason and the SMS
                         Toggle::make('is_wholesale_approved')
                             ->label('Wholesale prices unlocked')
+                            ->disabled()
+                            ->dehydrated(false)
                             ->inline(false),
                     ]),
             ]);

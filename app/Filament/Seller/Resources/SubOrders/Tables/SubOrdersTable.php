@@ -5,6 +5,7 @@ namespace App\Filament\Seller\Resources\SubOrders\Tables;
 use App\Exceptions\InvalidStatusTransitionException;
 use App\Models\FulfillmentStatus;
 use App\Models\SubOrder;
+use App\Services\Formatting\DisplayDate;
 use App\Services\Logistics\CourierBookingService;
 use App\Services\Logistics\CourierStatusService;
 use App\Services\Logistics\SelfDeliveryService;
@@ -123,9 +124,7 @@ class SubOrdersTable
                         DatePicker::make('until')->label('Received until'),
                     ])
                     ->columns(2)
-                    ->query(fn (Builder $query, array $data): Builder => $query
-                        ->when($data['from'] ?? null, fn (Builder $q, $date) => $q->whereDate('created_at', '>=', $date))
-                        ->when($data['until'] ?? null, fn (Builder $q, $date) => $q->whereDate('created_at', '<=', $date))),
+                    ->query(fn (Builder $query, array $data): Builder => DisplayDate::whereOnDays($query, $query->qualifyColumn('created_at'), $data['from'] ?? null, $data['until'] ?? null)),
             ])
             ->emptyStateIcon('heroicon-o-shopping-bag')
             ->emptyStateHeading('No orders yet')

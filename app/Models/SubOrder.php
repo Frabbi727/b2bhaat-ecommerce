@@ -109,7 +109,7 @@ class SubOrder extends Model
     }
 
     /**
-     * When the consignment was delivered: the latest "delivered" tracking log, falling back to the last update.
+     * When the consignment was delivered: the first "delivered" tracking log, falling back to the last update.
      * The escrow release and the return window both count from this moment.
      */
     public function deliveredAt(): ?Carbon
@@ -118,7 +118,9 @@ class SubOrder extends Model
 
         $loggedAt = $this->trackingLogs()
             ->where('fulfillment_status_id', $deliveredStatusId)
-            ->reorder('logged_at', 'desc')
+            // The first "delivered" entry: later notes (a return, a review request) keep the parcel's status and
+            // must not restart the 48-hour clock
+            ->reorder('logged_at', 'asc')
             ->value('logged_at');
 
         return $loggedAt !== null ? Carbon::parse($loggedAt) : $this->updated_at;
@@ -143,6 +145,12 @@ class SubOrder extends Model
     public function returnRequests(): HasMany
     {
         return $this->hasMany(ReturnRequest::class);
+    }
+
+    /** Money owed back to the buyer for this parcel, and whether it has been paid (PRA-027, roadmap 5.7) */
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(Refund::class);
     }
 
     /**

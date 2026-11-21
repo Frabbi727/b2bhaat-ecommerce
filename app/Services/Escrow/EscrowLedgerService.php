@@ -375,6 +375,14 @@ class EscrowLedgerService
         return SellerWallet::where('seller_id', $sellerId)->lockForUpdate()->first();
     }
 
+    /**
+     * Whether this parcel's held money has already been released to the seller's balance.
+     */
+    public function isReleased(SubOrder $subOrder): bool
+    {
+        return $this->findTransaction($subOrder, WalletTransaction::TYPE_ESCROW_RELEASE) !== null;
+    }
+
     private function findTransaction(SubOrder $subOrder, string $type): ?WalletTransaction
     {
         return WalletTransaction::where('sub_order_id', $subOrder->id)->where('transaction_type', $type)->first();

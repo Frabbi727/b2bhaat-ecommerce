@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\SellerProfiles\Tables;
 
+use App\Filament\Admin\Pages\SellerMoneyPage;
 use App\Filament\Admin\Support\ApplicationReviewActions;
 use App\Models\SellerProfile;
 use App\Notifications\Seller\SellerContactChangeDecided;
@@ -97,6 +98,11 @@ class SellerProfilesTable
                 self::reviewContactChange(),
                 ActionGroup::make([
                     ApplicationReviewActions::viewSellerApplication(),
+                    Action::make('money')
+                        ->label('Money')
+                        ->icon(Heroicon::OutlinedBanknotes)
+                        ->color('gray')
+                        ->url(fn (SellerProfile $record): string => SellerMoneyPage::getUrl(['seller' => $record->user_id])),
                     Action::make('viewStorefront')
                         ->label('View storefront')
                         ->icon(Heroicon::OutlinedArrowTopRightOnSquare)

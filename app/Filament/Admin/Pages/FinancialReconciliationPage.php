@@ -309,13 +309,13 @@ class FinancialReconciliationPage extends Page
         // 5. Courier COD Receivable (ACC-17)
         $courierResult = $reconciliationService->verifyCourierCodReceivable();
 
-        // 6. Payment Gateway Clearing (ACC-17)
+        // 6. bKash / Nagad wallet, account 1030 (ACC-17, F3)
         $gatewayResult = $reconciliationService->verifyGatewayClearing();
 
         return $this->cachedMetrics = [
             'seller_wallet' => [
                 'title' => 'Seller Wallet Payables',
-                'hint' => 'GL Code 2010 · Vendor liquid payables',
+                'hint' => 'GL Code 2020 · Ready for sellers to withdraw',
                 'sub_ledger_label' => 'Sub-Ledger Total',
                 'sub_ledger_total' => $walletSubTotal,
                 'gl_total' => $walletGlTotal,
@@ -324,7 +324,7 @@ class FinancialReconciliationPage extends Page
             ],
             'seller_escrow' => [
                 'title' => 'Seller Escrow Payables',
-                'hint' => 'GL Code 2020 · 48h escrow protection',
+                'hint' => 'GL Code 2010 · Held until the buyer\'s check period ends',
                 'sub_ledger_label' => 'Sub-Ledger Total',
                 'sub_ledger_total' => $escrowSubTotal,
                 'gl_total' => $escrowGlTotal,
@@ -359,7 +359,7 @@ class FinancialReconciliationPage extends Page
                 'is_reconciled' => $courierResult['is_reconciled'],
             ],
             'gateway_clearing' => [
-                'title' => 'Payment Gateway Clearing',
+                'title' => 'bKash / Nagad Wallet',
                 'hint' => 'GL Code 1030 · Must not fall below ৳0',
                 'sub_ledger_label' => 'Lowest Allowed',
                 'sub_ledger_total' => 0.00,

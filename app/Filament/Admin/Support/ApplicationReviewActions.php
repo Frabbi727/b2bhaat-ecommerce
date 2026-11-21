@@ -128,7 +128,7 @@ class ApplicationReviewActions
                     TextEntry::make('trade_license_number')->label('Trade licence')->state(fn (User $record): string => $record->trade_license_number ?: 'Not provided')->copyable(),
                     TextEntry::make('tax_id_number')->label('TIN')->state(fn (User $record): string => $record->tax_id_number ?: 'Not provided')->copyable(),
                     TextEntry::make('decided')->label('Decided')->state(fn (User $record) => $record->wholesale_approved_at ?? $record->wholesale_rejected_at)->dateTime('d M Y, g:i A')->placeholder('Not yet'),
-                    TextEntry::make('wholesale_rejection_reason')->label('Reason for rejection')->state(fn (User $record): ?string => $record->wholesale_rejection_reason)
+                    TextEntry::make('wholesale_rejection_reason')->label(fn (User $record): string => $record->isWholesaleWithdrawn() ? 'Reason access was withdrawn' : 'Reason for rejection')->state(fn (User $record): ?string => $record->wholesale_rejection_reason)
                         ->visible(fn (User $record): bool => $record->isWholesaleRejected() && filled($record->wholesale_rejection_reason))->columnSpanFull(),
                 ]),
             ]);
@@ -186,6 +186,39 @@ class ApplicationReviewActions
             });
     }
 
+    /**
+     * Roadmap 5.5: take wholesale access away from an approved buyer, with a reason they receive by SMS.
+     */
+    public static function withdrawWholesale(): Action
+    {
+        return Action::make('withdrawWholesale')
+            ->label('Withdraw wholesale access')
+            ->icon(Heroicon::OutlinedNoSymbol)
+            ->color('danger')
+            ->visible(fn (User $record): bool => (bool) $record->is_wholesale_approved)
+            ->modalHeading(fn (User $record): string => 'Withdraw wholesale access from '.($record->business_name ?: $record->name).'?')
+            ->modalDescription('They go back to retail prices and the retail role. Orders already placed are not changed. They get an SMS with your reason and can apply again.')
+            ->modalSubmitActionLabel('Withdraw access')
+            ->schema([
+                Textarea::make('reason')
+                    ->label('Reason')
+                    ->placeholder('e.g. The trade licence has expired.')
+                    ->rows(3)
+                    ->required()
+                    ->minLength(5)
+                    ->maxLength(1000),
+            ])
+            ->action(function (User $record, array $data): void {
+                app(ApplicationReviewService::class)->withdrawWholesaleAccess($record, (string) $data['reason'], auth()->user());
+
+                Notification::make()
+                    ->title('Wholesale access withdrawn')
+                    ->body(($record->business_name ?: $record->name).' now sees retail prices. The SMS is on its way.')
+                    ->warning()
+                    ->send();
+            });
+    }
+
     public static function sellerStatus(SellerProfile $profile): string
     {
         return $profile->isApproved() ? 'Approved' : ($profile->isRejected() ? 'Rejected' : 'Waiting for review');
@@ -193,6 +226,6 @@ class ApplicationReviewActions
 
     public static function wholesaleStatus(User $user): string
     {
-        return $user->is_wholesale_approved ? 'Approved' : ($user->isWholesaleRejected() ? 'Rejected' : 'Waiting for review');
+        return $user->is_wholesale_approved ? 'Approved' : ($user->isWholesaleWithdrawn() ? 'Access withdrawn' : ($user->isWholesaleRejected() ? 'Rejected' : 'Waiting for review'));
     }
 }

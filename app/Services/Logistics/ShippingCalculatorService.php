@@ -7,6 +7,7 @@ namespace App\Services\Logistics;
 use App\Models\Product;
 use App\Services\Formatting\Money;
 use App\Services\Settings\StoreConfigurationService;
+use Illuminate\Support\Collection;
 
 class ShippingCalculatorService
 {
@@ -64,12 +65,50 @@ class ShippingCalculatorService
             ];
         }
 
-        // 1. Group items by seller
-        $productIds = collect($items)->pluck('product_id')->unique()->filter();
-        $products = Product::with('seller.sellerProfile')
-            ->whereIn('id', $productIds)
+        return $this->quote($items, $deliveryZone, $this->productsFor($items));
+    }
+
+    /**
+     * Roadmap 4.4: the quote for every delivery zone, loading the products and their sellers once instead of once
+     * per zone. Each zone's quote is identical to calculateShipping() for that zone.
+     *
+     * @param  array<int, array{product_id: int, quantity: int, unit_price: float}>  $items
+     * @return array<string, array{total_shipping: float, vendors: array<int, array<string, mixed>>}>
+     */
+    public function calculateAllZones(array $items): array
+    {
+        $products = empty($items) ? collect() : $this->productsFor($items);
+
+        $quotes = [];
+        foreach (self::ZONES as $zone) {
+            $quotes[$zone] = empty($items)
+                ? ['total_shipping' => 0.00, 'vendors' => []]
+                : $this->quote($items, $zone, $products);
+        }
+
+        return $quotes;
+    }
+
+    /**
+     * @param  array<int, array{product_id: int}>  $items
+     * @return Collection<int, Product>
+     */
+    private function productsFor(array $items): Collection
+    {
+        return Product::with('seller.sellerProfile')
+            ->whereIn('id', collect($items)->pluck('product_id')->unique()->filter())
             ->get()
             ->keyBy('id');
+    }
+
+    /**
+     * @param  array<int, array{product_id: int, quantity: int, unit_price: float}>  $items
+     * @param  Collection<int, Product>  $products
+     * @return array{total_shipping: float, vendors: array<int, array<string, mixed>>}
+     */
+    private function quote(array $items, string $deliveryZone, Collection $products): array
+    {
+        // 1. Group items by seller
 
         $vendorGroups = [];
         foreach ($items as $item) {

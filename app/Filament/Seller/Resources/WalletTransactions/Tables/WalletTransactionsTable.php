@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Seller\Resources\WalletTransactions\Tables;
 
 use App\Models\WalletTransaction;
+use App\Services\Formatting\DisplayDate;
 use Filament\Forms\Components\DatePicker;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -95,9 +96,7 @@ class WalletTransactionsTable
                         DatePicker::make('until')->label('Until date'),
                     ])
                     ->columns(2)
-                    ->query(fn (Builder $query, array $data): Builder => $query
-                        ->when($data['from'] ?? null, fn (Builder $q, $date) => $q->whereDate('created_at', '>=', $date))
-                        ->when($data['until'] ?? null, fn (Builder $q, $date) => $q->whereDate('created_at', '<=', $date))),
+                    ->query(fn (Builder $query, array $data): Builder => DisplayDate::whereOnDays($query, $query->qualifyColumn('created_at'), $data['from'] ?? null, $data['until'] ?? null)),
 
                 SelectFilter::make('transaction_type')
                     ->label('Transaction Type')

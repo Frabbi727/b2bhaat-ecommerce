@@ -17,7 +17,8 @@ class WalletTransactionForm
                     ->required()
                     ->numeric(),
                 Select::make('sub_order_id')
-                    ->relationship('subOrder', 'id'),
+                    ->relationship('subOrder', 'id')
+                    ->searchable(),
                 TextInput::make('transaction_type')
                     ->required(),
                 TextInput::make('amount')

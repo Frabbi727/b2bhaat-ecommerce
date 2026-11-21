@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Models\Traits\Auditable;
+use App\Services\Settings\StoreConfigurationService;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,6 +22,12 @@ class ReturnRequest extends Model
     public const STATUS_REJECTED = 'rejected';
 
     public const STATUS_RESOLVED = 'resolved';
+
+    /** Roadmap 3.4: the seller rejected it and the buyer asked B2Bhaat to review; an admin decides. */
+    public const STATUS_ESCALATED = 'escalated';
+
+    /** Statuses that keep the parcel's escrow on hold. */
+    public const OPEN_STATUSES = [self::STATUS_PENDING, self::STATUS_ESCALATED];
 
     /** reason code => what the buyer picked, in the buyer's words (the same choices as the return form) */
     public const REASONS = [
@@ -41,6 +49,9 @@ class ReturnRequest extends Model
         'seller_note',
         'admin_arbitration_note',
         'resolved_at',
+        'escalated_at',
+        'escalation_note',
+        'escalation_decided_at',
     ];
 
     /**
@@ -50,6 +61,8 @@ class ReturnRequest extends Model
     {
         return [
             'resolved_at' => 'datetime',
+            'escalated_at' => 'datetime',
+            'escalation_decided_at' => 'datetime',
         ];
     }
 
@@ -108,6 +121,36 @@ class ReturnRequest extends Model
     public function isPending(): bool
     {
         return $this->status === self::STATUS_PENDING;
+    }
+
+    public function isEscalated(): bool
+    {
+        return $this->status === self::STATUS_ESCALATED;
+    }
+
+    /**
+     * How long a buyer has to ask B2Bhaat to review a rejected return: the same hours the escrow is held after
+     * delivery, counted from the rejection.
+     */
+    public static function escalationWindowHours(): int
+    {
+        return app(StoreConfigurationService::class)->getEscrowHoldingPeriodHours();
+    }
+
+    /**
+     * The seller rejected it, it was never escalated, and the window is still open.
+     */
+    public function canBeEscalated(): bool
+    {
+        return $this->status === self::STATUS_REJECTED
+            && $this->escalated_at === null
+            && $this->resolved_at !== null
+            && $this->resolved_at->copy()->addHours(self::escalationWindowHours())->isFuture();
+    }
+
+    public function escalationDeadline(): ?Carbon
+    {
+        return $this->resolved_at?->copy()->addHours(self::escalationWindowHours());
     }
 
     public function isResolved(): bool

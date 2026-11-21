@@ -244,11 +244,14 @@ class OrderNotificationService
             return false;
         }
 
-        $message = $user->is_wholesale_approved
+        $message = $user->isWholesaleWithdrawn()
+            ? $this->render('wholesale_withdrawn', ['customer_name' => $user->name, 'store_name' => $this->storeName(), 'reason' => (string) $user->wholesale_rejection_reason, 'apply_url' => route('wholesale.upgrade')],
+                'Dear {customer_name}, your wholesale access on {store_name} has been withdrawn: {reason}. You can still shop at retail prices, or apply again: {apply_url}')
+            : ($user->is_wholesale_approved
             ? $this->render('wholesale_approved', ['customer_name' => $user->name, 'store_name' => $this->storeName(), 'shop_url' => route('catalog.index')],
                 'Dear {customer_name}, your wholesale account on {store_name} is approved. Sign in to see bulk prices: {shop_url}')
             : $this->render('wholesale_rejected', ['customer_name' => $user->name, 'store_name' => $this->storeName(), 'reason' => (string) $user->wholesale_rejection_reason, 'apply_url' => route('wholesale.upgrade')],
-                'Dear {customer_name}, your wholesale application on {store_name} was not approved: {reason}. You can apply again: {apply_url}');
+                'Dear {customer_name}, your wholesale application on {store_name} was not approved: {reason}. You can apply again: {apply_url}'));
 
         SendSmsJob::dispatch(PhoneNormalizer::normalize($user->phone), $message, 'wholesale_decision', bypassDeduplication: true);
 

@@ -212,14 +212,64 @@
                             </div>
                         </div>
 
+                        {{-- 5.7: what the buyer is owed back for this parcel, and whether it has been paid --}}
+                        @foreach ($subOrder->refunds as $refund)
+                            @if ($refund->isPending())
+                                <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+                                    <span class="font-bold">Refund owed to you: ৳{{ number_format((float) $refund->amount, 2) }}.</span>
+                                    B2Bhaat will send it back to the way you paid and update this page when it is done.
+                                </div>
+                            @else
+                                <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-900">
+                                    <span class="font-bold">Refund paid: ৳{{ number_format((float) $refund->amount, 2) }}</span>
+                                    @if ($refund->paid_at) on {{ $refund->paid_at->timezone(config('app.display_timezone'))->format('d M Y') }}@endif
+                                    @if (filled($refund->method)) by {{ \App\Services\Orders\RefundService::METHODS[$refund->method] ?? $refund->method }}@endif
+                                    @if (filled($refund->reference)) (ref. {{ $refund->reference }})@endif.
+                                </div>
+                            @endif
+                        @endforeach
+
                         <!-- Package Action Controls (Cancel / Return Dispute) -->
                         <div class="flex items-center justify-between text-xs pt-1">
                             <div>
                                 @if ($subOrder->fulfillmentStatus?->slug === 'delivered')
                                     @php
                                         $pendingReturn = $subOrder->returnRequests->firstWhere('status', 'pending');
+                                        $escalatedReturn = $subOrder->returnRequests->firstWhere('status', \App\Models\ReturnRequest::STATUS_ESCALATED);
+                                        $latestDecided = $subOrder->returnRequests->where('status', \App\Models\ReturnRequest::STATUS_REJECTED)->sortByDesc('resolved_at')->first();
                                     @endphp
-                                    @if ($pendingReturn)
+                                    @if ($latestDecided && ! $pendingReturn && ! $escalatedReturn)
+                                        <div class="mb-2 max-w-xl rounded-xl border border-rose-200 bg-rose-50 p-3 text-[12px] text-rose-900">
+                                            @if ($latestDecided->escalation_decided_at)
+                                                <p class="font-bold">B2Bhaat reviewed your return and kept the seller's decision.</p>
+                                                @if (filled($latestDecided->admin_arbitration_note))<p class="mt-0.5">{{ $latestDecided->admin_arbitration_note }}</p>@endif
+                                            @else
+                                                <p class="font-bold">The seller did not accept your return.</p>
+                                                @if (filled($latestDecided->seller_note))<p class="mt-0.5">Seller's reason: {{ $latestDecided->seller_note }}</p>@endif
+                                                @if ($latestDecided->canBeEscalated())
+                                                    @if ($escalatingReturnId === $latestDecided->id)
+                                                        <div class="mt-2 space-y-2">
+                                                            <label for="escalation-note" class="block font-semibold">Why is the seller's decision wrong?</label>
+                                                            <textarea id="escalation-note" wire:model="escalationNote" rows="3" class="w-full rounded-lg border-rose-200 text-[12px] text-slate-900" placeholder="For example: the item was broken when it arrived, see my photos."></textarea>
+                                                            @error('escalationNote')<p class="text-rose-700">{{ $message }}</p>@enderror
+                                                            <div class="flex gap-2">
+                                                                <button type="button" wire:click="submitEscalation" class="rounded-lg bg-rose-700 px-3 py-1.5 font-bold text-white hover:bg-rose-800">Send to B2Bhaat</button>
+                                                                <button type="button" wire:click="cancelEscalation" class="rounded-lg border border-rose-200 bg-white px-3 py-1.5 font-bold text-rose-800">Cancel</button>
+                                                            </div>
+                                                        </div>
+                                                    @else
+                                                        <p class="mt-1">Think the seller is wrong? You can ask B2Bhaat to decide until {{ $latestDecided->escalationDeadline()?->timezone(config('app.display_timezone'))->format('d M, g:i A') }}.</p>
+                                                        <button type="button" wire:click="openEscalation({{ $latestDecided->id }})" class="mt-2 rounded-lg border border-rose-300 bg-white px-3 py-1.5 font-bold text-rose-800 hover:bg-rose-100">Ask B2Bhaat to review</button>
+                                                    @endif
+                                                @endif
+                                            @endif
+                                        </div>
+                                    @endif
+                                    @if ($escalatedReturn)
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold">
+                                            B2Bhaat is reviewing your return. The seller is not paid until we decide.
+                                        </span>
+                                    @elseif ($pendingReturn)
                                         <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold">
                                             Return request under review ({{ ucfirst($pendingReturn->requested_action) }})
                                         </span>
@@ -242,6 +292,7 @@
                                     >
                                         Cancel parcel
                                     </button>
+                                    <span class="text-[11px] text-gray-500">You can cancel until the seller packs it.</span>
                                 @elseif ($subOrder->fulfillmentStatus?->slug === 'processing')
                                     <span class="text-[11px] text-gray-500">Packed by the seller. To cancel, contact the seller or support.</span>
                                 @elseif ($subOrder->fulfillmentStatus?->slug === 'cancelled' && filled($subOrder->cancel_reason))

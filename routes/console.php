@@ -38,5 +38,9 @@ Schedule::command('monetization:bill-cod-deficits')->dailyAt('01:30')->timezone(
 // Monetization automation: Hourly suspension enforcement for expired grace accounts
 Schedule::command('monetization:enforce-suspensions')->hourly()->withoutOverlapping()->onOneServer();
 
+// Roadmap 4.2: check every morning that wallets, payouts, refunds and courier cash match the books; admins get a
+// bell entry if not
+Schedule::command('accounting:reconcile')->dailyAt('02:30')->timezone(config('app.display_timezone'))->withoutOverlapping()->onOneServer();
+
 // Automatically prune historical audit logs older than retention period (default 180 days)
 Schedule::command('audit:prune --force')->dailyAt('03:30')->timezone(config('app.display_timezone'))->withoutOverlapping()->onOneServer();

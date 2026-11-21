@@ -8,6 +8,7 @@ use App\Filament\Admin\Resources\AccountingJournalEntries\AccountingJournalEntry
 use App\Filament\Admin\Resources\AccountingJournalEntries\Actions\CreateManualJournalAction;
 use App\Filament\Admin\Resources\AccountingJournalEntries\Actions\RecordCourierRemittanceAction;
 use App\Filament\Admin\Resources\AccountingJournalEntries\Actions\RecordGatewayTransferAction;
+use App\Filament\Admin\Resources\AccountingJournalEntries\Actions\RecordRunningCostAction;
 use Filament\Resources\Pages\ListRecords;
 
 class ListAccountingJournalEntries extends ListRecords
@@ -21,6 +22,7 @@ class ListAccountingJournalEntries extends ListRecords
             // Money held by couriers and payment gateways is settled here (ACC-7).
             RecordCourierRemittanceAction::make(),
             RecordGatewayTransferAction::make(),
+            RecordRunningCostAction::make(),
             CreateManualJournalAction::make(),
         ];
     }

@@ -83,7 +83,7 @@ class FlashSaleCheckoutIntegrityTest extends TestCase
         $this->travel(3)->hours();
 
         $this->checkout('01899001101')
-            ->assertSet('errorMessage', "Prices changed for {$this->nails->title} because a flash sale ended. Please check your cart and place the order again.");
+            ->assertSet('errorMessage', "A price changed since you added it: {$this->nails->title} ৳800.00 → ৳1,000.00. Prices can change when a sale ends or the seller updates them. Please check your order and place it again.");
 
         $this->assertCount(0, $this->newOrders());
         $line = $this->onlyLine();
@@ -106,7 +106,7 @@ class FlashSaleCheckoutIntegrityTest extends TestCase
         app(FlashSaleLifecycleService::class)->endNow($offer->flashSale);
 
         $this->checkout('01899001102')
-            ->assertSet('errorMessage', "Prices changed for {$this->nails->title} because a flash sale ended. Please check your cart and place the order again.");
+            ->assertSet('errorMessage', "A price changed since you added it: {$this->nails->title} ৳800.00 → ৳1,000.00. Prices can change when a sale ends or the seller updates them. Please check your order and place it again.");
 
         $this->assertCount(0, $this->newOrders());
         $this->assertEqualsWithDelta(1000.0, $this->onlyLine()['unit_price'], 0.001);

@@ -8,6 +8,7 @@ use App\Models\Refund;
 use App\Models\SellerWallet;
 use App\Models\User;
 use App\Models\WalletTransaction;
+use App\Services\Formatting\Money;
 
 class AccountingReconciliationService
 {
@@ -206,26 +207,54 @@ class AccountingReconciliationService
      */
     public function verifyAllSellers(): array
     {
-        $wallets = SellerWallet::with('seller')->cursor();
+        // F6 / roadmap 4.2: three queries for every seller together (wallets, ledger balances, requested payouts)
+        // instead of five per seller, so the daily check and the page stay light as sellers grow.
+        $wallets = SellerWallet::query()
+            ->join('users', 'users.id', '=', 'seller_wallets.seller_id')
+            ->orderBy('seller_wallets.seller_id')
+            ->get(['seller_wallets.id', 'seller_wallets.seller_id', 'seller_wallets.available_balance', 'seller_wallets.escrow_held_balance']);
+
+        $ledger = app(SellerBalanceService::class)->balancesBySeller();
+
+        $requested = WalletTransaction::query()
+            ->where('transaction_type', WalletTransaction::TYPE_PAYOUT)
+            ->where('status', WalletTransaction::STATUS_REQUESTED)
+            ->groupBy('seller_wallet_id')
+            ->selectRaw('seller_wallet_id, COALESCE(SUM(amount), 0) as total')
+            ->pluck('total', 'seller_wallet_id');
 
         $details = [];
         $reconciledCount = 0;
         $unreconciledCount = 0;
 
         foreach ($wallets as $wallet) {
-            $seller = $wallet->seller;
-            if (! $seller) {
-                continue;
-            }
+            $sellerId = (int) $wallet->seller_id;
+            $balances = $ledger[$sellerId] ?? ['escrow' => 0.0, 'wallet' => 0.0, 'reserved' => 0.0];
 
-            $result = $this->verifySellerWallet($seller, $wallet);
-            $details[] = $result;
+            $walletBalance = round((float) $wallet->available_balance, 2);
+            $escrowWalletBalance = round((float) $wallet->escrow_held_balance, 2);
+            $reservedWalletBalance = round((float) ($requested[$wallet->id] ?? 0.0), 2);
 
-            if ($result['is_reconciled']) {
-                $reconciledCount++;
-            } else {
-                $unreconciledCount++;
-            }
+            $discrepancy = $this->normalizeZero(round($walletBalance - $balances['wallet'], 2));
+            $escrowDiscrepancy = $this->normalizeZero(round($escrowWalletBalance - $balances['escrow'], 2));
+            $reservedDiscrepancy = $this->normalizeZero(round($reservedWalletBalance - $balances['reserved'], 2));
+            $isReconciled = $discrepancy === 0.00 && $escrowDiscrepancy === 0.00 && $reservedDiscrepancy === 0.00;
+
+            $details[] = [
+                'is_reconciled' => $isReconciled,
+                'wallet_balance' => $this->normalizeZero($walletBalance),
+                'ledger_balance' => $this->normalizeZero(round($balances['wallet'], 2)),
+                'discrepancy' => $discrepancy,
+                'escrow_wallet_balance' => $this->normalizeZero($escrowWalletBalance),
+                'escrow_ledger_balance' => $this->normalizeZero(round($balances['escrow'], 2)),
+                'escrow_discrepancy' => $escrowDiscrepancy,
+                'reserved_wallet_balance' => $this->normalizeZero($reservedWalletBalance),
+                'reserved_ledger_balance' => $this->normalizeZero(round($balances['reserved'], 2)),
+                'reserved_discrepancy' => $reservedDiscrepancy,
+                'seller_id' => $sellerId,
+            ];
+
+            $isReconciled ? $reconciledCount++ : $unreconciledCount++;
         }
 
         return [
@@ -234,6 +263,44 @@ class AccountingReconciliationService
             'unreconciled_count' => $unreconciledCount,
             'details' => $details,
         ];
+    }
+
+    /**
+     * Every check at once, for the daily job and the admin alert. A check that fails names what is wrong in plain
+     * words.
+     *
+     * @return array{is_reconciled: bool, problems: list<string>}
+     */
+    public function runAllChecks(): array
+    {
+        $problems = [];
+
+        $sellers = $this->verifyAllSellers();
+        if ($sellers['unreconciled_count'] > 0) {
+            $problems[] = $sellers['unreconciled_count'].' seller wallet(s) do not match the books';
+        }
+
+        $payouts = $this->verifyReservedPayouts();
+        if (! $payouts['is_reconciled']) {
+            $problems[] = 'Requested payouts differ from the books by '.Money::taka($payouts['discrepancy']);
+        }
+
+        $refunds = $this->verifyCustomerRefundPayables();
+        if (! $refunds['is_reconciled']) {
+            $problems[] = 'Refunds owed to buyers differ from the books by '.Money::taka($refunds['discrepancy']);
+        }
+
+        $courier = $this->verifyCourierCodReceivable();
+        if (! $courier['is_reconciled']) {
+            $problems[] = 'Cash couriers owe us differs from the books by '.Money::taka($courier['discrepancy']);
+        }
+
+        $mfs = $this->verifyGatewayClearing();
+        if (! $mfs['is_reconciled']) {
+            $problems[] = 'The bKash / Nagad wallet is below zero in the books ('.Money::taka($mfs['ledger_balance']).')';
+        }
+
+        return ['is_reconciled' => $problems === [], 'problems' => $problems];
     }
 
     /**

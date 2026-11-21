@@ -340,6 +340,16 @@ class CartSessionService
      */
     public function refreshPrices(): array
     {
+        return array_values(array_unique(array_column($this->refreshPricesWithChanges(), 'title')));
+    }
+
+    /**
+     * Roadmap 5.3: the same re-pricing, saying for each changed line what the buyer saw and what it costs now.
+     *
+     * @return list<array{title: string, old_price: float, new_price: float}>
+     */
+    public function refreshPricesWithChanges(): array
+    {
         $before = $this->getItems();
         if ($before === []) {
             return [];
@@ -379,14 +389,16 @@ class CartSessionService
             $this->repriceWholesaleGroup($productId);
         }
 
-        $changedTitles = [];
+        $changes = [];
         foreach ($this->getItems() as $key => $item) {
-            if (abs((float) $item['unit_price'] - (float) $before[$key]['unit_price']) > 0.005) {
-                $changedTitles[] = (string) $item['product_title'];
+            $oldPrice = (float) $before[$key]['unit_price'];
+            $newPrice = (float) $item['unit_price'];
+            if (abs($newPrice - $oldPrice) > 0.005) {
+                $changes[] = ['title' => (string) $item['product_title'], 'old_price' => $oldPrice, 'new_price' => $newPrice];
             }
         }
 
-        return array_values(array_unique($changedTitles));
+        return $changes;
     }
 
     /**

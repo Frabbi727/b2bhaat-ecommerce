@@ -205,8 +205,11 @@ class ReturnRequestInfolist
                     'body' => self::replacementParcel($record)
                         ? 'Send the free replacement parcel '.self::replacementParcel($record)->sub_order_number.' from your Orders, like any other order.'
                         : "Send {$what} again from your Orders."],
-            ReturnRequest::STATUS_REJECTED => ['tone' => 'danger', 'icon' => 'heroicon-o-x-circle', 'heading' => 'You rejected this return',
-                'body' => 'The buyer keeps the items.'.(filled($record->seller_note) ? ' Your reason: '.$record->seller_note : '')],
+            ReturnRequest::STATUS_ESCALATED => ['tone' => 'warning', 'icon' => 'heroicon-o-scale', 'heading' => 'B2Bhaat is reviewing this return',
+                'body' => 'You rejected it and the buyer asked B2Bhaat to decide. Your payment for this parcel is on hold until then. The buyer says: '.$record->escalation_note],
+            ReturnRequest::STATUS_REJECTED => ['tone' => 'danger', 'icon' => 'heroicon-o-x-circle', 'heading' => $record->escalation_decided_at ? 'B2Bhaat kept your rejection' : 'You rejected this return',
+                'body' => 'The buyer keeps the items.'.(filled($record->admin_arbitration_note) ? ' B2Bhaat\'s note: '.$record->admin_arbitration_note : (filled($record->seller_note) ? ' Your reason: '.$record->seller_note : ''))
+                    .($record->canBeEscalated() ? ' The buyer can ask B2Bhaat to review it until '.$record->escalationDeadline()?->timezone(config('app.display_timezone'))->format('d M, g:i A').'; your payment waits until then.' : '')],
             default => ['tone' => 'info', 'icon' => 'heroicon-o-lock-closed', 'heading' => 'This return is closed',
                 'body' => $record->seller_note ?: 'Nothing more to do.'],
         };

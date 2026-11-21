@@ -32,7 +32,7 @@ class ListReturnRequests extends ListRecords
             'approved' => Tab::make('Approved')
                 ->modifyQueryUsing(fn (Builder $query): Builder => $query->where('status', ReturnRequest::STATUS_APPROVED)),
             'rejected' => Tab::make('Rejected & closed')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereIn('status', [ReturnRequest::STATUS_REJECTED, ReturnRequest::STATUS_RESOLVED])),
+                ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereIn('status', [ReturnRequest::STATUS_REJECTED, ReturnRequest::STATUS_RESOLVED, ReturnRequest::STATUS_ESCALATED])),
             'all' => Tab::make('All'),
         ];
     }
